@@ -1510,6 +1510,75 @@
         }
       ],
       "notes": "DASH potassium target is not applied in CKD even when serum K is normal; no blanket restriction either."
+    },
+    {
+      "rule_id": "SAFETY-HYPERK-SEVERE",
+      "guideline": "CareLoop internal safety rules",
+      "section": "Hyperkalaemia escalation",
+      "priority": 88,
+      "conditions": [
+        {
+          "field": "serum_K_meq_L",
+          "op": "ge",
+          "value": 5.5
+        }
+      ],
+      "actions": [
+        {
+          "type": "set_constraint",
+          "nutrient": "potassium_mg",
+          "kind": "max",
+          "value": 2000
+        },
+        {
+          "type": "assert",
+          "key": "clinician_review_required",
+          "value": true
+        },
+        {
+          "type": "assert",
+          "key": "monitor_serum_K",
+          "value": "urgent: repeat within 24-48 hours"
+        }
+      ],
+      "notes": "INTERNAL SAFETY RULE (not from a public guideline; no external citation). Severe hyperkalaemia (serum K >= 5.5 mEq/L) tightens the potassium ceiling from 2400 to 2000 mg/d on top of HYPERK-2024-POTASSIUM-2400 and demands clinician review.",
+      "url": null,
+      "verbatim_quote": null
+    },
+    {
+      "rule_id": "SAFETY-DKA-CLINICIAN-REVIEW",
+      "guideline": "CareLoop internal safety rules",
+      "section": "Glycaemic safety / ketoacidosis risk",
+      "priority": 88,
+      "conditions": [
+        {
+          "field": "diagnoses",
+          "op": "in",
+          "value": [
+            "T2D"
+          ]
+        },
+        {
+          "field": "hba1c_pct",
+          "op": "ge",
+          "value": 10.0
+        }
+      ],
+      "actions": [
+        {
+          "type": "assert",
+          "key": "clinician_review_required",
+          "value": true
+        },
+        {
+          "type": "assert",
+          "key": "auto_envelope_suppressed",
+          "value": true
+        }
+      ],
+      "notes": "INTERNAL SAFETY RULE (not from a public guideline; no external citation). T2D with severely elevated HbA1c (>= 10%) is a ketoacidosis-risk presentation: the engine must not auto-propose a nutrient envelope; a clinician must review first.",
+      "url": null,
+      "verbatim_quote": null
     }
   ]
 }

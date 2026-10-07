@@ -206,7 +206,18 @@ language, not certified verbatim extracts.
 ## 6. Verification
 
 ```bash
-python -c "import json; print(len(json.load(open('rules/rules.json'))['rules']))"   # 50
+python -c "import json; print(len(json.load(open('rules/rules.json'))['rules']))"   # 52 (50 + 2 internal safety rules)
 PYTHONPATH=. python -c "from shared.envelope_schema import NutrientEnvelope; print('ok')"
 python rules/clipspy_facts.py                                                        # prints availability
 ```
+
+---
+
+## 7. Rule engine (Week 2)
+
+`rules/engine.py` implements `run_rules(patient: dict) -> {"envelope", "trace"}`: the
+rulebook is compiled into CLIPS defrules (salience = priority), a patient fact is asserted
+and forward-chained, and Python assembles the `NutrientEnvelope` (per-kg scaling,
+priority-based conflict resolution with visible `SUPERSEDED` markers, scope gates) plus a
+full `RuleFire` trace. Usage, design, determinism and deviations: **see
+[`rules/ENGINE.md`](ENGINE.md)**. Tests: `.venv/bin/python -m pytest rules/ -q`.
