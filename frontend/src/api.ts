@@ -4,9 +4,20 @@ import type {
   MealPlan,
   ChatMessageResponse,
   TraceEntry,
+  EditEnvelopePayload,
 } from './types';
 
 const API_PREFIX = '/api';
+
+function normalizeEnvelope(raw: any): Envelope {
+  if (!raw) return raw;
+  return {
+    ...raw,
+    id: raw.id ?? raw.envelope_id,
+    constraints: raw.constraints || raw.targets || [],
+    trace: raw.trace || raw.fired_rules || [],
+  } as Envelope;
+}
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -30,7 +41,9 @@ export async function healthz(): Promise<{ status: string }> {
 }
 
 export async function listPatients(): Promise<Patient[]> {
-  return fetch(`${API_PREFIX}/patients`).then((r) => handleResponse<Patient[]>(r));
+  return fetch(`${API_PREFIX}/patients`)
+    .then((r) => handleResponse<Patient[] | { patients?: Patient[] }>(r))
+    .then((data) => (Array.isArray(data) ? data : (data.patients ?? [])));
 }
 
 export async function getPatient(id: string): Promise<Patient> {
@@ -47,11 +60,15 @@ export async function runRules(patientId: string): Promise<RulesRunResult> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ patient_id: patientId }),
-  }).then((r) => handleResponse<RulesRunResult>(r));
+  })
+    .then((r) => handleResponse<{ envelope: any; trace: TraceEntry[] }>(r))
+    .then(({ envelope, trace }) => ({ envelope: normalizeEnvelope(envelope), trace }));
 }
 
 export async function getEnvelope(id: string): Promise<Envelope> {
-  return fetch(`${API_PREFIX}/envelopes/${id}`).then((r) => handleResponse<Envelope>(r));
+  return fetch(`${API_PREFIX}/envelopes/${id}`)
+    .then((r) => handleResponse<any>(r))
+    .then(normalizeEnvelope);
 }
 
 export async function approveEnvelope(
@@ -62,18 +79,22 @@ export async function approveEnvelope(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).then((r) => handleResponse<Envelope>(r));
+  })
+    .then((r) => handleResponse<any>(r))
+    .then(normalizeEnvelope);
 }
 
 export async function editEnvelope(
   id: string,
-  payload: { constraints?: unknown[]; note?: string }
+  payload: EditEnvelopePayload
 ): Promise<Envelope> {
   return fetch(`${API_PREFIX}/envelopes/${id}/edit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).then((r) => handleResponse<Envelope>(r));
+  })
+    .then((r) => handleResponse<any>(r))
+    .then(normalizeEnvelope);
 }
 
 export async function rejectEnvelope(
@@ -84,7 +105,9 @@ export async function rejectEnvelope(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).then((r) => handleResponse<Envelope>(r));
+  })
+    .then((r) => handleResponse<any>(r))
+    .then(normalizeEnvelope);
 }
 
 export async function createPlan(

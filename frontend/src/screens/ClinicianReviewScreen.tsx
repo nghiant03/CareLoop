@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
-import { listPatients, runRules, approveEnvelope, rejectEnvelope, getEnvelope } from '../api';
-import type { Patient, Envelope } from '../types';
+import {
+  listPatients,
+  runRules,
+  approveEnvelope,
+  rejectEnvelope,
+  editEnvelope,
+} from '../api';
+import type { Patient, Envelope, NutrientConstraint } from '../types';
 import PatientCard from '../components/PatientCard';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
 import ConstraintTable from '../components/ConstraintTable';
 import RuleTrace from '../components/RuleTrace';
+import EditEnvelopeModal from '../components/EditEnvelopeModal';
 
 export default function ClinicianReviewScreen() {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -15,6 +22,8 @@ export default function ClinicianReviewScreen() {
   const [envelope, setEnvelope] = useState<Envelope | null>(null);
   const [envelopeLoading, setEnvelopeLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     listPatients()
@@ -71,17 +80,24 @@ export default function ClinicianReviewScreen() {
     }
   };
 
-  const handleEdit = async () => {
+  const handleEdit = () => {
     if (!envelope) return;
-    setActionLoading(true);
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdits = async (targets: NutrientConstraint[], notes?: string) => {
+    if (!envelope) return;
+    setSavingEdit(true);
     try {
-      const updated = await getEnvelope(envelope.id);
-      // In a real app, open an edit modal; here we re-fetch to keep it simple.
+      const updated = await editEnvelope(envelope.id, {
+        targets,
+        notes,
+        edited_by: 'clinician-1',
+      });
       setEnvelope(updated);
-    } catch (err: any) {
-      setError(err.message || 'Failed to edit envelope');
+      setIsEditOpen(false);
     } finally {
-      setActionLoading(false);
+      setSavingEdit(false);
     }
   };
 
@@ -204,6 +220,15 @@ export default function ClinicianReviewScreen() {
               <RuleTrace trace={envelope.trace || []} />
             </div>
           </section>
+        )}
+
+        {envelope && isEditOpen && (
+          <EditEnvelopeModal
+            envelope={envelope}
+            onClose={() => setIsEditOpen(false)}
+            onSave={handleSaveEdits}
+            isSaving={savingEdit}
+          />
         )}
       </div>
     </main>

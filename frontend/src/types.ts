@@ -49,6 +49,13 @@ export interface Envelope {
   updated_at?: string;
 }
 
+export interface EditEnvelopePayload {
+  targets: NutrientConstraint[];
+  exclusions?: unknown[];
+  notes?: string;
+  edited_by?: string;
+}
+
 export interface MealSlot {
   day: number;
   meal: 'breakfast' | 'lunch' | 'dinner';
