@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://careloop.local/schemas/envelope.schema.json",
+  "title": "NutrientEnvelope",
+  "description": "CareLoop canonical nutrient envelope contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "envelope_id",
+    "patient_id",
+    "patient_snapshot",
+    "targets",
+    "priority_basis"
+  ],
+  "properties": {
+    "envelope_id": { "type": "string" },
+    "patient_id": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["PROPOSED", "APPROVED", "REJECTED", "EDITED"],
+      "default": "PROPOSED"
+    },
+    "version": { "type": "integer", "minimum": 1, "default": 1 },
+    "patient_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["patient_id", "age", "sex", "weight_kg"],
+      "properties": {
+        "patient_id": { "type": "string" },
+        "age": { "type": "integer", "minimum": 0, "maximum": 130 },
+        "sex": { "type": "string", "enum": ["F", "M", "X"] },
+        "weight_kg": { "type": "number", "minimum": 0, "exclusiveMinimum": true },
+        "diagnoses": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "egfr": { "type": "number", "minimum": 0 },
+        "serum_K_meq_L": { "type": "number", "minimum": 0 },
+        "serum_PO4_mg_dL": { "type": "number", "minimum": 0 },
+        "meds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/nutrient_constraint" }
+    },
+    "exclusions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/exclusion_flag" },
+      "default": []
+    },
+    "fired_rules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/rule_fire" },
+      "default": []
+    },
+    "citations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/citation_source" },
+      "default": []
+    },
+    "priority_basis": { "type": "string" },
+    "proposed_by": { "type": "string", "default": "rules-engine" },
+    "proposed_at": { "type": "string", "format": "date-time" },
+    "approved_by": { "type": ["string", "null"] },
+    "approved_at": { "type": ["string", "null"], "format": "date-time" },
+    "notes": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "nutrient_constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nutrient", "kind", "value", "unit"],
+      "properties": {
+        "nutrient": {
+          "type": "string",
+          "enum": [
+            "energy_kcal",
+            "protein_g",
+            "sodium_mg",
+            "potassium_mg",
+            "phosphorus_mg",
+            "carbs_g",
+            "fat_g",
+            "sat_fat_g",
+            "fiber_g",
+            "sugar_g"
+          ]
+        },
+        "kind": { "type": "string", "enum": ["target", "min", "max"] },
+        "value": { "type": "number", "minimum": 0 },
+        "unit": { "type": "string" }
+      }
+    },
+    "exclusion_flag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "reason", "citation"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["ingredient", "dish_category", "macro_pattern", "diet_pattern"]
+        },
+        "value": { "type": "string" },
+        "reason": { "type": "string" },
+        "citation": { "$ref": "#/$defs/citation_source" }
+      }
+    },
+    "rule_fire": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id",
+        "fired_at",
+        "patient_summary",
+        "action_summary",
+        "priority",
+        "citation"
+      ],
+      "properties": {
+        "rule_id": { "type": "string" },
+        "fired_at": { "type": "string", "format": "date-time" },
+        "patient_summary": { "type": "string" },
+        "action_summary": { "type": "string" },
+        "priority": { "type": "integer", "minimum": 0 },
+        "citation": { "$ref": "#/$defs/citation_source" }
+      }
+    },
+    "citation_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["guideline", "section", "rule_id"],
+      "properties": {
+        "guideline": { "type": "string" },
+        "section": { "type": "string" },
+        "rule_id": { "type": "string" },
+        "url": { "type": ["string", "null"] },
+        "verbatim_quote": { "type": ["string", "null"] }
+      }
+    }
+  }
+}
