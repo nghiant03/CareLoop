@@ -15,6 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.core.approval_gate import get_envelope_or_404, put_envelope
+from backend.app.core.trace_store import trace_or_none
+from backend.app.explain.views import clinician_explanation
 from backend.app.models.envelope import (
     EnvelopeStatus,
     ExclusionFlag,
@@ -28,8 +30,20 @@ router = APIRouter(prefix="/envelopes", tags=["envelopes"])
 class ApproveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # ``approved_by``/``notes`` are the original fields; ``clinician_id``/``note``
+    # are the frontend-contract aliases (either form is accepted).
     approved_by: str = "clinician"
     notes: Optional[str] = None
+    clinician_id: Optional[str] = None
+    note: Optional[str] = None
+
+    @property
+    def approver(self) -> str:
+        return self.clinician_id or self.approved_by
+
+    @property
+    def approval_note(self) -> Optional[str]:
+        return self.note if self.note is not None else self.notes
 
 
 class EditRequest(BaseModel):
@@ -55,6 +69,17 @@ def read_envelope(
     return envelope
 
 
+@router.get("/{envelope_id}/explanation", summary="Clinician explanation of an envelope")
+def explain_envelope(
+    envelope: NutrientEnvelope = Depends(get_envelope_or_404),
+) -> dict:
+    """Structured clinician view: fired rules, conflict resolutions, cited
+    constraints. Falls back to the envelope's embedded ``fired_rules`` when no
+    separate trace was pinned."""
+    trace = trace_or_none(envelope) or []
+    return clinician_explanation(envelope.model_dump(by_alias=True), trace)
+
+
 @router.post("/{envelope_id}/approve", summary="Approve an envelope")
 def approve_envelope(
     body: ApproveRequest | None = None,
@@ -62,10 +87,10 @@ def approve_envelope(
 ) -> NutrientEnvelope:
     body = body or ApproveRequest()
     envelope.status = EnvelopeStatus.APPROVED
-    envelope.approved_by = body.approved_by
+    envelope.approved_by = body.approver
     envelope.approved_at = datetime.now(timezone.utc)
-    if body.notes is not None:
-        envelope.notes = body.notes
+    if body.approval_note is not None:
+        envelope.notes = body.approval_note
     return put_envelope(envelope)
 
 

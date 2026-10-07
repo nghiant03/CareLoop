@@ -1,16 +1,32 @@
-"""RAG chat endpoint (Week 1 stub).
+"""RAG chat endpoint.
 
-Week 2 wires retrieval over the versioned knowledge base plus citation-required
-prompting and an escalation filter. For now the endpoint returns a fixed stub
-that already advertises the citation-required contract.
+``POST /chat`` body ``{"patient_id": "...", "message": "..."}`` — answers via
+the grounded pipeline (``backend.app.chat.answers.answer``) over the process
+knowledge base, passing the patient's latest envelope (any status) so numbers
+and approval state can be reflected. Response contract:
+
+``{"answer": str, "citations": [{"rule_id", "guideline", "url"}],
+  "escalated": bool, "status": "answered"|"refused"|"escalated"}``
+
+Escalated out-of-scope requests get ``escalated: true`` with the safety
+message; low-confidence questions are refused (``escalated: false``) with a
+see-your-clinician text. Every answered response carries at least one
+guideline citation.
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
+
+from backend.app.chat import answers
+from backend.app.core.kb_loader import get_kb
+from backend.app.core.approval_gate import (
+    find_latest_envelope_for_patient,
+    get_envelope,
+)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -23,26 +39,29 @@ class ChatRequest(BaseModel):
     envelope_id: Optional[str] = None
 
 
-class ChatResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    answer: str
-    citation_required: bool = True
-    citations: list[str] = []
-    escalate: bool = False
-    backend: str = "stub"
+def _citation_brief(citation: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "rule_id": citation.get("rule_id"),
+        "guideline": citation.get("guideline"),
+        "url": citation.get("url"),
+    }
 
 
-@router.post("", summary="Ask the (stub) RAG chatbot")
-def chat(req: ChatRequest) -> ChatResponse:
-    return ChatResponse(
-        answer=(
-            "RAG pipeline coming Week 2. Answers will be grounded in the "
-            "versioned knowledge base and the patient's APPROVED envelope, "
-            "with mandatory citations."
-        ),
-        citation_required=True,
-        citations=[],
-        escalate=False,
-        backend="stub",
-    )
+@router.post("", summary="Ask the grounded RAG chatbot")
+def chat(req: ChatRequest) -> dict[str, Any]:
+    envelope_obj = None
+    if req.envelope_id:
+        envelope_obj = get_envelope(req.envelope_id)
+    elif req.patient_id:
+        envelope_obj = find_latest_envelope_for_patient(req.patient_id)
+
+    envelope = envelope_obj.model_dump(by_alias=True) if envelope_obj else None
+
+    result = answers.answer(req.message, get_kb(), envelope=envelope, role="patient")
+
+    return {
+        "answer": result["answer"],
+        "citations": [_citation_brief(c) for c in result["citations"]],
+        "escalated": result["status"] == "escalated",
+        "status": result["status"],
+    }

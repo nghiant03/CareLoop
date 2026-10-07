@@ -99,12 +99,28 @@ def test_rules_run_returns_proposed_envelope() -> None:
     }
     resp = _request("POST", "/rules/run", json=patient)
     assert resp.status_code == 200, resp.text
-    envelope = resp.json()
+    body = resp.json()
+    envelope = body["envelope"]
     assert envelope["status"] == "PROPOSED"
     assert envelope["patient_id"] == "p-smoke-rules"
     assert len(envelope["targets"]) >= 1
     assert len(envelope["fired_rules"]) >= 1
     assert envelope["priority_basis"]
+    assert isinstance(body["trace"], list) and body["trace"]
+
+
+def test_rules_run_by_patient_id() -> None:
+    resp = _request("POST", "/rules/run", json={"patient_id": "P0001"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["envelope"]["patient_id"] == "P0001"
+    assert body["envelope"]["status"] == "PROPOSED"
+
+
+def test_rules_run_unknown_patient_404() -> None:
+    resp = _request("POST", "/rules/run", json={"patient_id": "NOPE-999"})
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["detail"]["error"] == "patient_not_found"
 
 
 def test_approval_gate_blocks_until_approved() -> None:
@@ -118,7 +134,7 @@ def test_approval_gate_blocks_until_approved() -> None:
     }
     proposed = _request("POST", "/rules/run", json=patient)
     assert proposed.status_code == 200, proposed.text
-    envelope_id = proposed.json()["envelope_id"]
+    envelope_id = proposed.json()["envelope"]["envelope_id"]
 
     # PROPOSED -> blocked by the gate with the documented 409 body.
     blocked = _request("POST", "/plans", json={"patient_id": "p-gate"})
@@ -146,7 +162,7 @@ def test_edit_invalidates_approval() -> None:
         "weight_kg": 60.0,
         "diagnoses": ["HTN"],
     }
-    env = _request("POST", "/rules/run", json=patient).json()
+    env = _request("POST", "/rules/run", json=patient).json()["envelope"]
     _request("POST", f"/envelopes/{env['envelope_id']}/approve", json={})
     edited = _request(
         "POST", f"/envelopes/{env['envelope_id']}/edit", json={"notes": "tweak"}
@@ -158,12 +174,15 @@ def test_edit_invalidates_approval() -> None:
     assert blocked.status_code == 409, blocked.text
 
 
-def test_chat_stub_requires_citation() -> None:
+def test_chat_grounded_contract() -> None:
     resp = _request("POST", "/chat", json={"message": "What can I eat?"})
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["citation_required"] is True
-    assert body["backend"] == "stub"
+    assert body["status"] in ("answered", "refused", "escalated")
+    assert isinstance(body["citations"], list)
+    assert body["escalated"] is False
+    if body["status"] == "answered":
+        assert body["citations"], "answered chat must cite the KB"
 
 
 if __name__ == "__main__":

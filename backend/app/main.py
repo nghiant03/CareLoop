@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.app import __version__
-from backend.app.api import chat, envelopes, patients, plans, rules
+from backend.app.api import chat, envelopes, kb, mining, patients, plans, rules
 from backend.app.core.approval_gate import EnvelopeNotApprovedError
 
 logger = logging.getLogger("careloop")
@@ -33,7 +33,16 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("CareLoop backend starting (version=%s)", __version__)
-    # Week 2: initialise the versioned graph store / KB connections here.
+    try:
+        # Warm the versioned knowledge base + TF-IDF index once per process
+        # (in-memory SQLite per rules/SCHEMA_DECISION.md). Failure to load must
+        # not take the API down; endpoints fall back to lazy loading.
+        from backend.app.core.kb_loader import get_kb
+
+        stats = get_kb().stats()
+        logger.info("knowledge base ready: %s nodes", sum(stats["node_counts"].values()))
+    except Exception as exc:  # pragma: no cover - missing dataset
+        logger.warning("knowledge base not loaded at startup: %s", exc)
     yield
     logger.info("CareLoop backend shutting down")
 
@@ -102,6 +111,8 @@ app.include_router(rules.router)
 app.include_router(envelopes.router)
 app.include_router(plans.router)
 app.include_router(chat.router)
+app.include_router(mining.router)
+app.include_router(kb.router)
 
 
 @app.get("/healthz", tags=["meta"], summary="Liveness probe")

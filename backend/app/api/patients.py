@@ -53,6 +53,22 @@ def _ensure_loaded() -> None:
     _LOADED = True
 
 
+def _ui_view(record: dict[str, Any]) -> dict[str, Any]:
+    """Add the flat, UI-facing fields to a raw patient record (superset).
+
+    Keeps every raw field (``serum_K_meq_L`` etc.) and adds the snake_case
+    ``id``/``name``/``serum_k``/``serum_po4`` names the React UI consumes.
+    """
+    view = dict(record)
+    patient_id = str(record.get("patient_id", ""))
+    view.setdefault("id", patient_id)
+    view.setdefault("name", record.get("name") or f"Patient {patient_id}")
+    view.setdefault("serum_k", record.get("serum_K_meq_L"))
+    view.setdefault("serum_po4", record.get("serum_PO4_mg_dL"))
+    view.setdefault("diagnoses", record.get("diagnoses", []))
+    return view
+
+
 def get_patient(patient_id: str) -> dict[str, Any] | None:
     """Return a patient record from the overlay/read-only store."""
     _ensure_loaded()
@@ -62,7 +78,8 @@ def get_patient(patient_id: str) -> dict[str, Any] | None:
 @router.get("", summary="List patients")
 def list_patients() -> dict[str, Any]:
     _ensure_loaded()
-    return {"count": len(_OVERLAY), "patients": list(_OVERLAY.values())}
+    patients = [_ui_view(record) for record in _OVERLAY.values()]
+    return {"count": len(patients), "patients": patients}
 
 
 @router.get("/{patient_id}", summary="Get a patient by id")
@@ -73,7 +90,7 @@ def read_patient(patient_id: str) -> dict[str, Any]:
             status_code=404,
             detail={"error": "patient_not_found", "patient_id": patient_id},
         )
-    return record
+    return _ui_view(record)
 
 
 @router.post("", status_code=201, summary="Create a synthetic patient")

@@ -1,207 +1,86 @@
-"""Rule-engine endpoint (Week 1 stub).
+"""Rule-engine endpoint.
 
-``POST /rules/run`` accepts a :class:`PatientSummary` and returns a **PROPOSED**
-:class:`NutrientEnvelope`. For Week 1 this is a deterministic stub: it
-references rule IDs from ``rules/rules.json`` when that file exists but does
-**not** call clipspy. Week 2 replaces the body with the real CLIPS rule base
-while keeping the response contract identical.
+``POST /rules/run`` turns a patient into a **PROPOSED** nutrient envelope via
+the real CLIPS rule engine (``rules.engine.run_rules``) and returns the
+frontend contract ``{envelope, trace}``. The envelope is validated against the
+canonical ``shared.envelope_schema.NutrientEnvelope`` and registered in the
+approval-gate store (still PROPOSED — the gate keeps blocking downstream until
+a clinician approves). The trace is pinned in ``core.trace_store`` so the
+explanation endpoint can replay the decision.
+
+Request body (both accepted):
+* ``{"patient_id": "P0001"}`` — the patient is looked up in the patient store;
+* a full patient record (``data/patients.json`` shape) — used inline.
+
+Out-of-scope patients (pregnancy, dialysis, ketoacidosis) yield a REJECTED
+envelope with empty targets and a clear ``notes`` reason — returned with HTTP
+200 so the UI can render the explanation.
 """
 
 from __future__ import annotations
 
-import json
-import uuid
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body, HTTPException
+
+from rules.engine import run_rules as engine_run_rules
 
 from backend.app.core.approval_gate import put_envelope
-from backend.app.models.envelope import (
-    CitationSource,
-    ConstraintKind,
-    EnvelopeStatus,
-    NutrientConstraint,
-    NutrientEnvelope,
-    NutrientKind,
-    PatientSummary,
-    RuleFire,
-)
+from backend.app.core.trace_store import put_trace
+from backend.app.api.patients import get_patient
+from backend.app.models.envelope import NutrientEnvelope
 
 router = APIRouter(prefix="/rules", tags=["rules"])
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-RULES_FILE = _REPO_ROOT / "rules" / "rules.json"
 
-# Fallback rule IDs used when rules/rules.json is not yet present (Lane A).
-_FALLBACK_RULES: list[dict[str, Any]] = [
-    {
-        "rule_id": "CKD-NA-001",
-        "guideline": "KDIGO 2024",
-        "section": "Chapter 3.2",
-        "priority": 90,
-        "action": "Na ceiling = 2000 mg/d (CKD overrides DASH/ADA)",
-    },
-    {
-        "rule_id": "ADA-NA-001",
-        "guideline": "ADA Standards of Care 2026",
-        "section": "Nutrition Consensus",
-        "priority": 40,
-        "action": "Na ceiling = 2300 mg/d",
-    },
-    {
-        "rule_id": "CKD-PRO-001",
-        "guideline": "KDOQI 2020",
-        "section": "Protein intake",
-        "priority": 80,
-        "action": "Protein 0.55-0.8 g/kg/d",
-    },
-    {
-        "rule_id": "HTN-K-001",
-        "guideline": "AHA-ACC 2025",
-        "section": "DASH potassium",
-        "priority": 30,
-        "action": "K ~4700 mg/d unless CKD/hyperkalemia",
-    },
-]
+_INLINE_FIELDS = {
+    "age", "sex", "weight_kg", "diagnoses", "egfr", "serum_K_meq_L",
+    "serum_k_meq_l", "serum_PO4_mg_dL", "serum_po4_mg_dl", "meds", "bmi",
+    "pregnant", "hba1c_pct", "name", "height_cm",
+}
 
 
-def _summarise_actions(rule: dict[str, Any]) -> str:
-    """Turn Lane A's ``actions`` list into a short human-readable summary."""
-    explicit = rule.get("action") or rule.get("description")
-    if explicit:
-        return str(explicit)
-    actions = rule.get("actions")
-    if isinstance(actions, str):
-        return actions
-    if not isinstance(actions, list):
-        return "stub rule action"
-    parts: list[str] = []
-    for act in actions:
-        if isinstance(act, dict):
-            kind = act.get("kind", act.get("type", "set"))
-            nutrient = act.get("nutrient")
-            value = act.get("value")
-            if nutrient is not None:
-                parts.append(f"{kind} {nutrient} = {value}")
-            else:
-                parts.append(str(act.get("type", kind)))
-        else:
-            parts.append(str(act))
-    return "; ".join(parts) or "stub rule action"
-
-
-def _load_rule_specs() -> list[dict[str, Any]]:
-    """Best-effort read of Lane A's rule spec; fall back to stubs."""
-    if not RULES_FILE.exists():
-        return _FALLBACK_RULES
-    try:
-        raw = json.loads(RULES_FILE.read_text())
-    except (json.JSONDecodeError, OSError):
-        return _FALLBACK_RULES
-    rules = raw.get("rules", raw) if isinstance(raw, dict) else raw
-    if not isinstance(rules, list) or not rules:
-        return _FALLBACK_RULES
-    normalised: list[dict[str, Any]] = []
-    for r in rules:
-        if not isinstance(r, dict):
-            continue
-        rid = r.get("rule_id") or r.get("id")
-        if not rid:
-            continue
-        normalised.append(
-            {
-                "rule_id": str(rid),
-                "guideline": str(r.get("guideline", r.get("source", "unspecified"))),
-                "section": str(r.get("section", "unspecified")),
-                "priority": int(r.get("priority", 0)),
-                "action": _summarise_actions(r),
-                "url": r.get("url"),
-                "verbatim_quote": r.get("verbatim_quote"),
-            }
-        )
-    return normalised or _FALLBACK_RULES
-
-
-def _citation(spec: dict[str, Any]) -> CitationSource:
-    return CitationSource(
-        guideline=spec["guideline"],
-        section=spec["section"],
-        rule_id=spec["rule_id"],
-        url=spec.get("url"),
-        verbatim_quote=spec.get("verbatim_quote"),
-    )
-
-
-def build_stub_envelope(patient: PatientSummary) -> NutrientEnvelope:
-    """Build a deterministic PROPOSED envelope without invoking clipspy."""
-    specs = _load_rule_specs()
-    by_id = {s["rule_id"]: s for s in specs}
-
-    fired: list[RuleFire] = []
-    citations: list[CitationSource] = []
-    for spec in specs:
-        fired.append(
-            RuleFire(
-                rule_id=spec["rule_id"],
-                fired_at=datetime.now(timezone.utc),
-                patient_summary=(
-                    f"patient {patient.patient_id}: "
-                    f"{', '.join(patient.diagnoses) or 'no diagnoses'}"
-                ),
-                action_summary=spec["action"] or "stub rule action",
-                priority=spec["priority"],
-                citation=_citation(spec),
+def _resolve_patient(body: dict[str, Any]) -> dict[str, Any]:
+    if any(field in body for field in _INLINE_FIELDS):
+        patient = dict(body)
+        if not patient.get("patient_id"):
+            raise HTTPException(
+                status_code=422,
+                detail={"error": "validation_error", "detail": "patient_id is required"},
             )
+        return patient
+    patient_id = body.get("patient_id")
+    if not patient_id:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "validation_error",
+                "detail": "body must be {patient_id} or a full patient record",
+            },
         )
-        citations.append(_citation(spec))
-
-    targets = [
-        NutrientConstraint(
-            nutrient=NutrientKind.ENERGY_KCAL,
-            kind=ConstraintKind.TARGET,
-            value=round(30.0 * patient.weight_kg, 1),
-            unit="kcal",
-        ),
-        NutrientConstraint(
-            nutrient=NutrientKind.PROTEIN_G,
-            kind=ConstraintKind.MAX,
-            value=round(0.8 * patient.weight_kg, 1),
-            unit="g",
-        ),
-        NutrientConstraint(
-            nutrient=NutrientKind.SODIUM_MG,
-            kind=ConstraintKind.MAX,
-            value=2000.0,
-            unit="mg",
-        ),
-        NutrientConstraint(
-            nutrient=NutrientKind.POTASSIUM_MG,
-            kind=ConstraintKind.MAX,
-            value=3500.0,
-            unit="mg",
-        ),
-    ]
-
-    return NutrientEnvelope(
-        envelope_id=f"env-{uuid.uuid4().hex[:12]}",
-        patient_id=patient.patient_id,
-        status=EnvelopeStatus.PROPOSED,
-        version=1,
-        patient_snapshot=patient,
-        targets=targets,
-        exclusions=[],
-        fired_rules=fired,
-        citations=citations,
-        priority_basis="CKD > HTN > T2D on sodium; K/PO4 individualised to labs",
-        proposed_by="rules-engine-stub (Week 1; clipspy in Week 2)",
-        notes="Week 1 stub envelope. Not clinically validated.",
-    )
+    record = get_patient(str(patient_id))
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "patient_not_found", "patient_id": str(patient_id)},
+        )
+    return dict(record)
 
 
-@router.post("/run", summary="Run the rule engine (Week 1 stub)")
-def run_rules(patient: PatientSummary) -> NutrientEnvelope:
-    envelope = build_stub_envelope(patient)
+@router.post("/run", summary="Run the rule engine -> PROPOSED envelope + trace")
+def run_rules(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    patient = _resolve_patient(body)
+    result = engine_run_rules(patient)
+
+    envelope = NutrientEnvelope.model_validate(result["envelope"])
+    trace = [row for row in result["trace"]]
+
+    # Register with the approval gate (still PROPOSED/REJECTED — downstream
+    # consumption stays blocked until a clinician approves) and pin the trace.
     put_envelope(envelope)
-    return envelope
+    put_trace(envelope.envelope_id, trace)
+
+    return {
+        "envelope": envelope.model_dump(by_alias=True),
+        "trace": trace,
+    }
