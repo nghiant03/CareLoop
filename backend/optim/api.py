@@ -4,13 +4,12 @@ Bridges Lane B's ``backend.optim.spike_pymoo`` (which exposes `run_spike`)
 to the contract Lane D's ``/plans`` endpoint expects (`run` / `optimise`).
 
 This module is the contract glue between Lane B and Lane D. Lane B owns
-`backend.optim.problem`, `backend.optim.baselines`, and `backend.optim.spike_pymoo`;
+`backend.optim.problem`, `backend.optim.real_data`, and `backend.optim.solver`;
 this file lives in the same package so the FastAPI router can probe once
 for ``backend.optim.api`` and call ``run(envelope, dishes)``.
 
-For Week 1 we use the toy dataset embedded in ``backend.optim.toy_data``.
-Week 2 will swap to ``data/dishes.json`` once Lane C finishes the real SG
-curation and Lane B wires ``load_dishes()`` into the production pool.
+Since Week 2 the default dish pool is the real 190-dish dataset in
+``data/dishes.json`` (loaded via ``real_data.load_dishes``).
 """
 
 from __future__ import annotations
@@ -27,21 +26,26 @@ from typing import Optional
 
 from shared.envelope_schema import EnvelopeStatus, NutrientEnvelope  # noqa: E402
 
-from backend.optim.problem import allowed_dishes, evaluate  # noqa: E402
-from backend.optim.spike_pymoo import (  # noqa: E402
-    HAS_PYMOO,
-    _solve_pymoo,
-    baselines,
-)
-from backend.optim.toy_data import TOY_DISHES  # noqa: E402
+from backend.optim.problem import allowed_dishes  # noqa: E402
+from backend.optim.real_data import load_dishes  # noqa: E402
+from backend.optim.solver import solve  # noqa: E402
 
 
 def run(envelope: NutrientEnvelope, dishes=None, seed: int = 42,
         pop_size: int = 40, n_gen: int = 80) -> dict:
     """Run the optimiser with the given envelope.
 
-    Mirrors ``backend.optim.spike_pymoo.run_spike`` but accepts an injected
-    envelope, so the API can pass the clinician-approved envelope end-to-end.
+    Accepts an injected envelope so the API can pass the clinician-approved
+    envelope end-to-end.  Week 2: the default pool is the real 190-dish
+    ``data/dishes.json`` dataset (``real_data.load_dishes``); the toy pool is
+    still available by passing ``dishes=TOY_DISHES`` explicitly.
+
+    Hard guarantee: the returned plan NEVER violates the envelope's hard
+    constraints (``violation_count == 0``, ``feasible is True``).  If the
+    NSGA-II front has no feasible member the best candidate is repaired;
+    failing that a greedy-constructed feasible plan is returned.  When the
+    allowed pool provably cannot satisfy the envelope the result is an explicit
+    infeasibility diagnosis (``feasible=False`` + ``infeasibility_reason``).
     """
 
     if envelope.status != EnvelopeStatus.APPROVED:
@@ -50,20 +54,14 @@ def run(envelope: NutrientEnvelope, dishes=None, seed: int = 42,
             "API guard should have rejected it before calling run()."
         )
 
-    dishes = dishes if dishes is not None else TOY_DISHES
+    if dishes is None:
+        dishes = load_dishes()
 
-    slots = 7 * 3  # DAYS * MEALS_PER_DAY, hard-coded to match spike contract
     allowed = allowed_dishes(envelope, dishes)
 
-    if HAS_PYMOO:
-        result = _solve_pymoo(envelope, dishes, pop_size, n_gen, seed, slots)
-        result["engine"] = "pymoo"
-    else:
-        result = baselines.nsga2_fallback(
-            envelope, dishes, pop_size=pop_size, n_gen=n_gen, seed=seed,
-        )
-        result["engine"] = "fallback-nsga2"
-
+    result = solve(
+        envelope, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen, method="nsga2",
+    )
     result["envelope_id"] = envelope.envelope_id
     result["patient_id"] = envelope.patient_id
     result["allowed_dish_count"] = len(allowed)

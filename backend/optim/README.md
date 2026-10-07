@@ -14,9 +14,15 @@ hard constraints.
 |---|---|
 | `problem.py` | Formal problem spec: decision vars, 4 objectives, hard constraints, `evaluate()`, `is_feasible()`, `constraint_vector()`. |
 | `toy_data.py` | Week-1 toy pool of 8 Singapore-ish dishes + `load_dishes()` hook for Week 2 `data/dishes.json`. |
+| `real_data.py` | Week-2 real 190-dish pool loader (`load_dishes()`), `FastEvaluator` (numpy mirror of `evaluate`), feasibility precheck, greedy constructive builder, plan repair. |
+| `envelopes.py` | Four hand-built APPROVED envelopes (CKD-strict, CKD+hyperkalemia, T2D+HTN, T2D-only) validated against `shared/envelope_schema`. |
+| `solver.py` | Production pipeline `solve()`: pymoo NSGA-II + the hard feasibility guarantee (repair → greedy fallback → explicit diagnosis), plus raw GA/greedy/random baselines. |
+| `api.py` | Contract glue for `/plans`: `run(envelope, dishes=None, seed=42, pop_size=40, n_gen=80)`. Default pool = real dataset. |
 | `spike_pymoo.py` | pymoo NSGA-II spike with lazy import; pure-Python NSGA-II fallback. Writes `spike_pymoo.csv`. |
 | `baselines.py` | `random_search`, `greedy_search`, `exhaustive_search`, `nsga2_fallback`. |
+| `benchmark.py` | Harness: NSGA-II vs GA vs greedy vs random, 4 envelopes × 5 seeds + pop/gen sweep. Writes `benchmark_results.csv` / `.md`. |
 | `test_smoke.py` | 9 assertion tests (`python backend/optim/test_smoke.py`). |
+| `test_real.py` | 10 real-data tests (`python backend/optim/test_real.py`). |
 
 ## Problem formulation
 
@@ -63,12 +69,42 @@ Plus exclusions (`ingredient`, `dish_category`, `macro_pattern`,
 in a fixed canonical order (`0` = satisfied), which is fed to pymoo as `G ≤ 0`
 and used by the fallback's constraint-dominance.
 
+## Week 2: real dataset + feasibility guarantee
+
+`api.run` now defaults to the real 190-dish pool (`data/dishes.json` via
+`real_data.load_dishes()`). Key guarantees and mechanics:
+
+* **Feasibility guarantee** — `run()` never returns an infeasible plan. If the
+  NSGA-II front has no feasible member, the least-violating candidate is
+  repaired (`real_data.repair_plan`: per-day hill-climbing, then greedy
+  rebuild); failing that, a greedy-constructed feasible plan is returned.
+  When the pool provably cannot satisfy the envelope (checked by
+  `feasibility_precheck`: empty pool / MIN unreachable / MAX unavoidable), the
+  result is an explicit diagnosis: `feasible=False`, `engine="infeasible"`,
+  `infeasibility_reason` set, empty plan.
+* **FastEvaluator** — numpy mirror of `problem.evaluate` for pool-drawn plans
+  (same objectives, same canonical constraint ordering, same EPS tolerance);
+  ~50x faster, verified against the canonical evaluator in `test_real.py`.
+* **Cost placeholder** — `data/dishes.json` has no `price_sgd`; a
+  deterministic synthetic price (`2.5 + 0.004·kcal + 0.02·protein`) keeps the
+  cost objective non-degenerate until real pricing lands.
+* All hard constraints are per-day, so a plan is feasible iff every day is —
+  that is what makes construction/repair decompose into cheap 3-slot problems.
+
+Benchmark (`benchmark_results.md` headline, 4 envelopes × 5 seeds, HV on
+normalised objectives): NSGA-II 0.423 mean HV @ ~260 ms, GA 0.282 @ ~116 ms,
+greedy 0.084 @ ~8 ms, random 0.065 (infeasible on 75% of strict renal runs).
+Sweep knee: pop=80, gen=80. Random search violates hard constraints on the
+CKD envelopes — the constraint handling in NSGA-II/GA is what matters.
+
 ## Running
 
 ```bash
 source .venv/bin/activate
 PYTHONPATH=. python -m backend.optim.spike_pymoo     # spike (pymoo or fallback)
 python backend/optim/test_smoke.py                    # smoke tests
+python backend/optim/test_real.py                     # real-data tests
+python -m backend.optim.benchmark                     # benchmark harness (~20s)
 ```
 
 `pymoo` is imported lazily. The Week-1 venv has **pydantic only** (no
