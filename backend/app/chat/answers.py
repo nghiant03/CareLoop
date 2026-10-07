@@ -135,7 +135,8 @@ def _anchor_rule(kb: KBGraph, nutrients: list[str]) -> Optional[dict[str, Any]]:
 def _envelope_context(envelope: Optional[dict[str, Any]], nutrients: list[str]) -> Optional[dict[str, Any]]:
     if not envelope:
         return None
-    status = str(envelope.get("status", ""))
+    raw_status = envelope.get("status", "")
+    status = str(getattr(raw_status, "value", raw_status) or "")
     targets = list(envelope.get("targets") or [])
     matched = [t for t in targets if t.get("nutrient") in nutrients] if nutrients else []
     if nutrients and not matched:

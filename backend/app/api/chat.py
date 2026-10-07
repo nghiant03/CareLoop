@@ -55,7 +55,7 @@ def chat(req: ChatRequest) -> dict[str, Any]:
     elif req.patient_id:
         envelope_obj = find_latest_envelope_for_patient(req.patient_id)
 
-    envelope = envelope_obj.model_dump(by_alias=True) if envelope_obj else None
+    envelope = envelope_obj.model_dump(by_alias=True, mode="json") if envelope_obj else None
 
     result = answers.answer(req.message, get_kb(), envelope=envelope, role="patient")
 
