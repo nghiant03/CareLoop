@@ -1,20 +1,32 @@
-# CareLoop Frontend
+# React + TypeScript + Vite
 
-Placeholder for the clinician + patient single-page app.
+This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
-**Status:** Week 1 stub — no code yet. Planned stack (Week 3, PLAN.md §7):
-**React + Vite + Tailwind CSS**, two roles (clinician review screen, patient
-meal screen, RAG chat).
+Currently, two official plugins are available:
 
-## Planned screens
-- Clinician: patient list, proposed envelope review (targets/exclusions +
-  fired-rule trace with guideline citations), approve / edit / reject.
-- Patient: 7-day meal plan, plain-language "why this meal" explanations.
-- Chat: citation-required RAG assistant with escalation to a clinician.
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-## Approval gate
-The UI must only render approved constraints downstream of the review screen.
-Approval state comes from the backend (`POST /envelopes/{id}/approve`); the API
-returns `409 {"error": "envelope_not_approved"}` for any non-APPROVED envelope.
+## React Compiler
 
-_Scaffolding (`npm create vite`, Tailwind config, API client) lands in Week 3._
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the Oxlint configuration
+
+If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+
+```json
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
+}
+```
+
+See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
