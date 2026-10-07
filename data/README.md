@@ -1,8 +1,10 @@
 # CareLoop — Data Layer (Lane C: Data & Mining)
 
-Week 1 deliverables for the data & mining workstream: a curated Singapore dish
+The data & mining workstream deliverables: a curated Singapore dish
 nutrient table, a deterministic synthetic patient generator, and a USDA
-FoodData Central gap-filler skeleton for potassium/phosphorus.
+FoodData Central gap-filler for potassium/phosphorus. The knowledge-discovery
+modules built on top of this data (trends, clustering, substitutions) live in
+[`backend/mining/`](../backend/mining/README.md).
 
 ## Contents
 
@@ -63,7 +65,7 @@ Provenance values:
 `verified` flips to `true` only after a human checks the record against an
 authoritative source (HPB SG FoodID preferred).
 
-### HPB SG FoodID download plan (Week 1 follow-up)
+### HPB SG FoodID download plan (pending follow-up)
 
 HPB's SG FoodID (formerly FOCOS/ENCF) has >3,000 items and a web **download**
 button but **no public API**. Plan:
@@ -119,14 +121,13 @@ flat. `serum_K_meq_L` / `serum_PO4_mg_dL` always equal `labs_*_monthly[0]`.
 
 ### Reproducibility
 
-A single integer `--seed` drives every draw. When NumPy is present the generator
-uses `numpy.random.default_rng(seed)` exactly as specified. **The repo venv ships
-only pydantic**, so when NumPy is absent the generator transparently falls back to
-a deterministic `random.Random(seed)` shim that mirrors the subset of the
-`Generator` API used (`normal`/`uniform`/`integers`/`choice`/`random`). Output is
-reproducible for a given seed and RNG backend. Install NumPy later and re-run with
-the same seed to regenerate; values will differ only because the RNG backend
-changed (a note is printed to stderr).
+A single integer `--seed` drives every draw. NumPy is installed in the repo
+`.venv`, so the generator uses `numpy.random.default_rng(seed)` exactly as
+specified. When NumPy is absent it transparently falls back to a deterministic
+`random.Random(seed)` shim that mirrors the subset of the `Generator` API used
+(`normal`/`uniform`/`integers`/`choice`/`random`). Output is reproducible for a
+given seed and RNG backend; values differ between backends (a note is printed
+to stderr).
 
 `pregnancy_T2D` records set `exclude_from_careloop: true` and must never reach the
 optimiser (out of CareLoop scope).

@@ -1,13 +1,51 @@
 # CareLoop — Explainable Clinical Decision-Support
 
-An explainable decision-support system that turns a clinician-approved nutrient
-envelope (T2D, hypertension, CKD stage 3–4) into realistic Singapore meal
-plans, with full traceability from clinical guideline → fired rule → approved
-constraint → plated meal.
+CareLoop turns a clinician-approved **nutrient envelope** (targets, ceilings, hard
+exclusions) for T2D / hypertension / CKD stage 3–4 patients into a realistic
+7-day Singapore meal plan — with full traceability from clinical guideline →
+fired rule → approved constraint → plated meal. A grounded chatbot answers
+nutrition questions using only the versioned knowledge base, always citing the
+guideline it drew from, and escalates out-of-scope questions to a clinician
+instead of answering.
 
-See [`PLAN.md`](./PLAN.md) for the full 4-week plan, member allocations, and
-research-derived stack choices. This README documents the **repository
-layout** and **how to run** Week 1 deliverables.
+- Rule engine design: [`rules/ENGINE.md`](rules/ENGINE.md)
+- Optimiser benchmark: [`backend/optim/benchmark_results.md`](backend/optim/benchmark_results.md)
+- Evaluation report (generated): [`evaluation/EVALUATION.md`](evaluation/EVALUATION.md)
+- User guides: [`docs/`](docs/) — clinician, patient, 5-minute demo script, architecture
+
+---
+
+## Architecture
+
+```
+ ┌──────────────┐        ┌───────────────────────────────────────────────┐
+ │ React web UI │───────▶│  FastAPI backend  (backend/app, port 8000)    │
+ │ Vite :5173   │  /api  │  /patients /rules/run /envelopes /plans       │
+ │ clinician +  │        │  /chat /mining /kb /healthz                   │
+ │ patient views│        └───┬───────────────┬──────────────┬────────────┘
+ └──────────────┘            │               │              │
+                   ┌─────────▼──────┐ ┌──────▼───────┐ ┌────▼─────────┐
+                   │ Rule engine    │ │ Optimiser    │ │ Mining       │
+                   │ rules/ (CLIPS, │ │ backend/optim│ │ backend/min- │
+                   │ 52 rules,      │ │ (pymoo NSGA- │ │ ing (trends, │
+                   │ salience)      │ │ II + repair) │ │ clusters,    │
+                   └───────┬────────┘ └──────┬───────┘ │  subst.)     │
+                           │                 │         └──────────────┘
+                   ┌───────▼─────────────────▼──────────────────────┐
+                   │ Approval gate (APPROVED-only) + trace store    │
+                   └───────┬────────────────────────────────────────┘
+                   ┌───────▼────────────────────────────────────────┐
+                   │ Versioned KB (SQLite + NetworkX, in-memory):   │
+                   │ 52 rules + 190 SG dishes + citations; TF-IDF   │
+                   │ retrieval index for the grounded chatbot       │
+                   └────────────────────────────────────────────────┘
+```
+
+Data flow: patient → rule engine (PROPOSED envelope + `RuleFire` trace) →
+**approval gate** (clinician approve/edit/reject; only `APPROVED` passes) →
+optimiser (7-day × 3-meal plan, hard-constraint guarantee) → UI. The chatbot
+retrieves from the versioned KB + the patient's latest envelope and never
+answers without a citation. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
@@ -15,168 +53,145 @@ layout** and **how to run** Week 1 deliverables.
 
 ```
 CareLoop/
-├── PLAN.md                    Full plan: scope, stack, week-by-week, risks
-├── shared/                    Cross-cutting contract (single source of truth)
-│   ├── envelope_schema.py     Pydantic NutrientEnvelope + supporting models
-│   ├── envelope_schema.json   JSON Schema (cross-language contract)
-│   └── README.md
-├── rules/                     Lane A — Knowledge & Rules (Citable rule spec)
-│   ├── rules.json             50 rules from ADA 2026 / AHA-ACC 2025 / KDIGO 2024 / KDOQI 2020
-│   ├── example_trace.json     Worked CKD4 + HTN + K+5.4 patient trace
-│   ├── clipspy_facts.py       CLIPS deftemplates (import-safe; clippsy optional)
-│   ├── neo4j_schema_design.md Graph schema + versioning + SQLite+NetworkX fallback
-│   ├── SCHEMA_DECISION.md     Decision gate: SQLite + NetworkX for the prototype
-│   └── README.md
-├── backend/                   Lane D — Integration & API (FastAPI)
-│   ├── pyproject.toml
-│   ├── README.md              API surface + approval-gate invariant docs
-│   ├── app/
-│   │   ├── main.py            FastAPI app (uvicorn entry)
-│   │   ├── api/
-│   │   │   ├── patients.py    GET/POST /patients
-│   │   │   ├── rules.py       POST /rules/run  → PROPOSED envelope
-│   │   │   ├── envelopes.py   /approve, /edit, /reject
-│   │   │   ├── plans.py       POST /plans      → meal plan (gated on approval)
-│   │   │   └── chat.py        POST /chat       (Week 2 stub)
-│   │   ├── core/
-│   │   │   ├── approval_gate.py    Approval-gate middleware + deps
-│   │   │   ├── graph_versioning.py Versioned graph PoC (SQLite + NetworkX)
-│   │   │   └── llm_choice.py       LLM/embedding defaults + env switch
-│   │   ├── models/            Re-exports of canonical schema
-│   │   └── tests/test_smoke.py
-│   └── optim/                 Lane B — Optimisation (multi-objective plan search)
-│       ├── problem.py         Decision vars, objectives, hard constraints
-│       ├── baselines.py       random / greedy / exhaustive / fallback NSGA-II
-│       ├── spike_pymoo.py     pymoo spike (lazy-import, fallback when absent)
-│       ├── api.py             `run(envelope)` adapter for the /plans endpoint
-│       ├── toy_data.py        8-tdish toy pool
-│       └── test_smoke.py      9 smoke tests
-├── data/                      Lane C — Data & Mining
-│   ├── dishes.json            190 curated SG dishes
-│   ├── patients.json          20 synthetic patients (deterministic seed)
-│   ├── patients_generator.py  Reproducible patient generator
-│   ├── usda_fill_gaps.py      USDA FDC API skeleton (K/P gap filler)
-│   ├── patient.py             Pydantic Patient model
-│   └── README.md
-├── frontend/                  Week 3 placeholder (React + Vite + Tailwind)
-└── notebooks/                 Exploration notebooks (placeholder)
+├── shared/                      Cross-cutting contract (single source of truth)
+│   ├── envelope_schema.py       Pydantic NutrientEnvelope + RuleFire + ...
+│   └── envelope_schema.json     JSON Schema (language-agnostic mirror)
+├── rules/                       Lane A — knowledge & rules
+│   ├── rules.json               52 rules (50 guideline + 2 internal safety)
+│   ├── engine.py                CLIPS forward-chaining engine (run_rules)
+│   ├── ENGINE.md                Engine design, conflict resolution, trace
+│   ├── example_trace.json       Hand-worked CKD4 + HTN + K⁺ 5.4 trace
+│   └── clipspy_facts.py / SCHEMA_DECISION.md / neo4j_schema_design.md
+├── backend/
+│   ├── app/                     FastAPI service
+│   │   ├── main.py              uvicorn entry; CORS; 409 gate handler
+│   │   ├── api/                 patients / rules / envelopes / plans / chat / mining / kb
+│   │   ├── core/                approval_gate, trace_store, kb_loader,
+│   │   │                        plan_service (MIN-floor relaxation), graph_versioning, llm_choice
+│   │   ├── chat/                retrieval (TF-IDF), answers, escalation, llm
+│   │   ├── kb/                  versioned graph store (SQLite + NetworkX)
+│   │   ├── explain/             clinician + patient explanation views
+│   │   └── tests/               API, gate, chat, explain, e2e tests
+│   ├── optim/                   Lane B — meal-plan optimiser
+│   │   ├── problem.py / real_data.py / solver.py / api.py
+│   │   ├── baselines.py / benchmark.py / benchmark_results.md
+│   │   └── envelopes.py / spike_pymoo.py / toy_data.py
+│   └── mining/                  trends (Theil–Sen), clustering, substitutions
+├── data/                        Lane C — 190 SG dishes, 20 synthetic patients, USDA gap filler
+├── frontend/                    React 19 + Vite + Tailwind (3 screens)
+├── notebooks/                   Exploration notebooks
+├── docs/                        User guides, demo script, architecture
+└── evaluation/                  Generated evaluation report (EVALUATION.md)
 ```
-
----
-
-## Week 1 status (foundations)
-
-| Exit criterion                                            | Status |
-|-----------------------------------------------------------|--------|
-| Envelope schema frozen (shared/envelope_schema.py)        | ✅ |
-| ≥30 rules specced with citations                          | ✅ 50 rules (ADA / AHA-ACC / KDIGO / KDOQI) |
-| Schema decision recorded (Neo4j vs SQLite+NetworkX)       | ✅ SQLite + NetworkX for prototype |
-| ≥150 dishes with Na/K/P/carbs                             | ✅ 190 dishes, 8 categories |
-| ≥10 synthetic patients                                    | ✅ 20 patients across 9 archetypes |
-| Patient generator reproducible                            | ✅ Seeded stdlib RNG (numpy optional) |
-| USDA gap-filler skeleton                                  | ✅ urllib + DEMO_KEY, never-crashing |
-| Optimisation problem formalised                           | ✅ Decision vars, 4 objectives, hard constraints |
-| pymoo spike (or fallback) runs on toy data                | ✅ fallback-nsga2; pymoo path ready when installed |
-| Hard constraints never violated                           | ✅ 0 violations on toy envelope; `_repair_plan` guarantees feasibility when any neighbour exists |
-| FastAPI skeleton + stub endpoints                         | ✅ /healthz, /patients, /rules/run, /envelopes, /plans, /chat |
-| Approval-gate invariant enforced                          | ✅ /plans returns HTTP 409 before approval; 200 after |
-| End-to-end live test (POST /rules/run → /envelopes/approve → /plans) | ✅ HTTP 200, 40-plan feasible front |
-| Graph versioning PoC (SQLite + NetworkX)                  | ✅ Append-only valid_from/valid_to chains |
-| LLM/embedding choice                                      | ✅ Ollama default (nomic-embed-text + llama3.2:3b); OpenAI / Gemini / local-ST fallback |
 
 ---
 
 ## How to run
 
-### 1. Use the venv
+Prereqs: Python venv at `.venv/` (FastAPI, uvicorn, clipspy, pymoo, numpy,
+scikit-learn, networkx, pytest) and Node for the frontend.
+
+### 1. Backend (port 8000)
 
 ```bash
-uv venv --python python3.14 .venv
-source .venv/bin/activate
-uv pip install pydantic fastapi 'uvicorn[standard]' httpx pyyaml networkx pytest
-# (optional, for real NSGA-II rather than fallback):
-# uv pip install pymoo numpy
+# from the repo root
+PYTHONPATH=. .venv/bin/uvicorn backend.app.main:app --reload --port 8000
+# docs:   http://localhost:8000/docs
+# health: http://localhost:8000/healthz
 ```
 
-### 2. Boot the API
+### 2. Frontend (port 5173)
 
 ```bash
-PYTHONPATH=. uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+cd frontend && npm install && npm run dev
+# http://localhost:5173 — Vite proxies /api to the backend on :8000
 ```
 
-### 3. Run an end-to-end smoke (clone the curl recipe below)
+### 3. End-to-end in four calls
 
 ```bash
-P=127.0.0.1:8000
-PATIENT='{"patient_id":"P0001","age":57,"sex":"M","weight_kg":61.6,"diagnoses":["T2D"],"egfr":92.2,"serum_K_meq_L":3.78,"meds":["metformin"]}'
+P=http://127.0.0.1:8000
 
-# 1) Run rules -> PROPOSED envelope (50 fired rules)
-curl -sS -X POST $P/rules/run -H 'content-type: application/json' -d "$PATIENT" | jq
+# 1) Run the rule engine -> PROPOSED envelope + fired-rule trace
+EID=$(curl -sS -X POST $P/rules/run -H 'content-type: application/json' \
+  -d '{"patient_id":"P0005"}' | jq -r .envelope.envelope_id)
 
-# 2) Try /plans *before* approval -> 409
+# 2) /plans before approval -> 409 envelope_not_approved
 curl -sS -w '\nHTTP %{http_code}\n' -X POST $P/plans \
-  -H 'content-type: application/json' -d '{"patient_id":"P0001"}'
-# {"error":"envelope_not_approved","status":"PROPOSED"}  HTTP 409
+  -H 'content-type: application/json' -d '{"patient_id":"P0005"}'
 
-# 3) Approve
-EID=$(curl -sS -X POST $P/rules/run -H 'content-type: application/json' -d "$PATIENT" | jq -r .envelope_id)
-curl -sS -X POST $P/envelopes/$EID/approve -H 'content-type: application/json' -d '{"approved_by":"Dr.Test"}'
+# 3) Clinician approves
+curl -sS -X POST $P/envelopes/$EID/approve \
+  -H 'content-type: application/json' -d '{"approved_by":"Dr.Demo"}' | jq .status
 
-# 4) Generate a plan
-curl -sS -X POST $P/plans -H 'content-type: application/json' -d '{"patient_id":"P0001"}' | jq
+# 4) Generate the 7-day plan (or see the infeasibility diagnosis)
+curl -sS -X POST $P/plans -H 'content-type: application/json' \
+  -d '{"patient_id":"P0005"}' | jq '{feasible, engine, violation_count, infeasibility_reason, relaxed_constraints}'
 ```
 
-### 4. Optimiser spike (toy data)
+Envelopes, traces and created patients live in process-local stores; a backend
+restart resets them (the contracts are storage-agnostic by design).
 
-```bash
-PYTHONPATH=. python -m backend.optim.spike_pymoo
-# Engine                : fallback-nsga2
-# Allowed dishes        : 6 of 8
-# Pareto front size     : 40
-# Constraint violations : 0
-# Runtime               : ~830 ms
-```
+---
 
-### 5. Smoke tests
+## API surface
 
-```bash
-PYTHONPATH=. python -m backend.app.tests.test_smoke         # API smoke (8 tests)
-PYTHONPATH=. python -m backend.optim.test_smoke             # Optimiser smoke (9 tests)
-PYTHONPATH=. python -m backend.app.core.graph_versioning   # Graph demo
-PYTHONPATH=. python -m backend.app.core.llm_choice          # LLM choice
-PYTHONPATH=. python -m data.patients_generator --n 20 --seed 0 --out data/patients.json
-```
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/healthz` | liveness probe (+ `GET /` service banner) |
+| GET | `/patients` | list patients (reads `data/patients.json` + overlay) |
+| GET | `/patients/{patient_id}` | fetch one patient (404 if absent) |
+| POST | `/patients` | create a patient (process-local overlay) |
+| POST | `/rules/run` | patient id → PROPOSED `NutrientEnvelope` + `RuleFire` trace |
+| GET | `/envelopes/{id}` | fetch an envelope |
+| GET | `/envelopes/{id}/explanation` | clinician explanation (trace, conflicts, citations) |
+| POST | `/envelopes/{id}/approve` | PROPOSED/EDITED → APPROVED |
+| POST | `/envelopes/{id}/edit` | mutate targets → EDITED (re-approval required) |
+| POST | `/envelopes/{id}/reject` | → REJECTED |
+| POST | `/plans` | 7-day meal plan — **gated**: 409 unless APPROVED |
+| POST | `/chat` | grounded Q&A `{answer, citations, escalated, status}` |
+| GET | `/mining/trends` | rising K⁺/PO₄ flags across the cohort |
+| GET | `/mining/substitutions?dish_id=&k=` | healthier substitute dishes |
+| GET | `/kb/stats` | versioned-KB node/edge counts + retrieval-index size |
+
+Interactive docs: `http://localhost:8000/docs`.
 
 ---
 
 ## Architectural invariants
 
-1. **NutrientEnvelope.status == APPROVED is the single gate** to optimisation, RAG
-   retrieval, and patient-facing views. Enforced in
-   `backend/app/core/approval_gate.py` and verified in the schema's
-   `NutrientEnvelope.is_ready_for_optimisation()`.
-2. **The contract lives in `shared/envelope_schema.py`.** Rules engine,
-   optimiser, and API MUST import from there. Pydantic is the Python truth;
-   `shared/envelope_schema.json` is the language-agnostic mirror.
-3. **Conflict priority is `CKD > HTN > T2D` on sodium**. CKD also wins for
-   protein; potassium and phosphorus are individualised to serum labs.
-4. **Versioning is append-only.** Each graph node/edge has `valid_from`
-   and (when superseded) `valid_to` — never deleted.
-5. **Clinical safety.** Every patient-facing output must trace back to an
-   approved envelope. Out-of-scope (pregnancy, prescribing) is rejected with
-   `exclude_from_careloop=true`.
+1. **The approval gate.** `NutrientEnvelope.status == APPROVED` is the single
+   gate to the optimiser, RAG chat and patient-facing views. Enforced in
+   `backend/app/core/approval_gate.py`; violations render as
+   `HTTP 409 {"error": "envelope_not_approved", "status": ...}`.
+2. **The contract lives in `shared/envelope_schema.py`.** Engine, optimiser and
+   API import it; `shared/envelope_schema.json` is the language-agnostic mirror.
+3. **Conflict priority `CKD > HTN > T2D` on sodium** (KDIGO 2000 mg overrides
+   DASH/ADA 2300 mg). Losing rules keep their trace rows with an explicit
+   `SUPERSEDED: superseded by <rule> ...` marker. Potassium and phosphorus are
+   individualised to serum labs.
+4. **Hard constraints are never silently broken.** The optimiser guarantees
+   `violation_count == 0` (repair → greedy fallback); when the dish pool cannot
+   satisfy an envelope it returns an explicit infeasibility diagnosis, and
+   unreachable MIN floors are lowered with a full `relaxed_constraints`
+   disclosure in the plan response.
+5. **Chat is grounded or silent.** Answers are composed only from retrieved KB
+   chunks (+ the patient's envelope numbers) and always cite
+   `rule_id + guideline + section`; low-confidence questions are refused;
+   emergencies, diagnosis/dosing requests and out-of-scope topics are escalated.
+6. **Versioning is append-only.** Every KB node/edge carries `valid_from` /
+   `valid_to`; nothing is deleted.
+7. **Clinical safety.** Out-of-scope patients (pregnancy, paediatric, dialysis)
+   are `REJECTED` with `exclude_from_careloop=true` and never reach the
+   optimiser.
 
 ---
 
-## What's Week 2
+## Tests
 
-- **A** — implement clipspy rule base + salience-based conflict resolution;
-  unit-test against hand-computed cases; clinician explanation view.
-- **B** — full optimiser on `data/dishes.json`; verify hard constraints on
-  real dishes; collect runtime stats.
-- **C** — load KB into graph; cohort clustering (k-means / HDBSCAN); food
-  substitution engine v1.
-- **D** — versioned-graph read/write used by the API; RAG retrieval pipeline
-  indexed over KB chunks; approval gate end-to-end on real envelopes.
-
-See `PLAN.md` §4 for the full Week 2 / 3 / 4 plan and exit criteria.
+```bash
+.venv/bin/python -m pytest rules/ -q           # rule engine suite
+.venv/bin/python -m pytest backend -q          # API, gate, chat, explain, e2e
+.venv/bin/python -m pytest backend/mining -q   # trends / clustering / substitutions
+.venv/bin/python backend/optim/test_real.py    # optimiser on the real dish pool
+```

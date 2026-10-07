@@ -4,6 +4,12 @@ Knowledge-discovery modules over the synthetic CareLoop dataset
 (`data/patients.json`, `data/dishes.json`). Pure-Python + numpy/scikit-learn,
 no network access, fully deterministic.
 
+Wired into the API by `backend/app/api/mining.py`:
+`GET /mining/trends` (trend flags over the patient cohort) and
+`GET /mining/substitutions?dish_id=...&k=...` (substitute dishes). Cohort
+clustering is exposed as a library (`clustering.cluster_patients`), not as an
+endpoint.
+
 ## Modules
 
 ### `clustering.cluster_patients(patients, k_range=(2, 6)) -> dict`

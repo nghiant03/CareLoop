@@ -1,4 +1,4 @@
-# CareLoop — Rules Knowledge Base (Lane A, Week 1)
+# CareLoop — Rules Knowledge Base (Lane A)
 
 Structured, citable clinical rules that turn a patient profile into a proposed
 **nutrient envelope** (`shared/envelope_schema.py`). This folder is the contract between
@@ -8,17 +8,18 @@ the rule engine and every downstream module (clinician gate → optimiser → RA
 
 | File | Purpose |
 |---|---|
-| `rules.json` | The rule spec: **50 rules** across ADA 2026, AHA/ACC 2025 (DASH), KDIGO 2024, KDOQI 2020 + medication/scope/conflict extensions. |
+| `rules.json` | The rule spec: **52 rules** — 50 from ADA 2026 / AHA-ACC 2025 (DASH) / KDIGO 2024 / KDOQI 2020 plus medication/scope/conflict extensions, and 2 internal safety rules. |
+| `engine.py` | The rule engine: compiles the rulebook into CLIPS defrules, forward-chains a patient fact, assembles the envelope + `RuleFire` trace. See [`ENGINE.md`](ENGINE.md). |
 | `example_trace.json` | Hand-worked trace for a CKD stage 4 + HTN + K⁺ 5.4 patient → expected envelope, 30 fired rules. |
 | `clipspy_facts.py` | CLIPS `deftemplate` layer + mapping helpers mirroring the pydantic contracts. Import-safe without clipspy. |
 | `neo4j_schema_design.md` | Graph schema + versioning model, with SQLite + NetworkX fallback mapping. |
-| `SCHEMA_DECISION.md` | Recorded Week 1 gate: **SQLite + NetworkX** for the prototype. |
+| `SCHEMA_DECISION.md` | Recorded gate decision: **SQLite + NetworkX** for the prototype. |
 
-> **Tooling note.** `clipspy` and `pymoo` are **not installed** in this environment yet
-> (they are Week 2 dependencies). `rules.json` is pure data and needs no engine; the
-> CLIPS templates in `clipspy_facts.py` import safely without clipspy (guarded by
-> `try/except`), and `load_templates()` raises a clear error until clipspy is installed.
-> Neo4j is likewise not installed — the prototype uses SQLite + NetworkX per the decision.
+> **Tooling note.** `clipspy` (and, for the optimiser, `pymoo` + `numpy`) are
+> installed in the repo `.venv`; `rules.engine` imports `clips` directly and is
+> a hard runtime dependency. `rules.json` itself is pure data and needs no
+> engine. Neo4j is not used — the prototype uses SQLite + NetworkX per the
+> recorded decision.
 
 ---
 
@@ -101,16 +102,21 @@ resolution, so the trace explains *why* a value was chosen.
 import json
 
 spec = json.load(open("rules/rules.json"))
-rules = spec["rules"]                          # 50 dicts
+rules = spec["rules"]                          # 52 dicts
 by_id = {r["rule_id"]: r for r in rules}
+```
 
-# Week 2: compile into CLIPS and forward-chain.
-# from rules.clipspy_facts import CLIPS_AVAILABLE, load_templates, patient_fact
-# import clips
-# env = clips.Environment()
-# load_templates(env)
-# env.assert_string(patient_fact(patient_summary))
-# env.run()
+The production engine is `rules/engine.py` — the rulebook is compiled into
+CLIPS defrules (salience = priority), a patient fact is asserted and
+forward-chained to fixpoint, and Python assembles the envelope. Usage,
+pipeline, determinism guarantees and known deviations: **see
+[`rules/ENGINE.md`](ENGINE.md)**. Quick start:
+
+```python
+from rules.engine import run_rules
+
+result = run_rules(patient_dict)   # data/patients.json shape
+envelope, trace = result["envelope"], result["trace"]
 ```
 
 Reference evaluator (used to verify this spec; no clipspy needed):
@@ -213,7 +219,7 @@ python rules/clipspy_facts.py                                                   
 
 ---
 
-## 7. Rule engine (Week 2)
+## 7. Rule engine
 
 `rules/engine.py` implements `run_rules(patient: dict) -> {"envelope", "trace"}`: the
 rulebook is compiled into CLIPS defrules (salience = priority), a patient fact is asserted

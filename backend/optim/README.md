@@ -1,8 +1,8 @@
-# CareLoop Meal Optimiser (Module 4 — Lane B, Week 1)
+# CareLoop Meal Optimiser
 
 Multi-objective meal-plan optimiser that turns a clinician-**APPROVED**
 `NutrientEnvelope` into a 7-day × 3-meal plan that never violates the envelope's
-hard constraints.
+hard constraints — on the real 190-dish `data/dishes.json` pool by default.
 
 > **Architectural invariant:** only `EnvelopeStatus.APPROVED` envelopes may be
 > consumed. `evaluate()` / `is_feasible()` raise `EnvelopeNotApprovedError`
@@ -13,8 +13,8 @@ hard constraints.
 | File | Purpose |
 |---|---|
 | `problem.py` | Formal problem spec: decision vars, 4 objectives, hard constraints, `evaluate()`, `is_feasible()`, `constraint_vector()`. |
-| `toy_data.py` | Week-1 toy pool of 8 Singapore-ish dishes + `load_dishes()` hook for Week 2 `data/dishes.json`. |
-| `real_data.py` | Week-2 real 190-dish pool loader (`load_dishes()`), `FastEvaluator` (numpy mirror of `evaluate`), feasibility precheck, greedy constructive builder, plan repair. |
+| `toy_data.py` | Toy pool of 8 Singapore-ish dishes (still used by the spike and smoke tests; the production pool is `data/dishes.json`). |
+| `real_data.py` | Real 190-dish pool loader (`load_dishes()`), `FastEvaluator` (numpy mirror of `evaluate`), feasibility precheck, greedy constructive builder, plan repair. |
 | `envelopes.py` | Four hand-built APPROVED envelopes (CKD-strict, CKD+hyperkalemia, T2D+HTN, T2D-only) validated against `shared/envelope_schema`. |
 | `solver.py` | Production pipeline `solve()`: pymoo NSGA-II + the hard feasibility guarantee (repair → greedy fallback → explicit diagnosis), plus raw GA/greedy/random baselines. |
 | `api.py` | Contract glue for `/plans`: `run(envelope, dishes=None, seed=42, pop_size=40, n_gen=80)`. Default pool = real dataset. |
@@ -69,9 +69,9 @@ Plus exclusions (`ingredient`, `dish_category`, `macro_pattern`,
 in a fixed canonical order (`0` = satisfied), which is fed to pymoo as `G ≤ 0`
 and used by the fallback's constraint-dominance.
 
-## Week 2: real dataset + feasibility guarantee
+## Real dataset + feasibility guarantee
 
-`api.run` now defaults to the real 190-dish pool (`data/dishes.json` via
+`api.run` defaults to the real 190-dish pool (`data/dishes.json` via
 `real_data.load_dishes()`). Key guarantees and mechanics:
 
 * **Feasibility guarantee** — `run()` never returns an infeasible plan. If the
@@ -107,12 +107,18 @@ python backend/optim/test_real.py                     # real-data tests
 python -m backend.optim.benchmark                     # benchmark harness (~20s)
 ```
 
-`pymoo` is imported lazily. The Week-1 venv has **pydantic only** (no
-`numpy`/`pymoo`), so the spike automatically uses the pure-Python NSGA-II
-fallback in `baselines.py`. When pymoo is installed, the same problem is solved
-by `pymoo.algorithms.moo.nsga2.NSGA2` and the spike reports `Engine: pymoo`.
+`pymoo` is imported lazily. When pymoo + numpy are installed (they are in the
+repo `.venv`), `solve()` uses `pymoo.algorithms.moo.nsga2.NSGA2` and reports
+`Engine: pymoo`; if they are missing, the same problem falls back to the
+pure-Python NSGA-II in `baselines.py` and the spike reports
+`fallback-nsga2`. `api.run` additionally falls back to the greedy builder
+(`engine="greedy-fallback"`) when the NSGA-II front has no feasible member, so
+the endpoint stays fast and feasible regardless of engine availability.
 
 ## Expected output
+
+With numpy/pymoo installed the spike prints `Engine : pymoo`. Without them
+(fallback path):
 
 ```
 Engine                : fallback-nsga2
@@ -142,17 +148,12 @@ targets: energy `TARGET=1900 kcal`, sodium `MAX=2000 mg`, protein `MIN=60 g`
 
 ## Baseline comparison
 
-`baselines.py` provides the Week-3 benchmark comparators. `exhaustive_search`
+`baselines.py` provides the benchmark comparators. `exhaustive_search`
 enumerates all `MEALS_PER_DAY`-meal combinations for one day (true small
 exhaustive) and repeats the best day — deliberately variety-poor, so NSGA-II's
 front should dominate it. `greedy_search` adds a single-slot local-search pass.
 
-## Week 2 plans
-
-1. Replace `TOY_DISHES` with `load_dishes("data/dishes.json")` (150–300 HPB/USDA
-   dishes) — `Dish` contract already matches.
-2. Support multi-dish meals in the GA encoding (currently one dish per meal).
-3. Add nutrient-provenance flags for estimated K/P values.
-4. Feed real APPROVED envelopes from the rule engine instead of the toy builder.
-5. Harden the pymoo path (population/generation tuning) once `pymoo`+`numpy`
-   are added to the environment.
+Numbers: see [`benchmark_results.md`](benchmark_results.md) — NSGA-II 0.423 mean
+hypervolume @ ~262 ms vs GA 0.282 @ ~117 ms, greedy 0.084 @ ~8 ms, random 0.065
+(infeasible on 75% of strict renal runs). Recommended production config:
+pop=80, gen=80.
