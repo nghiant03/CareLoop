@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.eggs/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Neo4j / data dumps
+data/neo4j/
+data/cache/
+*.dump
+
+# Env / secrets
+.env
+.env.local
+*.pem
+
+# Node / frontend
+node_modules/
+dist/
+.parcel-cache/
+
+# OS
+Thumbs.db
+
+# Project-specific
+# Keep *.json in data/, only ignore generated caches
