@@ -1,4 +1,4 @@
-# CareLoop — 5-minute demo script
+# CareLoop — demo script (~6 minutes)
 
 Screen-by-screen walkthrough. Every command below has been run against the
 current codebase. Start both processes first.
@@ -24,12 +24,14 @@ Open http://localhost:5173 — the Clinician review screen is the landing page.
   eGFR ≈ 25.
 - Press **Generate proposed envelope**.
 
-Say: *"The rule engine forward-chains 52 citable rules over this patient's
+Say: *"The rule engine forward-chains 61 citable rules over this patient's
 facts — diagnoses, labs, weight, meds — and proposes a nutrient envelope. Every
-fired rule is kept in the trace below."*
+fired rule is kept in the trace below. Medication rules fire too: for a
+patient on an ACE inhibitor you'll see potassium-monitoring cautions alongside
+the nutrient constraints."*
 
 Point at the constraint table: sodium max 2000 mg, protein 29.9–43.4 g (scaled
-0.55–0.8 g/kg to her 54.3 kg), energy 1357–1900 kcal, potassium ceiling,
+0.55–0.8 g/kg to his 54.3 kg), energy 1357–1900 kcal, potassium ceiling,
 phosphate-additive exclusions.
 
 ## 2. Show the KDIGO-over-DASH sodium override (~1 min)
@@ -59,7 +61,7 @@ in the API, enforced as HTTP 409, not a convention."*
 ## 4. Generate a 7-day plan (~1.5 min)
 
 - Go to **Meal plan**, pick **P0001** (T2D-only — produces a feasible plan on
-  today's 190-dish pool), press **Generate 7-day plan**.
+  today's 214-dish pool), press **Generate 7-day plan**.
 
 Say: *"The optimiser is a multi-objective NSGA-II over 21 meal slots — nutrient
 deviation, preference, variety, cost — with the approved limits as hard
@@ -80,7 +82,7 @@ fallback."*
 
   > **why is my sodium limit 2000?**
 
-Say: *"The answer is assembled only from the versioned knowledge base — TF-IDF
+Say: *"The answer is assembled only from the versioned knowledge base — BM25
 retrieval over rule chunks — plus her approved envelope numbers. It cites the
 guidelines behind the number: KDIGO 2024 (the 2000 mg ceiling that won) and
 AHA/ACC 2025 (the DASH 2300 that lost). No citation, no answer."*
@@ -89,14 +91,34 @@ AHA/ACC 2025 (the DASH 2300 that lost). No citation, no answer."*
 
   > **do I have kidney failure?**
 
-Say: *"Diagnoses, medication changes, emergencies, pregnancy — the escalation
-filter refuses to answer and hands it to a clinician instead. False positives
-are safe; false negatives are not."*
+Say: *"Diagnoses, medication changes — including 'should I stop taking
+metformin?' — emergencies, pregnancy: the escalation filter refuses to answer
+and hands it to a clinician instead. False positives are safe; false negatives
+are not."*
 
-## 6. Optional 30-second extras
+## 6. The loop: log actual meals and see adherence (~1.5 min)
+
+- Go to **Adherence**, pick **P0005**, and log a few days of **Chicken Rice
+  (Hainanese)** for all three meals (search "chicken" in the dish picker).
+
+Say: *"This is the loop in CareLoop: the plan proposes, the patient logs
+reality, and the system measures one against the other — against the same
+envelope the clinician approved."*
+
+- The **summary** shows per-day totals with **Over limit** rows: three chicken
+  rice a day is ~3600 mg sodium against her 2000 mg KDIGO ceiling — a hard
+  violation on every logged day, flagged per nutrient.
+- The **trends** panel shows the deviation series and a **worsening banner**
+  (with these logs, the fibre shortfall is flagged worsening/alert).
+
+Say: *"Hard ceilings are hard violations; MIN floors are soft aims reported
+separately — same semantics as the optimiser. And if the envelope hadn't been
+approved yet, every comparison would be labelled informational-only."*
+
+## 7. Optional 30-second extras
 
 ```bash
-curl -sS http://127.0.0.1:8000/kb/stats | jq          # versioned KB: 52 rules, 190 dishes
+curl -sS http://127.0.0.1:8000/kb/stats | jq          # versioned KB: 61 rules, 214 dishes
 curl -sS http://127.0.0.1:8000/mining/trends | jq     # rising K+/PO4 flags, urgent first
 curl -sS 'http://127.0.0.1:8000/mining/substitutions?dish_id=SG0001&k=3' | jq
 ```
@@ -117,12 +139,19 @@ curl -sS -X POST $P/chat -H 'content-type: application/json' \
       -d '{"patient_id":"P0005","message":"why is my sodium limit 2000?"}' | jq
 curl -sS -X POST $P/chat -H 'content-type: application/json' \
       -d '{"patient_id":"P0005","message":"do I have kidney failure?"}' | jq
+# adherence loop (upsert per slot; today's date in UTC)
+for meal in breakfast lunch dinner; do
+  curl -sS -X POST $P/adherence/log -H 'content-type: application/json' \
+        -d "{\"patient_id\":\"P0005\",\"date\":\"$(date -I)\",\"meal\":\"$meal\",\"dish_id\":\"SG0001\"}" | jq
+done
+curl -sS "$P/adherence/P0005/summary?days=14" | jq '{informational_only, days_logged, aggregate: (.aggregate | {days_logged, hard_violation_days})}'
+curl -sS "$P/adherence/P0005/deviation" | jq '.flags'
 ```
 
 ## Notes for the presenter
 
-- Backend state (envelopes, traces, created patients) is process-local; a
-  restart resets it, so re-run `/rules/run` after restarting.
+- Backend state (envelopes, traces, created patients, meal logs) is
+  process-local; a restart resets it, so re-run `/rules/run` after restarting.
 - Rule engine output is deterministic — the same patient always yields the same
   envelope and trace, so this demo reproduces exactly.
 - Dish nutrient values are curated estimates (`data/README.md`); present

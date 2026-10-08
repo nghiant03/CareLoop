@@ -48,6 +48,34 @@ goal.
   past a limit. Treat it as a signal to talk to your care team — the numbers
   come from estimated food values, not from weighing your actual plate.
 
+## Logging what you actually ate
+
+On the **Adherence** screen you can record what you really ate. Pick your
+name, a day, and the meal (breakfast, lunch or dinner), then choose the dish
+from a searchable list (type part of a dish name, e.g. "chicken rice"). One
+dish per meal slot — if you log the same meal again, the new dish replaces
+the old one.
+
+The app compares your logged meals with the targets your clinician approved:
+
+- A day can show **"Over limit"** (red) — the logged food went past a hard
+  ceiling, such as a sodium or potassium limit. This is the same "over the
+  limit" idea as on the meal-plan bars, but for what you actually ate.
+- A day can show **"Below aim"** (amber) — the logged food fell short of an
+  "at least" goal (such as getting enough carbohydrate) or drifted off a
+  "target" value. Falling short of an aim is not a violation; it just means
+  today's food didn't reach the goal.
+- An **aggregate view** shows how many logged days were over a limit, and
+  which nutrients come up most often.
+- A **trends** view looks at your logged days over time. If a nutrient keeps
+  moving away from your target, you will see a **worsening banner** — a
+  signal worth bringing up with your care team, not an emergency.
+
+The numbers are only as good as the dish estimates behind them, and only you
+know what portion you really ate — treat the results as a conversation
+starter, not a lab report. If your clinician has not approved your targets
+yet, the comparison is clearly marked as informational only.
+
 ## Using chat
 
 The **Chat** screen answers questions about your nutrition — for example *"why
@@ -58,14 +86,22 @@ is my sodium limit 2000?"*.
   the guideline it came from (name and link).
 - It answers nutrition questions only. If you ask something a chatbot should
   not answer, you will see a banner instead:
-  - emergency symptoms → "contact emergency services or urgent care
+  - emergency symptoms (including metabolic emergencies like possible
+    ketoacidosis signs) → "contact emergency services or urgent care
     immediately";
   - diagnosis questions ("do I have …?") → "please discuss symptoms and
     diagnosis with your clinician";
-  - medication changes, pregnancy and other out-of-scope topics → "this needs a
-    clinician".
+  - medication changes — including phrasings like *"should I stop taking
+    metformin?"* or *"can I skip my insulin today?"* — and other out-of-scope
+    topics → "this needs a clinician".
   **"A clinician will review this"** means exactly that: the app does not
   answer, and the question belongs with your care team.
 - If the chat cannot find guideline-backed information for your question, it
   says so and suggests speaking with your clinician or dietitian rather than
   guessing.
+- If you take **warfarin** (Coumadin), asking about vitamin K or leafy greens
+  gives one specific, guideline-backed message: keep your vitamin K intake
+  **consistent** from week to week — do not avoid leafy greens or make drastic
+  dietary changes while on warfarin (source: the FDA Coumadin label's
+  instructions for patients). Your clinician manages the dose, not your
+  salad.

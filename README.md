@@ -3,15 +3,19 @@
 CareLoop turns a clinician-approved **nutrient envelope** (targets, ceilings, hard
 exclusions) for T2D / hypertension / CKD stage 3–4 patients into a realistic
 7-day Singapore meal plan — with full traceability from clinical guideline →
-fired rule → approved constraint → plated meal. A grounded chatbot answers
-nutrition questions using only the versioned knowledge base, always citing the
-guideline it drew from, and escalates out-of-scope questions to a clinician
-instead of answering.
+fired rule → approved constraint → plated meal. Patients then log what they
+actually ate, and the **adherence loop** measures logged meals against the
+envelope: per-day totals, hard-violation / soft-gap classifications and
+deviation trend flags. A grounded chatbot answers nutrition questions using
+only the versioned knowledge base, always citing the guideline it drew from,
+and escalates out-of-scope questions to a clinician instead of answering.
 
 - Rule engine design: [`rules/ENGINE.md`](rules/ENGINE.md)
 - Optimiser benchmark: [`backend/optim/benchmark_results.md`](backend/optim/benchmark_results.md)
+- Retrieval benchmark: [`backend/app/chat/RETRIEVAL_BENCH.md`](backend/app/chat/RETRIEVAL_BENCH.md)
+- Mining method comparison: [`backend/mining/COMPARISON.md`](backend/mining/COMPARISON.md)
 - Evaluation report (generated): [`evaluation/EVALUATION.md`](evaluation/EVALUATION.md)
-- User guides: [`docs/`](docs/) — clinician, patient, 5-minute demo script, architecture
+- User guides: [`docs/`](docs/) — clinician, patient, demo script, architecture
 
 ---
 
@@ -21,29 +25,32 @@ instead of answering.
  ┌──────────────┐        ┌───────────────────────────────────────────────┐
  │ React web UI │───────▶│  FastAPI backend  (backend/app, port 8000)    │
  │ Vite :5173   │  /api  │  /patients /rules/run /envelopes /plans       │
- │ clinician +  │        │  /chat /mining /kb /healthz                   │
- │ patient views│        └───┬───────────────┬──────────────┬────────────┘
- └──────────────┘            │               │              │
+ │ clinician +  │        │  /chat /mining /kb /adherence /dishes         │
+ │ patient views│        │  /healthz                                     │
+ └──────────────┘        └───┬───────────────┬──────────────┬────────────┘
                    ┌─────────▼──────┐ ┌──────▼───────┐ ┌────▼─────────┐
                    │ Rule engine    │ │ Optimiser    │ │ Mining       │
                    │ rules/ (CLIPS, │ │ backend/optim│ │ backend/min- │
-                   │ 52 rules,      │ │ (pymoo NSGA- │ │ ing (trends, │
+                   │ 61 rules,      │ │ (pymoo NSGA- │ │ ing (trends, │
                    │ salience)      │ │ II + repair) │ │ clusters,    │
                    └───────┬────────┘ └──────┬───────┘ │  subst.)     │
                            │                 │         └──────────────┘
                    ┌───────▼─────────────────▼──────────────────────┐
                    │ Approval gate (APPROVED-only) + trace store    │
+                   │ + adherence meal-log store                     │
                    └───────┬────────────────────────────────────────┘
                    ┌───────▼────────────────────────────────────────┐
                    │ Versioned KB (SQLite + NetworkX, in-memory):   │
-                   │ 52 rules + 214 SG dishes + citations; TF-IDF   │
+                   │ 61 rules + 214 SG dishes + citations; BM25     │
                    │ retrieval index for the grounded chatbot       │
                    └────────────────────────────────────────────────┘
 ```
 
 Data flow: patient → rule engine (PROPOSED envelope + `RuleFire` trace) →
 **approval gate** (clinician approve/edit/reject; only `APPROVED` passes) →
-optimiser (7-day × 3-meal plan, hard-constraint guarantee) → UI. The chatbot
+optimiser (7-day × 3-meal plan, hard-constraint guarantee) → UI. Patients then
+log actual meals (`/adherence/log`) and the adherence summary / deviation
+endpoints measure logged reality against the latest envelope. The chatbot
 retrieves from the versioned KB + the patient's latest envelope and never
 answers without a citation. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -57,7 +64,8 @@ CareLoop/
 │   ├── envelope_schema.py       Pydantic NutrientEnvelope + RuleFire + ...
 │   └── envelope_schema.json     JSON Schema (language-agnostic mirror)
 ├── rules/                       Lane A — knowledge & rules
-│   ├── rules.json               52 rules (50 guideline + 2 internal safety)
+│   ├── rules.json               61 rules (guideline-sourced + medication/
+│   │                            scope/conflict extensions, 2 internal safety)
 │   ├── engine.py                CLIPS forward-chaining engine (run_rules)
 │   ├── ENGINE.md                Engine design, conflict resolution, trace
 │   ├── example_trace.json       Hand-worked CKD4 + HTN + K⁺ 5.4 trace
@@ -65,20 +73,24 @@ CareLoop/
 ├── backend/
 │   ├── app/                     FastAPI service
 │   │   ├── main.py              uvicorn entry; CORS; 409 gate handler
-│   │   ├── api/                 patients / rules / envelopes / plans / chat / mining / kb
+│   │   ├── api/                 patients / rules / envelopes / plans / chat /
+│   │   │                        mining / kb / adherence / dishes
+│   │   ├── adherence/           meal-log store + analysis (per-day totals,
+│   │   │                        hard/soft classification, Theil–Sen trends)
 │   │   ├── core/                approval_gate, trace_store, kb_loader,
 │   │   │                        plan_service (MIN-floor relaxation), graph_versioning, llm_choice
-│   │   ├── chat/                retrieval (TF-IDF), answers, escalation, llm
+│   │   ├── chat/                retrieval (BM25), answers, escalation, llm
 │   │   ├── kb/                  versioned graph store (SQLite + NetworkX)
 │   │   ├── explain/             clinician + patient explanation views
-│   │   └── tests/               API, gate, chat, explain, e2e tests
+│   │   └── tests/               API, gate, chat, explain, adherence, e2e tests
 │   ├── optim/                   Lane B — meal-plan optimiser
 │   │   ├── problem.py / real_data.py / solver.py / api.py
 │   │   ├── baselines.py / benchmark.py / benchmark_results.md
 │   │   └── envelopes.py / spike_pymoo.py / toy_data.py
-│   └── mining/                  trends (Theil–Sen), clustering, substitutions
+│   └── mining/                  trends (Theil–Sen + EWMA), clustering,
+│                                renal-weighted substitutions, COMPARISON.md
 ├── data/                        Lane C — 214 SG dishes, 20 synthetic patients, USDA gap filler
-├── frontend/                    React 19 + Vite + Tailwind (3 screens)
+├── frontend/                    React 19 + Vite + Tailwind (4 screens)
 ├── notebooks/                   Exploration notebooks
 ├── docs/                        User guides, demo script, architecture
 └── evaluation/                  Generated evaluation report (EVALUATION.md)
@@ -129,8 +141,9 @@ curl -sS -X POST $P/plans -H 'content-type: application/json' \
   -d '{"patient_id":"P0005"}' | jq '{feasible, engine, violation_count, infeasibility_reason, relaxed_constraints}'
 ```
 
-Envelopes, traces and created patients live in process-local stores; a backend
-restart resets them (the contracts are storage-agnostic by design).
+Envelopes, traces, created patients and adherence meal logs live in
+process-local stores; a backend restart resets them (the contracts are
+storage-agnostic by design).
 
 ---
 
@@ -150,8 +163,13 @@ restart resets them (the contracts are storage-agnostic by design).
 | POST | `/envelopes/{id}/reject` | → REJECTED |
 | POST | `/plans` | 7-day meal plan — **gated**: 409 unless APPROVED |
 | POST | `/chat` | grounded Q&A `{answer, citations, escalated, status}` |
-| GET | `/mining/trends` | rising K⁺/PO₄ flags across the cohort |
-| GET | `/mining/substitutions?dish_id=&k=` | healthier substitute dishes |
+| POST | `/adherence/log` | log an actual meal `{patient_id, date, meal, dish_id}` (upsert per slot; 404 on unknown patient/dish) |
+| GET | `/adherence/{pid}/summary?days=14` | per-day totals vs the latest envelope — hard violations (MAX exceeded) vs soft gaps (MIN/TARGET shortfalls); `informational_only` when the envelope is not APPROVED |
+| GET | `/adherence/{pid}/deviation` | per-nutrient deviation-exposure series + Theil–Sen trend flags (`worsening`/`improving`, `alert`/`review`) |
+| GET | `/dishes?category=&search=` | dish catalogue for pickers (category filter + name search) |
+| GET | `/dishes/{dish_id}` | one full dish record (404 if absent) |
+| GET | `/mining/trends` | rising K⁺/PO₄ flags across the cohort (Theil–Sen + EWMA de-escalation) |
+| GET | `/mining/substitutions?dish_id=&k=` | healthier substitute dishes (renal-weighted distance) |
 | GET | `/kb/stats` | versioned-KB node/edge counts + retrieval-index size |
 
 Interactive docs: `http://localhost:8000/docs`.
@@ -181,12 +199,23 @@ Interactive docs: `http://localhost:8000/docs`.
 5. **Chat is grounded or silent.** Answers are composed only from retrieved KB
    chunks (+ the patient's envelope numbers) and always cite
    `rule_id + guideline + section`; low-confidence questions are refused;
-   emergencies, diagnosis/dosing requests and out-of-scope topics are escalated.
+   emergencies, medication questions (including "should I stop taking X?",
+   "skip my insulin"), diagnosis/dosing requests and out-of-scope topics are
+   escalated. Envelope numbers are quoted only when the envelope is APPROVED
+   (PROPOSED → pending-review phrasing; REJECTED → a fixed declined response),
+   and internal `CONFLICT-*`/`SAFETY-*` rules never surface as patient-facing
+   citation anchors. Retrieval is Okapi BM25 with stopword filtering;
+   `MIN_SCORE = 2.0` keeps the refusal gate meaningful
+   (`backend/app/chat/RETRIEVAL_BENCH.md`).
 6. **Versioning is append-only.** Every KB node/edge carries `valid_from` /
    `valid_to`; nothing is deleted.
-7. **Clinical safety.** Out-of-scope patients (pregnancy, paediatric, dialysis)
-   are `REJECTED` with `exclude_from_careloop=true` and never reach the
-   optimiser.
+7. **Clinical safety.** Out-of-scope patients (pregnancy, paediatric, dialysis,
+   eGFR < 15) are `REJECTED` with `exclude_from_careloop=true` and never reach
+   the optimiser. Approving a REJECTED or empty-target envelope is refused with
+   `HTTP 422 {"error": "out_of_scope_envelope"}`; re-running the rule engine
+   mints a fresh envelope id (`ENV-<pid>-002`, ...) instead of overwriting a
+   prior one, so approvals survive; clinician edits append an explicit
+   `CLINICIAN-EDIT` trace row so edited numbers never claim rule provenance.
 
 ---
 
@@ -194,7 +223,7 @@ Interactive docs: `http://localhost:8000/docs`.
 
 ```bash
 .venv/bin/python -m pytest rules/ -q           # rule engine suite
-.venv/bin/python -m pytest backend -q          # API, gate, chat, explain, e2e
+.venv/bin/python -m pytest backend -q          # API, gate, chat, explain, adherence, e2e
 .venv/bin/python -m pytest backend/mining -q   # trends / clustering / substitutions
 .venv/bin/python backend/optim/test_real.py    # optimiser on the real dish pool
 ```

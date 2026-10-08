@@ -40,14 +40,25 @@ convention:
 - `POST /rules/run` produces a `PROPOSED` envelope and stores it in
   `ENVELOPE_STORE` (process-local dict behind a lock).
 - Clinician actions move it: `/approve → APPROVED`, `/edit → EDITED` (clears
-  approval; re-approval required), `/reject → REJECTED`.
+  approval; re-approval required), `/reject → REJECTED`. Approving an
+  out-of-scope envelope (REJECTED status or no nutrient targets) is refused
+  with `HTTP 422 {"error": "out_of_scope_envelope"}` — scope decisions are not
+  overridable through the approval endpoint.
+- Re-running the rule engine for a patient never overwrites an existing
+  envelope: `put_envelope` mints the next sequential id (`ENV-<pid>-002`,
+  ...) and stamps a fresh `proposed_at`, so prior envelopes — including
+  APPROVED ones and their approval history — stay intact.
+- Clinician edits append an explicit `CLINICIAN-EDIT` trace row: edited
+  numbers carry no rule citations, so chat and explanation views can never
+  attribute a human override to a guideline.
 - Downstream endpoints depend on `require_approved_envelope` (path-keyed) or
   `require_approved_envelope_for_patient` (body-keyed, used by `/plans`).
   Non-APPROVED status raises `EnvelopeNotApprovedError`, rendered by `main.py`
   as `HTTP 409 {"error": "envelope_not_approved", "status": "..."}`.
 - The rule engine itself rejects out-of-scope patients (pregnancy, paediatric,
-  dialysis, ketoacid-risk) as `REJECTED` with no nutrient targets — they never
-  reach the gate or the optimiser.
+  dialysis — by diagnosis or `CKD_stage_5` — eGFR < 15, ketoacid-risk) as
+  `REJECTED` with no nutrient targets — they never reach the gate or the
+  optimiser.
 
 The gate contract is storage-agnostic: `trace_store.py` pins each envelope's
 `RuleFire` trace beside it so `/envelopes/{id}/explanation` reconstructs the
@@ -61,15 +72,20 @@ into a graph on an **in-memory SQLite** database (the recorded prototype
 decision; `rules/SCHEMA_DECISION.md`) with NetworkX for graph queries.
 
 - Node/edge kinds: `Guideline → Section → Rule → NutrientConstraint`,
-  `Diagnosis`, `ExclusionFlag`, `Dish → NutrientProfile` (~52 rules, 190 dishes,
-  ~600 edges; see `GET /kb/stats`).
+  `Diagnosis`, `ExclusionFlag`, `Dish → NutrientProfile` (~61 rules, 214 dishes,
+  ~630 edges; see `GET /kb/stats`).
 - **Append-only versioning**: every row has `valid_from` and, when superseded,
   `valid_to` — history is never deleted, and "current" means `valid_to IS NULL`.
 - `core/kb_loader.py` builds the KB once per process (warmed at startup, lazy
-  fallback on failure) and caches a **TF-IDF retrieval index**
+  fallback on failure) and caches a **BM25 retrieval index**
   (`chat/retrieval.py`) over citable chunks: one per rule (guideline, section,
   verbatim quote, constraint actions + plain-language nutrient synonyms) and
-  one per dish.
+  one per dish. Scoring is Okapi BM25 over stopword-filtered word tokens with
+  synonym-expanded queries; scores below `MIN_SCORE = 2.0` count as no match
+  (calibrated so stopword-only overlap can never look relevant — rationale and
+  the eight-configuration comparison in
+  `backend/app/chat/RETRIEVAL_BENCH.md`; the previous TF-IDF scorer remains
+  documented there as the revert path).
 
 ## 4. End-to-end data flow
 
@@ -91,7 +107,29 @@ patient ──▶ rules.run_rules ──▶ PROPOSED envelope + RuleFire trace
                 ▼
         map_plan_result ──▶ UI: days → slots / totals-vs-targets
                             + patient explanation (+ relaxation notes)
+
+patient logs actual meals ──▶ adherence.analysis ──▶ per-day totals vs the
+                             (upsert per slot)       latest envelope: hard
+                                                     violations (MAX) vs soft
+                                                     gaps (MIN/TARGET) +
+                                                     deviation series + flags
 ```
+
+The adherence loop closes the cycle: logged meals are measured against the
+patient's *latest* envelope regardless of status, but a non-APPROVED envelope
+makes every comparison `informational_only` with an explicit notice — the
+gate is never bypassed, comparisons are just labelled.
+
+- **Adherence** (`backend/app/adherence/` + `api/adherence.py`): process-local
+  meal-log store (one dish per `(patient, date, meal)` slot, newest wins) and
+  a pure analysis module. `MAX` totals that are exceeded are **hard
+  violations** (the same semantics the optimiser treats as unbreakable);
+  `MIN`/`TARGET` shortfalls are **soft gaps**. The deviation endpoint builds
+  a per-nutrient exposure series (magnitude in the "bad" direction) and flags
+  Theil–Sen trends as `worsening`/`improving` with `alert`/`review` severity.
+- **Dish catalogue** (`api/dishes.py`): deterministic read-only views over
+  `data/dishes.json` (`GET /dishes?category=&search=`, `GET /dishes/{id}`) —
+  the searchable picker behind the meal-logging screen.
 
 - **Rule engine** (`rules/engine.py`): CLIPS forward-chaining decides *which*
   rules fire (salience = documented priority scale, CKD 90 > safety 88 >
@@ -102,13 +140,24 @@ patient ──▶ rules.run_rules ──▶ PROPOSED envelope + RuleFire trace
   Deterministic: fixed engine clock, total tie-breaks, sorted output.
 - **Optimiser** (`backend/optim/`): decision vars are 21 meal slots
   (7 days × 3 meals, multi-dish allowed); 4 objectives (nutrient deviation,
-  preference, variety, cost); hard daily MAX/MIN constraints + exclusions.
+  preference, variety, cost); hard daily MAX ceilings + exclusions (MIN floors
+  and TARGETs are soft objective terms per PLAN.md module 4).
   `run()` never returns a violating plan: NSGA-II front → `repair_plan` →
   greedy construction; if the pool provably cannot satisfy the envelope the
-  result is `feasible=false` + `infeasibility_reason`. Benchmarks and engine
-  choices: `backend/optim/benchmark_results.md`.
-- **Mining** (`backend/mining/`): read-only over the dataset — Theil–Sen K⁺/PO₄
-  trend flags, k-means cohort clustering, nutrient-distance substitutions.
+  result is `feasible=false` + `infeasibility_reason`. The feasibility
+  guarantee is method-agnostic — every pymoo algorithm comparison runs through
+  the same `solve(..., method=, guarantee=)` path (`guarantee=False` for raw
+  violation-rate measurement). A 13-row algorithm benchmark (NSGA-II/III,
+  MOEA/D, AGE-MOEA, SMSEMOA, plus GA/greedy/random baselines) keeps NSGA-II as
+  the production default: SMSEMOA posts the best hypervolume (~+24% over
+  NSGA-II) at ~2.5× the runtime, and all guaranteed rows hold 0% violations.
+  Benchmarks and engine choices: `backend/optim/benchmark_results.md`.
+- **Mining** (`backend/mining/`): read-only over the dataset — K⁺/PO₄ trend
+  flags (Theil–Sen raises flags; an EWMA-weighted slope with a 2-month
+  half-life can de-escalate an urgent flag when recent months flatten, exposed
+  as `ewma_slope_per_month`), k-means cohort clustering, renal-weighted
+  substitution ranking (sodium/potassium/phosphorus count double). Method
+  choices and comparisons: `backend/mining/COMPARISON.md`.
 - **Explanation views** (`backend/app/explain/views.py`): pure functions turning
   an envelope (+ optional day-1 totals) into the clinician explanation
   (trace, conflict resolutions) and the patient explanation (plain-language
@@ -120,14 +169,22 @@ patient ──▶ rules.run_rules ──▶ PROPOSED envelope + RuleFire trace
 LLM adapter only rephrases an already-grounded answer:
 
 1. **Escalation filter** (`chat/escalation.py`, regex-only, deliberately
-   conservative): emergencies, diagnosis requests, medication/dosing changes and
-   out-of-scope topics are escalated — never answered.
-2. **Retrieval** (`chat/retrieval.py`): TF-IDF over the versioned KB chunks;
-   cosine score below `MIN_SCORE` counts as no match.
+   conservative): emergencies (including metabolic emergencies such as
+   ketoacidosis signs and extreme glucose readings), diagnosis requests,
+   medication changes — including drug-name phrasings like *"should I stop
+   taking metformin?"* or *"skip my insulin"* — and out-of-scope topics are
+   escalated — never answered.
+2. **Retrieval** (`chat/retrieval.py`): Okapi BM25 over the versioned KB
+   chunks (stopword-filtered tokens + nutrient synonym expansion); a score
+   below `MIN_SCORE = 2.0` counts as no match.
 3. **Composition**: the answer is assembled only from retrieved chunk text plus
    the patient's latest envelope numbers; templates pick sentences, nothing
-   invents facts. Envelope context honours the approval gate — a non-APPROVED
-   envelope is surfaced transparently with a "not approved yet" notice.
+   invents facts. Envelope context honours the approval gate: an APPROVED
+   envelope's numbers may be quoted; a PROPOSED/EDITED envelope gets
+   pending-review phrasing with no numbers; a REJECTED envelope gets a fixed
+   declined response regardless of the question. Internal rule families
+   (`CONFLICT-*`, `SAFETY-*`) are excluded from patient-facing citation
+   anchors.
 4. **Citation invariant**: every `answered` response carries at least one
    citation (`rule_id`, `guideline`, `section`); if no rule can be cited, the
    answer is refused instead.
@@ -140,21 +197,22 @@ LLM adapter only rephrases an already-grounded answer:
 |---|---|---|
 | `shared/` | — | envelope + trace contracts (Pydantic + JSON Schema) |
 | `rules/` | `shared/` | `run_rules(patient) → {envelope, trace}` (CLIPS) |
-| `data/` | `shared/` | 190 dishes, 20 patients, generator, USDA filler |
-| `backend/optim/` | `shared/` | `run(envelope) → feasible plan` (pymoo + repair) |
-| `backend/mining/` | `data/` | trends / clustering / substitutions |
+| `data/` | `shared/` | 214 dishes, 20 patients, generator, USDA filler |
+| `backend/optim/` | `shared/` | `run(envelope) → feasible plan` (pymoo + repair; `solve(method=, guarantee=)` for algorithm comparisons) |
+| `backend/mining/` | `data/` | trends (Theil–Sen + EWMA) / clustering / substitutions |
 | `backend/app/kb/` | `rules/`, `data/` | versioned KBGraph (+ stats) |
-| `backend/app/chat/` | `kb/`, `approval_gate`, `llm_choice` | grounded, cited Q&A |
+| `backend/app/chat/` | `kb/`, `approval_gate`, `llm_choice` | grounded, cited Q&A (BM25 retrieval) |
+| `backend/app/adherence/` | `optim.real_data` (dish pool), `approval_gate` | meal-log store + summary/deviation analysis |
 | `backend/app/core/` | `shared/`, `kb/`, `optim/`, `explain/` | gate, stores, plan service |
 | `backend/app/api/` | all of the above | the REST surface |
-| `frontend/` | REST API (`/api` proxy) | clinician / patient / chat screens |
+| `frontend/` | REST API (`/api` proxy) | clinician / patient / chat / adherence screens |
 | `evaluation/` | everything | generated report (`EVALUATION.md`) |
 
 ## 7. Known runtime boundaries
 
-- Envelope store, trace store and created patients are process-local; a backend
-  restart resets them. The contracts are designed so a persistent store drops in
-  without endpoint changes.
+- Envelope store, trace store, created patients and adherence meal logs are
+  process-local; a backend restart resets them. The contracts are designed so
+  a persistent store drops in without endpoint changes.
 - The KB is rebuilt in memory per process from `rules/rules.json` +
   `data/dishes.json`; dish values are manual-curation estimates
   (`verified: false`, see `data/README.md`).
