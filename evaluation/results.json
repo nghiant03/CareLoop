@@ -2439,7 +2439,7 @@
   },
   "q4_benchmark": {
     "question": "Q4 Quality/runtime (optimiser benchmark)",
-    "definition": "Consumes backend/optim/benchmark_results.{csv,md} (4 envelopes x 5 seeds x 4 methods, plus the pop x gen sweep). The benchmark is NOT re-run by default; pass --rerun-benchmark to regenerate it.",
+    "definition": "Consumes backend/optim/benchmark_results.{csv,md} (4 envelopes x 5 seeds for every method recorded in the artefact, plus the pop x gen sweep). The benchmark is NOT re-run by default; pass --rerun-benchmark to regenerate it.",
     "artefacts": {
       "csv": "backend/optim/benchmark_results.csv",
       "md": "backend/optim/benchmark_results.md",
@@ -2448,15 +2448,26 @@
     },
     "headline": [
       {
-        "method": "nsga2",
+        "method": "age",
+        "guarantee": "yes",
         "runs": 20,
-        "mean_hv": 0.522,
-        "hv_std": 0.0423,
+        "mean_hv": 0.5944,
+        "hv_std": 0.0244,
         "violation_rate": 0.0,
-        "mean_runtime_ms": 287.6
+        "mean_runtime_ms": 617.2
+      },
+      {
+        "method": "age-raw",
+        "guarantee": "no",
+        "runs": 20,
+        "mean_hv": 0.5944,
+        "hv_std": 0.0244,
+        "violation_rate": 0.0,
+        "mean_runtime_ms": 525.5
       },
       {
         "method": "ga",
+        "guarantee": "no",
         "runs": 20,
         "mean_hv": 0.3715,
         "hv_std": 0.0329,
@@ -2465,6 +2476,7 @@
       },
       {
         "method": "greedy",
+        "guarantee": "no",
         "runs": 20,
         "mean_hv": 0.17,
         "hv_std": 0.0302,
@@ -2472,42 +2484,151 @@
         "mean_runtime_ms": 9.3
       },
       {
+        "method": "moead",
+        "guarantee": "yes",
+        "runs": 20,
+        "mean_hv": 0.0235,
+        "hv_std": 0.0119,
+        "violation_rate": 0.0,
+        "mean_runtime_ms": 1195.0
+      },
+      {
+        "method": "moead-raw",
+        "guarantee": "no",
+        "runs": 20,
+        "mean_hv": 0.0143,
+        "hv_std": 0.0158,
+        "violation_rate": 0.45,
+        "mean_runtime_ms": 1196.0
+      },
+      {
+        "method": "nsga2",
+        "guarantee": "yes",
+        "runs": 20,
+        "mean_hv": 0.522,
+        "hv_std": 0.0423,
+        "violation_rate": 0.0,
+        "mean_runtime_ms": 287.6
+      },
+      {
+        "method": "nsga2-raw",
+        "guarantee": "no",
+        "runs": 20,
+        "mean_hv": 0.522,
+        "hv_std": 0.0423,
+        "violation_rate": 0.0,
+        "mean_runtime_ms": 287.5
+      },
+      {
+        "method": "nsga3",
+        "guarantee": "yes",
+        "runs": 20,
+        "mean_hv": 0.5534,
+        "hv_std": 0.0193,
+        "violation_rate": 0.0,
+        "mean_runtime_ms": 314.7
+      },
+      {
+        "method": "nsga3-raw",
+        "guarantee": "no",
+        "runs": 20,
+        "mean_hv": 0.5499,
+        "hv_std": 0.02,
+        "violation_rate": 0.0,
+        "mean_runtime_ms": 314.3
+      },
+      {
         "method": "random",
+        "guarantee": "no",
         "runs": 20,
         "mean_hv": 0.2367,
         "hv_std": 0.0362,
         "violation_rate": 0.0,
         "mean_runtime_ms": 50.7
+      },
+      {
+        "method": "sms",
+        "guarantee": "yes",
+        "runs": 20,
+        "mean_hv": 0.6459,
+        "hv_std": 0.0298,
+        "violation_rate": 0.0,
+        "mean_runtime_ms": 706.0
+      },
+      {
+        "method": "sms-raw",
+        "guarantee": "no",
+        "runs": 20,
+        "mean_hv": 0.6459,
+        "hv_std": 0.0298,
+        "violation_rate": 0.0,
+        "mean_runtime_ms": 705.9
       }
     ],
     "hv_per_envelope": [
       {
         "envelope": "ckd_hyperkalemia",
-        "nsga2": 0.5174,
+        "age": 0.5982,
+        "age-raw": 0.5982,
         "ga": 0.3588,
         "greedy": 0.1853,
-        "random": 0.2706
+        "moead": 0.0274,
+        "moead-raw": 0.0274,
+        "nsga2": 0.5174,
+        "nsga2-raw": 0.5174,
+        "nsga3": 0.5618,
+        "nsga3-raw": 0.5571,
+        "random": 0.2706,
+        "sms": 0.6649,
+        "sms-raw": 0.6649
       },
       {
         "envelope": "ckd_strict",
-        "nsga2": 0.498,
+        "age": 0.5727,
+        "age-raw": 0.5727,
         "ga": 0.3371,
         "greedy": 0.2039,
-        "random": 0.2283
+        "moead": 0.0207,
+        "moead-raw": 0.011,
+        "nsga2": 0.498,
+        "nsga2-raw": 0.498,
+        "nsga3": 0.5405,
+        "nsga3-raw": 0.5422,
+        "random": 0.2283,
+        "sms": 0.6222,
+        "sms-raw": 0.6222
       },
       {
         "envelope": "t2d_htn",
-        "nsga2": 0.5069,
+        "age": 0.5875,
+        "age-raw": 0.5875,
         "ga": 0.3981,
         "greedy": 0.1545,
-        "random": 0.1978
+        "moead": 0.0155,
+        "moead-raw": 0.0,
+        "nsga2": 0.5069,
+        "nsga2-raw": 0.5069,
+        "nsga3": 0.5435,
+        "nsga3-raw": 0.5327,
+        "random": 0.1978,
+        "sms": 0.6297,
+        "sms-raw": 0.6297
       },
       {
         "envelope": "t2d_only",
-        "nsga2": 0.5658,
+        "age": 0.6192,
+        "age-raw": 0.6192,
         "ga": 0.3919,
         "greedy": 0.1361,
-        "random": 0.2501
+        "moead": 0.0304,
+        "moead-raw": 0.0189,
+        "nsga2": 0.5658,
+        "nsga2-raw": 0.5658,
+        "nsga3": 0.5678,
+        "nsga3-raw": 0.5678,
+        "random": 0.2501,
+        "sms": 0.6667,
+        "sms-raw": 0.6667
       }
     ],
     "sweep": [
@@ -2566,9 +2687,9 @@
         "mean_runtime_ms": 1016.4
       }
     ],
-    "recommendation": "* Fastest swept NSGA-II config: pop=20, gen=40 (mean HV 0.4553, 89 ms/solve).\n* NSGA-II knee point (HV within 2% of the best 0.5892): **pop=80, gen=80** (mean HV 0.5892, 513 ms/solve).\n* Best guaranteed method by mean HV: **sms** (HV 0.6459, 706 ms/solve); NSGA-II scores 0.5220 at 288 ms/solve.\n* Best raw method by mean HV: sms-raw (HV 0.6459, violation rate 0%) — raw fronts can include infeasible members, which inflates HV relative to the guaranteed rows when ceilings are tight.\n* **Algorithm recommendation: sms** — highest mean HV among guarantee-carrying methods (0.6459 vs NSGA-II 0.5220) at 2.5x the NSGA-II runtime; it would be a drop-in ``method=`` argument to ``solve()`` (the guarantee path is method-agnostic).\n* Budget option: nsga2 is the cheapest guaranteed method (288 ms/solve, HV 0.5220) if latency ever trumps front quality.\n* The guarantee wrapper (repair + greedy fallback) is method-agnostic: every guaranteed row reports violation rate 0% regardless of algorithm, so algorithm choice affects front quality and runtime only.\n* Total harness wall time: 141s. Baselines: GA scalarises (single-point fronts -> lower HV); greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on quality. Under the module-4 encoding (hard = MAX ceilings + exclusions only) raw methods rarely violate a ceiling on these envelopes, so methods are separated mainly by hypervolume; the repair/greedy guarantee remains the backstop for genuinely tight ceilings.",
+    "recommendation": "* Fastest swept NSGA-II config: pop=20, gen=40 (mean HV 0.4553, 89 ms/solve).\n* NSGA-II knee point (HV within 2% of the best 0.5892): **pop=80, gen=80** (mean HV 0.5892, 513 ms/solve).\n* Best guaranteed method by mean HV: **sms** (HV 0.6459, 706 ms/solve); NSGA-II scores 0.5220 at 288 ms/solve.\n* Best raw method by mean HV: sms-raw (HV 0.6459, violation rate 0%) — raw and guaranteed HV figures are directly comparable: HV is computed only over feasible front members (infeasible front members are filtered out before the HV calculation), so raw HV is not inflated by infeasible members. Raw rows differ in that they report honest hard-constraint violation rates and skip the repair step that guarantees the delivered plan.\n* **Algorithm recommendation: sms** — highest mean HV among guarantee-carrying methods (0.6459 vs NSGA-II 0.5220) at 2.5x the NSGA-II runtime; it would be a drop-in ``method=`` argument to ``solve()`` (the guarantee path is method-agnostic).\n* Budget option: nsga2 is the cheapest guaranteed method (288 ms/solve, HV 0.5220) if latency ever trumps front quality.\n* The guarantee wrapper (repair + greedy fallback) is method-agnostic: every guaranteed row reports violation rate 0% regardless of algorithm, so algorithm choice affects front quality and runtime only.\n* Interpretation caveat: the HV metric scores the whole Pareto front (front coverage), not the single delivered plan. Single-point baselines (GA scalarisation, greedy) are structurally disadvantaged on full-front HV because they emit one plan per solve; the quality of that single delivered meal plan answers a different question and is assessed separately by the constraint-satisfaction evaluation.\n* Equal-work caveat: nominal population x generations is not an equal-work budget across all methods (e.g. MOEA/D's population is tied to its reference-direction count, so its per-generation work differs from population-sized methods); evaluation counts are estimated from the algorithm configuration rather than recorded per run.\n* Total harness wall time: 141s. Baselines: GA scalarises (single-point fronts -> lower HV); greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on quality. Under the module-4 encoding (hard = MAX ceilings + exclusions only) raw methods rarely violate a ceiling on these envelopes, so methods are separated mainly by hypervolume; the repair/greedy guarantee remains the backstop for genuinely tight ceilings.",
     "verdict": "PASS",
-    "verdict_note": "NSGA-II (production path, with the repair/greedy feasibility guarantee) combines 0% hard-constraint violations with the best hypervolume. Under the module-4 encoding (hard = MAX ceilings + exclusions) all methods achieve 0% violations on these pools, so the methods separate on hypervolume; the guarantee remains the backstop for genuinely tight ceilings."
+    "verdict_note": "sms leads the benchmark on mean hypervolume (0.6459, level with sms-raw) with a 0% hard-constraint violation rate. The winner claim is computed from the committed artefact rows for every recorded method, not hardcoded to any algorithm. Caveats: HV scores the whole Pareto front (front coverage) — single-point baselines (GA, greedy) are structurally disadvantaged on full-front HV, and the quality of the single delivered meal plan answers a different question (see Q3). Nominal population x generations is not an equal-work budget across all methods (e.g. MOEA/D's population is tied to its reference-direction count), and evaluation counts are estimated from the algorithm configuration rather than recorded per run."
   },
   "q5_groundedness": {
     "question": "Q5 Groundedness (chat)",

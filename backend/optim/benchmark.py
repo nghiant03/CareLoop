@@ -454,8 +454,12 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
             lines.append(
                 f"* Best raw method by mean HV: {best_raw['method']} "
                 f"(HV {best_raw['hv']:.4f}, violation rate {best_raw['viol']:.0%}) — "
-                "raw fronts can include infeasible members, which inflates HV "
-                "relative to the guaranteed rows when ceilings are tight."
+                "raw and guaranteed HV figures are directly comparable: HV is "
+                "computed only over feasible front members (infeasible front "
+                "members are filtered out before the HV calculation), so raw "
+                "HV is not inflated by infeasible members. Raw rows differ in "
+                "that they report honest hard-constraint violation rates and "
+                "skip the repair step that guarantees the delivered plan."
             )
         # Recommendation text: keep the production NSGA-II path unless a
         # challenger wins on HV at a comparable runtime AND stays guaranteed.
@@ -487,6 +491,22 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
             "regardless of algorithm, so algorithm choice affects front "
             "quality and runtime only."
         )
+    lines.append(
+        "* Interpretation caveat: the HV metric scores the whole Pareto front "
+        "(front coverage), not the single delivered plan. Single-point "
+        "baselines (GA scalarisation, greedy) are structurally disadvantaged "
+        "on full-front HV because they emit one plan per solve; the quality of "
+        "that single delivered meal plan answers a different question and is "
+        "assessed separately by the constraint-satisfaction evaluation."
+    )
+    lines.append(
+        "* Equal-work caveat: nominal population x generations is not an "
+        "equal-work budget across all methods (e.g. MOEA/D's population is "
+        "tied to its reference-direction count, so its per-generation work "
+        "differs from population-sized methods); evaluation counts are "
+        "estimated from the algorithm configuration rather than recorded per "
+        "run."
+    )
     lines.append(
         f"* Total harness wall time: {runtime_total:.0f}s"
         + (" (SMOKE run — not comparable to the full benchmark)" if SMOKE else "")

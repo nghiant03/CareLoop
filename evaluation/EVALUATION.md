@@ -11,7 +11,7 @@ Reproduce with `.venv/bin/python -m evaluation.run` (add `--rerun-benchmark` to 
 | Q1 Traceability | PASS | 202/202 envelope items traceable (100.0%) across 18 eligible patients; 2 REJECTED patients counted separately |
 | Q2 Conflict resolution | PASS | 10/10 cases (100.0%), 37/37 checks |
 | Q3 Constraint satisfaction | PASS | 18/18 plans with zero hard violations (100.0%); 0 infeasible (diagnosed, nothing served); 18 envelopes needed a disclosed MIN relaxation |
-| Q4 Quality/runtime | PASS | NSGA-II: 0% violations, best HV, 287.6 ms mean (consumed from benchmark artefacts) |
+| Q4 Quality/runtime | PASS | sms: 0% violations, best mean HV 0.6459, 706.0 ms mean (consumed from benchmark artefacts) |
 | Q5 Groundedness | PASS | grounded 100.0% (citation accuracy 100.0%), escalation 100.0%, refusals 100.0% |
 
 ## Q1 — Traceability
@@ -93,25 +93,34 @@ For every eligible patient: engine -> simulated APPROVED -> prepare_envelope_for
 
 ## Q4 — Quality/runtime (optimiser benchmark)
 
-Consumes backend/optim/benchmark_results.{csv,md} (4 envelopes x 5 seeds x 4 methods, plus the pop x gen sweep). The benchmark is NOT re-run by default; pass --rerun-benchmark to regenerate it.
+Consumes backend/optim/benchmark_results.{csv,md} (4 envelopes x 5 seeds for every method recorded in the artefact, plus the pop x gen sweep). The benchmark is NOT re-run by default; pass --rerun-benchmark to regenerate it.
 
 ### Headline (main phase: 4 envelopes × 5 seeds, pop=40, gen=80)
 
-| Method | Runs | Mean HV | HV std | Violation rate | Mean runtime (ms) |
-|---|---|---|---|---|---|
-| nsga2 | 20 | 0.522 | 0.042 | 0.0% | 287.6 |
-| ga | 20 | 0.371 | 0.033 | 0.0% | 134.4 |
-| greedy | 20 | 0.17 | 0.03 | 0.0% | 9.3 |
-| random | 20 | 0.237 | 0.036 | 0.0% | 50.7 |
+| Method | Guarantee | Runs | Mean HV | HV std | Violation rate | Mean runtime (ms) |
+|---|---|---|---|---|---|---|
+| age | yes | 20 | 0.594 | 0.024 | 0.0% | 617.2 |
+| age-raw | no | 20 | 0.594 | 0.024 | 0.0% | 525.5 |
+| ga | no | 20 | 0.371 | 0.033 | 0.0% | 134.4 |
+| greedy | no | 20 | 0.17 | 0.03 | 0.0% | 9.3 |
+| moead | yes | 20 | 0.024 | 0.012 | 0.0% | 1195 |
+| moead-raw | no | 20 | 0.014 | 0.016 | 45.0% | 1196 |
+| nsga2 | yes | 20 | 0.522 | 0.042 | 0.0% | 287.6 |
+| nsga2-raw | no | 20 | 0.522 | 0.042 | 0.0% | 287.5 |
+| nsga3 | yes | 20 | 0.553 | 0.019 | 0.0% | 314.7 |
+| nsga3-raw | no | 20 | 0.55 | 0.02 | 0.0% | 314.3 |
+| random | no | 20 | 0.237 | 0.036 | 0.0% | 50.7 |
+| sms | yes | 20 | 0.646 | 0.03 | 0.0% | 706 |
+| sms-raw | no | 20 | 0.646 | 0.03 | 0.0% | 705.9 |
 
 ### Mean hypervolume per envelope
 
-| Envelope | NSGA-II | GA | Greedy | Random |
-|---|---|---|---|---|
-| ckd_hyperkalemia | 0.517 | 0.359 | 0.185 | 0.271 |
-| ckd_strict | 0.498 | 0.337 | 0.204 | 0.228 |
-| t2d_htn | 0.507 | 0.398 | 0.154 | 0.198 |
-| t2d_only | 0.566 | 0.392 | 0.136 | 0.25 |
+| Envelope | age | age-raw | ga | greedy | moead | moead-raw | nsga2 | nsga2-raw | nsga3 | nsga3-raw | random | sms | sms-raw |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ckd_hyperkalemia | 0.598 | 0.598 | 0.359 | 0.185 | 0.027 | 0.027 | 0.517 | 0.517 | 0.562 | 0.557 | 0.271 | 0.665 | 0.665 |
+| ckd_strict | 0.573 | 0.573 | 0.337 | 0.204 | 0.021 | 0.011 | 0.498 | 0.498 | 0.54 | 0.542 | 0.228 | 0.622 | 0.622 |
+| t2d_htn | 0.588 | 0.588 | 0.398 | 0.154 | 0.015 | 0 | 0.507 | 0.507 | 0.543 | 0.533 | 0.198 | 0.63 | 0.63 |
+| t2d_only | 0.619 | 0.619 | 0.392 | 0.136 | 0.03 | 0.019 | 0.566 | 0.566 | 0.568 | 0.568 | 0.25 | 0.667 | 0.667 |
 
 ### NSGA-II pop × gen sweep (1 seed)
 
@@ -132,13 +141,15 @@ Consumes backend/optim/benchmark_results.{csv,md} (4 envelopes x 5 seeds x 4 met
 * Fastest swept NSGA-II config: pop=20, gen=40 (mean HV 0.4553, 89 ms/solve).
 * NSGA-II knee point (HV within 2% of the best 0.5892): **pop=80, gen=80** (mean HV 0.5892, 513 ms/solve).
 * Best guaranteed method by mean HV: **sms** (HV 0.6459, 706 ms/solve); NSGA-II scores 0.5220 at 288 ms/solve.
-* Best raw method by mean HV: sms-raw (HV 0.6459, violation rate 0%) — raw fronts can include infeasible members, which inflates HV relative to the guaranteed rows when ceilings are tight.
+* Best raw method by mean HV: sms-raw (HV 0.6459, violation rate 0%) — raw and guaranteed HV figures are directly comparable: HV is computed only over feasible front members (infeasible front members are filtered out before the HV calculation), so raw HV is not inflated by infeasible members. Raw rows differ in that they report honest hard-constraint violation rates and skip the repair step that guarantees the delivered plan.
 * **Algorithm recommendation: sms** — highest mean HV among guarantee-carrying methods (0.6459 vs NSGA-II 0.5220) at 2.5x the NSGA-II runtime; it would be a drop-in ``method=`` argument to ``solve()`` (the guarantee path is method-agnostic).
 * Budget option: nsga2 is the cheapest guaranteed method (288 ms/solve, HV 0.5220) if latency ever trumps front quality.
 * The guarantee wrapper (repair + greedy fallback) is method-agnostic: every guaranteed row reports violation rate 0% regardless of algorithm, so algorithm choice affects front quality and runtime only.
+* Interpretation caveat: the HV metric scores the whole Pareto front (front coverage), not the single delivered plan. Single-point baselines (GA scalarisation, greedy) are structurally disadvantaged on full-front HV because they emit one plan per solve; the quality of that single delivered meal plan answers a different question and is assessed separately by the constraint-satisfaction evaluation.
+* Equal-work caveat: nominal population x generations is not an equal-work budget across all methods (e.g. MOEA/D's population is tied to its reference-direction count, so its per-generation work differs from population-sized methods); evaluation counts are estimated from the algorithm configuration rather than recorded per run.
 * Total harness wall time: 141s. Baselines: GA scalarises (single-point fronts -> lower HV); greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on quality. Under the module-4 encoding (hard = MAX ceilings + exclusions only) raw methods rarely violate a ceiling on these envelopes, so methods are separated mainly by hypervolume; the repair/greedy guarantee remains the backstop for genuinely tight ceilings.
 
-Verdict: **PASS** — NSGA-II (production path, with the repair/greedy feasibility guarantee) combines 0% hard-constraint violations with the best hypervolume. Under the module-4 encoding (hard = MAX ceilings + exclusions) all methods achieve 0% violations on these pools, so the methods separate on hypervolume; the guarantee remains the backstop for genuinely tight ceilings.
+Verdict: **PASS** — sms leads the benchmark on mean hypervolume (0.6459, level with sms-raw) with a 0% hard-constraint violation rate. The winner claim is computed from the committed artefact rows for every recorded method, not hardcoded to any algorithm. Caveats: HV scores the whole Pareto front (front coverage) — single-point baselines (GA, greedy) are structurally disadvantaged on full-front HV, and the quality of the single delivered meal plan answers a different question (see Q3). Nominal population x generations is not an equal-work budget across all methods (e.g. MOEA/D's population is tied to its reference-direction count), and evaluation counts are estimated from the algorithm configuration rather than recorded per run.
 
 ## Q5 — Groundedness (chat)
 
@@ -227,7 +238,7 @@ Human reviewers score each of the five criteria below on a 1–5 scale; the chat
 
 4. **Newest-first labs orientation.** `labs_K_monthly` / `labs_PO4_monthly` are ordered newest-first: index 0 pairs with `months_offset_ago == 0` (current) and equals the top-level `serum_K_meq_L` / `serum_PO4_mg_dL` the rule engine consumes. Any consumer that sorts these series ascending silently reads the *oldest* lab as current and will mis-trigger the hyperkalaemia/hyperphosphataemia rules.
 
-5. **Benchmark reuse.** Q4 consumes the committed benchmark artefacts instead of re-running NSGA-II/GA/greedy/random (default); `--rerun-benchmark` regenerates them (~23 s wall time). The artefacts were regenerated after the hard/soft re-encoding, so the comparison table reflects the new objective semantics for all methods alike. Runtimes in the report are wall-clock and not deterministic.
+5. **Benchmark reuse.** Q4 consumes the committed benchmark artefacts instead of re-running the optimiser benchmark methods (default); `--rerun-benchmark` regenerates them (~23 s wall time). The artefacts were regenerated after the hard/soft re-encoding, so the comparison table reflects the new objective semantics for all methods alike. Runtimes in the report are wall-clock and not deterministic.
 
 6. **Chat evaluation scope.** Groundedness is scored automatically against the rules that *produce a constraint* for the asked nutrient; supporting citations retrieved by TF-IDF may legitimately mention other nutrients. Nutrients without constraint-producing rules (sugar, total fat) cannot be grounded today and are listed as known gaps. The expert-review rubric is provided for the human evaluation that cannot be automated.
 

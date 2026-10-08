@@ -111,10 +111,16 @@ def test_q4_consumes_benchmark_artefacts_without_rerunning():
     results = evaluate_q4(rerun_benchmark=False)
     assert results["artefacts"]["rerun_benchmark"] is False
     methods = {m["method"] for m in results["headline"]}
-    assert methods == {"nsga2", "ga", "greedy", "random"}
+    # every method recorded in the CSV artefact, not a hardcoded subset
+    assert methods == {"nsga2", "nsga2-raw", "nsga3", "nsga3-raw", "moead",
+                       "moead-raw", "age", "age-raw", "sms", "sms-raw",
+                       "ga", "greedy", "random"}
     nsga2 = next(m for m in results["headline"] if m["method"] == "nsga2")
     assert nsga2["violation_rate"] == 0.0  # the hard feasibility guarantee
     assert nsga2["runs"] == 20  # 4 envelopes x 5 seeds
+    # the verdict note names the data-derived HV winner, not a fixed method
+    best = max(results["headline"], key=lambda m: m["mean_hv"])
+    assert best["method"] in results["verdict_note"]
     assert len(results["sweep"]) == 9
     assert "pop=80, gen=80" in results["recommendation"]
 

@@ -21,6 +21,17 @@ def _pct(rate: Optional[float]) -> str:
     return "n/a" if rate is None else f"{rate * 100:.1f}%"
 
 
+def _q4_headline_text(q4: dict[str, Any]) -> str:
+    """One-line Q4 summary naming the actual mean-HV winner from the data."""
+    headline = q4.get("headline") or []
+    if not headline:
+        return "no benchmark rows available"
+    winner = max(headline, key=lambda m: (m["mean_hv"], -m["violation_rate"]))
+    return (f"{winner['method']}: {winner['violation_rate'] * 100:.0f}% "
+            f"violations, best mean HV {winner['mean_hv']}, "
+            f"{winner['mean_runtime_ms']} ms mean")
+
+
 def _table(headers: list[str], rows: list[list[Any]]) -> str:
     out = ["| " + " | ".join(headers) + " |",
            "|" + "|".join("---" for _ in headers) + "|"]
@@ -67,10 +78,7 @@ def render_report(results: dict[str, Any]) -> str:
              f"violations ({_pct(q3['zero_violation_rate'])}); "
              f"{q3['infeasible_plans']} infeasible (diagnosed, nothing served); "
              f"{q3['relaxed_envelopes']} envelopes needed a disclosed MIN relaxation"],
-            ["Q4 Quality/runtime", q4["verdict"],
-             "NSGA-II: 0% violations, best HV, "
-             + next((f"{m['mean_runtime_ms']} ms mean" for m in q4["headline"]
-                     if m["method"] == "nsga2"), "n/a")
+            ["Q4 Quality/runtime", q4["verdict"], _q4_headline_text(q4)
              + " (consumed from benchmark artefacts)"],
             ["Q5 Groundedness", q5["verdict"],
              f"grounded {_pct(q5['grounded']['pass_rate'])} "
@@ -150,14 +158,16 @@ def render_report(results: dict[str, Any]) -> str:
     add("")
     add("### Headline (main phase: 4 envelopes × 5 seeds, pop=40, gen=80)")
     add("")
-    add(_table(["Method", "Runs", "Mean HV", "HV std", "Violation rate", "Mean runtime (ms)"],
-               [[m["method"], m["runs"], m["mean_hv"], m["hv_std"],
+    add(_table(["Method", "Guarantee", "Runs", "Mean HV", "HV std", "Violation rate",
+                "Mean runtime (ms)"],
+               [[m["method"], m["guarantee"], m["runs"], m["mean_hv"], m["hv_std"],
                  _pct(m["violation_rate"]), m["mean_runtime_ms"]] for m in q4["headline"]]))
     add("")
     add("### Mean hypervolume per envelope")
     add("")
-    add(_table(["Envelope", "NSGA-II", "GA", "Greedy", "Random"],
-               [[e["envelope"], e["nsga2"], e["ga"], e["greedy"], e["random"]]
+    methods = [m["method"] for m in q4["headline"]]
+    add(_table(["Envelope"] + methods,
+               [[e["envelope"]] + [e.get(method) for method in methods]
                 for e in q4["hv_per_envelope"]]))
     add("")
     add("### NSGA-II pop × gen sweep (1 seed)")
@@ -272,7 +282,7 @@ def render_report(results: dict[str, Any]) -> str:
         "hyperkalaemia/hyperphosphataemia rules.")
     add("")
     add("5. **Benchmark reuse.** Q4 consumes the committed benchmark artefacts "
-        "instead of re-running NSGA-II/GA/greedy/random (default); "
+        "instead of re-running the optimiser benchmark methods (default); "
         "`--rerun-benchmark` regenerates them (~23 s wall time). The artefacts "
         "were regenerated after the hard/soft re-encoding, so the comparison "
         "table reflects the new objective semantics for all methods alike. "
