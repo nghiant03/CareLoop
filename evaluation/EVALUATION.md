@@ -11,7 +11,7 @@ Reproduce with `.venv/bin/python -m evaluation.run` (add `--rerun-benchmark` to 
 | Q1 Traceability | PASS | 202/202 envelope items traceable (100.0%) across 18 eligible patients; 2 REJECTED patients counted separately |
 | Q2 Conflict resolution | PASS | 10/10 cases (100.0%), 37/37 checks |
 | Q3 Constraint satisfaction | PASS | 18/18 plans with zero hard violations (100.0%); 0 infeasible (diagnosed, nothing served); 18 envelopes needed a disclosed MIN relaxation |
-| Q4 Quality/runtime | PASS | NSGA-II: 0% violations, best HV, 303.1 ms mean (consumed from benchmark artefacts) |
+| Q4 Quality/runtime | PASS | NSGA-II: 0% violations, best HV, 287.6 ms mean (consumed from benchmark artefacts) |
 | Q5 Groundedness | PASS | grounded 100.0% (citation accuracy 100.0%), escalation 100.0%, refusals 100.0% |
 
 ## Q1 — Traceability
@@ -20,26 +20,26 @@ Every envelope target and exclusion must be traceable to >=1 fired trace row car
 
 | Patient | Status | Targets | Exclusions | Items | Traceable | Rate | Fired rules |
 |---|---|---|---|---|---|---|---|
-| P0001 | PROPOSED | 9 | 2 | 11 | 11 | 100.0% | 13 |
-| P0002 | PROPOSED | 9 | 0 | 9 | 9 | 100.0% | 14 |
-| P0003 | PROPOSED | 12 | 2 | 14 | 14 | 100.0% | 21 |
-| P0004 | PROPOSED | 10 | 3 | 13 | 13 | 100.0% | 31 |
-| P0005 | PROPOSED | 10 | 3 | 13 | 13 | 100.0% | 32 |
-| P0006 | PROPOSED | 11 | 5 | 16 | 16 | 100.0% | 30 |
-| P0007 | PROPOSED | 6 | 1 | 7 | 7 | 100.0% | 10 |
+| P0001 | PROPOSED | 9 | 2 | 11 | 11 | 100.0% | 14 |
+| P0002 | PROPOSED | 9 | 0 | 9 | 9 | 100.0% | 15 |
+| P0003 | PROPOSED | 12 | 2 | 14 | 14 | 100.0% | 23 |
+| P0004 | PROPOSED | 10 | 3 | 13 | 13 | 100.0% | 33 |
+| P0005 | PROPOSED | 10 | 3 | 13 | 13 | 100.0% | 34 |
+| P0006 | PROPOSED | 11 | 5 | 16 | 16 | 100.0% | 32 |
+| P0007 | PROPOSED | 6 | 1 | 7 | 7 | 100.0% | 11 |
 | P0008 | REJECTED | 0 | 3 | 3 | 3 | 100.0% | 14 |
 | P0009 | PROPOSED | 5 | 0 | 5 | 5 | 100.0% | 6 |
-| P0010 | PROPOSED | 9 | 2 | 11 | 11 | 100.0% | 14 |
-| P0011 | PROPOSED | 9 | 0 | 9 | 9 | 100.0% | 14 |
-| P0012 | PROPOSED | 12 | 2 | 14 | 14 | 100.0% | 23 |
-| P0013 | PROPOSED | 10 | 3 | 13 | 13 | 100.0% | 33 |
-| P0014 | PROPOSED | 11 | 5 | 16 | 16 | 100.0% | 34 |
-| P0015 | PROPOSED | 11 | 5 | 16 | 16 | 100.0% | 29 |
-| P0016 | PROPOSED | 7 | 3 | 10 | 10 | 100.0% | 14 |
+| P0010 | PROPOSED | 9 | 2 | 11 | 11 | 100.0% | 15 |
+| P0011 | PROPOSED | 9 | 0 | 9 | 9 | 100.0% | 15 |
+| P0012 | PROPOSED | 12 | 2 | 14 | 14 | 100.0% | 25 |
+| P0013 | PROPOSED | 10 | 3 | 13 | 13 | 100.0% | 35 |
+| P0014 | PROPOSED | 11 | 5 | 16 | 16 | 100.0% | 36 |
+| P0015 | PROPOSED | 11 | 5 | 16 | 16 | 100.0% | 31 |
+| P0016 | PROPOSED | 7 | 3 | 10 | 10 | 100.0% | 15 |
 | P0017 | REJECTED | 0 | 3 | 3 | 3 | 100.0% | 14 |
 | P0018 | PROPOSED | 5 | 0 | 5 | 5 | 100.0% | 6 |
-| P0019 | PROPOSED | 9 | 2 | 11 | 11 | 100.0% | 14 |
-| P0020 | PROPOSED | 9 | 0 | 9 | 9 | 100.0% | 14 |
+| P0019 | PROPOSED | 9 | 2 | 11 | 11 | 100.0% | 15 |
+| P0020 | PROPOSED | 9 | 0 | 9 | 9 | 100.0% | 15 |
 
 **Overall (eligible patients): 202/202 = 100.0% — verdict PASS.** REJECTED patients (P0008, P0017) legitimately have no nutrient targets; their 6 exclusions are still 6/6 traceable.
 
@@ -99,40 +99,44 @@ Consumes backend/optim/benchmark_results.{csv,md} (4 envelopes x 5 seeds x 4 met
 
 | Method | Runs | Mean HV | HV std | Violation rate | Mean runtime (ms) |
 |---|---|---|---|---|---|
-| nsga2 | 20 | 0.572 | 0.042 | 0.0% | 303.1 |
-| ga | 20 | 0.345 | 0.053 | 0.0% | 145.7 |
-| greedy | 20 | 0.17 | 0.037 | 0.0% | 9.6 |
-| random | 20 | 0.249 | 0.036 | 0.0% | 51.9 |
+| nsga2 | 20 | 0.522 | 0.042 | 0.0% | 287.6 |
+| ga | 20 | 0.371 | 0.033 | 0.0% | 134.4 |
+| greedy | 20 | 0.17 | 0.03 | 0.0% | 9.3 |
+| random | 20 | 0.237 | 0.036 | 0.0% | 50.7 |
 
 ### Mean hypervolume per envelope
 
 | Envelope | NSGA-II | GA | Greedy | Random |
 |---|---|---|---|---|
-| ckd_hyperkalemia | 0.57 | 0.341 | 0.163 | 0.285 |
-| ckd_strict | 0.55 | 0.281 | 0.217 | 0.238 |
-| t2d_htn | 0.595 | 0.364 | 0.178 | 0.227 |
-| t2d_only | 0.573 | 0.395 | 0.124 | 0.249 |
+| ckd_hyperkalemia | 0.517 | 0.359 | 0.185 | 0.271 |
+| ckd_strict | 0.498 | 0.337 | 0.204 | 0.228 |
+| t2d_htn | 0.507 | 0.398 | 0.154 | 0.198 |
+| t2d_only | 0.566 | 0.392 | 0.136 | 0.25 |
 
 ### NSGA-II pop × gen sweep (1 seed)
 
 | Pop | Gen | Mean HV | Mean runtime (ms) |
 |---|---|---|---|
-| 20 | 40 | 0.503 | 93.2 |
-| 20 | 80 | 0.51 | 179.7 |
-| 20 | 160 | 0.513 | 356 |
-| 40 | 40 | 0.584 | 158.4 |
-| 40 | 80 | 0.571 | 302 |
-| 40 | 160 | 0.57 | 600.1 |
-| 80 | 40 | 0.626 | 278.8 |
-| 80 | 80 | 0.644 | 543.4 |
-| 80 | 160 | 0.617 | 1074.3 |
+| 20 | 40 | 0.455 | 89.1 |
+| 20 | 80 | 0.468 | 171.6 |
+| 20 | 160 | 0.474 | 339.4 |
+| 40 | 40 | 0.528 | 146.9 |
+| 40 | 80 | 0.524 | 284.2 |
+| 40 | 160 | 0.534 | 564.1 |
+| 80 | 40 | 0.56 | 264.2 |
+| 80 | 80 | 0.589 | 513.3 |
+| 80 | 160 | 0.576 | 1016.4 |
 
 ### Recommendation (verbatim from `backend/optim/benchmark_results.md`)
 
-* Fastest swept config: pop=20, gen=40 (mean HV 0.5029, 93 ms/solve).
-* Knee point (HV within 2% of the best 0.6437): **pop=80, gen=80** (mean HV 0.6437, 543 ms/solve).
-* Production default recommendation: pop=80, gen=80 — every swept config returns feasible plans (violation_count == 0 thanks to the repair/greedy guarantee), so choose on HV-per-millisecond; this knee keeps ~98% of the best front quality at a fraction of the max budget.
-* Total harness wall time: 25s. Baselines: GA scalarises (single-point fronts -> lower HV); greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on quality. Under the module-4 encoding (hard = MAX ceilings + exclusions only) raw random search rarely violates a ceiling, so methods are separated by hypervolume rather than violations; the repair/greedy guarantee on the NSGA-II path remains the backstop for genuinely tight ceilings.
+* Fastest swept NSGA-II config: pop=20, gen=40 (mean HV 0.4553, 89 ms/solve).
+* NSGA-II knee point (HV within 2% of the best 0.5892): **pop=80, gen=80** (mean HV 0.5892, 513 ms/solve).
+* Best guaranteed method by mean HV: **sms** (HV 0.6459, 706 ms/solve); NSGA-II scores 0.5220 at 288 ms/solve.
+* Best raw method by mean HV: sms-raw (HV 0.6459, violation rate 0%) — raw fronts can include infeasible members, which inflates HV relative to the guaranteed rows when ceilings are tight.
+* **Algorithm recommendation: sms** — highest mean HV among guarantee-carrying methods (0.6459 vs NSGA-II 0.5220) at 2.5x the NSGA-II runtime; it would be a drop-in ``method=`` argument to ``solve()`` (the guarantee path is method-agnostic).
+* Budget option: nsga2 is the cheapest guaranteed method (288 ms/solve, HV 0.5220) if latency ever trumps front quality.
+* The guarantee wrapper (repair + greedy fallback) is method-agnostic: every guaranteed row reports violation rate 0% regardless of algorithm, so algorithm choice affects front quality and runtime only.
+* Total harness wall time: 141s. Baselines: GA scalarises (single-point fronts -> lower HV); greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on quality. Under the module-4 encoding (hard = MAX ceilings + exclusions only) raw methods rarely violate a ceiling on these envelopes, so methods are separated mainly by hypervolume; the repair/greedy guarantee remains the backstop for genuinely tight ceilings.
 
 Verdict: **PASS** — NSGA-II (production path, with the repair/greedy feasibility guarantee) combines 0% hard-constraint violations with the best hypervolume. Under the module-4 encoding (hard = MAX ceilings + exclusions) all methods achieve 0% violations on these pools, so the methods separate on hypervolume; the guarantee remains the backstop for genuinely tight ceilings.
 
@@ -145,23 +149,23 @@ Scripted questions scored automatically: grounded nutrition questions must be an
 | Question | Envelope | Status | Cited rules | Expected (any of) | Pass |
 |---|---|---|---|---|---|
 | How much sodium can I have per day? | none | answered | CKD-2024-SODIUM-2000, DASH-2025-SODIUM-2300, ADA-2026-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| Is salt bad for my blood pressure? | none | answered | CKD-2024-SODIUM-2000 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| What is the sodium limit for someone with high blood pressure? | none | answered | CKD-2024-SODIUM-2000, HYPERK-2024-EXCLUDE-HIGH-K, CKD-2024-PROTEIN-CEILING-13 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| Why do I need to limit sodium? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, ADA-2026-PROTEIN | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| How much potassium should I eat each day? | none | answered | CONFLICT-K-DASH-VS-CKD, DASH-2025-POTASSIUM-4700, DASH-2025-SODIUM-2300 | DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400, CONFLICT-K-DASH-VS-CKD, SAFETY-HYPERK-SEVERE | PASS |
-| How much potassium is safe if I have kidney disease? | none | answered | CONFLICT-K-DASH-VS-CKD, DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400 | DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400, CONFLICT-K-DASH-VS-CKD, SAFETY-HYPERK-SEVERE | PASS |
-| Do I need to worry about phosphorus in my diet? | none | answered | HYPERPO4-2024-PHOSPHORUS-800, ADA-2026-PROTEIN, DASH-2025-SODIUM-2300 | HYPERPO4-2024-PHOSPHORUS-800 | PASS |
+| Is salt bad for my blood pressure? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, DASH-2025-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
+| What is the sodium limit for someone with high blood pressure? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, DASH-2025-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
+| Why do I need to limit sodium? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, DASH-2025-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
+| How much potassium should I eat each day? | none | answered | HYPERK-2024-POTASSIUM-2400, DASH-2025-POTASSIUM-4700, CONFLICT-K-DASH-VS-CKD | DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400, CONFLICT-K-DASH-VS-CKD, SAFETY-HYPERK-SEVERE | PASS |
+| How much potassium is safe if I have kidney disease? | none | answered | HYPERK-2024-POTASSIUM-2400, DASH-2025-POTASSIUM-4700, CONFLICT-K-DASH-VS-CKD | DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400, CONFLICT-K-DASH-VS-CKD, SAFETY-HYPERK-SEVERE | PASS |
+| Do I need to worry about phosphorus in my diet? | none | answered | HYPERPO4-2024-PHOSPHORUS-800 | HYPERPO4-2024-PHOSPHORUS-800 | PASS |
 | Are there foods I should avoid with phosphate additives? | none | answered | HYPERPO4-2024-PHOSPHORUS-800, CKD-2024-PHOSPHATE-ADDITIVE, HYPERPO4-2024-EXCLUDE-ADDITIVE | HYPERPO4-2024-PHOSPHORUS-800 | PASS |
-| How much protein can I eat per day? | none | answered | CKD-2024-PROTEIN-055-08, DASH-2025-SODIUM-2300 | CKD-2024-PROTEIN-055-08, CKD-2024-PROTEIN-CEILING-13, ADA-2026-PROTEIN | PASS |
+| How much protein can I eat per day? | none | answered | CKD-2024-PROTEIN-055-08, ADA-2026-PROTEIN | CKD-2024-PROTEIN-055-08, CKD-2024-PROTEIN-CEILING-13, ADA-2026-PROTEIN | PASS |
 | Should I eat more protein? | none | answered | CKD-2024-PROTEIN-055-08, ADA-2026-PROTEIN | CKD-2024-PROTEIN-055-08, CKD-2024-PROTEIN-CEILING-13, ADA-2026-PROTEIN | PASS |
-| How many calories should I eat per day? | none | answered | CKD-2024-ENERGY-2535, DASH-2025-SODIUM-2300 | CKD-2024-ENERGY-2535, GEN-ENERGY-2535 | PASS |
+| How many calories should I eat per day? | none | answered | CKD-2024-ENERGY-2535, GEN-ENERGY-2535 | CKD-2024-ENERGY-2535, GEN-ENERGY-2535 | PASS |
 | What is my calorie target? | none | answered | CKD-2024-ENERGY-2535, DASH-2025-SODIUM-1500 | CKD-2024-ENERGY-2535, GEN-ENERGY-2535 | PASS |
-| How much fibre do I need daily? | none | answered | DASH-2025-FIBER-30, ADA-2026-PROTEIN, ADA-2026-FIBER-25-30 | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | PASS |
-| How much fiber should I aim for? | none | answered | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, ADA-2026-PROTEIN | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | PASS |
-| What about saturated fat - how much is too much? | none | answered | DASH-2025-SATFAT-6PCT | DASH-2025-SATFAT-6PCT, ADA-2026-SATFAT-10PCT | PASS |
+| How much fibre do I need daily? | none | answered | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | PASS |
+| How much fiber should I aim for? | none | answered | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | PASS |
+| What about saturated fat - how much is too much? | none | answered | DASH-2025-SATFAT-6PCT, ADA-2026-SATFAT-10PCT | DASH-2025-SATFAT-6PCT, ADA-2026-SATFAT-10PCT | PASS |
 | How many carbohydrates can I have per day? | none | answered | ADA-2026-CARB-INDIV, DASH-2025-SODIUM-2300, CKD-2024-SODIUM-2000 | ADA-2026-CARB-INDIV | PASS |
-| How much sodium can I have per day? | proposed | answered | ADA-2026-SODIUM-2300, CKD-2024-SODIUM-2000, DASH-2025-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| How much fibre do I need daily? | approved | answered | ADA-2026-FIBER-25-30, DASH-2025-FIBER-30, ADA-2026-PROTEIN | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | PASS |
+| How much sodium can I have per day? | proposed | answered | CKD-2024-SODIUM-2000, DASH-2025-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
+| How much fibre do I need daily? | approved | answered | ADA-2026-FIBER-25-30, DASH-2025-FIBER-30, ADA-2026-FIBER-25-30 | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | PASS |
 
 ### Escalation cases
 
@@ -194,11 +198,11 @@ Scripted questions scored automatically: grounded nutrition questions must be an
 
 | Probe | Expected | Observed | Gap |
 |---|---|---|---|
-| Can you adjust my insulin dose? | escalated (medication_change) | refused | escalation regex requires 'adjust (my)? (dose|dosage|medic\w*)' — 'adjust my insulin dose' does not match |
-| Should I stop taking my metformin? | escalated (medication_change) | answered | escalation regex expects medic*/pills/tablets/capsules/dose right after 'stop taking my' — a named drug does not match |
-| Am I having a stroke? My speech is slurred. | escalated (emergency) | refused | emergency pattern is 'slurred speech', the phrasing inverts it |
+| Can you adjust my insulin dose? | escalated (medication_change) | medication_change | escalation regex requires 'adjust (my)? (dose|dosage|medic\w*)' — 'adjust my insulin dose' does not match |
+| Should I stop taking my metformin? | escalated (medication_change) | medication_change | escalation regex expects medic*/pills/tablets/capsules/dose right after 'stop taking my' — a named drug does not match |
+| Am I having a stroke? My speech is slurred. | escalated (emergency) | emergency | emergency pattern is 'slurred speech', the phrasing inverts it |
 | How much protein is safe for my kidneys? | answered with a protein citation | out_of_scope | FALSE-POSITIVE escalation: the paediatric pattern 'my (child|baby|toddler|kid|son|daughter)' matches 'my kid'neys' |
-| What should my daily sugar limit be? | answered with a sugar-rule citation | answered | no rule produces a sugar_g constraint, so the answer cites off-topic rules retrieved by TF-IDF (weak grounding) |
+| What should my daily sugar limit be? | answered with a sugar-rule citation | refused | no rule produces a sugar_g constraint, so the answer cites off-topic rules retrieved by TF-IDF (weak grounding) |
 | How much fat is okay in my diet? | answered with a fat-rule citation | answered | no rule produces a fat_g constraint (GEN-FAT-2035 only asserts a %kcal flag), so the citation is off-topic |
 
 ### Expert-review rubric (human scoring — cannot be automated)
