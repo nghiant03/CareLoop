@@ -93,6 +93,46 @@ per-constraint provenance is carried by (a) the constraint-producing rule's
 whose `action_summary` names the constraint with `[guideline / section]`. This is a
 deliberate consequence of the frozen contract, not an omission.
 
+## Medication–nutrient interaction rules (stretch feature #1)
+
+Eight cited medication–nutrient rules were added to `rules/rules.json` (guidelines, sections,
+URLs and verbatim quotes verified against the primary sources). They use only the existing
+action kinds (`assert` clinical flags — no new constraint kinds) and are ANDed like every
+other condition set, including a two-`meds`-condition conjunction for the combination alert.
+
+| Rule | Priority | Fires on | Flag keys |
+|---|---|---|---|
+| `MED-RASI-K-CAUTION` | 85 | ACEi/ARB (class token `ACEi` in the dataset; `ARB` + generic spellings accepted) | `rasi_k_monitoring`, `assess_dietary_potassium` — KDIGO 2024 CKD, Practice Point 3.6.3 |
+| `MED-RASI-KSPARING-ALERT` | 88 | **ACEi/ARB AND spironolactone** (two `meds in` conditions ANDed) | `rasi_k_sparing_interaction`, `med_interaction_high_risk` — UK MHRA Drug Safety Update 2020 |
+| `MED-SGLT2I-VOLUME` | 65 | SGLT2i (`SGLT2i` token + generic spellings) | `sglt2i_volume_caution` — KDIGO 2022 Diabetes in CKD, Practice Point 1.3.4 |
+| `MED-THIAZIDE-ELECTROLYTES` | 70 | thiazide (`thiazide` token + generic spellings) | `thiazide_electrolyte_monitoring` — 2025 AHA/ACC Hypertension §5.2.8 |
+| `MED-LOOP-K-MG` | 70 | loop diuretic (`loop_diuretic` token + generic spellings) | `loop_diuretic_k_mg_monitoring` — FDA Lasix label / AHA/ACC §5.2.8 (quote from the AHA/ACC guideline; noted in the rule) |
+| `MED-PHOSPHATE-BINDER-TIMING` | 65 | phosphate binder (dataset token `phosphate_binder` + `sevelamer`/`calcium_acetate`) | `phosphate_binder_timing` — RACGP AJGP 2023 CKD-MBD |
+| `MED-WARFARIN-VITK` | 75 | warfarin | `warfarin_vitamin_k_consistency` — FDA Coumadin label, Instructions for Patients |
+| `MED-METFORMIN-B12` | 60 | metformin (dataset token) | `metformin_b12_assessment` — ADA Standards of Care 2026, Rec. 3.10 |
+
+Notes:
+
+* **Vocabulary.** The live dataset (`data/patients.json`) encodes meds as class tokens
+  (`ACEi`, `metformin`, `phosphate_binder`, `statin`, `insulin`, `potassium_binder`,
+  `erythropoietin`). Each rule's `in`-list therefore contains the dataset token **plus**
+  common generic spellings (e.g. `lisinopril`, `furosemide`, `sevelamer`) so future profiles
+  using drug names still match; unmatched rules are inert for today's cohort.
+* **Conjunction.** Rule 2 expresses "ACEi/ARB present AND spironolactone present" as two
+  separate `meds` conditions — the compiler emits one `member$` test per condition and CLIPS
+  ANDs them, so no engine change was needed.
+* **Surface.** The flags land in the envelope `notes` "Cautions/asserts" line and, because
+  every fired rule contributes its `CitationSource`, chat citations and the clinician
+  explanation pick up `guideline`/`section`/`url`/`verbatim_quote` automatically.
+* **No nutrient constraints.** These rules deliberately set no nutrient ceiling/target —
+  potassium/phosphorus/sodium levels remain governed by the lab- and diagnosis-driven rules;
+  the med flags only add monitoring/diet-counselling instructions.
+* **Determinism** is untouched: the flags are harvested and sorted by
+  `(key, value, rule_id)` like all other clinical flags.
+* `rules/example_trace.json` was regenerated for the SYN-0007 patient (ACEi +
+  `loop_diuretic`), which now fires 32 rules (was 30): `MED-RASI-K-CAUTION` and
+  `MED-LOOP-K-MG` joined the pinned `all_fired_rule_ids`.
+
 ## Fallback
 
 No pure-Python interpreter is shipped: clipspy 1.0.6 is a hard runtime dependency of

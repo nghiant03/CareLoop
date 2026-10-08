@@ -7,11 +7,17 @@
     "age": 62,
     "sex": "M",
     "weight_kg": 70.0,
-    "diagnoses": ["CKD_stage_4", "HTN"],
+    "diagnoses": [
+      "CKD_stage_4",
+      "HTN"
+    ],
     "egfr": 22.0,
     "serum_K_meq_L": 5.4,
     "serum_PO4_mg_dL": 4.0,
-    "meds": ["ACEi", "loop_diuretic"],
+    "meds": [
+      "ACEi",
+      "loop_diuretic"
+    ],
     "bmi": 27.5,
     "pregnant": false
   },
@@ -25,21 +31,67 @@
       "age": 62,
       "sex": "M",
       "weight_kg": 70.0,
-      "diagnoses": ["CKD_stage_4", "HTN"],
+      "diagnoses": [
+        "CKD_stage_4",
+        "HTN"
+      ],
       "egfr": 22.0,
       "serum_K_meq_L": 5.4,
       "serum_PO4_mg_dL": 4.0,
-      "meds": ["ACEi", "loop_diuretic"]
+      "meds": [
+        "ACEi",
+        "loop_diuretic"
+      ]
     },
     "targets": [
-      {"nutrient": "sodium_mg", "kind": "max", "value": 2000.0, "unit": "mg"},
-      {"nutrient": "protein_g", "kind": "min", "value": 38.5, "unit": "g"},
-      {"nutrient": "protein_g", "kind": "max", "value": 56.0, "unit": "g"},
-      {"nutrient": "energy_kcal", "kind": "min", "value": 1750.0, "unit": "kcal"},
-      {"nutrient": "energy_kcal", "kind": "max", "value": 2450.0, "unit": "kcal"},
-      {"nutrient": "potassium_mg", "kind": "max", "value": 2400.0, "unit": "mg"},
-      {"nutrient": "fiber_g", "kind": "min", "value": 30.0, "unit": "g"},
-      {"nutrient": "sat_fat_g", "kind": "max", "value": 13.0, "unit": "g"}
+      {
+        "nutrient": "sodium_mg",
+        "kind": "max",
+        "value": 2000.0,
+        "unit": "mg"
+      },
+      {
+        "nutrient": "protein_g",
+        "kind": "min",
+        "value": 38.5,
+        "unit": "g"
+      },
+      {
+        "nutrient": "protein_g",
+        "kind": "max",
+        "value": 56.0,
+        "unit": "g"
+      },
+      {
+        "nutrient": "energy_kcal",
+        "kind": "min",
+        "value": 1750.0,
+        "unit": "kcal"
+      },
+      {
+        "nutrient": "energy_kcal",
+        "kind": "max",
+        "value": 2450.0,
+        "unit": "kcal"
+      },
+      {
+        "nutrient": "potassium_mg",
+        "kind": "max",
+        "value": 2400.0,
+        "unit": "mg"
+      },
+      {
+        "nutrient": "fiber_g",
+        "kind": "min",
+        "value": 30.0,
+        "unit": "g"
+      },
+      {
+        "nutrient": "sat_fat_g",
+        "kind": "max",
+        "value": 13.0,
+        "unit": "g"
+      }
     ],
     "exclusions": [
       {
@@ -86,7 +138,13 @@
         "patient_summary": "CKD stage 4 (eGFR 22)",
         "action_summary": "Na ceiling = 2000 mg/d",
         "priority": 90,
-        "citation": {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.4 / Dietary Sodium", "rule_id": "CKD-2024-SODIUM-2000", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": "recommend sodium intake less than 2 g per day"}
+        "citation": {
+          "guideline": "KDIGO 2024 CKD Guideline",
+          "section": "Sec. 3.4 / Dietary Sodium",
+          "rule_id": "CKD-2024-SODIUM-2000",
+          "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+          "verbatim_quote": "recommend sodium intake less than 2 g per day"
+        }
       },
       {
         "rule_id": "CONFLICT-SODIUM-CKD-WINS",
@@ -94,7 +152,13 @@
         "patient_summary": "CKD stage 4 + HTN",
         "action_summary": "sodium: CKD 2000 overrides DASH/ADA 2300",
         "priority": 90,
-        "citation": {"guideline": "CareLoop conflict policy", "section": "Priority hierarchy", "rule_id": "CONFLICT-SODIUM-CKD-WINS", "url": null, "verbatim_quote": null}
+        "citation": {
+          "guideline": "CareLoop conflict policy",
+          "section": "Priority hierarchy",
+          "rule_id": "CONFLICT-SODIUM-CKD-WINS",
+          "url": null,
+          "verbatim_quote": null
+        }
       },
       {
         "rule_id": "CKD-2024-PROTEIN-055-08",
@@ -102,7 +166,13 @@
         "patient_summary": "CKD stage 4 (eGFR 22), weight 70 kg",
         "action_summary": "protein = 0.55-0.8 g/kg/d -> 38.5-56 g/d",
         "priority": 90,
-        "citation": {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.5 / Protein Intake", "rule_id": "CKD-2024-PROTEIN-055-08", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": "maintain protein intake at 0.8 g/kg per day"}
+        "citation": {
+          "guideline": "KDIGO 2024 CKD Guideline",
+          "section": "Sec. 3.5 / Protein Intake",
+          "rule_id": "CKD-2024-PROTEIN-055-08",
+          "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+          "verbatim_quote": "maintain protein intake at 0.8 g/kg per day"
+        }
       },
       {
         "rule_id": "CKD-2024-ENERGY-2535",
@@ -110,7 +180,13 @@
         "patient_summary": "CKD stage 4, weight 70 kg",
         "action_summary": "energy = 25-35 kcal/kg/d -> 1750-2450 kcal/d",
         "priority": 80,
-        "citation": {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.6 / Energy Intake", "rule_id": "CKD-2024-ENERGY-2535", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": null}
+        "citation": {
+          "guideline": "KDIGO 2024 CKD Guideline",
+          "section": "Sec. 3.6 / Energy Intake",
+          "rule_id": "CKD-2024-ENERGY-2535",
+          "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+          "verbatim_quote": null
+        }
       },
       {
         "rule_id": "HYPERK-2024-POTASSIUM-2400",
@@ -118,7 +194,13 @@
         "patient_summary": "serum K 5.4 mEq/L >= 5.0",
         "action_summary": "K ceiling = 2400 mg/d",
         "priority": 85,
-        "citation": {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.7 / Potassium", "rule_id": "HYPERK-2024-POTASSIUM-2400", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": "restrict dietary potassium in hyperkalaemia"}
+        "citation": {
+          "guideline": "KDIGO 2024 CKD Guideline",
+          "section": "Sec. 3.7 / Potassium",
+          "rule_id": "HYPERK-2024-POTASSIUM-2400",
+          "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+          "verbatim_quote": "restrict dietary potassium in hyperkalaemia"
+        }
       },
       {
         "rule_id": "CONFLICT-K-DASH-VS-CKD",
@@ -126,7 +208,13 @@
         "patient_summary": "HTN + CKD stage 4 + serum K 5.4",
         "action_summary": "potassium: CKD/hyperkalaemia restriction overrides DASH 4700 target",
         "priority": 90,
-        "citation": {"guideline": "CareLoop conflict policy", "section": "Priority hierarchy", "rule_id": "CONFLICT-K-DASH-VS-CKD", "url": null, "verbatim_quote": null}
+        "citation": {
+          "guideline": "CareLoop conflict policy",
+          "section": "Priority hierarchy",
+          "rule_id": "CONFLICT-K-DASH-VS-CKD",
+          "url": null,
+          "verbatim_quote": null
+        }
       },
       {
         "rule_id": "HYPERK-2024-EXCLUDE-HIGH-K",
@@ -134,7 +222,13 @@
         "patient_summary": "serum K 5.4 mEq/L",
         "action_summary": "exclude dish_category high_potassium_foods",
         "priority": 85,
-        "citation": {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.7 / Potassium", "rule_id": "HYPERK-2024-EXCLUDE-HIGH-K", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": null}
+        "citation": {
+          "guideline": "KDIGO 2024 CKD Guideline",
+          "section": "Sec. 3.7 / Potassium",
+          "rule_id": "HYPERK-2024-EXCLUDE-HIGH-K",
+          "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+          "verbatim_quote": null
+        }
       },
       {
         "rule_id": "HYPERK-2024-NO-SALT-SUB",
@@ -142,7 +236,13 @@
         "patient_summary": "serum K 5.4 mEq/L",
         "action_summary": "exclude ingredient potassium_chloride",
         "priority": 85,
-        "citation": {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.7 / Potassium", "rule_id": "HYPERK-2024-NO-SALT-SUB", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": null}
+        "citation": {
+          "guideline": "KDIGO 2024 CKD Guideline",
+          "section": "Sec. 3.7 / Potassium",
+          "rule_id": "HYPERK-2024-NO-SALT-SUB",
+          "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+          "verbatim_quote": null
+        }
       },
       {
         "rule_id": "CKD-2024-PHOSPHORUS-INDIV",
@@ -150,7 +250,13 @@
         "patient_summary": "CKD stage 4, serum PO4 4.0 mg/dL (< 4.5)",
         "action_summary": "phosphorus individualized; no blanket restriction",
         "priority": 80,
-        "citation": {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.8 / Phosphorus", "rule_id": "CKD-2024-PHOSPHORUS-INDIV", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": null}
+        "citation": {
+          "guideline": "KDIGO 2024 CKD Guideline",
+          "section": "Sec. 3.8 / Phosphorus",
+          "rule_id": "CKD-2024-PHOSPHORUS-INDIV",
+          "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+          "verbatim_quote": null
+        }
       },
       {
         "rule_id": "CKD-2024-PHOSPHATE-ADDITIVE",
@@ -158,7 +264,13 @@
         "patient_summary": "CKD stage 4",
         "action_summary": "exclude dish_category phosphate_additive_processed",
         "priority": 80,
-        "citation": {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.8 / Phosphorus", "rule_id": "CKD-2024-PHOSPHATE-ADDITIVE", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": null}
+        "citation": {
+          "guideline": "KDIGO 2024 CKD Guideline",
+          "section": "Sec. 3.8 / Phosphorus",
+          "rule_id": "CKD-2024-PHOSPHATE-ADDITIVE",
+          "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+          "verbatim_quote": null
+        }
       },
       {
         "rule_id": "DASH-2025-SODIUM-2300",
@@ -166,7 +278,13 @@
         "patient_summary": "HTN",
         "action_summary": "Na ceiling = 2300 mg/d (overridden by CKD 2000)",
         "priority": 70,
-        "citation": {"guideline": "AHA/ACC 2025 Hypertension Guideline", "section": "Sec. 4 / Diet and Sodium", "rule_id": "DASH-2025-SODIUM-2300", "url": "https://www.ahajournals.org/journal/hyp", "verbatim_quote": "reduce sodium intake to less than 2,300 mg per day"}
+        "citation": {
+          "guideline": "AHA/ACC 2025 Hypertension Guideline",
+          "section": "Sec. 4 / Diet and Sodium",
+          "rule_id": "DASH-2025-SODIUM-2300",
+          "url": "https://www.ahajournals.org/journal/hyp",
+          "verbatim_quote": "reduce sodium intake to less than 2,300 mg per day"
+        }
       },
       {
         "rule_id": "DASH-2025-FIBER-30",
@@ -174,7 +292,13 @@
         "patient_summary": "HTN",
         "action_summary": "fiber floor = 30 g/d (stricter than ADA 25 g)",
         "priority": 70,
-        "citation": {"guideline": "AHA/ACC 2025 Hypertension Guideline", "section": "Sec. 4 / DASH Dietary Pattern", "rule_id": "DASH-2025-FIBER-30", "url": "https://www.ahajournals.org/journal/hyp", "verbatim_quote": null}
+        "citation": {
+          "guideline": "AHA/ACC 2025 Hypertension Guideline",
+          "section": "Sec. 4 / DASH Dietary Pattern",
+          "rule_id": "DASH-2025-FIBER-30",
+          "url": "https://www.ahajournals.org/journal/hyp",
+          "verbatim_quote": null
+        }
       },
       {
         "rule_id": "DASH-2025-SATFAT-6PCT",
@@ -182,7 +306,13 @@
         "patient_summary": "HTN",
         "action_summary": "sat fat max = 13 g/d (6% kcal reference)",
         "priority": 70,
-        "citation": {"guideline": "AHA/ACC 2025 Hypertension Guideline", "section": "Sec. 4 / DASH Dietary Pattern", "rule_id": "DASH-2025-SATFAT-6PCT", "url": "https://www.ahajournals.org/journal/hyp", "verbatim_quote": null}
+        "citation": {
+          "guideline": "AHA/ACC 2025 Hypertension Guideline",
+          "section": "Sec. 4 / DASH Dietary Pattern",
+          "rule_id": "DASH-2025-SATFAT-6PCT",
+          "url": "https://www.ahajournals.org/journal/hyp",
+          "verbatim_quote": null
+        }
       },
       {
         "rule_id": "MED-ACEI-ARB-K-CAUTION",
@@ -190,14 +320,44 @@
         "patient_summary": "meds include ACEi",
         "action_summary": "potassium_caution = true (ACEi/ARB reduce renal K excretion)",
         "priority": 85,
-        "citation": {"guideline": "CareLoop medication rules (extension)", "section": "Medication-nutrient interaction", "rule_id": "MED-ACEI-ARB-K-CAUTION", "url": null, "verbatim_quote": null}
+        "citation": {
+          "guideline": "CareLoop medication rules (extension)",
+          "section": "Medication-nutrient interaction",
+          "rule_id": "MED-ACEI-ARB-K-CAUTION",
+          "url": null,
+          "verbatim_quote": null
+        }
       }
     ],
     "citations": [
-      {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.4 / Dietary Sodium", "rule_id": "CKD-2024-SODIUM-2000", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": "recommend sodium intake less than 2 g per day"},
-      {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.5 / Protein Intake", "rule_id": "CKD-2024-PROTEIN-055-08", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": "maintain protein intake at 0.8 g/kg per day"},
-      {"guideline": "KDIGO 2024 CKD Guideline", "section": "Sec. 3.7 / Potassium", "rule_id": "HYPERK-2024-POTASSIUM-2400", "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/", "verbatim_quote": "restrict dietary potassium in hyperkalaemia"},
-      {"guideline": "AHA/ACC 2025 Hypertension Guideline", "section": "Sec. 4 / Diet and Sodium", "rule_id": "DASH-2025-SODIUM-2300", "url": "https://www.ahajournals.org/journal/hyp", "verbatim_quote": "reduce sodium intake to less than 2,300 mg per day"}
+      {
+        "guideline": "KDIGO 2024 CKD Guideline",
+        "section": "Sec. 3.4 / Dietary Sodium",
+        "rule_id": "CKD-2024-SODIUM-2000",
+        "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+        "verbatim_quote": "recommend sodium intake less than 2 g per day"
+      },
+      {
+        "guideline": "KDIGO 2024 CKD Guideline",
+        "section": "Sec. 3.5 / Protein Intake",
+        "rule_id": "CKD-2024-PROTEIN-055-08",
+        "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+        "verbatim_quote": "maintain protein intake at 0.8 g/kg per day"
+      },
+      {
+        "guideline": "KDIGO 2024 CKD Guideline",
+        "section": "Sec. 3.7 / Potassium",
+        "rule_id": "HYPERK-2024-POTASSIUM-2400",
+        "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+        "verbatim_quote": "restrict dietary potassium in hyperkalaemia"
+      },
+      {
+        "guideline": "AHA/ACC 2025 Hypertension Guideline",
+        "section": "Sec. 4 / Diet and Sodium",
+        "rule_id": "DASH-2025-SODIUM-2300",
+        "url": "https://www.ahajournals.org/journal/hyp",
+        "verbatim_quote": "reduce sodium intake to less than 2,300 mg per day"
+      }
     ],
     "priority_basis": "CKD (stage 3-4, p90) > hyperkalaemia (p85) > HTN/DASH (p70) > ADA (p60) > generic (p50). CKD 2000 mg sodium ceiling overrides DASH/ADA 2300; hyperkalaemia 2400 mg potassium ceiling overrides the DASH 4700 mg target.",
     "proposed_by": "rules-engine",
@@ -216,36 +376,38 @@
     "medication": "ACEi triggers MED-ACEI-ARB-K-CAUTION; loop diuretic triggers MED-DIURETIC-K-LOSS which warns not to restrict K without labs, but the hyperkalaemia lab is present and wins."
   },
   "all_fired_rule_ids": [
-    "CKD-2024-SODIUM-2000",
     "CKD-2024-PROTEIN-055-08",
-    "CONFLICT-SODIUM-CKD-WINS",
+    "CKD-2024-SODIUM-2000",
     "CONFLICT-K-DASH-VS-CKD",
+    "CONFLICT-SODIUM-CKD-WINS",
     "CKD-2024-NO-K-SALT-SUB",
-    "HYPERK-2024-POTASSIUM-2400",
     "HYPERK-2024-EXCLUDE-HIGH-K",
-    "HYPERK-2024-NO-SALT-SUB",
     "HYPERK-2024-MONITOR",
-    "MED-ACEI-ARB-K-CAUTION",
+    "HYPERK-2024-NO-SALT-SUB",
+    "HYPERK-2024-POTASSIUM-2400",
     "MED-ACEI-ARB-CKD-MONITOR",
-    "CKD-2024-PROTEIN-CEILING-13",
+    "MED-ACEI-ARB-K-CAUTION",
+    "MED-RASI-K-CAUTION",
     "CKD-2024-ENERGY-2535",
-    "CKD-2024-PHOSPHORUS-INDIV",
     "CKD-2024-PHOSPHATE-ADDITIVE",
-    "KDOQI-2020-PROTEIN",
+    "CKD-2024-PHOSPHORUS-INDIV",
+    "CKD-2024-PROTEIN-CEILING-13",
     "CKD-STAGE-CLASSIFY-EGFR",
-    "DASH-2025-SODIUM-2300",
-    "DASH-2025-SODIUM-1500",
-    "DASH-2025-FIBER-30",
-    "DASH-2025-SATFAT-6PCT",
-    "DASH-2025-WEIGHT-LOSS",
-    "DASH-2025-MINERALS",
+    "KDOQI-2020-PROTEIN",
     "DASH-2025-ALCOHOL",
+    "DASH-2025-FIBER-30",
+    "DASH-2025-MINERALS",
+    "DASH-2025-SATFAT-6PCT",
+    "DASH-2025-SODIUM-1500",
+    "DASH-2025-SODIUM-2300",
+    "DASH-2025-WEIGHT-LOSS",
     "MED-DIURETIC-K-LOSS",
+    "MED-LOOP-K-MG",
     "GEN-ENERGY-2535",
-    "GEN-PROTEIN-RDA",
-    "GEN-FIBER-25",
     "GEN-FAT-2035",
+    "GEN-FIBER-25",
+    "GEN-PROTEIN-RDA",
     "GEN-SUGAR-10PCT"
   ],
-  "fired_rule_count": 30
+  "fired_rule_count": 32
 }

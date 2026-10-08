@@ -8,9 +8,9 @@ the rule engine and every downstream module (clinician gate → optimiser → RA
 
 | File | Purpose |
 |---|---|
-| `rules.json` | The rule spec: **52 rules** — 50 from ADA 2026 / AHA-ACC 2025 (DASH) / KDIGO 2024 / KDOQI 2020 plus medication/scope/conflict extensions, and 2 internal safety rules. |
+| `rules.json` | The rule spec: **61 rules** — guideline-sourced rules from ADA 2026 / AHA-ACC 2025 (DASH) / KDIGO 2024+2022 / KDOQI 2020 / UK MHRA 2020 / RACGP AJGP 2023 / FDA labels, plus medication/scope/conflict extensions, and 2 internal safety rules. |
 | `engine.py` | The rule engine: compiles the rulebook into CLIPS defrules, forward-chains a patient fact, assembles the envelope + `RuleFire` trace. See [`ENGINE.md`](ENGINE.md). |
-| `example_trace.json` | Hand-worked trace for a CKD stage 4 + HTN + K⁺ 5.4 patient → expected envelope, 30 fired rules. |
+| `example_trace.json` | Hand-worked trace for a CKD stage 4 + HTN + K⁺ 5.4 patient → expected envelope, 32 fired rules. |
 | `clipspy_facts.py` | CLIPS `deftemplate` layer + mapping helpers mirroring the pydantic contracts. Import-safe without clipspy. |
 | `neo4j_schema_design.md` | Graph schema + versioning model, with SQLite + NetworkX fallback mapping. |
 | `SCHEMA_DECISION.md` | Recorded gate decision: **SQLite + NetworkX** for the prototype. |
@@ -102,7 +102,7 @@ resolution, so the trace explains *why* a value was chosen.
 import json
 
 spec = json.load(open("rules/rules.json"))
-rules = spec["rules"]                          # 52 dicts
+rules = spec["rules"]                          # 61 dicts
 by_id = {r["rule_id"]: r for r in rules}
 ```
 
@@ -178,9 +178,11 @@ serum PO₄ 4.0 mg/dL, meds `ACEi` + `loop_diuretic`.
    avoiding a "no restriction" assertion.
 3. Protein/energy are per-kg rules scaled to the 70 kg patient.
 4. PO₄ is normal, so no phosphorus ceiling — only the additive exclusion applies.
-5. ACEi adds a potassium caution flag (`MED-ACEI-ARB-K-CAUTION`).
+5. ACEi adds a potassium caution flag (`MED-ACEI-ARB-K-CAUTION`), now backed by the cited
+   `MED-RASI-K-CAUTION` (KDIGO 2024 Practice Point 3.6.3); the `loop_diuretic` med adds the
+   cited K⁺/Mg monitoring flag `MED-LOOP-K-MG` (AHA/ACC 2025 §5.2.8).
 
-**Fired-rule count:** 30 (full list in `example_trace.json["all_fired_rule_ids"]`), well above
+**Fired-rule count:** 32 (full list in `example_trace.json["all_fired_rule_ids"]`), well above
 the ≥5 requirement. `example_trace.json` carries a representative `fired_rules` array of
 14 `RuleFire` rows plus the full id list.
 
@@ -196,7 +198,7 @@ the ≥5 requirement. `example_trace.json` carries a representative `fired_rules
 | KDOQI 2020 | 1 | protein basis reinforcement |
 | Hyperkalaemia | 4 | K ceiling 2400, high-K food + KCl exclusions, monitoring |
 | Hyperphosphataemia | 3 | P ceiling 800, additive exclusion, monitoring |
-| Medication interactions | 5 | ACEi/ARB K caution, SGLT2i/metformin context, diuretic K loss |
+| Medication interactions | 13 | ACEi/ARB K caution (KDIGO 2024), RASi+spironolactone alert (UK MHRA 2020), SGLT2i volume (KDIGO 2022), thiazide/loop electrolytes (AHA/ACC 2025), phosphate-binder timing (RACGP 2023), warfarin vitamin-K consistency (FDA label), metformin B12 (ADA 2026) |
 | Generic defaults | 6 | energy, protein RDA, fiber, sodium, fat %, sugar % |
 | Scope gates | 3 | pregnancy, paediatric, dialysis exclusions |
 | Conflict resolution | 3 | sodium CKD-wins, K DASH-vs-CKD (elevated / normal) |
@@ -212,7 +214,7 @@ language, not certified verbatim extracts.
 ## 6. Verification
 
 ```bash
-python -c "import json; print(len(json.load(open('rules/rules.json'))['rules']))"   # 52 (50 + 2 internal safety rules)
+python -c "import json; print(len(json.load(open('rules/rules.json'))['rules']))"   # 61 (59 + 2 internal safety rules)
 PYTHONPATH=. python -c "from shared.envelope_schema import NutrientEnvelope; print('ok')"
 python rules/clipspy_facts.py                                                        # prints availability
 ```

@@ -1175,6 +1175,249 @@
       "notes": "Loop/thiazide diuretics can cause hypokalaemia; do not apply a potassium ceiling without a supporting lab value."
     },
     {
+      "rule_id": "MED-RASI-K-CAUTION",
+      "guideline": "KDIGO 2024 CKD Guideline",
+      "section": "3.11 / Hyperkalemia in CKD (Practice Point 3.6.3)",
+      "priority": 85,
+      "conditions": [
+        {
+          "field": "meds",
+          "op": "in",
+          "value": [
+            "ACEi",
+            "ARB",
+            "lisinopril",
+            "enalapril",
+            "ramipril",
+            "losartan",
+            "valsartan",
+            "telmisartan"
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "assert",
+          "key": "rasi_k_monitoring",
+          "value": "monitor serum potassium and creatinine after initiation or any dose change; assess dietary potassium"
+        },
+        {
+          "type": "assert",
+          "key": "assess_dietary_potassium",
+          "value": true
+        }
+      ],
+      "notes": "Cited medication-nutrient rule: RASi raises hyperkalaemia risk; KDIGO 2024 says hyperkalaemia on RASi can often be managed by measures to reduce serum potassium rather than decreasing the RASi dose, so dietary potassium is assessed (not blanket-restricted). Dataset vocabulary token is 'ACEi' (no ARB or generic drug names in the current cohort); generic spellings are accepted for forward compatibility. Coexists with MED-ACEI-ARB-K-CAUTION (unflagged caution) \u2014 this rule adds the cited monitoring instruction.",
+      "url": "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf",
+      "verbatim_quote": "Hyperkalemia associated with use of RASi can often be managed by measures to reduce the serum potassium levels rather than decreasing the dose"
+    },
+    {
+      "rule_id": "MED-RASI-KSPARING-ALERT",
+      "guideline": "UK MHRA Drug Safety Update 2020",
+      "section": "Spironolactone and renin-angiotensin system drugs in heart failure",
+      "priority": 88,
+      "conditions": [
+        {
+          "field": "meds",
+          "op": "in",
+          "value": [
+            "ACEi",
+            "ARB",
+            "lisinopril",
+            "enalapril",
+            "ramipril",
+            "losartan",
+            "valsartan",
+            "telmisartan"
+          ]
+        },
+        {
+          "field": "meds",
+          "op": "in",
+          "value": [
+            "spironolactone"
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "assert",
+          "key": "rasi_k_sparing_interaction",
+          "value": "ACEi/ARB + spironolactone: increased risk of potentially fatal hyperkalaemia and renal dysfunction; check serum potassium and renal function during the first and second week, then monthly for the first 2 months"
+        },
+        {
+          "type": "assert",
+          "key": "med_interaction_high_risk",
+          "value": "ACEi/ARB + spironolactone"
+        }
+      ],
+      "notes": "Conjunction rule (two meds conditions are ANDed): RASi AND K-sparing diuretic co-prescription is a MHRA-flagged fatal-hyperkalaemia risk. No spironolactone in the current dataset cohort; the rule is inert for today's patients but guards future profiles.",
+      "url": "https://www.gov.uk/drug-safety-update/spironolactone-and-renin-angiotensin-system-drugs-in-heart-failure-risk-of-potentially-fatal-hyperkalaemia",
+      "verbatim_quote": "Recognised side effects of treatment with an ACEi or ARB include renal dysfunction and an increase in serum potassium"
+    },
+    {
+      "rule_id": "MED-SGLT2I-VOLUME",
+      "guideline": "KDIGO 2022 Diabetes Management in CKD Guideline",
+      "section": "Practice Point 1.3.4",
+      "priority": 65,
+      "conditions": [
+        {
+          "field": "meds",
+          "op": "in",
+          "value": [
+            "SGLT2i",
+            "empagliflozin",
+            "dapagliflozin",
+            "canagliflozin"
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "assert",
+          "key": "sglt2i_volume_caution",
+          "value": "review diuretic dose if hypovolaemia risk before or at SGLT2i initiation; hold SGLT2i during acute illness or fasting (sick-day rule)"
+        }
+      ],
+      "notes": "Volume-depletion caution on SGLT2i initiation. No SGLT2i in the current dataset cohort; the token 'SGLT2i' matches the existing MED-SGLT2I-CONTEXT rule. Complements MED-SGLT2I-CONTEXT (hydration/euglycaemic-DKA context).",
+      "url": "https://kdigo.org/wp-content/uploads/2022/10/KDIGO-2022-Diabetes-Guideline.pdf",
+      "verbatim_quote": "If a patient is at risk for hypovolemia, consider decreasing thiazide or loop diuretic dosages before commencement of SGLT2i treatment"
+    },
+    {
+      "rule_id": "MED-THIAZIDE-ELECTROLYTES",
+      "guideline": "2025 AHA/ACC Hypertension Guideline",
+      "section": "5.2.8 / Electrolyte Imbalances",
+      "priority": 70,
+      "conditions": [
+        {
+          "field": "meds",
+          "op": "in",
+          "value": [
+            "thiazide",
+            "hydrochlorothiazide",
+            "chlorthalidone",
+            "indapamide"
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "assert",
+          "key": "thiazide_electrolyte_monitoring",
+          "value": "monitor serum sodium and potassium on thiazide diuretics; individualised dietary potassium helps counter thiazide-induced hypokalaemia"
+        }
+      ],
+      "notes": "Thiazide electrolyte monitoring. No thiazide in the current dataset cohort; the token 'thiazide' matches the existing MED-DIURETIC-K-LOSS rule. Dietary potassium stays individualised \u2014 this flag does NOT set a potassium target (that remains DASH/CKD/hyperkalaemia governed).",
+      "url": "https://www.ahajournals.org/doi/10.1161/HYP.0000000000000249",
+      "verbatim_quote": "Monitor for hyponatremia and hypokalemia, increased glucose, uric acid, and calcium levels."
+    },
+    {
+      "rule_id": "MED-LOOP-K-MG",
+      "guideline": "FDA Lasix label / 2025 AHA/ACC Hypertension Guideline",
+      "section": "5.2.8 / Electrolyte Imbalances",
+      "priority": 70,
+      "conditions": [
+        {
+          "field": "meds",
+          "op": "in",
+          "value": [
+            "loop_diuretic",
+            "furosemide",
+            "bumetanide",
+            "torsemide"
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "assert",
+          "key": "loop_diuretic_k_mg_monitoring",
+          "value": "monitor serum potassium and magnesium on loop diuretics (loop agents cause kaliuresis and magnesiuria)"
+        }
+      ],
+      "notes": "Loop-diuretic K+/Mg monitoring. Token 'loop_diuretic' matches the example_trace patient and MED-DIURETIC-K-LOSS. Citation note: the verbatim_quote is verified from the 2025 AHA/ACC Hypertension Guideline (secondary source covering both thiazide-type and loop diuretics); no verbatim text is taken from the FDA Lasix label itself, which is cited as the primary interaction source.",
+      "url": "https://www.ahajournals.org/doi/10.1161/HYP.0000000000000249",
+      "verbatim_quote": "hypokalemia may be caused by kaliuresis from thiazide-type and loop diuretics"
+    },
+    {
+      "rule_id": "MED-PHOSPHATE-BINDER-TIMING",
+      "guideline": "RACGP AJGP 2023 CKD-MBD",
+      "section": "Phosphate binders",
+      "priority": 65,
+      "conditions": [
+        {
+          "field": "meds",
+          "op": "in",
+          "value": [
+            "phosphate_binder",
+            "sevelamer",
+            "calcium_acetate"
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "assert",
+          "key": "phosphate_binder_timing",
+          "value": "take phosphate binders with each meal; doses taken without food do not bind dietary phosphate and are ineffective"
+        }
+      ],
+      "notes": "Dataset vocabulary token is 'phosphate_binder' (P0005-P0007, P0014-P0016). Complements CKD-2024-PHOSPHATE-ADDITIVE (prefer_binders_with_meals assert): this rule adds the cited patient-facing timing instruction.",
+      "url": "https://www1.racgp.org.au/ajgp/2023/january-february/chronic-kidney-disease-mineral-and-bone-disorder",
+      "verbatim_quote": "binders should be given with meals as they limit gastrointestinal phosphate absorption"
+    },
+    {
+      "rule_id": "MED-WARFARIN-VITK",
+      "guideline": "FDA Coumadin label",
+      "section": "Instructions for Patients",
+      "priority": 75,
+      "conditions": [
+        {
+          "field": "meds",
+          "op": "in",
+          "value": [
+            "warfarin",
+            "coumadin"
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "assert",
+          "key": "warfarin_vitamin_k_consistency",
+          "value": "keep vitamin K intake CONSISTENT week to week; do NOT avoid leafy greens; avoid drastic dietary changes while on warfarin"
+        }
+      ],
+      "notes": "Consistency, not avoidance: the correct warfarin dietary instruction is a steady vitamin K intake. No warfarin in the current dataset cohort; the rule is inert for today's patients but guards future profiles and prevents an over-restrictive 'avoid vitamin K foods' interpretation.",
+      "url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2017/009218s017lbl.pdf",
+      "verbatim_quote": "Eat a normal, balanced diet to maintain a consistent intake of vitamin K."
+    },
+    {
+      "rule_id": "MED-METFORMIN-B12",
+      "guideline": "ADA Standards of Care in Diabetes 2026",
+      "section": "3 / Recommendation 3.10",
+      "priority": 60,
+      "conditions": [
+        {
+          "field": "meds",
+          "op": "in",
+          "value": [
+            "metformin"
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "assert",
+          "key": "metformin_b12_assessment",
+          "value": "periodic vitamin B12 assessment with long-term metformin therapy, especially with anaemia or peripheral neuropathy"
+        }
+      ],
+      "notes": "Dataset vocabulary token 'metformin' (P0001, P0003, P0004, P0010, P0012, P0013, P0019). Complements MED-METFORMIN-CONTEXT (check B12 context assert): this rule adds the cited ADA recommendation.",
+      "url": "https://diabetesjournals.org/care/article/49/Supplement_1/S50/163924/",
+      "verbatim_quote": "Consider periodic assessment of vitamin B12 levels in individuals receiving long-term metformin therapy, especially in those with anemia or peripheral neuropathy."
+    },
+    {
       "rule_id": "GEN-ENERGY-2535",
       "guideline": "General adult nutrition (extension)",
       "section": "Energy",
@@ -1366,7 +1609,28 @@
             "dialysis",
             "CKD_stage_5"
           ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "assert",
+          "key": "careloop_eligible",
+          "value": false
         },
+        {
+          "type": "assert",
+          "key": "escalate_to_clinician",
+          "value": true
+        }
+      ],
+      "notes": "CareLoop covers CKD stage 3-4 only. A dialysis / ESRD / CKD stage 5 diagnosis alone is out of scope regardless of any recorded eGFR (the eGFR may be missing or stale); it needs a renal dietitian. Lab-only detection of stage 5 is handled by SCOPE-EGFR-STAGE5-EXCLUDE."
+    },
+    {
+      "rule_id": "SCOPE-EGFR-STAGE5-EXCLUDE",
+      "guideline": "CareLoop scope policy",
+      "section": "Scope exclusion",
+      "priority": 90,
+      "conditions": [
         {
           "field": "egfr",
           "op": "lt",
@@ -1385,7 +1649,7 @@
           "value": true
         }
       ],
-      "notes": "CareLoop covers CKD stage 3-4 only. Stage 5/dialysis needs a renal dietitian and is out of scope."
+      "notes": "Lab-only detection: a measured eGFR below 15 (CKD stage 5) is out of scope. An unknown eGFR never satisfies this rule (fail-safe guard); when a scope-class rule cannot be evaluated because a lab is missing, the engine records a scope_lab_unknown caution instead of silently skipping the gate."
     },
     {
       "rule_id": "CONFLICT-SODIUM-CKD-WINS",

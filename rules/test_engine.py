@@ -245,6 +245,67 @@ def test_example_trace_patient_fires_the_documented_ruleset():
 
 
 # ---------------------------------------------------------------------------
+# Dialysis / stage 5: out of scope even when eGFR is missing
+# ---------------------------------------------------------------------------
+
+
+def _dialysis_patient(**overrides) -> dict:
+    patient = {
+        "patient_id": "ESRD-1",
+        "age": 58,
+        "sex": "M",
+        "weight_kg": 70.0,
+        "diagnoses": ["ESRD", "T2D"],
+        "serum_K_meq_L": 4.2,
+        "serum_PO4_mg_dL": 3.4,
+        "meds": [],
+        "bmi": 26.0,
+    }
+    patient.update(overrides)
+    return patient
+
+
+def test_dialysis_excluded_even_without_egfr():
+    """Regression: diagnosis alone must fire the scope gate — a missing eGFR
+    used to let dialysis patients slip through with a normal PROPOSED
+    envelope (the old rule ANDed the diagnosis with egfr < 15)."""
+    out = run_rules(_dialysis_patient())  # no egfr key at all
+    env = out["envelope"]
+
+    assert env["status"] == "REJECTED"
+    assert env["targets"] == []
+    assert "SCOPE-DIALYSIS-EXCLUDE" in _trace(out)
+    assert "careloop_eligible=false" in env["notes"]
+    # Fail-safe: the unevaluable lab-only scope gate is surfaced, not silent.
+    assert "scope_lab_unknown=SCOPE-EGFR-STAGE5-EXCLUDE:egfr" in env["notes"]
+
+
+def test_dialysis_excluded_with_stale_high_egfr():
+    """A recorded eGFR must not veto the dialysis diagnosis."""
+    out = run_rules(_dialysis_patient(egfr=68.0))
+    assert out["envelope"]["status"] == "REJECTED"
+    assert "SCOPE-DIALYSIS-EXCLUDE" in _trace(out)
+
+
+def test_stage5_egfr_lab_only_detection():
+    """Lab-only path: measured eGFR < 15 is out of scope without a diagnosis."""
+    out = run_rules(_dialysis_patient(diagnoses=["T2D"], egfr=12.0))
+    env = out["envelope"]
+    assert env["status"] == "REJECTED"
+    assert env["targets"] == []
+    assert "SCOPE-EGFR-STAGE5-EXCLUDE" in _trace(out)
+
+
+def test_unknown_egfr_alone_does_not_exclude():
+    """An unknown eGFR must not fabricate an exclusion for patients without a
+    stage-5 diagnosis — the lab-only rule stays guarded by the sentinel."""
+    out = run_rules(_dialysis_patient(diagnoses=["T2D"]))  # no egfr
+    env = out["envelope"]
+    assert env["status"] == "PROPOSED"
+    assert "SCOPE-EGFR-STAGE5-EXCLUDE" not in _trace(out)
+
+
+# ---------------------------------------------------------------------------
 # Ketoacid-risk presentation: clinician-review flag, no auto envelope
 # ---------------------------------------------------------------------------
 
@@ -295,3 +356,127 @@ def test_result_contract_shape():
     assert out["envelope"]["patient_id"] == PATIENTS[0]["patient_id"]
     assert all(set(row) == {"rule_id", "fired_at", "patient_summary", "action_summary",
                             "priority", "citation"} for row in out["trace"])
+
+
+# ---------------------------------------------------------------------------
+# Medication-nutrient interaction rules (stretch feature #1)
+# ---------------------------------------------------------------------------
+
+MED_RULES = {
+    "MED-RASI-K-CAUTION": {"meds": ["lisinopril"], "priority": 85},
+    "MED-RASI-KSPARING-ALERT": {"meds": ["ACEi", "spironolactone"], "priority": 88},
+    "MED-SGLT2I-VOLUME": {"meds": ["SGLT2i"], "priority": 65},
+    "MED-THIAZIDE-ELECTROLYTES": {"meds": ["thiazide"], "priority": 70},
+    "MED-LOOP-K-MG": {"meds": ["loop_diuretic"], "priority": 70},
+    "MED-PHOSPHATE-BINDER-TIMING": {"meds": ["phosphate_binder"], "priority": 65},
+    "MED-WARFARIN-VITK": {"meds": ["warfarin"], "priority": 75},
+    "MED-METFORMIN-B12": {"meds": ["metformin"], "priority": 60},
+}
+
+
+def _med_patient(meds: list[str], **overrides) -> dict:
+    patient = {
+        "patient_id": "MED-TEST",
+        "age": 60,
+        "sex": "F",
+        "weight_kg": 70.0,
+        "diagnoses": ["T2D"],
+        "egfr": 70.0,
+        "serum_K_meq_L": 4.2,
+        "serum_PO4_mg_dL": 3.5,
+        "meds": meds,
+        "bmi": 27.0,
+        "pregnant": False,
+    }
+    patient.update(overrides)
+    return patient
+
+
+def test_rasi_plus_k_sparing_diuretic_fires_both_flags_with_citations():
+    """ACEi/ARB + spironolactone: the MHRA combination alert AND the general
+    RASi potassium caution must both fire, each with a full citation, and the
+    flags must surface in the envelope notes."""
+    out = run_rules(_med_patient(["lisinopril", "spironolactone"]))
+    trace = _trace(out)
+    env = out["envelope"]
+
+    rasi = trace["MED-RASI-K-CAUTION"]
+    assert rasi["priority"] == 85
+    assert rasi["citation"]["guideline"] == "KDIGO 2024 CKD Guideline"
+    assert rasi["citation"]["section"] == "3.11 / Hyperkalemia in CKD (Practice Point 3.6.3)"
+    assert rasi["citation"]["verbatim_quote"]
+
+    combo = trace["MED-RASI-KSPARING-ALERT"]
+    assert combo["priority"] == 88
+    assert combo["citation"]["guideline"] == "UK MHRA Drug Safety Update 2020"
+    assert combo["citation"]["url"].startswith("https://www.gov.uk/drug-safety-update/")
+
+    # flags surface in the notes/cautions line of the envelope
+    assert "rasi_k_monitoring=" in env["notes"]
+    assert "rasi_k_sparing_interaction=" in env["notes"]
+    assert "med_interaction_high_risk=" in env["notes"]
+
+
+def test_metformin_only_fires_b12_flag_and_no_other_new_med_flag():
+    out = run_rules(_med_patient(["metformin"]))
+    trace = _trace(out)
+    env = out["envelope"]
+
+    assert "MED-METFORMIN-B12" in trace
+    b12 = trace["MED-METFORMIN-B12"]
+    assert b12["citation"]["guideline"] == "ADA Standards of Care in Diabetes 2026"
+    assert b12["citation"]["section"] == "3 / Recommendation 3.10"
+    assert "metformin_b12_assessment=" in env["notes"]
+
+    others = set(MED_RULES) - {"MED-METFORMIN-B12"}
+    assert others.isdisjoint(trace)
+
+
+def test_patient_without_relevant_meds_fires_no_med_rules():
+    for patient in (PATIENTS[8], PATIENTS[17]):  # healthy controls, meds == []
+        out = run_rules(patient)
+        assert not [r for r in _trace(out) if r.startswith("MED-")]
+
+
+@pytest.mark.parametrize("rule_id", sorted(MED_RULES))
+def test_each_new_med_rule_fires_with_full_citation(rule_id):
+    spec = MED_RULES[rule_id]
+    out = run_rules(_med_patient(spec["meds"]))
+    trace = _trace(out)
+
+    assert rule_id in trace
+    row = trace[rule_id]
+    assert row["priority"] == spec["priority"]
+    citation = row["citation"]
+    assert citation["rule_id"] == rule_id
+    assert citation["guideline"]
+    assert citation["section"]
+    # every new med rule also contributes its citation to the envelope
+    assert citation in out["envelope"]["citations"]
+
+
+def test_med_combo_patient_deterministic():
+    first = run_rules(_med_patient(["lisinopril", "spironolactone"]))
+    second = run_rules(_med_patient(["lisinopril", "spironolactone"]))
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+
+
+def test_real_dataset_patient_triggers_at_least_two_new_med_rules():
+    """P0006 (CKD4 + hyperkalaemia; meds ACEi + phosphate_binder + ...) must
+    fire both the cited RASi potassium rule and the binder-timing rule from
+    the live dataset vocabulary."""
+    patient = next(p for p in PATIENTS if p["patient_id"] == "P0006")
+    out = run_rules(patient)
+    trace = _trace(out)
+    fired_new = set(MED_RULES) & set(trace)
+    assert {"MED-RASI-K-CAUTION", "MED-PHOSPHATE-BINDER-TIMING"} <= fired_new
+    for rid in fired_new:
+        assert trace[rid]["citation"]["guideline"]
+        assert trace[rid]["citation"]["section"]
+
+
+def test_example_trace_regression_includes_new_med_rules():
+    """The hand-worked SYN-0007 patient (ACEi + loop_diuretic) now also fires
+    the two cited med rules; the pinned id list in example_trace.json was
+    regenerated accordingly (30 -> 32 fired rules)."""
+    assert len(json.load(open(REPO / "rules" / "example_trace.json"))["all_fired_rule_ids"]) == 32

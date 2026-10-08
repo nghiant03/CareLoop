@@ -450,12 +450,22 @@ def _action_summary(rule: dict, prep: dict) -> str:
         kind = act["type"]
         if kind == "set_constraint":
             nutrient, k, value = act["nutrient"], act["kind"], float(act["value"])
-            if nutrient in _PER_KG_NUTRIENTS and weight > 0:
+            if nutrient in _PER_KG_NUTRIENTS:
                 per = "kcal/kg/d" if nutrient == "energy_kcal" else "g/kg/d"
-                pieces.append(
-                    f"set {nutrient} {k} = {value:g} {per} -> "
-                    f"{round(value * weight, 2):g} {_UNITS[nutrient]}/d (weight {weight:g} kg)"
-                )
+                if weight > 0:
+                    pieces.append(
+                        f"set {nutrient} {k} = {value:g} {per} -> "
+                        f"{round(value * weight, 2):g} {_UNITS[nutrient]}/d (weight {weight:g} kg)"
+                    )
+                else:
+                    # Weight unknown: the coefficient is NOT scaled. The trace
+                    # must keep the explicit per-kg marker so downstream
+                    # consumers never read the coefficient as an absolute
+                    # daily dose.
+                    pieces.append(
+                        f"set {nutrient} {k} = {value:g} {per} "
+                        f"(weight unknown; not scaled)"
+                    )
             else:
                 pieces.append(f"set {nutrient} {k} = {value:g} {_UNITS[nutrient]}/d")
         elif kind == "exclude":
@@ -481,6 +491,28 @@ def run_rules(patient: dict) -> dict:
     env.run()
     constraints, exclusions, flags, fired_ids = _harvest(env)
     env.reset()
+
+    # Fail-safe for scope-class rules on unknown labs: a SCOPE-* rule whose
+    # numeric (unknown-guarded) condition cannot be evaluated because the lab
+    # is missing must not silently vanish from the decision record. Surface a
+    # caution flag so the notes show the gate was not evaluable. The rule
+    # itself still does NOT fire on an unknown lab (the -1.0 sentinel guard in
+    # _condition_to_clips stands) — a missing value never fabricates an
+    # exclusion, but it is never silent either.
+    for rule in ruleset:
+        rid = rule["rule_id"]
+        if not rid.startswith("SCOPE-") or rid in fired_ids:
+            continue
+        for cond in rule.get("conditions", []):
+            if cond.get("field") in _UNKNOWN_GUARDED and prep[cond["field"]] < 0:
+                flags.append(
+                    {
+                        "key": "scope_lab_unknown",
+                        "value": f"{rid}:{cond['field']}",
+                        "rule_id": rid,
+                        "priority": int(rule["priority"]),
+                    }
+                )
 
     winners, losses = _resolve_conflicts(constraints)
 
