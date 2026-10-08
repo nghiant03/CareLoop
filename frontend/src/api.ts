@@ -1,6 +1,8 @@
 import type {
   Patient,
   Envelope,
+  EnvelopeResponse,
+  RuleFire,
   MealPlan,
   ChatMessageResponse,
   TraceEntry,
@@ -25,14 +27,33 @@ import type {
 
 const API_PREFIX = '/api';
 
-function normalizeEnvelope(raw: any): Envelope {
-  if (!raw) return raw;
+export function normalizeEnvelope(raw: EnvelopeResponse): Envelope {
   return {
-    ...raw,
-    id: raw.id ?? raw.envelope_id,
-    constraints: raw.constraints || raw.targets || [],
-    trace: raw.trace || raw.fired_rules || [],
-  } as Envelope;
+    id: raw.envelope_id,
+    patient_id: raw.patient_id,
+    status: raw.status,
+    version: raw.version,
+    lifecycle_revision: raw.lifecycle_revision,
+    scope_eligible: raw.scope_eligible,
+    constraints: raw.targets,
+    exclusions: raw.exclusions,
+    citations: raw.citations,
+    trace: raw.fired_rules.map(normalizeTrace),
+    created_at: raw.proposed_at,
+  };
+}
+
+function normalizeTrace(row: RuleFire): TraceEntry {
+  return {
+    rule_id: row.rule_id,
+    priority: row.priority,
+    fired_at: row.fired_at,
+    guideline: row.citation.guideline,
+    section: row.citation.section,
+    url: row.citation.url,
+    message: row.action_summary,
+    overridden_by: row.action_summary.match(/SUPERSEDED: superseded by ([\w-]+)/)?.[1],
+  };
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {
@@ -41,7 +62,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
     try {
       const body = await res.json();
       const raw = body.detail || body.error || body;
-      detail = typeof raw === 'string' ? raw : (raw.message || raw.error || JSON.stringify(raw));
+      detail = body.message || (typeof raw === 'string' ? raw : (raw.message || raw.error || JSON.stringify(raw)));
     } catch {
       // ignore
     }
@@ -78,32 +99,32 @@ export async function runRules(patientId: string): Promise<RulesRunResult> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ patient_id: patientId }),
   })
-    .then((r) => handleResponse<{ envelope: any; trace: TraceEntry[] }>(r))
-    .then(({ envelope, trace }) => ({ envelope: normalizeEnvelope(envelope), trace }));
+    .then((r) => handleResponse<{ envelope: EnvelopeResponse; trace: RuleFire[] }>(r))
+    .then(({ envelope, trace }) => ({ envelope: normalizeEnvelope(envelope), trace: trace.map(normalizeTrace) }));
 }
 
 export async function getEnvelope(id: string): Promise<Envelope> {
   return fetch(`${API_PREFIX}/envelopes/${id}`)
-    .then((r) => handleResponse<any>(r))
+    .then((r) => handleResponse<EnvelopeResponse>(r))
     .then(normalizeEnvelope);
 }
 
 export async function getLatestEnvelope(patientId: string): Promise<Envelope> {
   return fetch(`${API_PREFIX}/envelopes/latest?patient_id=${encodeURIComponent(patientId)}`)
-    .then((r) => handleResponse<any>(r))
+    .then((r) => handleResponse<EnvelopeResponse>(r))
     .then(normalizeEnvelope);
 }
 
 export async function approveEnvelope(
   id: string,
-  payload: { clinician_id: string; note?: string }
+  payload: { clinician_id: string; note?: string; expected_revision?: number }
 ): Promise<Envelope> {
   return fetch(`${API_PREFIX}/envelopes/${id}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-    .then((r) => handleResponse<any>(r))
+    .then((r) => handleResponse<EnvelopeResponse>(r))
     .then(normalizeEnvelope);
 }
 
@@ -116,20 +137,20 @@ export async function editEnvelope(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-    .then((r) => handleResponse<any>(r))
+    .then((r) => handleResponse<EnvelopeResponse>(r))
     .then(normalizeEnvelope);
 }
 
 export async function rejectEnvelope(
   id: string,
-  payload: { reason?: string }
+  payload: { reason?: string; expected_revision?: number }
 ): Promise<Envelope> {
   return fetch(`${API_PREFIX}/envelopes/${id}/reject`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-    .then((r) => handleResponse<any>(r))
+    .then((r) => handleResponse<EnvelopeResponse>(r))
     .then(normalizeEnvelope);
 }
 

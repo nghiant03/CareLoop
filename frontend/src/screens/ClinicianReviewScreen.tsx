@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   listPatients,
   runRules,
+  getEnvelope,
   approveEnvelope,
   rejectEnvelope,
   editEnvelope,
@@ -15,8 +16,11 @@ import EmptyState from '../components/EmptyState';
 import ConstraintTable from '../components/ConstraintTable';
 import RuleTrace from '../components/RuleTrace';
 import EditEnvelopeModal from '../components/EditEnvelopeModal';
+import { useRequestScope } from '../hooks/useRequestScope';
 
 export default function ClinicianReviewScreen() {
+  const requests = useRequestScope();
+  const selectionIsCurrent = requests.capture();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,61 +43,75 @@ export default function ClinicianReviewScreen() {
   }, []);
 
   const handleSelect = (patient: Patient) => {
+    requests.reset();
     setSelectedPatient(patient);
     setEnvelope(null);
+    setObservations([]);
+    setError(null);
+    setIsEditOpen(false);
+    setEnvelopeLoading(false);
+    setActionLoading(false);
+    setSavingEdit(false);
     loadObservations(patient.id);
   };
 
   const loadObservations = async (patientId: string) => {
+    const isCurrent = requests.start('observations');
     setObservationsLoading(true);
     try {
       const result = await listObservations(patientId);
-      setObservations(result.observations || []);
+      if (isCurrent()) setObservations(result.observations || []);
     } catch {
-      setObservations([]);
+      if (isCurrent()) setObservations([]);
     } finally {
-      setObservationsLoading(false);
+      if (isCurrent()) setObservationsLoading(false);
     }
   };
 
   const handleGenerate = async () => {
     if (!selectedPatient) return;
+    const isCurrent = requests.start('envelope');
     setEnvelopeLoading(true);
     setError(null);
     try {
       const result = await runRules(selectedPatient.id);
-      const env = result.envelope || (result as any);
-      setEnvelope(env);
+      if (isCurrent()) setEnvelope(result.envelope);
     } catch (err: any) {
-      setError(err.message || 'Failed to generate envelope');
+      if (isCurrent()) setError(err.message || 'Failed to generate envelope');
     } finally {
-      setEnvelopeLoading(false);
+      if (isCurrent()) setEnvelopeLoading(false);
     }
   };
 
   const handleApprove = async () => {
     if (!envelope) return;
+    const isCurrent = requests.start('envelope');
     setActionLoading(true);
     try {
-      const updated = await approveEnvelope(envelope.id, { clinician_id: 'clinician-1' });
-      setEnvelope(updated);
+      const updated = await approveEnvelope(envelope.id, {
+        clinician_id: 'clinician-1', expected_revision: envelope.lifecycle_revision,
+      });
+      if (isCurrent()) setEnvelope(updated);
     } catch (err: any) {
-      setError(err.message || 'Failed to approve envelope');
+      if (isCurrent()) setError(err.message || 'Failed to approve envelope');
     } finally {
-      setActionLoading(false);
+      if (isCurrent()) setActionLoading(false);
     }
   };
 
   const handleReject = async () => {
     if (!envelope) return;
+    const isCurrent = requests.start('envelope');
     setActionLoading(true);
     try {
-      const updated = await rejectEnvelope(envelope.id, { reason: 'Rejected by clinician' });
-      setEnvelope(updated);
+      const updated = await rejectEnvelope(envelope.id, {
+        reason: 'Rejected by clinician', expected_revision: envelope.lifecycle_revision,
+      });
+      if (isCurrent()) setEnvelope(updated);
     } catch (err: any) {
-      setError(err.message || 'Failed to reject envelope');
+      if (isCurrent()) setError(err.message || 'Failed to reject envelope');
     } finally {
-      setActionLoading(false);
+      if (isCurrent()) setActionLoading(false);
     }
   };
 
@@ -102,19 +120,39 @@ export default function ClinicianReviewScreen() {
     setIsEditOpen(true);
   };
 
+  const handleReloadEnvelope = async () => {
+    if (!envelope) return;
+    const isCurrent = requests.start('envelope');
+    setActionLoading(true);
+    setIsEditOpen(false);
+    try {
+      const current = await getEnvelope(envelope.id);
+      if (!isCurrent()) return;
+      setEnvelope(current);
+      setError(null);
+    } catch (err: any) {
+      if (isCurrent()) setError(err.message || 'Failed to reload envelope');
+    } finally {
+      if (isCurrent()) setActionLoading(false);
+    }
+  };
+
   const handleSaveEdits = async (targets: NutrientConstraint[], notes?: string) => {
     if (!envelope) return;
+    const isCurrent = requests.start('envelope');
     setSavingEdit(true);
     try {
       const updated = await editEnvelope(envelope.id, {
         targets,
         notes,
         edited_by: 'clinician-1',
+        expected_revision: envelope.lifecycle_revision,
       });
+      if (!isCurrent()) return;
       setEnvelope(updated);
       setIsEditOpen(false);
     } finally {
-      setSavingEdit(false);
+      if (isCurrent()) setSavingEdit(false);
     }
   };
 
@@ -206,7 +244,7 @@ export default function ClinicianReviewScreen() {
                 </button>
                 <button
                   onClick={handleEdit}
-                  disabled={actionLoading}
+                  disabled={actionLoading || envelope.status === 'REJECTED' || !envelope.scope_eligible}
                   className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 transition-colors"
                 >
                   Edit
@@ -217,6 +255,10 @@ export default function ClinicianReviewScreen() {
                   className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50 transition-colors"
                 >
                   {actionLoading ? 'Working…' : 'Reject'}
+                </button>
+                <button onClick={handleReloadEnvelope} disabled={actionLoading}
+                  className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-700 underline disabled:opacity-50">
+                  Reload envelope
                 </button>
               </div>
             </div>
@@ -251,17 +293,20 @@ export default function ClinicianReviewScreen() {
 
         {selectedPatient && (
           <ObservationsSection
+            key={selectedPatient.id}
             patient={selectedPatient}
             observations={observations}
             loading={observationsLoading}
             onRecorded={async () => {
+              if (!selectionIsCurrent()) return;
               await loadObservations(selectedPatient.id);
               try {
                 const updated = await listPatients();
+                if (!selectionIsCurrent()) return;
                 setPatients(updated);
                 setSelectedPatient((current) => updated.find((p) => p.id === current?.id) || current);
               } catch (err: any) {
-                setError(err.message || 'Failed to refresh patient profile');
+                if (selectionIsCurrent()) setError(err.message || 'Failed to refresh patient profile');
               }
             }}
           />

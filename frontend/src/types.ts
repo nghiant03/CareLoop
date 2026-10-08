@@ -17,13 +17,55 @@ export interface NutrientConstraint {
   value: number;
   unit: string;
   note?: string;
+  provenance?: ConstraintProvenance | null;
+}
+
+export interface ConstraintProvenance {
+  nutrient: string;
+  kind: NutrientConstraint['kind'];
+  value: number;
+  unit: string;
+  envelope_id: string;
+  version: number;
+  author: string;
+  citation: Citation;
+}
+
+export interface RuleFire {
+  rule_id: string;
+  priority: number;
+  fired_at: string;
+  patient_summary: string;
+  action_summary: string;
+  citation: Citation;
+}
+
+export interface ExclusionFlag {
+  kind: 'ingredient' | 'dish_category' | 'macro_pattern' | 'diet_pattern';
+  value: string;
+  reason: string;
+  citation: Citation;
+}
+
+export interface EnvelopeResponse {
+  envelope_id: string;
+  patient_id: string;
+  status: Envelope['status'];
+  version: number;
+  lifecycle_revision: number;
+  scope_eligible: boolean;
+  targets: NutrientConstraint[];
+  exclusions: ExclusionFlag[];
+  citations: Citation[];
+  fired_rules: RuleFire[];
+  proposed_at: string;
 }
 
 export interface Citation {
   rule_id: string;
   guideline: string;
   section?: string;
-  url?: string;
+  url?: string | null;
 }
 
 export interface TraceEntry {
@@ -31,7 +73,7 @@ export interface TraceEntry {
   priority: number;
   guideline: string;
   section?: string;
-  url?: string;
+  url?: string | null;
   fired_at?: string;
   message?: string;
   overridden_by?: string;
@@ -42,7 +84,10 @@ export interface Envelope {
   patient_id: string;
   status: 'PROPOSED' | 'APPROVED' | 'REJECTED' | 'EDITED';
   constraints: NutrientConstraint[];
-  exclusions?: string[];
+  version: number;
+  lifecycle_revision: number;
+  scope_eligible: boolean;
+  exclusions?: ExclusionFlag[];
   citations?: Citation[];
   trace?: TraceEntry[];
   created_at?: string;
@@ -54,6 +99,7 @@ export interface EditEnvelopePayload {
   exclusions?: unknown[];
   notes?: string;
   edited_by?: string;
+  expected_revision?: number;
 }
 
 export interface PlanSlot {

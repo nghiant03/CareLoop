@@ -3,6 +3,7 @@ import { listPatients, searchDishes, logMeal, getAdherenceSummary, getAdherenceD
 import type { Patient, Dish, AdherenceSummary, AdherenceDeviation, AdherenceAnalysis } from '../types';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
+import { useRequestScope } from '../hooks/useRequestScope';
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -22,6 +23,8 @@ const NUTRIENT_LABELS: Record<string, string> = {
 const MEAL_OPTIONS = ['breakfast', 'lunch', 'dinner'] as const;
 
 export default function AdherenceScreen() {
+  const requests = useRequestScope();
+  const selectionIsCurrent = requests.capture();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [patientsError, setPatientsError] = useState<string | null>(null);
@@ -44,18 +47,19 @@ export default function AdherenceScreen() {
   }, []);
 
   const loadData = (patientId: string) => {
+    const isCurrent = requests.start('adherence');
     setSummaryError(null);
     setDeviationError(null);
     setSummaryLoading(true);
     setDeviationLoading(true);
     getAdherenceSummary(patientId)
-      .then((data) => setSummary(data))
-      .catch((err) => setSummaryError(err.message || 'Failed to load summary'))
-      .finally(() => setSummaryLoading(false));
+      .then((data) => { if (isCurrent()) setSummary(data); })
+      .catch((err) => { if (isCurrent()) setSummaryError(err.message || 'Failed to load summary'); })
+      .finally(() => { if (isCurrent()) setSummaryLoading(false); });
     getAdherenceDeviation(patientId)
-      .then((data) => setDeviation(data))
-      .catch((err) => setDeviationError(err.message || 'Failed to load trends'))
-      .finally(() => setDeviationLoading(false));
+      .then((data) => { if (isCurrent()) setDeviation(data); })
+      .catch((err) => { if (isCurrent()) setDeviationError(err.message || 'Failed to load trends'); })
+      .finally(() => { if (isCurrent()) setDeviationLoading(false); });
   };
 
   return (
@@ -95,6 +99,13 @@ export default function AdherenceScreen() {
                   id="adherence-patient"
                   value={selectedPatient?.id || ''}
                   onChange={(e) => {
+                    requests.reset();
+                    setSummary(null);
+                    setDeviation(null);
+                    setSummaryError(null);
+                    setDeviationError(null);
+                    setSummaryLoading(false);
+                    setDeviationLoading(false);
                     const p = patients.find((pt) => pt.id === e.target.value) || null;
                     setSelectedPatient(p);
                     if (p) loadData(p.id);
@@ -140,7 +151,7 @@ export default function AdherenceScreen() {
             key={selectedPatient.id}
             patient={selectedPatient}
             onLogged={() => {
-              loadData(selectedPatient.id);
+              if (selectionIsCurrent()) loadData(selectedPatient.id);
             }}
           />
         )}

@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { listPatients, sendChat } from '../api';
-import type { Patient, ChatMessageResponse } from '../types';
+import type { Patient, ChatMessageResponse, Citation } from '../types';
 import LoadingState from '../components/LoadingState';
+import { useRequestScope } from '../hooks/useRequestScope';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   text: string;
   escalated?: boolean;
-  citations?: { guideline: string; url?: string }[];
+  citations?: Citation[];
 }
 
 export default function ChatScreen() {
+  const requests = useRequestScope();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -35,6 +37,7 @@ export default function ChatScreen() {
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPatient || !input.trim() || sending) return;
+    const isCurrent = requests.start('chat');
 
     const userMsg: Message = {
       id: crypto.randomUUID(),
@@ -50,6 +53,7 @@ export default function ChatScreen() {
 
     try {
       const result: ChatMessageResponse = await sendChat(selectedPatient.id, sentText);
+      if (!isCurrent()) return;
       const assistantMsg: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -59,9 +63,9 @@ export default function ChatScreen() {
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err: any) {
-      setError(err.message || 'Failed to send message');
+      if (isCurrent()) setError(err.message || 'Failed to send message');
     } finally {
-      setSending(false);
+      if (isCurrent()) setSending(false);
     }
   };
 
@@ -86,9 +90,13 @@ export default function ChatScreen() {
               id="chat-patient"
               value={selectedPatient?.id || ''}
               onChange={(e) => {
+                requests.reset();
                 const p = patients.find((pt) => pt.id === e.target.value) || null;
                 setSelectedPatient(p);
                 setMessages([]);
+                setInput('');
+                setError(null);
+                setSending(false);
               }}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
             >
@@ -146,7 +154,7 @@ export default function ChatScreen() {
                             {msg.citations.map((c, idx) => (
                               <a
                                 key={idx}
-                                href={c.url}
+                                href={c.url ?? undefined}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-white"

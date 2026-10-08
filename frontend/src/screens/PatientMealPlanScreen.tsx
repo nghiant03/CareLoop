@@ -13,8 +13,11 @@ import type {
 } from '../types';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
+import { useRequestScope } from '../hooks/useRequestScope';
 
 export default function PatientMealPlanScreen() {
+  const requests = useRequestScope();
+  const selectionIsCurrent = requests.capture();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,47 +35,52 @@ export default function PatientMealPlanScreen() {
   }, []);
 
   const loadSavedPlans = async (patientId: string) => {
+    const isCurrent = requests.start('saved-plans');
     setSavedPlansLoading(true);
     try {
       const data = await listPlans(patientId);
-      setSavedPlans(data.plans || []);
+      if (isCurrent()) setSavedPlans(data.plans || []);
     } catch {
-      setSavedPlans([]);
+      if (isCurrent()) setSavedPlans([]);
     } finally {
-      setSavedPlansLoading(false);
+      if (isCurrent()) setSavedPlansLoading(false);
     }
   };
 
   const handleGeneratePlan = async () => {
     if (!selectedPatient) return;
+    const isCurrent = requests.start('plan');
     setPlanLoading(true);
     setError(null);
     setPlan(null);
     try {
       const result = await createPlan({ patient_id: selectedPatient.id });
+      if (!isCurrent()) return;
       setPlan(result);
       await loadSavedPlans(selectedPatient.id);
     } catch (err: any) {
+      if (!isCurrent()) return;
       const message = err.message || 'Failed to create plan';
       setError(message);
       if (message.toLowerCase().includes('envelope_not_approved') || err.status === 409) {
         setError('This patient does not have an approved envelope. Approve a proposed envelope in the Clinician review screen first.');
       }
     } finally {
-      setPlanLoading(false);
+      if (isCurrent()) setPlanLoading(false);
     }
   };
 
   const handleLoadPlan = async (planId: string) => {
+    const isCurrent = requests.start('plan');
     setPlanLoading(true);
     setError(null);
     try {
       const loaded = await getPlan(planId);
-      setPlan(loaded);
+      if (isCurrent()) setPlan(loaded);
     } catch (err: any) {
-      setError(err.message || 'Failed to load plan');
+      if (isCurrent()) setError(err.message || 'Failed to load plan');
     } finally {
-      setPlanLoading(false);
+      if (isCurrent()) setPlanLoading(false);
     }
   };
 
@@ -118,9 +126,14 @@ export default function PatientMealPlanScreen() {
                   id="patient"
                   value={selectedPatient?.id || ''}
                   onChange={(e) => {
+                    requests.reset();
                     const p = patients.find((pt) => pt.id === e.target.value) || null;
                     setSelectedPatient(p);
                     setPlan(null);
+                    setSavedPlans([]);
+                    setError(null);
+                    setPlanLoading(false);
+                    setSavedPlansLoading(false);
                     if (p) loadSavedPlans(p.id);
                   }}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
@@ -157,12 +170,13 @@ export default function PatientMealPlanScreen() {
           <PlanView
             plan={plan}
             onPlanUpdate={(newPlan) => {
+              if (!selectionIsCurrent()) return;
               setPlan(newPlan);
               if (selectedPatient) {
-                listPlans(selectedPatient.id).then((data) => setSavedPlans(data.plans || []));
+                loadSavedPlans(selectedPatient.id);
               }
             }}
-            onError={setError}
+            onError={(message) => { if (selectionIsCurrent()) setError(message); }}
           />
         )}
       </div>

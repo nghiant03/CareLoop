@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   listPatients,
@@ -11,6 +11,7 @@ import {
 import type { Patient, ReviewItem } from '../types';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
+import { useRequestScope } from '../hooks/useRequestScope';
 
 type ReviewStatus = 'open' | 'acknowledged' | 'actioned' | 'all';
 
@@ -22,6 +23,7 @@ const STATUS_TABS: { key: ReviewStatus; label: string }[] = [
 ];
 
 export default function ReviewQueueScreen() {
+  const requests = useRequestScope();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,8 +31,8 @@ export default function ReviewQueueScreen() {
   const [status, setStatus] = useState<ReviewStatus>('open');
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [history, setHistory] = useState<ReviewItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [actionForms, setActionForms] = useState<Record<string, { action: string; note: string }>>({});
   const [working, setWorking] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
@@ -42,54 +44,56 @@ export default function ReviewQueueScreen() {
       .finally(() => setLoadingPatients(false));
   }, []);
 
+  const resetFilter = () => {
+    requests.reset();
+    setItems([]);
+    setHistory([]);
+    setError(null);
+    setActionForms({});
+    setWorking({});
+    setLoading(true);
+    setHistoryLoading(true);
+  };
+
+  const loadQueue = useCallback(() => {
+    const isCurrent = requests.start('queue');
+    return getReviewQueue(selectedPatientId || null, status)
+      .then((result) => { if (isCurrent()) setItems(result.items); })
+      .catch((err: Error) => { if (isCurrent()) setError(err.message || 'Failed to load review queue'); })
+      .finally(() => { if (isCurrent()) setLoading(false); });
+  }, [requests, selectedPatientId, status]);
+
+  const loadHistory = useCallback(() => {
+    const isCurrent = requests.start('history');
+    return getReviewItems(selectedPatientId || undefined, 'actioned')
+      .then((result) => { if (isCurrent()) setHistory(result.items); })
+      .catch(() => { if (isCurrent()) setHistory([]); })
+      .finally(() => { if (isCurrent()) setHistoryLoading(false); });
+  }, [requests, selectedPatientId]);
+
   useEffect(() => {
     loadQueue();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPatientId, status]);
-
-  useEffect(() => {
     loadHistory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPatientId]);
-
-  const loadQueue = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await getReviewQueue(selectedPatientId || null, status);
-      setItems(result.items);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load review queue');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadHistory = async () => {
-    setHistoryLoading(true);
-    try {
-      const result = await getReviewItems(selectedPatientId || undefined, 'actioned');
-      setHistory(result.items);
-    } catch {
-      // history is secondary
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
+  }, [loadQueue, loadHistory]);
 
   const handleAcknowledge = async (item: ReviewItem) => {
+    const isCurrent = requests.capture();
     setWorking((w) => ({ ...w, [item.review_id]: true }));
     try {
       await acknowledgeReview(item.review_id);
-      await loadQueue();
+      if (isCurrent()) {
+        setLoading(true);
+        await loadQueue();
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to acknowledge item');
+      if (isCurrent()) setError(err.message || 'Failed to acknowledge item');
     } finally {
-      setWorking((w) => ({ ...w, [item.review_id]: false }));
+      if (isCurrent()) setWorking((w) => ({ ...w, [item.review_id]: false }));
     }
   };
 
   const handleAction = async (item: ReviewItem) => {
+    const isCurrent = requests.capture();
     const form = actionForms[item.review_id] || { action: '', note: '' };
     if (!form.action.trim()) return;
     setWorking((w) => ({ ...w, [item.review_id]: true }));
@@ -98,26 +102,32 @@ export default function ReviewQueueScreen() {
         action: form.action.trim(),
         note: form.note.trim() || undefined,
       });
+      if (!isCurrent()) return;
       setActionForms((f) => ({ ...f, [item.review_id]: { action: '', note: '' } }));
+      setLoading(true);
+      setHistoryLoading(true);
       await loadQueue();
-      await loadHistory();
+      if (isCurrent()) await loadHistory();
     } catch (err: any) {
-      setError(err.message || 'Failed to record action');
+      if (isCurrent()) setError(err.message || 'Failed to record action');
     } finally {
-      setWorking((w) => ({ ...w, [item.review_id]: false }));
+      if (isCurrent()) setWorking((w) => ({ ...w, [item.review_id]: false }));
     }
   };
 
   const handleProposal = async (item: ReviewItem) => {
+    const isCurrent = requests.capture();
     setWorking((w) => ({ ...w, [item.review_id]: true }));
     try {
       const result = await proposalReview(item.review_id);
+      if (!isCurrent()) return;
+      setLoading(true);
       await loadQueue();
-      navigate(`/?envelope=${result.envelope_id}`);
+      if (isCurrent()) navigate(`/?envelope=${result.envelope_id}`);
     } catch (err: any) {
-      setError(err.message || 'Failed to create proposal');
+      if (isCurrent()) setError(err.message || 'Failed to create proposal');
     } finally {
-      setWorking((w) => ({ ...w, [item.review_id]: false }));
+      if (isCurrent()) setWorking((w) => ({ ...w, [item.review_id]: false }));
     }
   };
 
@@ -160,7 +170,7 @@ export default function ReviewQueueScreen() {
                 <select
                   id="review-patient"
                   value={selectedPatientId}
-                  onChange={(e) => setSelectedPatientId(e.target.value)}
+                  onChange={(e) => { resetFilter(); setSelectedPatientId(e.target.value); }}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                 >
                   <option value="">All patients</option>
@@ -179,7 +189,7 @@ export default function ReviewQueueScreen() {
                   {STATUS_TABS.map((tab) => (
                     <button
                       key={tab.key}
-                      onClick={() => setStatus(tab.key)}
+                      onClick={() => { if (status !== tab.key) { resetFilter(); setStatus(tab.key); } }}
                       className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                         status === tab.key
                           ? 'bg-sky-600 text-white'

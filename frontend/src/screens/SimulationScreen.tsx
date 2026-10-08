@@ -9,8 +9,10 @@ import type {
 } from '../types';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
+import { useRequestScope } from '../hooks/useRequestScope';
 
 export default function SimulationScreen() {
+  const requests = useRequestScope();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,26 +31,34 @@ export default function SimulationScreen() {
   }, []);
 
   const loadPast = async (patientId: string) => {
+    const isCurrent = requests.start('past');
     setPastLoading(true);
     try {
       const res = await listSimulations(patientId);
-      setPast(res.simulations);
+      if (isCurrent()) setPast(res.simulations);
     } catch {
       // past simulations are optional
     } finally {
-      setPastLoading(false);
+      if (isCurrent()) setPastLoading(false);
     }
   };
 
   const handleSelectPatient = async (patient: Patient | null) => {
+    requests.reset();
+    const isCurrent = requests.start('prefill');
     setSelectedPatient(patient);
     setTargets([]);
     setResult(null);
+    setPast([]);
+    setPastLoading(false);
+    setRunning(false);
+    setError(null);
     if (patient) {
       // Prefill the target editor from the patient's current envelope so the
       // clinician edits the actual baseline instead of retyping constraints.
       try {
         const envelope = await getLatestEnvelope(patient.id);
+        if (!isCurrent()) return;
         const constraints = (envelope.constraints || []).map((c) => ({
           nutrient: c.nutrient,
           kind: c.kind,
@@ -57,14 +67,15 @@ export default function SimulationScreen() {
         }));
         if (constraints.length > 0) setTargets(constraints);
       } catch {
-        // No envelope for this patient yet — start from an empty editor.
+        // Prefill is optional; keep the empty editor after any fetch failure.
       }
-      await loadPast(patient.id);
+      if (isCurrent()) await loadPast(patient.id);
     }
   };
 
   const handleRun = async () => {
     if (!selectedPatient) return;
+    const isCurrent = requests.start('simulation');
     setRunning(true);
     setError(null);
     try {
@@ -72,12 +83,13 @@ export default function SimulationScreen() {
         patient_id: selectedPatient.id,
         targets: targets.filter((t) => t.nutrient && t.value !== undefined),
       });
+      if (!isCurrent()) return;
       setResult(sim);
       await loadPast(selectedPatient.id);
     } catch (err: any) {
-      setError(err.message || 'Failed to run simulation');
+      if (isCurrent()) setError(err.message || 'Failed to run simulation');
     } finally {
-      setRunning(false);
+      if (isCurrent()) setRunning(false);
     }
   };
 

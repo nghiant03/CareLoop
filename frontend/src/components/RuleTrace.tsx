@@ -41,7 +41,7 @@ export default function RuleTrace({ trace }: RuleTraceProps) {
             )}
             {entry.url && (
               <a
-                href={entry.url}
+                href={entry.url ?? undefined}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-700 hover:underline"
