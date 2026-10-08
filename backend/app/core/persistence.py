@@ -4,7 +4,7 @@ Single SQLite database (stdlib ``sqlite3`` only) holding everything that
 previously lived in process-local dicts:
 
 * ``plans``            — generated meal plans (POST /plans output documents)
-* ``meal_logs``        — adherence logs, one dish per (patient, date, meal)
+* ``meal_logs``        — adherence item lists per (patient, date, meal)
 * ``envelope_journal`` — append-only lifecycle history of nutrient envelopes
 * ``observations``     — longitudinal clinical observations (labs, eGFR, ...)
 * ``simulations``      — clinician what-if simulations
@@ -31,8 +31,8 @@ import-order gymnastics.
 
 Identifier minting mirrors the existing sequential patterns (envelope ids
 ``ENV-<pid>-001``, plan ids ``PLAN-<pid>-001``): ids are
-``<PREFIX>-<patient_id>-<NNN>``, minted under the module lock by scanning the
-existing rows for the highest suffix and incrementing. Ids are never reused
+``<PREFIX>-<patient_id>-<NNN>``, minted under a SQLite write reservation by
+scanning existing rows for the highest suffix and incrementing. Ids are never reused
 because rows are never deleted from the keyed tables (except meal logs, which
 are keyed by a natural id and have no minted id).
 """
@@ -280,7 +280,7 @@ def save_plan(
     engine: Optional[str],
     feasible: bool,
     violation_count: int,
-    objectives: Optional[list[dict[str, Any]]] = None,
+    objectives: Optional[dict[str, float] | list[dict[str, Any]]] = None,
     days: Optional[list[dict[str, Any]]] = None,
     adequacy: Optional[list[dict[str, Any]]] = None,
     kb_version: Optional[str] = None,
@@ -405,7 +405,7 @@ def put_log(
     dish_id: str,
     logged_at: Optional[str] = None,
     items: Optional[list[dict[str, Any]]] = None,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """Insert or replace the log for one (patient, date, meal) slot."""
     entry = {
         "patient_id": patient_id,
@@ -430,7 +430,7 @@ def put_log(
     return {**entry, **({"items": items} if items else {})}
 
 
-def get_log(patient_id: str, date: str, meal: str) -> Optional[dict[str, str]]:
+def get_log(patient_id: str, date: str, meal: str) -> Optional[dict[str, Any]]:
     """Return the log for one slot, or ``None``."""
     with _connect() as conn:
         row = conn.execute(
@@ -453,7 +453,7 @@ def list_logs(
     patient_id: str,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """All logs for a patient, chronological (date, then meal order).
 
     ``date_from`` / ``date_to`` are inclusive ISO date bounds.
@@ -524,18 +524,46 @@ def clear_logs() -> None:
 # ---------------------------------------------------------------------------
 
 
+class EnvelopeConflictError(Exception):
+    """The caller's lifecycle snapshot has been superseded; reload before retrying."""
+
+    def __init__(self, envelope_id: str):
+        self.envelope_id = envelope_id
+        super().__init__(f"Envelope {envelope_id} changed; reload before retrying.")
+
+
 def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) -> None:
-    """Atomically allocate proposal identity and append its durable snapshot."""
+    """Append a snapshot only if its lifecycle revision is still current.
+
+    The write reservation covers the revision check and insert across workers.
+    Stale updates raise ``EnvelopeConflictError`` without appending a snapshot.
+    Mutates the supplied object: new proposals receive an ID/time, updates
+    restore durable scope eligibility, missing provenance is attached, and the
+    lifecycle revision advances after commit. No unchanged-copy guarantee is
+    made on other write failures; callers needing one must copy before calling.
+    """
     with _LOCK, _connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
         if new_proposal:
             base = re.sub(r"-\d+$", "", envelope.envelope_id)
             envelope.envelope_id = _mint_id(conn, "envelope_journal", base + "-", "envelope_id")
             envelope.proposed_at = datetime.now(timezone.utc)
+        row = conn.execute(
+            "SELECT snapshot_json FROM envelope_journal WHERE envelope_id = ? ORDER BY id DESC LIMIT 1",
+            (envelope.envelope_id,),
+        ).fetchone()
+        current = NutrientEnvelope.model_validate_json(row[0]) if row else None
+        if current is not None:
+            if current.lifecycle_revision != envelope.lifecycle_revision:
+                raise EnvelopeConflictError(envelope.envelope_id)
+            # Eligibility belongs to the proposal, not to clinician-editable fields.
+            envelope.scope_eligible = current.scope_eligible
+        revision = (current.lifecycle_revision if current else 0) + 1
         from shared.provenance import attach_provenance
 
         attach_provenance(envelope)
         snapshot = envelope.model_dump(by_alias=True, mode="json")
+        snapshot["lifecycle_revision"] = revision
         conn.execute(
             "INSERT INTO envelope_journal "
             "(event, envelope_id, patient_id, version, status, snapshot_json, effective_at) "
@@ -543,10 +571,14 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
             (envelope.status.value, envelope.envelope_id, envelope.patient_id,
              envelope.version, envelope.status.value, json.dumps(snapshot), _today()),
         )
+    envelope.lifecycle_revision = revision
 
 
 def current_envelopes() -> list[NutrientEnvelope]:
-    """Latest lifecycle snapshot per id; disk is authoritative across workers."""
+    """Fresh latest snapshot per id, in ascending last-journal-row order.
+
+    Disk is authoritative across workers; an update changes an identity's order.
+    """
     with _connect() as conn:
         rows = conn.execute(
             "SELECT snapshot_json FROM envelope_journal WHERE id IN "

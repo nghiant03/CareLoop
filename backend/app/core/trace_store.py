@@ -1,11 +1,7 @@
-"""Trace side-store for explainability.
+"""Trace serialization, with legacy side-store helpers for older callers.
 
-The approval gate (``core/approval_gate.py``) keeps its storage-agnostic
-envelope contract untouched; this module adds a process-local side table that
-pins the rule-engine trace (the ``RuleFire`` list) alongside each envelope id
-so ``GET /envelopes/{id}/explanation`` can reconstruct the decision exactly as
-it was proposed. Week 2+ swaps both stores for a persistent backing table
-without changing either contract.
+Envelope snapshots carry the authoritative trace, including an explicitly empty
+trace. Only inputs without a ``fired_rules`` field consult the legacy side store.
 """
 
 from __future__ import annotations
@@ -33,7 +29,15 @@ def get_trace(envelope_id: str) -> Optional[list[dict[str, Any]]]:
 
 
 def trace_or_none(envelope: Any) -> Optional[list[dict[str, Any]]]:
-    """Trace for an envelope, falling back to its embedded ``fired_rules``."""
+    """Read the snapshot's trace; never let a process cache override durable data."""
+    fired = getattr(envelope, "fired_rules", None)
+    if fired is None and isinstance(envelope, dict):
+        fired = envelope.get("fired_rules")
+    if fired is not None:
+        return [
+            row.model_dump(mode="json", by_alias=True) if hasattr(row, "model_dump") else row
+            for row in fired
+        ]
     envelope_id = getattr(envelope, "envelope_id", None) or (
         envelope.get("envelope_id") if isinstance(envelope, dict) else None
     )
@@ -41,12 +45,4 @@ def trace_or_none(envelope: Any) -> Optional[list[dict[str, Any]]]:
         stored = get_trace(str(envelope_id))
         if stored is not None:
             return stored
-    fired = getattr(envelope, "fired_rules", None)
-    if fired is None and isinstance(envelope, dict):
-        fired = envelope.get("fired_rules")
-    if fired:
-        return [
-            row.model_dump(by_alias=True) if hasattr(row, "model_dump") else row
-            for row in fired
-        ]
     return None

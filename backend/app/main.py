@@ -5,7 +5,7 @@ Run locally::
     uvicorn backend.app.main:app --reload --port 8000
 
 Responsibilities:
-- lifespan startup/shutdown logging (graph DB readiness is a Week 2 concern)
+- lifespan logging and knowledge-base warmup
 - dev-permissive CORS for the React UI
 - exception handlers that keep error bodies stable for the frontend
 - mounting of the patient / rules / envelope / plan / chat routers
@@ -38,6 +38,8 @@ from backend.app.api import (
     simulations,
 )
 from backend.app.core.approval_gate import EnvelopeNotApprovedError
+from backend.app.core.envelope_lifecycle import EnvelopeScopeError
+from backend.app.core.persistence import EnvelopeConflictError
 
 logger = logging.getLogger("careloop")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -47,7 +49,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 async def lifespan(app: FastAPI):
     logger.info("CareLoop backend starting (version=%s)", __version__)
     try:
-        # Warm the versioned knowledge base + TF-IDF index once per process
+        # Warm the versioned knowledge base + BM25 index once per process
         # (in-memory SQLite per rules/SCHEMA_DECISION.md). Failure to load must
         # not take the API down; endpoints fall back to lazy loading.
         from backend.app.core.kb_loader import get_kb
@@ -106,6 +108,21 @@ async def _validation_handler(
             {k: v for k, v in error.items() if k != "ctx"} for error in exc.errors()
         ]},
     )
+
+
+@app.exception_handler(EnvelopeConflictError)
+async def _envelope_conflict_handler(request: Request, exc: EnvelopeConflictError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={
+        "error": "envelope_conflict", "envelope_id": exc.envelope_id, "message": str(exc),
+    })
+
+
+@app.exception_handler(EnvelopeScopeError)
+async def _envelope_scope_handler(request: Request, exc: EnvelopeScopeError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={
+        "error": "out_of_scope_envelope", "envelope_id": exc.envelope.envelope_id,
+        "status": exc.envelope.status.value,
+    })
 
 
 @app.exception_handler(Exception)

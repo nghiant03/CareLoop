@@ -624,6 +624,7 @@ def run_rules(patient: dict) -> dict:
         "envelope_id": f"ENV-{prep['patient_id']}-001",
         "patient_id": prep["patient_id"],
         "status": status,
+        "scope_eligible": not (out_of_scope or suppressed),
         "version": 1,
         "patient_snapshot": snapshot,
         "targets": targets,

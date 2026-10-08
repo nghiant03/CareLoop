@@ -1,13 +1,13 @@
 """Approval-gate invariant.
 
-Hard architectural rule (PLAN.md §2.3): a nutrient envelope is ``PROPOSED``
-until a clinician approves/edits/rejects it, and **only APPROVED envelopes may
-be consumed downstream** (optimiser, RAG chat, patient-facing views). This is
-enforced in the API layer, not by convention.
+Live planning requires an APPROVED, scope-eligible envelope with nonempty targets.
+HTTP dependencies enforce this gate. Informational views and chat may inspect
+other lifecycle states; personal target guidance still requires approval.
+See docs/ARCHITECTURE.md for the lifecycle and chat contracts.
 
 Usage in an endpoint that reads an envelope::
 
-    from backend.app.core.approval_gate import require_approved_envelope
+    from backend.app.core.approval_gate import require_approved_envelope_for_patient
 
     @router.post("/plans")
     def create_plan(
@@ -15,7 +15,7 @@ Usage in an endpoint that reads an envelope::
     ):
         ...
 
-Any non-approved status raises :class:`EnvelopeNotApprovedError`, which
+Failure of any gate condition raises :class:`EnvelopeNotApprovedError`, which
 ``backend.app.main`` renders as HTTP 409 with body::
 
     {"error": "envelope_not_approved", "status": "<CURRENT_STATUS>"}
@@ -53,7 +53,7 @@ __all__ = [
 
 
 class EnvelopeNotApprovedError(Exception):
-    """Raised when a non-APPROVED envelope reaches a downstream endpoint."""
+    """Raised when approval, scope eligibility, or nonempty targets are missing."""
 
     def __init__(self, envelope: NutrientEnvelope) -> None:
         self.envelope = envelope
@@ -72,7 +72,12 @@ _STORE_LOCK = Lock()
 
 
 def put_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) -> NutrientEnvelope:
-    """Persist a lifecycle update, or atomically mint a fresh proposal id."""
+    """Persist and cache the supplied envelope, returning that same object.
+
+    Mutations and stale-revision conflicts follow ``persistence.store_envelope``;
+    ``new_proposal`` assigns a fresh identity and proposal time. Callers needing
+    an unchanged input must copy it first. Cache publication follows the write.
+    """
     from backend.app.core import persistence
 
     with _STORE_LOCK:
@@ -87,7 +92,10 @@ def get_envelope(envelope_id: str) -> Optional[NutrientEnvelope]:
 
 
 def list_envelopes() -> list[NutrientEnvelope]:
-    """Return all envelopes (insertion order)."""
+    """Return fresh durable snapshots ordered by their latest journal row.
+
+    Updating an existing identity moves it later in this order.
+    """
     from backend.app.core import persistence
 
     return persistence.current_envelopes()
@@ -107,7 +115,10 @@ def find_latest_envelope_for_patient(patient_id: str) -> Optional[NutrientEnvelo
 
 
 def assert_approved(envelope: NutrientEnvelope) -> NutrientEnvelope:
-    """Raise :class:`EnvelopeNotApprovedError` unless the envelope is APPROVED."""
+    """Return the input if APPROVED, scope-eligible, and carrying nutrient targets.
+
+    Raise :class:`EnvelopeNotApprovedError` if any condition fails.
+    """
     if not envelope.is_ready_for_optimisation():
         raise EnvelopeNotApprovedError(envelope)
     return envelope

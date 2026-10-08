@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 # ----------------------------------------------------------------------------
@@ -24,8 +24,8 @@ class EnvelopeStatus(str, Enum):
     """Lifecycle states of a nutrient envelope.
 
     Hard architectural invariant: only APPROVED envelopes may be consumed by the
-    optimiser, RAG chat, or any patient-facing view. Anything else is PROPOSED or
-    REJECTED and must not be served downstream.
+    optimiser or personal target guidance. PROPOSED, EDITED, and REJECTED
+    envelopes do not authorize live downstream use.
     """
 
     PROPOSED = "PROPOSED"
@@ -38,7 +38,7 @@ class ConstraintKind(str, Enum):
     """Per-nutrient target/ceiling/floor."""
 
     TARGET = "target"      # desired value (soft)
-    MIN = "min"            # lower bound (hard if used as safeguard)
+    MIN = "min"            # desired floor (soft)
     MAX = "max"            # ceiling (hard ceiling when present)
 
 
@@ -184,8 +184,8 @@ class PatientSummary(BaseModel):
 class NutrientEnvelope(BaseModel):
     """The full nutrient envelope contract.
 
-    Status is the gate. Downstream modules MUST check status == APPROVED
-    before consuming targets/exclusions. The API enforces this in middleware.
+    Live planning requires approval and scope eligibility. Lifecycle services
+    enforce transitions; HTTP dependencies enforce downstream access.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -193,7 +193,9 @@ class NutrientEnvelope(BaseModel):
     envelope_id: str
     patient_id: str
     status: EnvelopeStatus = EnvelopeStatus.PROPOSED
-    version: int = Field(default=1, ge=1)
+    version: int = Field(default=1, ge=1, description="Content version; incremented by clinician edits")
+    lifecycle_revision: int = Field(default=0, ge=0, description="Concurrency token; incremented on every durable lifecycle update")
+    scope_eligible: bool = Field(default=True, description="Proposal eligibility, independent of editable notes and lifecycle status")
 
     patient_snapshot: PatientSummary
     targets: list[NutrientConstraint]
@@ -212,6 +214,19 @@ class NutrientEnvelope(BaseModel):
     approved_at: Optional[datetime] = None
     notes: Optional[str] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_scope_eligibility(cls, value):
+        """Read old snapshots conservatively without changing their stored JSON."""
+        if isinstance(value, dict) and "scope_eligible" not in value:
+            value = dict(value)
+            value["scope_eligible"] = not (
+                value.get("status") == "REJECTED"
+                or "careloop_eligible=false" in (value.get("notes") or "")
+                or "auto_envelope_suppressed=true" in (value.get("notes") or "")
+            )
+        return value
+
     def is_ready_for_optimisation(self) -> bool:
         """Architectural invariant check (also enforced server-side)."""
-        return self.status == EnvelopeStatus.APPROVED
+        return self.status == EnvelopeStatus.APPROVED and self.scope_eligible and bool(self.targets)

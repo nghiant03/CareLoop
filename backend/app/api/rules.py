@@ -5,8 +5,8 @@ the real CLIPS rule engine (``rules.engine.run_rules``) and returns the
 frontend contract ``{envelope, trace}``. The envelope is validated against the
 canonical ``shared.envelope_schema.NutrientEnvelope`` and registered in the
 approval-gate store (still PROPOSED — the gate keeps blocking downstream until
-a clinician approves). The trace is pinned in ``core.trace_store`` so the
-explanation endpoint can replay the decision.
+a clinician approves). The trace is embedded in the durable envelope snapshot
+so explanations can replay the decision across workers and restarts.
 
 Request body (both accepted):
 * ``{"patient_id": "P0001"}`` — the patient is looked up in the patient store;
@@ -26,7 +26,6 @@ from fastapi import APIRouter, Body, HTTPException
 from rules.engine import run_rules as engine_run_rules
 
 from backend.app.core.approval_gate import put_envelope
-from backend.app.core.trace_store import put_trace
 from backend.app.api.patients import get_patient
 from backend.app.models.envelope import NutrientEnvelope
 
@@ -71,8 +70,8 @@ def run_rules_service(patient: dict[str, Any]) -> dict[str, Any]:
     """Shared service behind ``POST /rules/run`` (reused by the review queue).
 
     Runs the CLIPS rule engine for a patient record, validates the envelope,
-    registers it with the approval gate (still PROPOSED/REJECTED — downstream
-    consumption stays blocked until a clinician approves) and pins the trace.
+    registers it with its embedded trace (still PROPOSED/REJECTED — downstream
+    consumption stays blocked until a clinician approves).
 
     Returns ``{"envelope": NutrientEnvelope, "trace": [...]}``.
     """
@@ -82,7 +81,6 @@ def run_rules_service(patient: dict[str, Any]) -> dict[str, Any]:
     trace = [row for row in result["trace"]]
 
     put_envelope(envelope, new_proposal=True)
-    put_trace(envelope.envelope_id, trace)
     return {"envelope": envelope, "trace": trace}
 
 
