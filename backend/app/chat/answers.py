@@ -12,7 +12,11 @@ point. Pipeline order:
    Nothing is invented: templates pick sentences, they never generate facts.
 4. **Citation invariant** — an ``answered`` response always carries at least
    one citation with ``rule_id`` + ``guideline`` + ``section``. If no rule
-   can be cited for the question, the answer is refused instead.
+   can be cited for the question, the answer is refused instead. The first
+   citation always reflects the provenance of the answered number: a
+   clinician-edited constraint cites the CLINICIAN-EDIT trace row, and
+   guideline rules appear only as additional context and only when they
+   apply to the patient.
 5. **Low-confidence refusal** — if no nutrient is detected and the best
    retrieval score is below ``retrieval.MIN_SCORE``, refuse and suggest
    speaking with a clinician.
@@ -54,6 +58,22 @@ _PER_KG_NUTRIENTS = {"energy_kcal", "protein_g"}
 # they encode conflict-resolution bookkeeping and internal safety policy, not
 # guideline content a patient should be pointed at.
 _INTERNAL_RULE_PREFIXES = ("CONFLICT-", "SAFETY-")
+
+# Trace rule id the envelope lifecycle records for a clinician-authored edit
+# (see ``api/envelopes.py``). A value backed by this row was set by a
+# clinician, not derived from a guideline rule, so it must be cited as the
+# source of the number instead of any guideline rule for the nutrient.
+_CLINICIAN_EDIT_RULE_ID = "CLINICIAN-EDIT"
+
+# Condition fields from the rulebook (mirrors rules/engine.py).
+_MULTISLOT_CONDITION_FIELDS = {"diagnoses", "meds"}
+_NUMERIC_CONDITION_FIELDS = {
+    "age", "weight_kg", "bmi", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL",
+    "hba1c_pct",
+}
+# Numeric fields the engine guards against unknown values (a missing lab is
+# stored as a -1.0 sentinel and must never satisfy a numeric test).
+_UNKNOWN_GUARDED_FIELDS = {"bmi", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL", "hba1c_pct"}
 
 # Fixed, number-free responses for non-approved / declined envelopes.
 _PENDING_REVIEW_SENTENCE = (
@@ -149,8 +169,79 @@ def _citation_of_rule(rule: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _rule_applies_to_patient(
+    rule: dict[str, Any], patient: Optional[dict[str, Any]]
+) -> bool:
+    """Best-effort re-evaluation of a rulebook rule's conditions for a patient.
+
+    Mirrors ``rules/engine.py`` semantics: multislot membership for
+    ``diagnoses``/``meds``, ``pregnant`` equality (the engine also encodes
+    pregnancy as a diagnosis), and numeric comparisons where a missing lab
+    (or the ``-1.0`` unknown sentinel, or NaN) never satisfies the test.
+
+    With no patient context (``patient`` falsy) every rule is treated as
+    applicable so pure-KB behaviour is unchanged.
+    """
+    if not patient:
+        return True
+    diagnoses = {str(d) for d in (patient.get("diagnoses") or [])}
+    pregnant = bool(patient.get("pregnant")) or "pregnancy" in diagnoses
+    for cond in rule.get("conditions") or []:
+        field, op, value = cond.get("field"), cond.get("op"), cond.get("value")
+        if field in _MULTISLOT_CONDITION_FIELDS:
+            have = diagnoses if field == "diagnoses" else {
+                str(m) for m in (patient.get("meds") or [])
+            }
+            wanted = [str(v) for v in (value or [])]
+            if op == "in":
+                if not any(v in have for v in wanted):
+                    return False
+            elif op == "not_in":
+                if any(v in have for v in wanted):
+                    return False
+            else:
+                return False
+        elif field == "pregnant":
+            if op != "eq" or pregnant != bool(value):
+                return False
+        elif field in _NUMERIC_CONDITION_FIELDS:
+            try:
+                num = float(patient.get(field))
+            except (TypeError, ValueError):
+                return False
+            if num != num:  # NaN -> unknown
+                return False
+            if field in _UNKNOWN_GUARDED_FIELDS and num < 0:
+                return False
+            try:
+                if op == "between":
+                    lo, hi = value
+                    if not (float(lo) <= num <= float(hi)):
+                        return False
+                elif op == "ge" and not num >= float(value):
+                    return False
+                elif op == "gt" and not num > float(value):
+                    return False
+                elif op == "le" and not num <= float(value):
+                    return False
+                elif op == "lt" and not num < float(value):
+                    return False
+                elif op == "eq" and not num == float(value):
+                    return False
+                else:
+                    return False
+            except (TypeError, ValueError):
+                return False
+        else:
+            return False
+    return True
+
+
 def _anchor_rule(
-    kb: KBGraph, nutrients: list[str], role: str = "patient"
+    kb: KBGraph,
+    nutrients: list[str],
+    role: str = "patient",
+    patient: Optional[dict[str, Any]] = None,
 ) -> Optional[dict[str, Any]]:
     """Highest-priority current KB rule covering the detected nutrients.
 
@@ -162,12 +253,18 @@ def _anchor_rule(
     bookkeeping, ``SAFETY-*`` internal safety policy) are excluded from anchor
     selection: patients should be anchored to guideline content, not internal
     engine policy.
+
+    When a patient context is passed, rules whose conditions do not apply to
+    this patient (diagnoses, meds, labs) are skipped: a guideline rule must
+    never be anchored for a patient it does not cover.
     """
     for nutrient in nutrients:
         for rule in kb.rules_for_nutrient(nutrient):
             if role == "patient" and str(rule.get("rule_id", "")).startswith(
                 _INTERNAL_RULE_PREFIXES
             ):
+                continue
+            if not _rule_applies_to_patient(rule, patient):
                 continue
             return rule
     return None
@@ -234,6 +331,7 @@ def _envelope_context(
             "approved": False,
             "sentence": sentence,
             "citation": None,
+            "edit_authored": False,
             "target": target,
         }
 
@@ -256,21 +354,31 @@ def _envelope_context(
         core = f"a daily {label} target of {amount}"
     sentence = f"Your clinician-approved plan sets {core}."
 
-    # Cite only the rule that actually fired for this nutrient — never fall
+    # Cite the trace row that actually produced the quoted number — never fall
     # back to citations[0], which could attach an unrelated guideline (e.g.
     # after a clinician edit replaced the targets) to the quoted number.
-    citation = None
+    # A clinician-authored value (CLINICIAN-EDIT row) always wins over the
+    # original guideline rows for the same nutrient: the edit replaced those
+    # values, so the edit's provenance is the source of the answered number.
+    edit_citation: Optional[dict[str, Any]] = None
+    rule_citation: Optional[dict[str, Any]] = None
     for fired in envelope.get("fired_rules") or []:
         summary = str(fired.get("action_summary", "")).lower()
-        if nutrient.split("_")[0] in summary or nutrient in summary:
-            citation = fired.get("citation")
-            break
+        if nutrient.split("_")[0] not in summary and nutrient not in summary:
+            continue
+        if str(fired.get("rule_id", "")) == _CLINICIAN_EDIT_RULE_ID:
+            # Keep the latest matching edit row (multiple edits may be traced).
+            edit_citation = fired.get("citation")
+        elif rule_citation is None:
+            rule_citation = fired.get("citation")
+    citation = edit_citation or rule_citation
     return {
         "envelope_id": envelope.get("envelope_id"),
         "status": status,
         "approved": True,
         "sentence": sentence,
         "citation": citation,
+        "edit_authored": edit_citation is not None,
         "target": target,
     }
 
@@ -432,14 +540,30 @@ def answer(
     parts: list[str] = []
     citations: list[dict[str, Any]] = []
 
+    # When the patient's APPROVED numbers are being quoted, every guideline
+    # citation must be checked against this patient: a rule whose conditions
+    # (diagnoses, meds, labs) do not apply must never be cited as if it
+    # governed their plan. Generic guideline-only answers (no approved
+    # envelope consulted) keep the plain retrieval-order anchor.
+    applicability_patient = (
+        patient if (env_ctx is not None and env_ctx.get("approved")) else None
+    )
+
     # 1) Envelope numbers (approved only; pending/declined get fixed text).
     if env_ctx is not None:
         parts.append(env_ctx["sentence"])
         if env_ctx["citation"]:
             citations.append(env_ctx["citation"])
 
-    # 2) KB anchor rule for the detected nutrient(s).
-    anchor = _anchor_rule(kb, nutrients, role) if nutrients else None
+    # 2) KB anchor rule for the detected nutrient(s). With an approved
+    #    envelope the anchor must be a rule that actually applies to this
+    #    patient — a guideline rule that did not fire for the patient must
+    #    never be cited as if it governed their plan.
+    anchor = (
+        _anchor_rule(kb, nutrients, role, applicability_patient)
+        if nutrients
+        else None
+    )
     if anchor is not None:
         parts.append(_rule_sentence(anchor, role))
         parts.extend(_constraint_sentences(anchor, role, weight_kg)[:2])
@@ -458,6 +582,12 @@ def answer(
                 rule_id = hit["citation"]["rule_id"]
                 if rule_id == used_anchor:
                     continue
+                if applicability_patient is not None:
+                    rule = kb.get_rule(rule_id)
+                    if rule is not None and not _rule_applies_to_patient(
+                        rule, applicability_patient
+                    ):
+                        continue
                 parts.append(_rule_sentence_from_chunk(hit, role))
                 citations.append(hit["citation"])
             else:
