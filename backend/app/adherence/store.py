@@ -14,17 +14,18 @@ Log entry shape (plain dict)::
         "date": "2026-10-08",            # ISO calendar day (local care day)
         "meal": "breakfast",             # breakfast | lunch | dinner
         "dish_id": "SG0001",
+        "items": [{"dish_id": "SG0001", "quantity": 0.5}],
         "logged_at": "2026-10-08T02:14:09.123456+00:00",
     }
 
-**Upsert semantics per (patient_id, date, meal)**: a patient logs one dish per
-meal slot; logging the same slot again replaces the previous dish (the newest
-log wins) rather than accumulating rows.
+**Upsert semantics per (patient_id, date, meal)**: saving a slot replaces its
+entire item list. ``items`` carries dish IDs and serving quantities; legacy
+entries without it represent one serving of ``dish_id``.
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from backend.app.core import persistence
 
@@ -37,13 +38,13 @@ def put_log(
     meal: str,
     dish_id: str,
     logged_at: Optional[str] = None,
-    items=None,
-) -> dict[str, str]:
+    items: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, Any]:
     """Insert or replace the log for one (patient, date, meal) slot."""
     return persistence.put_log(patient_id, date, meal, dish_id, logged_at, items=items)
 
 
-def get_log(patient_id: str, date: str, meal: str) -> Optional[dict[str, str]]:
+def get_log(patient_id: str, date: str, meal: str) -> Optional[dict[str, Any]]:
     """Return the log for one slot, or ``None``."""
     return persistence.get_log(patient_id, date, meal)
 
@@ -52,7 +53,7 @@ def list_logs(
     patient_id: str,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """All logs for a patient, chronological (date, then meal order).
 
     ``date_from`` / ``date_to`` are inclusive ISO date bounds.

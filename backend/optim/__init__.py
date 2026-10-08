@@ -3,7 +3,7 @@
 Public surface:
 * :mod:`backend.optim.problem`   — formal problem spec, ``evaluate`` / ``is_feasible``
 * :mod:`backend.optim.toy_data`  — Week-1 toy dish pool (Week 2: ``data/dishes.json``)
-* :mod:`backend.optim.real_data` — Week-2 real 190-dish pool, FastEvaluator, feasibility machinery
+* :mod:`backend.optim.real_data` — real 214-dish pool, FastEvaluator, feasibility machinery
 * :mod:`backend.optim.envelopes` — four representative APPROVED test/benchmark envelopes
 * :mod:`backend.optim.solver`    — production ``solve()`` (NSGA-II + feasibility guarantee)
 * :mod:`backend.optim.baselines` — random / greedy / exhaustive / NSGA-II fallback

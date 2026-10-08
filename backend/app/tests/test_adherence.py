@@ -39,10 +39,10 @@ from shared.envelope_schema import (
 
 
 @pytest.fixture(autouse=True)
-def _clean_meal_logs():
-    store.clear()
-    yield
-    store.clear()
+def _isolated_clinical_state(tmp_path, monkeypatch):
+    # Each case owns its logs AND envelope journal. Reusing a fixture ID must
+    # not overwrite a previous case's envelope through the live revision gate.
+    monkeypatch.setenv("CARELOOP_APP_DB", str(tmp_path / "adherence.sqlite3"))
 
 
 def _today(offset_days: int = 0) -> str:
@@ -282,7 +282,8 @@ def test_deviation_worsening_sodium_flag(client) -> None:
     """Synthetic escalating series: sodium deviation trends up -> worsening."""
     _hand_built_envelope("P0009", sodium_max=100.0, protein_min=0.0, energy_target=50_000.0)
 
-    # Five consecutive days, one lunch dish each, sodium strictly increasing.
+    # Five complete days: increasing-sodium lunches plus fixed breakfast/dinner.
+    # All three meals are needed for the exposures to enter trend calculations.
     by_sodium = sorted(load_dishes(), key=lambda d: d.nutrient("sodium_mg"))
     picks = [by_sodium[i] for i in (0, len(by_sodium) // 4, len(by_sodium) // 2, 3 * len(by_sodium) // 4, len(by_sodium) - 1)]
     assert len({d.dish_id for d in picks}) == 5

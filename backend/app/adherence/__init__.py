@@ -2,7 +2,7 @@
 
 Sub-modules
 -----------
-- :mod:`store`    — process-local meal-log store (Week 1 prototype pattern).
+- :mod:`store`    — durable SQLite meal-log store.
 - :mod:`analysis` — deterministic deviation analysis + trend flags.
 """
 

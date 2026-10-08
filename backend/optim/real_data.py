@@ -383,7 +383,11 @@ def _repair_day(ev: FastEvaluator, day_idx: np.ndarray, max_passes: int = 6):
 def _build_feasible_day(
     ev: FastEvaluator, seed: int, day: int, used: dict[int, int]
 ) -> np.ndarray | None:
-    """Greedy build + repair for one day; ``None`` if the day is impossible."""
+    """Greedily build and repair one day; ``None`` if the heuristic finds none.
+
+    A successful build increments ``used`` in place; failure leaves it unchanged.
+    Failure is not an infeasibility proof.
+    """
     rng = random.Random((seed * 1_000_003 + day * 97 + 13) & 0xFFFFFFFF)
     day_idx = _greedy_pick_day(ev, used=dict(used), rng=rng)
     count, _mag = ev.day_violation(ev._nut[day_idx].sum(axis=0))
@@ -398,7 +402,11 @@ def _build_feasible_day(
 
 
 def greedy_feasible_plan(ev: FastEvaluator, seed: int = 0) -> np.ndarray | None:
-    """Construct a fully feasible 7-day plan, or ``None`` if impossible."""
+    """Construct a hard-feasible ``ev.n_days`` plan, or return ``None``.
+
+    Bounded greedy retries may miss feasible plans. The solver's exact diagnostic
+    distinguishes search exhaustion from proven single-dish infeasibility.
+    """
     used: dict[int, int] = {}
     days: list[np.ndarray] = []
     for day in range(ev.n_days):
@@ -421,8 +429,10 @@ def repair_plan(
     """Repair an arbitrary pool plan to feasibility, day by day.
 
     Tries hill-climbing first (keeps most of the optimiser's work), then falls
-    back to a greedy rebuild for stubborn days.  Returns ``None`` when some day
-    is provably unfixable (the caller then reports an infeasibility diagnosis).
+    back to a greedy rebuild for stubborn days. Returns a repaired copy, leaving
+    ``idx`` unchanged, or ``None`` if these heuristics fail to find a feasible day.
+    Only the solver's exact diagnostic can establish single-dish infeasibility;
+    heuristic failure alone is search exhaustion.
     """
     idx = np.asarray(idx, dtype=int).copy()
     used: dict[int, int] = {}

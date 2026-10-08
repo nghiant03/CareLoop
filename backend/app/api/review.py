@@ -235,8 +235,8 @@ def _derive_for_patient(patient_id: str) -> list[dict[str, Any]]:
                 )
             )
 
-    # 3. Longitudinal lab trends (fixture patients with a monthly lab series
-    #    only; created/sparse patients are skipped silently).
+    # 3. Lab trends use durable dated observations when present, otherwise fixture
+    #    monthly series. Sparse urgent observations can still warrant review.
     record = get_patient(patient_id)
     if record is not None:
         for trend in detect_trends([dict(record)]):
@@ -334,7 +334,7 @@ def proposal_review(review_id: str) -> dict[str, Any]:
             },
         )
     # Same code path as POST /rules/run (no HTTP hop): engine -> PROPOSED
-    # envelope registered with the approval gate + pinned trace.
+    # envelope and embedded trace persisted together.
     result = run_rules_service(dict(patient))
     envelope = result["envelope"]
     updated = persistence.record_review_action(

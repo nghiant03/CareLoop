@@ -2,8 +2,8 @@
 
 Per ``backend/app/core/llm_choice.py`` the documented default chat model is a
 local Ollama model (``llama3.2:3b``) with optional OpenAI/Google overrides.
-Week 1 ships a **deterministic template adapter** (:class:`TemplateLLM`) as
-the active implementation — the prototype must never fabricate content, and
+The active implementation is a **deterministic template adapter** (:class:`TemplateLLM`);
+the prototype must never fabricate content, and
 deterministic template assembly makes the grounded-answer contract testable.
 
 A real API-backed adapter can be plugged in later by implementing
@@ -59,7 +59,7 @@ def build_adapter(
     ``info["resolved"]`` mirrors ``llm_choice.choose_llm`` (documented priority:
     explicit override -> OPENAI_API_KEY -> GOOGLE_API_KEY -> local Ollama);
     ``info["active"]`` names the adapter actually serving completions, which in
-    Week 1 is always the deterministic template adapter.
+    this implementation is always the deterministic template adapter.
     """
     choice = choose_llm(env if env is not None else os.environ)
     return TemplateLLM(), {"resolved": asdict(choice), "active": TemplateLLM.name}

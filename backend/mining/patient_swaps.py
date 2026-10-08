@@ -15,11 +15,11 @@ or the meals they actually eat.  This module adds the patient context:
 * per-nutrient day deltas (after - before) and a cost delta are reported so
   the clinician sees what the swap does to the patient's actual day.
 
-Envelopes: the swap helpers accept the patient's latest envelope regardless
-of status (callers label the response ``informational_only`` when it is not
-APPROVED).  :func:`problem.evaluate` refuses non-APPROVED envelopes, so a
-local, never-persisted APPROVED copy is used for validation only — the store
-and journal are untouched (same by-construction safety as the simulations).
+Envelopes: suggestion helpers may evaluate any lifecycle status; the API labels
+unapproved suggestions ``informational_only``. Applying a swap requires a ready
+approved envelope. For local evaluation, unapproved inputs receive an APPROVED
+deep copy; already-approved inputs are reused. These helpers do not persist
+envelopes or approvals. The apply endpoint separately saves a derived plan.
 """
 
 from __future__ import annotations
@@ -135,13 +135,12 @@ def _day_totals(plan: Plan, day: int, lookup: dict[str, Any]) -> dict[str, float
 
 
 def _approval_safe_copy(envelope: NutrientEnvelope) -> NutrientEnvelope:
-    """APPROVED copy for local evaluation only (never stored or journalled).
+    """Return an APPROVED evaluation input without changing the supplied status.
 
-    ``problem.evaluate`` refuses non-APPROVED envelopes.  The swap endpoints
-    deliberately accept the patient's latest envelope regardless of status
-    (labelled informational), so validation runs against a local deep copy
-    with the status forced to APPROVED.  By construction this object never
-    reaches the envelope store or the journal.
+    Already-approved inputs are returned by identity; callers must not mutate
+    them. Other inputs receive a deep copy with local approval solely to satisfy
+    ``problem.evaluate``. That copy must not be stored or journalled. This does
+    not authorize applying a swap; the endpoint enforces readiness separately.
     """
     if getattr(envelope, "status", None) == EnvelopeStatus.APPROVED:
         return envelope
@@ -150,10 +149,10 @@ def _approval_safe_copy(envelope: NutrientEnvelope) -> NutrientEnvelope:
     return local
 
 
-def _worst_aim_shortfall_pct(
+def _worst_aim_deviation_pct(
     day_totals: dict[int, dict[str, float]], envelope: NutrientEnvelope
 ) -> float:
-    """Worst relative shortfall vs the envelope's MIN/TARGET aims.
+    """Worst MIN shortfall or absolute TARGET deviation as a percentage.
 
     Pooled over the supplied days only (the affected days); MAX ceilings are
     excluded (they are hard constraints, not aims).  0.0 when nothing counts.
@@ -167,8 +166,8 @@ def _worst_aim_shortfall_pct(
             if aim <= 0.0:
                 continue
             delta = aim - totals.get(constraint.nutrient.value, 0.0)
-            shortfall = abs(delta) if constraint.kind == ConstraintKind.TARGET else max(0., delta)
-            worst = max(worst, shortfall / aim * 100.0)
+            deviation = abs(delta) if constraint.kind == ConstraintKind.TARGET else max(0., delta)
+            worst = max(worst, deviation / aim * 100.0)
     return round(worst, 3)
 
 
@@ -250,7 +249,8 @@ def patient_substitutions(
             (candidate_dish.price_sgd - source.price_sgd) * occurrences, 4
         )
         item["passes_hard_checks"] = True
-        item["worst_aim_shortfall_pct"] = _worst_aim_shortfall_pct(after, envelope)
+        # Retain the public field name; TARGET deviations include overshoots.
+        item["worst_aim_shortfall_pct"] = _worst_aim_deviation_pct(after, envelope)
         validated.append(item)
         if len(validated) == k:
             break

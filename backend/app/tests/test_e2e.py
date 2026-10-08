@@ -12,12 +12,12 @@ included so the knowledge base warms up):
 * out-of-scope patient (pregnancy) -> REJECTED envelope with a clear reason;
 * mining + kb observability endpoints with deterministic shapes.
 
-NOTE on fibre floors: the guideline rulebook sets hard MIN fibre floors
-(25/30 g per day) that the real 214-dish dataset cannot reach (max 8 g per
-dish). ``POST /plans`` lowers unreachable floors to the achievable pool bound
-and discloses them in ``relaxed_constraints`` — this is the documented
-cross-lane reconciliation; ``violation_count == 0`` holds against the envelope
-actually solved.
+NOTE on fibre aims: MIN floors are soft, not hard constraints. Single-dish
+search may lower floors to its pool bound and disclose the adjustment, but
+main/side composition scores the original approved aims. This fixture asserts
+that composition meets the original fibre aim on all seven days without a
+retained relaxation. Hard feasibility and nutritional adequacy are checked
+separately (see ``docs/ARCHITECTURE.md``).
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ def test_full_happy_path(client) -> None:
     assert plan["explanation"]["daily_targets"]
     assert plan["explanation"]["why"]
 
-    # every hard constraint (incl. relaxed floors) satisfied every day
+    # These flags check MAX ceilings; original-aim adequacy is asserted above.
     for day in plan["days"]:
         for total in day["totals"]:
             if total["compliant"] is False:

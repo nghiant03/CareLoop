@@ -8,12 +8,12 @@ serum K and phosphate values.
 Reproducibility
 ---------------
 A single integer seed drives every random draw. When NumPy is installed we use
-``numpy.random.default_rng(seed)`` exactly as specified. NumPy is *not* a hard
-dependency of the repo (the venv ships only pydantic), so when it is missing we
-fall back to a small stdlib ``random.Random(seed)`` shim that mirrors the subset
+``numpy.random.default_rng(seed)``. NumPy is a backend runtime dependency;
+standalone runs without it fall back to a small stdlib ``random.Random(seed)``
+shim that mirrors the subset
 of the ``Generator`` API we use (``normal``/``uniform``/``integers``/``choice``/
-``random``). Either way the output is fully reproducible for a given seed and
-Python/NumPy version.
+``random``). Output is reproducible for a fixed seed, selected RNG backend,
+and Python/NumPy version; the two RNG backends do not promise identical output.
 
 Usage
 -----

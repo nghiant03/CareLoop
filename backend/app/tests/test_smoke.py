@@ -144,7 +144,7 @@ def test_approval_gate_blocks_until_approved() -> None:
         "status": "PROPOSED",
     }
 
-    # Approve, then the gate passes (optimiser itself is a 501 stub in Week 1).
+    # Approval lets the request reach planning; this smoke check isolates the gate.
     approved = _request("POST", f"/envelopes/{envelope_id}/approve", json={})
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "APPROVED"

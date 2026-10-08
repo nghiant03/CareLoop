@@ -1,15 +1,7 @@
-"""Backend API adapter (orchestrator-level).
+"""Single-dish solver entry point with patient/envelope result metadata.
 
-Bridges Lane B's ``backend.optim.spike_pymoo`` (which exposes `run_spike`)
-to the contract Lane D's ``/plans`` endpoint expects (`run` / `optimise`).
-
-This module is the contract glue between Lane B and Lane D. Lane B owns
-`backend.optim.problem`, `backend.optim.real_data`, and `backend.optim.solver`;
-this file lives in the same package so the FastAPI router can probe once
-for ``backend.optim.api`` and call ``run(envelope, dishes)``.
-
-Since Week 2 the default dish pool is the real 190-dish dataset in
-``data/dishes.json`` (loaded via ``real_data.load_dishes``).
+Uses ``solver.solve`` and the catalogue in ``data/dishes.json`` by default.
+Application planning adds main/side composition through ``plan_service.plan_meals``.
 """
 
 from __future__ import annotations
@@ -37,7 +29,7 @@ def run(envelope: NutrientEnvelope, dishes=None, seed: int = 42,
     """Run the optimiser with the given envelope.
 
     Accepts an injected envelope so the API can pass the clinician-approved
-    envelope end-to-end.  Week 2: the default pool is the real 190-dish
+    envelope end-to-end. The default pool is the
     ``data/dishes.json`` dataset (``real_data.load_dishes``); the toy pool is
     still available by passing ``dishes=TOY_DISHES`` explicitly.
 

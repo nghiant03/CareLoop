@@ -1,9 +1,11 @@
 """Longitudinal lab trend detection (K+ and PO4).
 
-Series orientation
+Observation precedence and fixture orientation
 ------------------
-The task brief assumed ``labs_*_monthly`` runs oldest->newest, but the actual
-dataset is the opposite: for every patient ``labs_K_monthly[0]`` equals the
+Dated observations take precedence when present for an analyte; their elapsed
+dates determine the slope. Otherwise fixture ``labs_*_monthly`` arrays are used.
+The task brief assumed oldest->newest, but the fixture dataset is the opposite:
+``labs_K_monthly[0]`` equals the
 current ``serum_K_meq_L`` and ``months_offset_ago == [0, 1, 2, 3, 4, 5]``
 (0 = this month). Values are therefore stored **newest-first**.
 
@@ -23,6 +25,7 @@ Flagging rules
 --------------
 * Potassium (mmol/L/month): slope > 0.05 OR 3-month projection crossing 5.5.
 * Phosphate (mg/dL/month): slope > 0.05 OR 3-month projection crossing 5.0.
+* Dated observations also flag an urgent latest value, even in a sparse series.
 * severity: "urgent" if the latest value is already above the clinical alert
   level (K+ >= 5.0, PO4 >= 4.6) or the 3-month projection crosses the flag
   threshold; otherwise "review".
@@ -31,13 +34,13 @@ Hybrid de-escalation (COMPARISON.md §2)
 ---------------------------------------
 The Theil-Sen slope is fit over the full window, so a series that rose and
 then plateaued keeps flagging (synthetic plateau false-positive rate 14% vs
-EWMA's 6%). Flags therefore stay raised by Theil-Sen exactly as before
-(unchanged flag semantics), but each flag also computes the EWMA-weighted
+EWMA's 6% in that comparison). Trend flags are raised by Theil-Sen, but each
+flag also computes the EWMA-weighted
 least-squares slope (half-life 2 months, exposed as ``ewma_slope_per_month``).
 If the *recent* regime no longer satisfies the same flag rule under the EWMA
 slope — i.e. EWMA would not flag this series — severity is de-escalated to
-"review" and the reason says so. Patients flagged by both estimators keep
-their severity.
+"review" and the reason says so, except that an urgent latest dated observation
+remains urgent. Patients flagged by both estimators keep their severity.
 """
 
 from __future__ import annotations
@@ -127,10 +130,13 @@ def detect_trends(patients: list[dict]) -> list[dict]:
     ewma_slope_per_month, values (oldest->newest), projected_3mo, severity,
     reason}.
 
-    Flags are raised by the Theil-Sen rule; the EWMA slope (half-life 2
-    months) only acts as a de-escalation signal: if the recent regime no
-    longer satisfies the same flag rule under EWMA, severity is downgraded
-    to "review" with a reason noting the EWMA check.
+    Dated observations take precedence over fixture monthly series; elapsed
+    dates determine slopes. Sparse dated series can flag an urgent latest value
+    even without enough points for the usual trend rule.
+
+    Theil-Sen raises trend flags. EWMA (half-life 2 months) can downgrade an
+    urgent trend to "review" when the recent regime no longer satisfies the
+    flag rule, but never de-escalates an urgent latest dated observation.
     """
     flags: list[dict] = []
     for p in patients:
@@ -153,7 +159,7 @@ def detect_trends(patients: list[dict]) -> list[dict]:
 
             # Hybrid de-escalation: the EWMA slope tracks the recent regime,
             # so a Theil-Sen flag whose EWMA counterpart no longer fires is
-            # a rise that has plateaued — downgrade to "review".
+            # a rise that has plateaued. An urgent dated value remains urgent.
             ewma = _ewma_slope(series, times=times)
             ewma_rising = _would_flag(ewma, latest, cfg)
 

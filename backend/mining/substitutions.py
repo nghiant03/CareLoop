@@ -11,7 +11,7 @@ v2 — ranked substitution suggestions: renal-weighted nutrient distance
 
 Category compatibility keeps suggestions sensible: a drink never gets a soup.
 ``hpb_id``/``verified`` are honoured even though the current synthetic dataset
-has ``hpb_id=None`` and ``verified=False`` for all 190 dishes (tiebreaks are
+has ``hpb_id=None`` and ``verified=False`` for all 214 dishes (tiebreaks are
 no-ops there).
 """
 

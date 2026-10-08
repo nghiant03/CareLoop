@@ -134,8 +134,8 @@ def _completeness(entries: list[Mapping[str, Any]]) -> dict[str, Any]:
     """Logging completeness for one day.
 
     ``meals_logged`` counts the *distinct* meal slots (breakfast / lunch /
-    dinner) with at least one log; the store's upsert semantics mean one dish
-    per slot, so this is simply how many of the three slots were filled.
+    dinner) with at least one log. Multiple dishes in the same meal still
+    count as one filled slot.
     """
     meals_logged = len({e.get("meal") for e in entries if e.get("meal") in MEALS})
     return {
@@ -427,6 +427,10 @@ def trend_flags(
     slope_trigger: float = _SLOPE_TRIGGER,
 ) -> list[dict[str, Any]]:
     """Flag directional deviation trends from the exposure series.
+
+    Points marked incomplete are excluded; ``min_len`` counts the remaining
+    complete-day points. Points without a ``complete`` field are treated as
+    complete for compatibility.
 
     A flag is emitted when the Theil-Sen slope of the exposure series against
     the observation *dates* (per elapsed day, not per observation index)

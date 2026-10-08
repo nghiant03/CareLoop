@@ -6,19 +6,17 @@ as per-day totals, hard-violation / soft-gap classifications, aggregate stats
 (``GET .../summary``) and a deviation time-series with trend flags
 (``GET .../deviation``).
 
-Envelope handling mirrors ``/chat``: the *latest* envelope for the patient is
-used regardless of status, but when it is not ``APPROVED`` the response carries
-a clear ``envelope_status`` notice and ``informational_only: true`` — the
-approval gate is never bypassed, comparisons are simply labelled as
-informational.
+The latest envelope supplies top-level status metadata and an informational
+notice when it is unapproved. It does not supply historical comparison targets.
+See ``docs/ARCHITECTURE.md`` for the approval-coverage contract.
 
 Envelope-version attribution (Milestone 3)
 ------------------------------------------
 History is evaluated against the envelope that was **effective on each
 consumption date**, not blindly against the latest one. Each logged date is
 resolved through ``persistence.envelope_effective_at`` (the durable envelope
-journal), falling back to ``find_latest_envelope_for_patient`` when the journal
-has no row covering that date. Days are then grouped by the resolving envelope
+journal). Dates without approval coverage remain unattributed; there is no
+fallback to current targets. Covered days are grouped by the resolving envelope
 (identity *and* version) and analysed per group:
 
 * **Single-group responses** keep the exact legacy shape (plain series keys,
@@ -31,13 +29,12 @@ has no row covering that date. Days are then grouped by the resolving envelope
   one window spans multiple *versions of the same envelope id*), and flags are
   merged with an ``envelope_id`` (and ``envelope_version``) stamp.
 
-Every day row always carries ``envelope_id`` + ``envelope_version`` — also in
+Every analysed day row carries ``envelope_id`` + ``envelope_version`` — also in
 the single-envelope case. The top-level ``envelope_id``/``envelope_status``
 fields and the informational notice remain keyed on the **latest** envelope
 for backward compatibility; the per-day rows and
-``envelope_versions_used`` are authoritative for history. A date that cannot
-be attributed at all (no journal row *and* no latest envelope — should not
-happen post-journal) is skipped and listed under ``unattributed_days``.
+``envelope_versions_used`` are authoritative for history. Dates without approval
+coverage are excluded from comparisons and listed under ``unattributed_days``.
 """
 
 from __future__ import annotations
@@ -108,14 +105,17 @@ def _latest_envelope_or_404(patient_id: str) -> Any:
 
 
 def _date_window(days: int) -> tuple[str, str]:
-    """Inclusive ISO date window: the last ``days`` days ending today (UTC)."""
+    """Inclusive ISO window ending on the server's local date, not UTC.
+
+    Logged dates are date-only values; this helper performs no timezone conversion.
+    """
     end = date_type.today()
     start = end - timedelta(days=days - 1)
     return start.isoformat(), end.isoformat()
 
 
 def _envelope_notice(envelope: Any) -> tuple[bool, Optional[str]]:
-    """(informational_only, notice) — mirrors chat's any-status behaviour."""
+    """Compatibility flag/notice for latest-envelope status, not day attribution."""
     status = envelope.status.value
     if status == "APPROVED":
         return False, None

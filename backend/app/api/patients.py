@@ -21,9 +21,9 @@ router = APIRouter(prefix="/patients", tags=["patients"])
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 PATIENTS_FILE = _REPO_ROOT / "data" / "patients.json"
 
-# Process-local overlay: seeded from the read-only JSON file, plus created rows.
-_OVERLAY: dict[str, dict[str, Any]] = {}
-_LOADED = False
+# Cache only fixture records; created profiles and observations are read from SQLite.
+_SEED_PATIENTS: dict[str, dict[str, Any]] = {}
+_SEEDS_LOADED = False
 
 
 def _normalise(raw: Any) -> dict[str, dict[str, Any]]:
@@ -41,17 +41,17 @@ def _normalise(raw: Any) -> dict[str, dict[str, Any]]:
     return {}
 
 
-def _ensure_loaded() -> None:
-    global _LOADED
-    if _LOADED:
+def _load_seeds_once() -> None:
+    global _SEEDS_LOADED
+    if _SEEDS_LOADED:
         return
     if PATIENTS_FILE.exists():
         try:
-            _OVERLAY.update(_normalise(json.loads(PATIENTS_FILE.read_text())))
+            _SEED_PATIENTS.update(_normalise(json.loads(PATIENTS_FILE.read_text())))
         except (json.JSONDecodeError, OSError):
-            # A malformed/absent file must not take down the API in Week 1.
+            # Durable profiles remain available even if fixture loading fails.
             pass
-    _LOADED = True
+    _SEEDS_LOADED = True
 
 
 def _ui_view(record: dict[str, Any]) -> dict[str, Any]:
@@ -71,9 +71,9 @@ def _ui_view(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_patient(patient_id: str) -> dict[str, Any] | None:
-    """Return a patient record from the overlay/read-only store."""
-    _ensure_loaded()
-    record = persistence.saved_patients().get(patient_id) or _OVERLAY.get(patient_id)
+    """Read a durable profile or fixture, overlaid with its latest observations."""
+    _load_seeds_once()
+    record = persistence.saved_patients().get(patient_id) or _SEED_PATIENTS.get(patient_id)
     if record is None:
         return None
     record = dict(record)
@@ -86,14 +86,14 @@ def get_patient(patient_id: str) -> dict[str, Any] | None:
 
 
 def list_patient_ids() -> list[str]:
-    """All known patient ids (read-only store + created overlay), sorted."""
-    _ensure_loaded()
-    return sorted(set(_OVERLAY) | set(persistence.saved_patients()))
+    """All fixture and durable patient IDs, sorted."""
+    _load_seeds_once()
+    return sorted(set(_SEED_PATIENTS) | set(persistence.saved_patients()))
 
 
 @router.get("", summary="List patients")
 def list_patients() -> dict[str, Any]:
-    _ensure_loaded()
+    _load_seeds_once()
     patients = [_ui_view(get_patient(pid)) for pid in list_patient_ids()]
     return {"count": len(patients), "patients": patients}
 
@@ -111,7 +111,7 @@ def read_patient(patient_id: str) -> dict[str, Any]:
 
 @router.post("", status_code=201, summary="Create a synthetic patient")
 def create_patient(patient: Patient) -> dict[str, Any]:
-    _ensure_loaded()
+    _load_seeds_once()
     record = patient.model_dump(by_alias=True, exclude_none=True)
     persistence.save_patient(record)
     return record

@@ -2,7 +2,7 @@
 
 ``PatientSummary`` is the canonical audit-friendly subset frozen inside every
 envelope (re-exported from ``shared/``). ``Patient`` is the richer synthetic
-record used by the Week 1 patient store and the synthetic generator (Lane C).
+record used by the patient API and synthetic generator.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ __all__ = ["PatientSummary", "Patient"]
 
 
 class Patient(BaseModel):
-    """Extended synthetic patient record for the Week 1 store.
+    """Extended patient record accepted by the patient API.
 
-    Extra keys are allowed so Lane C's generator can evolve the schema without
+    Extra keys are allowed so the synthetic generator can evolve its schema without
     breaking the API. ``to_summary()`` projects down to the frozen envelope
     contract.
     """

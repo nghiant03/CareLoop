@@ -11,10 +11,9 @@ API / rate limits
 * ``DEMO_KEY`` is shared and **rate-limited to ~30 requests/hour per IP** (and
   ~50/day). A free data.gov key raises this to 1,000 req/hour — set
   ``USDA_API_KEY`` in the environment for real runs.
-* This script is written to *never crash*: every network call is wrapped in
-  try/except and rate-limit (HTTP 429) responses are treated as "give up for now"
-  rather than an error. Missing values stay ``None`` and the dish keeps its
-  provenance until a human verifies it.
+* Search handles network/HTTP/JSON failures; rate limits propagate to ingredient
+  estimation, which logs them and returns unknown values. Input or response-shape
+  errors can still raise. Estimates require human review before verification.
 
 This is deliberately a skeleton: the per-ingredient -> per-serving math is a
 crude first pass (USDA values are per 100 g and dish ingredient *quantities* are
@@ -107,8 +106,9 @@ def search_food(
 ) -> list[dict[str, Any]]:
     """Search FDC for ``query`` and return raw food dicts.
 
-    Returns an empty list on any failure (never raises except for the local
-    request-budget guard). Network/HTTP/JSON errors are swallowed by design.
+    Returns an empty list for network/HTTP/JSON failures other than HTTP 429.
+    Local budget exhaustion and HTTP 429 raise ``RateLimitError``. Malformed
+    response shapes or invalid arguments can still raise outside that guard.
     """
     budget = budget or RequestBudget()
     params = urllib.parse.urlencode(
@@ -125,7 +125,7 @@ def search_food(
         payload = _http_get_json(url, timeout=timeout)
     except RateLimitError:
         raise
-    except Exception as exc:  # noqa: BLE001 - skeleton must not crash
+    except Exception as exc:  # noqa: BLE001 - preserve unknowns after search failures
         print(f"[usda] search failed for {query!r}: {exc}", file=sys.stderr)
         return []
     return list(payload.get("foods", []) or [])
@@ -156,7 +156,8 @@ def estimate_kp_for_ingredient(
 
     Uses the first FDC hit's per-100 g values scaled by ``portion_g / 100``.
     Returns a dict with ``potassium_mg``/``phosphorus_mg`` (None when unknown),
-    the matched description and the fdcId. Never raises (except local budget).
+    the matched description and the fdcId. Rate limits are logged and return
+    unknown values, as do missing hits; invalid input/response shapes may raise.
     """
     result: dict[str, Any] = {
         "ingredient": ingredient,
@@ -194,12 +195,13 @@ def estimate_dish_gaps(
 ) -> dict[str, Any]:
     """Estimate missing K/P for one dish from its ingredient list.
 
-    Strategy (skeleton): query each ingredient, take the per-ingredient
-    estimates, then use the **sum** as a rough per-dish estimate. Because
-    ingredient quantities are unknown this over-counts; treat the output as a
-    starting point for human review and keep ``provenance='usda_estimate'``.
+    Splits the serving weight equally across ingredients, scales each matched
+    per-100 g value, and sums the available estimates. Unknown recipe quantities
+    and missing matches can bias results in either direction; keep
+    ``provenance='usda_estimate'`` until human review.
 
-    Never mutates ``dish``. Never raises (except local budget).
+    Returns a shallow copy without mutating ``dish``. Rate-limited ingredients
+    remain unknown; invalid inputs or malformed response shapes may raise.
     """
     portion = float(dish.get("portion_g") or 100.0)
     ingredients = dish.get("ingredients") or []

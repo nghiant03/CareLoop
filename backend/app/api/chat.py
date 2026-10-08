@@ -58,8 +58,7 @@ def chat(req: ChatRequest) -> dict[str, Any]:
 
     envelope = envelope_obj.model_dump(by_alias=True, mode="json") if envelope_obj else None
 
-    # The patient record lets per-kg rulebook coefficients (25-35 kcal/kg,
-    # g/kg protein) be rendered as computed daily amounts instead of raw
+    # The patient record lets per-kg rulebook coefficients be rendered as computed daily amounts instead of raw
     # coefficients that read like absolute daily doses.
     patient = get_patient(req.patient_id) if req.patient_id else None
 

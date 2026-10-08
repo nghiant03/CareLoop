@@ -5,7 +5,7 @@ point. Pipeline order:
 
 1. **Escalation filter** (``escalation.check``) — out-of-scope requests are
    escalated, never answered.
-2. **Retrieval** (``retrieval.build_index``) — TF-IDF over KB rule + dish
+2. **Retrieval** (``retrieval.build_index``) — BM25 over KB rule + dish
    chunks.
 3. **Composition** — the answer text is assembled *only* from retrieved chunk
    content plus (when an envelope is supplied) the envelope's own numbers.

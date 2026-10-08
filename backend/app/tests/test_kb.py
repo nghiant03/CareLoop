@@ -38,8 +38,8 @@ def kb() -> KBGraph:
 
 def test_load_real_content_counts(kb: KBGraph) -> None:
     stats = kb.stats()
-    # rules.json documents 50 rules; the shipped file carries 52 — assert the
-    # documented floor and the exact dish corpus.
+    # Keep a minimum rule-coverage check without fixing the growing rule count;
+    # dish/profile counts must match the benchmark corpus exactly.
     assert stats["node_counts"]["Rule"] >= 50
     assert stats["node_counts"]["Dish"] == 214
     assert stats["node_counts"]["NutrientProfile"] == 214

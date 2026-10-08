@@ -392,13 +392,15 @@ def plan_vs_exact(envelope, dishes: list[Dish], plan) -> dict:
     Recomputes the delivered plan's per-day additive quantities with the
     ``problem`` helpers and compares them with :func:`one_day_exact`:
 
-    * ``gaps`` — per day, ``day_value - exact_one_day_best`` (>= 0 for any
-      delivered plan, since the exact value is the per-day minimum);
+    * ``gaps`` — per day, ``day_value - exact_one_day_best`` (>= 0 for feasible
+      single-dish plans in the reference encoding; not guaranteed for broader
+      compositions, which the reference does not enumerate);
     * ``mean_gap`` — mean of the daily gaps;
     * ``seven_day_lower_bound`` — ``7 x per-day best``, an exact lower bound on
-      the 7-day SUM of the additive quantity (the horizon deviation/cost
-      objectives are means, so their horizon lower bound is this value
-      divided by the number of days).
+      the 7-day SUM of the additive quantity. Cost is summed over the horizon;
+      nutrient deviation is a daily mean, so only its horizon objective bound
+      divides this value by seven. Raw preference sums are not the normalized
+      preference objective.
 
     ``variety`` is NOT per-day decomposable (it is defined over the whole
     horizon) and is explicitly excluded — the reported bounds cover deviation,

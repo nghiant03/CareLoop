@@ -1,11 +1,11 @@
 """Cohort clustering for synthetic CKD/T2D patients.
 
-`cluster_patients` standardises a fixed set of numeric features, runs k-means
+`cluster_patients` standardises the available numeric features, runs k-means
 over a small range of k, and selects the k with the best mean silhouette.
 Everything is deterministic (fixed ``random_state``).
 
-Feature set (used when present in *every* patient; otherwise imputed with the
-column median so the feature set stays stable):
+Candidate features (retained when present in at least one patient; missing
+entries are median-imputed and wholly absent columns are dropped):
 
     age, bmi, hba1c_pct, egfr, serum_K_meq_L, serum_PO4_mg_dL,
     systolic_bp, diastolic_bp
