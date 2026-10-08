@@ -2,7 +2,9 @@
 
 v1 — pure nutrient distance between two dishes over the 6 core nutrients
      (min-max normalised across the dish database).
-v2 — ranked substitution suggestions: nutrient distance, category/cuisine
+v2 — ranked substitution suggestions: renal-weighted nutrient distance
+     (sodium/potassium/phosphorus weighted ×2 — the minerals CKD patients
+     must limit; adopted from the COMPARISON.md §3 study), category/cuisine
      similarity bonuses, a healthier-choice prior (prefer lower
      sodium/potassium/phosphorus among near-distance candidates), and
      hpb_id/verified as final tiebreaks.
@@ -33,6 +35,12 @@ CORE_NUTRIENTS = (
 
 # Minerals whose intake CKD patients must limit — the "healthier choice" prior.
 _MINERALS = ("sodium_mg", "potassium_mg", "phosphorus_mg")
+
+# Renal weights over CORE_NUTRIENTS order: Na/K/P count double when judging
+# how "similar" two dishes are, because those are the minerals CKD patients
+# must limit (adopted from backend/mining/COMPARISON.md §3). Energy, protein
+# and carbs keep weight 1.
+RENAL_WEIGHTS: tuple[float, ...] = (1.0, 1.0, 2.0, 2.0, 2.0, 1.0)
 
 # Weight of the healthier-choice prior, applied only to near-distance
 # candidates (within NEAR_TOLERANCE of the best distance) so it acts as a
@@ -95,6 +103,16 @@ def nutrient_distance(dish_a: dict, dish_b: dict) -> float:
     return float(sum((a - b) ** 2 for a, b in zip(va, vb)) ** 0.5)
 
 
+def renal_nutrient_distance(dish_a: dict, dish_b: dict) -> float:
+    """Renal-weighted euclidean distance over min-max normalised core
+    nutrients: sodium/potassium/phosphorus weighted ×2 (CKD-relevant
+    minerals), everything else weight 1 (range [0, sqrt(15)])."""
+    va, vb = _normalised_vector(dish_a), _normalised_vector(dish_b)
+    return float(
+        sum(w * (a - b) ** 2 for w, a, b in zip(RENAL_WEIGHTS, va, vb)) ** 0.5
+    )
+
+
 def _health_term(dish: dict) -> float:
     """Mean normalised mineral load — lower is 'healthier'."""
     vals = [_normalised_vector(dish)[i] for i, n in enumerate(CORE_NUTRIENTS) if n in _MINERALS]
@@ -133,9 +151,11 @@ def suggest_substitutions(
     """Suggest up to ``k`` substitute dishes for ``dish_id``.
 
     version=1: rank purely by nutrient distance.
-    version=2: nutrient distance + category/cuisine bonus + healthier-choice
-    prior (lower sodium/potassium/phosphorus among near-distance candidates),
-    hpb_id/verified tiebreaks.
+    version=2: renal-weighted nutrient distance (Na/K/P ×2) + category/cuisine
+    bonus + healthier-choice prior (lower sodium/potassium/phosphorus among
+    near-distance candidates), hpb_id/verified tiebreaks. The returned
+    ``nutrient_distance`` field holds the distance used by the chosen
+    version (renal-weighted for v2, plain euclidean for v1).
 
     Candidates are restricted to compatible categories (never e.g. a soup for
     a drink) and the query dish itself is always excluded. Results are sorted
@@ -151,14 +171,14 @@ def suggest_substitutions(
     query = by_id[dish_id]
     scored = []
     for cand in _candidates(query, dishes):
-        nd = nutrient_distance(query, cand)
-        category_match = cand["category"] == query["category"]
         if version == 1:
-            distance = nd
+            nd = nutrient_distance(query, cand)
         elif version == 2:
-            distance = nd
+            nd = renal_nutrient_distance(query, cand)
         else:
             raise ValueError(f"unsupported version: {version}")
+        category_match = cand["category"] == query["category"]
+        distance = nd
         scored.append((cand, nd, distance, category_match))
 
     if version == 2 and scored:
