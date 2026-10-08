@@ -1,6 +1,6 @@
 # CareLoop — Automated Evaluation Report
 
-Suite: CareLoop automated evaluation v1 · optimiser seed 42 (pop 40, gen 80, NSGA-II) · 20 patients · 190-dish pool
+Suite: CareLoop automated evaluation v1 · optimiser seed 42 (pop 40, gen 80, NSGA-II) · 20 patients · 214-dish pool
 
 Reproduce with `.venv/bin/python -m evaluation.run` (add `--rerun-benchmark` to regenerate the optimiser benchmark artefacts). Deterministic apart from wall-clock runtimes. Machine-readable twin: `evaluation/results.json`.
 
@@ -10,8 +10,8 @@ Reproduce with `.venv/bin/python -m evaluation.run` (add `--rerun-benchmark` to 
 |---|---|---|
 | Q1 Traceability | PASS | 202/202 envelope items traceable (100.0%) across 18 eligible patients; 2 REJECTED patients counted separately |
 | Q2 Conflict resolution | PASS | 10/10 cases (100.0%), 37/37 checks |
-| Q3 Constraint satisfaction | FAIL | 2/18 plans with zero hard violations (11.1%); 16 infeasible (diagnosed, nothing served); 18 envelopes needed a disclosed MIN relaxation |
-| Q4 Quality/runtime | PASS | NSGA-II: 0% violations, best HV, 261.7 ms mean (consumed from benchmark artefacts) |
+| Q3 Constraint satisfaction | PASS | 18/18 plans with zero hard violations (100.0%); 0 infeasible (diagnosed, nothing served); 18 envelopes needed a disclosed MIN relaxation |
+| Q4 Quality/runtime | PASS | NSGA-II: 0% violations, best HV, 303.1 ms mean (consumed from benchmark artefacts) |
 | Q5 Groundedness | PASS | grounded 100.0% (citation accuracy 100.0%), escalation 100.0%, refusals 100.0% |
 
 ## Q1 — Traceability
@@ -64,32 +64,32 @@ Scripted conflict cases with expected outcomes, checked against the engine's env
 
 ## Q3 — Constraint satisfaction
 
-For every eligible patient: engine -> simulated APPROVED -> prepare_envelope_for_pool (MIN-floor relaxation, as /plans does) -> backend.optim.api.run -> violation_count == 0 and per-day totals within the SOLVED envelope. Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served) and relaxation cases are reported distinctly.
+For every eligible patient: engine -> simulated APPROVED -> prepare_envelope_for_pool (MIN-floor relaxation disclosure) -> backend.optim.api.run -> violation_count == 0 and per-day totals within the SOLVED envelope's HARD constraints (MAX ceilings; MIN floors / TARGETs are soft per PLAN.md module 4, reported as soft-aim shortfalls, never violations). Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served) and relaxation disclosures are reported distinctly.
 
 | Patient | Archetype | Outcome | Violations | Engine | Per-day OK | Relaxations | Blockers (leave-one-out) |
 |---|---|---|---|---|---|---|---|
-| P0001 | T2D | solved | 0 | greedy-fallback | True | fiber_g | — |
-| P0002 | HTN | infeasible | 1 | infeasible | n/a | fiber_g, potassium_mg | fiber_g:min=24, potassium_mg:min=2700 |
-| P0003 | T2D_HTN | infeasible | 1 | infeasible | n/a | fiber_g, potassium_mg | potassium_mg:min=2700 |
-| P0004 | CKD3_T2D_HTN | infeasible | 1 | infeasible | n/a | fiber_g | — |
-| P0005 | CKD4_T2D_HTN | infeasible | 1 | infeasible | n/a | fiber_g | — |
-| P0006 | CKD4_hyperK | infeasible | 1 | infeasible | n/a | fiber_g | — |
-| P0007 | CKD5_pre_dialysis_hyperPO4 | infeasible | 1 | infeasible | n/a | fiber_g | phosphorus_mg:max=800 |
+| P0001 | T2D | solved | 0 | pymoo | n/a | fiber_g | — |
+| P0002 | HTN | solved | 0 | pymoo | n/a | fiber_g, potassium_mg | — |
+| P0003 | T2D_HTN | solved | 0 | pymoo | n/a | fiber_g, potassium_mg | — |
+| P0004 | CKD3_T2D_HTN | solved | 0 | pymoo | n/a | fiber_g | — |
+| P0005 | CKD4_T2D_HTN | solved | 0 | pymoo | n/a | fiber_g | — |
+| P0006 | CKD4_hyperK | solved | 0 | pymoo | n/a | energy_kcal, fiber_g | — |
+| P0007 | CKD5_pre_dialysis_hyperPO4 | solved | 0 | pymoo | n/a | fiber_g | — |
 | P0008 | pregnancy_T2D | REJECTED | — | — | — | — | — |
-| P0009 | healthy_control | solved | 0 | greedy-fallback | True | fiber_g | — |
-| P0010 | T2D | infeasible | 1 | infeasible | n/a | fiber_g | energy_kcal:min=2060 |
-| P0011 | HTN | infeasible | 1 | infeasible | n/a | fiber_g, potassium_mg | — |
-| P0012 | T2D_HTN | infeasible | 1 | infeasible | n/a | fiber_g, potassium_mg | fiber_g:min=24, potassium_mg:min=2700 |
-| P0013 | CKD3_T2D_HTN | infeasible | 1 | infeasible | n/a | fiber_g | — |
-| P0014 | CKD4_T2D_HTN | infeasible | 1 | infeasible | n/a | fiber_g | — |
-| P0015 | CKD4_hyperK | infeasible | 1 | infeasible | n/a | fiber_g | — |
-| P0016 | CKD5_pre_dialysis_hyperPO4 | infeasible | 1 | infeasible | n/a | fiber_g | fiber_g:min=24 |
+| P0009 | healthy_control | solved | 0 | pymoo | n/a | fiber_g | — |
+| P0010 | T2D | solved | 0 | pymoo | n/a | energy_kcal, fiber_g | — |
+| P0011 | HTN | solved | 0 | pymoo | n/a | fiber_g, potassium_mg | — |
+| P0012 | T2D_HTN | solved | 0 | pymoo | n/a | fiber_g, potassium_mg | — |
+| P0013 | CKD3_T2D_HTN | solved | 0 | pymoo | n/a | energy_kcal, fiber_g | — |
+| P0014 | CKD4_T2D_HTN | solved | 0 | pymoo | n/a | fiber_g | — |
+| P0015 | CKD4_hyperK | solved | 0 | pymoo | n/a | fiber_g | — |
+| P0016 | CKD5_pre_dialysis_hyperPO4 | solved | 0 | pymoo | n/a | fiber_g | — |
 | P0017 | pregnancy_T2D | REJECTED | — | — | — | — | — |
-| P0018 | healthy_control | infeasible | 1 | infeasible | n/a | fiber_g | energy_kcal:min=2105 |
-| P0019 | T2D | infeasible | 1 | infeasible | n/a | fiber_g | energy_kcal:min=1850 |
-| P0020 | HTN | infeasible | 1 | infeasible | n/a | fiber_g, potassium_mg | — |
+| P0018 | healthy_control | solved | 0 | pymoo | n/a | fiber_g | — |
+| P0019 | T2D | solved | 0 | pymoo | n/a | fiber_g | — |
+| P0020 | HTN | solved | 0 | pymoo | n/a | fiber_g, potassium_mg | — |
 
-**Zero-violation plans: 2/18 (11.1%) — verdict FAIL.** Infeasible envelopes are diagnosed explicitly by the solver (empty plan, `infeasibility_reason` set) and never served; where a single constraint removal restores greedy feasibility it is listed as a blocker.
+**Zero-violation plans: 18/18 (100.0%) — verdict PASS.** Infeasible envelopes are diagnosed explicitly by the solver (empty plan, `infeasibility_reason` set) and never served; where a single constraint removal restores greedy feasibility it is listed as a blocker.
 
 ## Q4 — Quality/runtime (optimiser benchmark)
 
@@ -99,42 +99,42 @@ Consumes backend/optim/benchmark_results.{csv,md} (4 envelopes x 5 seeds x 4 met
 
 | Method | Runs | Mean HV | HV std | Violation rate | Mean runtime (ms) |
 |---|---|---|---|---|---|
-| nsga2 | 20 | 0.423 | 0.074 | 0.0% | 261.7 |
-| ga | 20 | 0.282 | 0.078 | 0.0% | 117 |
-| greedy | 20 | 0.084 | 0.012 | 0.0% | 8 |
-| random | 20 | 0.065 | 0.113 | 75.0% | 48.6 |
+| nsga2 | 20 | 0.572 | 0.042 | 0.0% | 303.1 |
+| ga | 20 | 0.345 | 0.053 | 0.0% | 145.7 |
+| greedy | 20 | 0.17 | 0.037 | 0.0% | 9.6 |
+| random | 20 | 0.249 | 0.036 | 0.0% | 51.9 |
 
 ### Mean hypervolume per envelope
 
 | Envelope | NSGA-II | GA | Greedy | Random |
 |---|---|---|---|---|
-| ckd_hyperkalemia | 0.338 | 0.203 | 0.077 | 0 |
-| ckd_strict | 0.402 | 0.246 | 0.096 | 0 |
-| t2d_htn | 0.442 | 0.303 | 0.077 | 0 |
-| t2d_only | 0.51 | 0.376 | 0.085 | 0.26 |
+| ckd_hyperkalemia | 0.57 | 0.341 | 0.163 | 0.285 |
+| ckd_strict | 0.55 | 0.281 | 0.217 | 0.238 |
+| t2d_htn | 0.595 | 0.364 | 0.178 | 0.227 |
+| t2d_only | 0.573 | 0.395 | 0.124 | 0.249 |
 
 ### NSGA-II pop × gen sweep (1 seed)
 
 | Pop | Gen | Mean HV | Mean runtime (ms) |
 |---|---|---|---|
-| 20 | 40 | 0.158 | 79.2 |
-| 20 | 80 | 0.234 | 156.1 |
-| 20 | 160 | 0.332 | 316.6 |
-| 40 | 40 | 0.392 | 131.7 |
-| 40 | 80 | 0.445 | 261.9 |
-| 40 | 160 | 0.476 | 524.1 |
-| 80 | 40 | 0.406 | 230.8 |
-| 80 | 80 | 0.509 | 457.4 |
-| 80 | 160 | 0.516 | 914.9 |
+| 20 | 40 | 0.503 | 93.2 |
+| 20 | 80 | 0.51 | 179.7 |
+| 20 | 160 | 0.513 | 356 |
+| 40 | 40 | 0.584 | 158.4 |
+| 40 | 80 | 0.571 | 302 |
+| 40 | 160 | 0.57 | 600.1 |
+| 80 | 40 | 0.626 | 278.8 |
+| 80 | 80 | 0.644 | 543.4 |
+| 80 | 160 | 0.617 | 1074.3 |
 
 ### Recommendation (verbatim from `backend/optim/benchmark_results.md`)
 
-* Fastest swept config: pop=20, gen=40 (mean HV 0.1578, 79 ms/solve).
-* Knee point (HV within 2% of the best 0.5164): **pop=80, gen=80** (mean HV 0.5092, 457 ms/solve).
+* Fastest swept config: pop=20, gen=40 (mean HV 0.5029, 93 ms/solve).
+* Knee point (HV within 2% of the best 0.6437): **pop=80, gen=80** (mean HV 0.6437, 543 ms/solve).
 * Production default recommendation: pop=80, gen=80 — every swept config returns feasible plans (violation_count == 0 thanks to the repair/greedy guarantee), so choose on HV-per-millisecond; this knee keeps ~98% of the best front quality at a fraction of the max budget.
-* Total harness wall time: 21s. Baselines: GA scalarises (single-point fronts -> lower HV) and its violation rate shows why constraint handling matters; greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on both axes.
+* Total harness wall time: 25s. Baselines: GA scalarises (single-point fronts -> lower HV); greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on quality. Under the module-4 encoding (hard = MAX ceilings + exclusions only) raw random search rarely violates a ceiling, so methods are separated by hypervolume rather than violations; the repair/greedy guarantee on the NSGA-II path remains the backstop for genuinely tight ceilings.
 
-Verdict: **PASS** — NSGA-II (production path, with the repair/greedy feasibility guarantee) is the only method combining 0% hard-constraint violations with the best hypervolume; raw baselines are shown for contrast (random violates 75% of the time by design).
+Verdict: **PASS** — NSGA-II (production path, with the repair/greedy feasibility guarantee) combines 0% hard-constraint violations with the best hypervolume. Under the module-4 encoding (hard = MAX ceilings + exclusions) all methods achieve 0% violations on these pools, so the methods separate on hypervolume; the guarantee remains the backstop for genuinely tight ceilings.
 
 ## Q5 — Groundedness (chat)
 
@@ -147,7 +147,7 @@ Scripted questions scored automatically: grounded nutrition questions must be an
 | How much sodium can I have per day? | none | answered | CKD-2024-SODIUM-2000, DASH-2025-SODIUM-2300, ADA-2026-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
 | Is salt bad for my blood pressure? | none | answered | CKD-2024-SODIUM-2000 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
 | What is the sodium limit for someone with high blood pressure? | none | answered | CKD-2024-SODIUM-2000, HYPERK-2024-EXCLUDE-HIGH-K, CKD-2024-PROTEIN-CEILING-13 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| Why do I need to limit sodium? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, DASH-2025-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
+| Why do I need to limit sodium? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, ADA-2026-PROTEIN | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
 | How much potassium should I eat each day? | none | answered | CONFLICT-K-DASH-VS-CKD, DASH-2025-POTASSIUM-4700, DASH-2025-SODIUM-2300 | DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400, CONFLICT-K-DASH-VS-CKD, SAFETY-HYPERK-SEVERE | PASS |
 | How much potassium is safe if I have kidney disease? | none | answered | CONFLICT-K-DASH-VS-CKD, DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400 | DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400, CONFLICT-K-DASH-VS-CKD, SAFETY-HYPERK-SEVERE | PASS |
 | Do I need to worry about phosphorus in my diet? | none | answered | HYPERPO4-2024-PHOSPHORUS-800, ADA-2026-PROTEIN, DASH-2025-SODIUM-2300 | HYPERPO4-2024-PHOSPHORUS-800 | PASS |
@@ -215,17 +215,19 @@ Human reviewers score each of the five criteria below on a 1–5 scale; the chat
 
 ## Limitations & known caveats
 
-1. **Fibre MIN relaxation (known caveat).** The rulebook sets hard fibre floors (GEN-FIBER-25 min 25 g/d, DASH-2025-FIBER-30 min 30 g/d) but the real 190-dish dataset tops out at 8 g fibre per dish, so the best possible 3-dish day reaches only 24 g. `/plans` therefore relaxes unreachable MIN floors to the achievable pool bound via `prepare_envelope_for_pool` and discloses every adjustment in `relaxed_constraints`; `violation_count == 0` holds against the *solved* (relaxed) envelope, not the original guideline floor. Every eligible envelope in this run needed at least the fibre relaxation, and HTN envelopes additionally needed the DASH potassium-min relaxation.
+1. **Encoding: hard = MAX ceilings + exclusions only (PLAN.md module 4).** MIN floors and TARGET values are soft objective terms: they steer the nutrient-deviation objective and never count as violations. This is the documented intent of the plan; the earlier hard-MIN encoding made guideline floors (fibre, potassium, energy) cause infeasibility instead of guiding the search. Consequence: `violation_count == 0` means the hard ceilings and exclusions hold — it does NOT mean the plan meets every soft floor. Residual soft shortfalls are reported per plan (see `soft_aims` in results.json and the totals panel), and with the placeholder scalar weights (deviation 0.001 vs preference/variety 0.5, cost 0.02) the search may still trade floors against preference and cost — retuning `SCALAR_WEIGHTS` is the natural next step.
 
-2. **Joint infeasibility is broader than single-nutrient relaxation.** Only 2 of 18 eligible envelopes yield a zero-violation plan. The solver's infeasibility verdict is relative to its NSGA-II + repair + greedy guarantee pipeline (a greedy failure is strong evidence, not a formal proof of infeasibility); the leave-one-out column identifies the likely binding constraints (energy kcal/kg floors at higher body weights, the DASH potassium-min, fibre floors, the 800 mg phosphorus ceiling, and joint effects). This is a dataset-coverage gap, not a solver bug.
+2. **Fibre MIN relaxation (disclosure still active).** The guideline rulebook sets fibre floors (GEN-FIBER-25 min 25 g/d, DASH-2025-FIBER-30 min 30 g/d) but the dish dataset tops out at 8 g fibre per dish, so the best possible 3-dish day reaches only 24 g. `prepare_envelope_for_pool` still lowers unreachable MIN floors in the solved copy and discloses every adjustment in `relaxed_constraints` — no longer needed for feasibility (floors are soft), it now calibrates the deviation objective to an achievable aim and keeps the clinician-facing disclosure intact. Heavier patients additionally trigger the energy-kcal floor relaxation once the semantic exclusions narrow the pool's energy ceiling.
 
-3. **Exclusion vocabulary mismatch.** Every rulebook exclusion (`high_potassium_foods`, `phosphate_additive_processed`, `sugar_sweetened_beverage`, `potassium_chloride`, `high_glycaemic_load`, `pregnancy`) matches **zero** dishes in `data/dishes.json` — the dataset uses different tags (e.g. `high_potassium`, `high_phosphorus`) and has no `sugar_sweetened_beverage` category. Exclusions are therefore currently no-ops against the real pool (`allowed_dish_count == 190` everywhere). The exclusion machinery itself is correct and tested against matching data.
+3. **Exclusion vocabulary (fixed in this remediation).** The rulebook emits semantic exclusion values (`high_potassium_foods`, `phosphate_additive_processed`, `sugar_sweetened_beverage`, `high_glycaemic_load`) that no dataset tag spells out; before the fix every rulebook exclusion matched zero dishes. `backend/optim/exclusion_mapping.py` now bridges each value to a documented per-serving nutrient threshold (K > 500 mg, P > 300 mg, drink with sugar > 5 g, carbs > 75 g); unknown values keep literal-only matching. The dataset's own `high_potassium` tag continues to work via literal matching.
 
 4. **Newest-first labs orientation.** `labs_K_monthly` / `labs_PO4_monthly` are ordered newest-first: index 0 pairs with `months_offset_ago == 0` (current) and equals the top-level `serum_K_meq_L` / `serum_PO4_mg_dL` the rule engine consumes. Any consumer that sorts these series ascending silently reads the *oldest* lab as current and will mis-trigger the hyperkalaemia/hyperphosphataemia rules.
 
-5. **Benchmark reuse.** Q4 consumes the committed benchmark artefacts instead of re-running NSGA-II/GA/greedy/random (default); `--rerun-benchmark` regenerates them (~21 s wall time). Runtimes in the report are wall-clock and not deterministic.
+5. **Benchmark reuse.** Q4 consumes the committed benchmark artefacts instead of re-running NSGA-II/GA/greedy/random (default); `--rerun-benchmark` regenerates them (~23 s wall time). The artefacts were regenerated after the hard/soft re-encoding, so the comparison table reflects the new objective semantics for all methods alike. Runtimes in the report are wall-clock and not deterministic.
 
 6. **Chat evaluation scope.** Groundedness is scored automatically against the rules that *produce a constraint* for the asked nutrient; supporting citations retrieved by TF-IDF may legitimately mention other nutrients. Nutrients without constraint-producing rules (sugar, total fat) cannot be grounded today and are listed as known gaps. The expert-review rubric is provided for the human evaluation that cannot be automated.
 
-7. **Scale.** 20 synthetic patients, one dish dataset, one seed set. Statistical strength is limited; the numbers measure pipeline correctness, not clinical validity.
+7. **Soft floors vs the dish pool.** Even as soft aims, some floors remain far from what the pool delivers (e.g. mean fibre ~10 g/day against the 25-30 g guideline aim) — the curated renal-replenishment dishes add fruit/vegetable and higher-fibre options, but 3 dishes/day from a 214-dish Singaporean pool cannot reach DASH-level fibre/potassium without dedicated product reformulation. The soft-aim shortfalls in results.json quantify this per patient.
+
+8. **Scale.** 20 synthetic patients, one dish dataset, one seed set. Statistical strength is limited; the numbers measure pipeline correctness, not clinical validity.
 

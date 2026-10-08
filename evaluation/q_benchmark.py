@@ -128,8 +128,10 @@ def evaluate_q4(rerun_benchmark: bool = False) -> dict[str, Any]:
         ),
         "verdict_note": (
             "NSGA-II (production path, with the repair/greedy feasibility "
-            "guarantee) is the only method combining 0% hard-constraint "
-            "violations with the best hypervolume; raw baselines are shown for "
-            "contrast (random violates 75% of the time by design)."
+            "guarantee) combines 0% hard-constraint violations with the best "
+            "hypervolume. Under the module-4 encoding (hard = MAX ceilings + "
+            "exclusions) all methods achieve 0% violations on these pools, so "
+            "the methods separate on hypervolume; the guarantee remains the "
+            "backstop for genuinely tight ceilings."
         ),
     }

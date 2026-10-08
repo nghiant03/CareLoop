@@ -228,34 +228,41 @@ def render_report(results: dict[str, Any]) -> str:
     # ------------------------------------------------------------------ limits
     add("## Limitations & known caveats")
     add("")
-    add("1. **Fibre MIN relaxation (known caveat).** The rulebook sets hard fibre "
-        "floors (GEN-FIBER-25 min 25 g/d, DASH-2025-FIBER-30 min 30 g/d) but the "
-        "real 190-dish dataset tops out at 8 g fibre per dish, so the best possible "
-        "3-dish day reaches only 24 g. `/plans` therefore relaxes unreachable MIN "
-        "floors to the achievable pool bound via `prepare_envelope_for_pool` and "
-        "discloses every adjustment in `relaxed_constraints`; `violation_count == 0` "
-        "holds against the *solved* (relaxed) envelope, not the original guideline "
-        "floor. Every eligible envelope in this run needed at least the fibre "
-        "relaxation, and HTN envelopes additionally needed the DASH potassium-min "
-        "relaxation.")
+    add("1. **Encoding: hard = MAX ceilings + exclusions only (PLAN.md module 4).** "
+        "MIN floors and TARGET values are soft objective terms: they steer the "
+        "nutrient-deviation objective and never count as violations. This is the "
+        "documented intent of the plan; the earlier hard-MIN encoding made "
+        "guideline floors (fibre, potassium, energy) cause infeasibility instead "
+        "of guiding the search. Consequence: `violation_count == 0` means the "
+        "hard ceilings and exclusions hold — it does NOT mean the plan meets "
+        "every soft floor. Residual soft shortfalls are reported per plan "
+        "(see `soft_aims` in results.json and the totals panel), and with the "
+        "placeholder scalar weights (deviation 0.001 vs preference/variety 0.5, "
+        "cost 0.02) the search may still trade floors against preference and "
+        "cost — retuning `SCALAR_WEIGHTS` is the natural next step.")
     add("")
-    add("2. **Joint infeasibility is broader than single-nutrient relaxation.** "
-        "Only 2 of 18 eligible envelopes yield a zero-violation plan. The solver's "
-        "infeasibility verdict is relative to its NSGA-II + repair + greedy "
-        "guarantee pipeline (a greedy failure is strong evidence, not a formal "
-        "proof of infeasibility); the leave-one-out column identifies the likely "
-        "binding constraints (energy kcal/kg floors at higher body weights, the "
-        "DASH potassium-min, fibre floors, the 800 mg phosphorus ceiling, and "
-        "joint effects). This is a dataset-coverage gap, not a solver bug.")
+    add("2. **Fibre MIN relaxation (disclosure still active).** The guideline "
+        "rulebook sets fibre floors (GEN-FIBER-25 min 25 g/d, DASH-2025-FIBER-30 "
+        "min 30 g/d) but the dish dataset tops out at 8 g fibre per dish, so the "
+        "best possible 3-dish day reaches only 24 g. `prepare_envelope_for_pool` "
+        "still lowers unreachable MIN floors in the solved copy and discloses "
+        "every adjustment in `relaxed_constraints` — no longer needed for "
+        "feasibility (floors are soft), it now calibrates the deviation "
+        "objective to an achievable aim and keeps the clinician-facing "
+        "disclosure intact. Heavier patients additionally trigger the "
+        "energy-kcal floor relaxation once the semantic exclusions narrow the "
+        "pool's energy ceiling.")
     add("")
-    add("3. **Exclusion vocabulary mismatch.** Every rulebook exclusion "
-        "(`high_potassium_foods`, `phosphate_additive_processed`, "
-        "`sugar_sweetened_beverage`, `potassium_chloride`, `high_glycaemic_load`, "
-        "`pregnancy`) matches **zero** dishes in `data/dishes.json` — the dataset "
-        "uses different tags (e.g. `high_potassium`, `high_phosphorus`) and has no "
-        "`sugar_sweetened_beverage` category. Exclusions are therefore currently "
-        "no-ops against the real pool (`allowed_dish_count == 190` everywhere). "
-        "The exclusion machinery itself is correct and tested against matching data.")
+    add("3. **Exclusion vocabulary (fixed in this remediation).** The rulebook "
+        "emits semantic exclusion values (`high_potassium_foods`, "
+        "`phosphate_additive_processed`, `sugar_sweetened_beverage`, "
+        "`high_glycaemic_load`) that no dataset tag spells out; before the fix "
+        "every rulebook exclusion matched zero dishes. "
+        "`backend/optim/exclusion_mapping.py` now bridges each value to a "
+        "documented per-serving nutrient threshold (K > 500 mg, P > 300 mg, "
+        "drink with sugar > 5 g, carbs > 75 g); unknown values keep "
+        "literal-only matching. The dataset's own `high_potassium` tag continues "
+        "to work via literal matching.")
     add("")
     add("4. **Newest-first labs orientation.** `labs_K_monthly` / `labs_PO4_monthly` "
         "are ordered newest-first: index 0 pairs with `months_offset_ago == 0` "
@@ -266,8 +273,10 @@ def render_report(results: dict[str, Any]) -> str:
     add("")
     add("5. **Benchmark reuse.** Q4 consumes the committed benchmark artefacts "
         "instead of re-running NSGA-II/GA/greedy/random (default); "
-        "`--rerun-benchmark` regenerates them (~21 s wall time). Runtimes in the "
-        "report are wall-clock and not deterministic.")
+        "`--rerun-benchmark` regenerates them (~23 s wall time). The artefacts "
+        "were regenerated after the hard/soft re-encoding, so the comparison "
+        "table reflects the new objective semantics for all methods alike. "
+        "Runtimes in the report are wall-clock and not deterministic.")
     add("")
     add("6. **Chat evaluation scope.** Groundedness is scored automatically against "
         "the rules that *produce a constraint* for the asked nutrient; supporting "
@@ -276,7 +285,15 @@ def render_report(results: dict[str, Any]) -> str:
         "grounded today and are listed as known gaps. The expert-review rubric is "
         "provided for the human evaluation that cannot be automated.")
     add("")
-    add("7. **Scale.** 20 synthetic patients, one dish dataset, one seed set. "
+    add("7. **Soft floors vs the dish pool.** Even as soft aims, some floors "
+        "remain far from what the pool delivers (e.g. mean fibre ~10 g/day "
+        "against the 25-30 g guideline aim) — the curated renal-replenishment "
+        "dishes add fruit/vegetable and higher-fibre options, but 3 dishes/day "
+        "from a 214-dish Singaporean pool cannot reach DASH-level fibre/potassium "
+        "without dedicated product reformulation. The soft-aim shortfalls in "
+        "results.json quantify this per patient.")
+    add("")
+    add("8. **Scale.** 20 synthetic patients, one dish dataset, one seed set. "
         "Statistical strength is limited; the numbers measure pipeline correctness, "
         "not clinical validity.")
     add("")

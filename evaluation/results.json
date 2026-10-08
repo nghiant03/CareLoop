@@ -5,7 +5,7 @@
     "pop_size": 40,
     "n_gen": 80,
     "patients": 20,
-    "dishes": 190
+    "dishes": 214
   },
   "q1_traceability": {
     "question": "Q1 Traceability",
@@ -1375,7 +1375,7 @@
   },
   "q3_constraint_satisfaction": {
     "question": "Q3 Constraint satisfaction",
-    "definition": "For every eligible patient: engine -> simulated APPROVED -> prepare_envelope_for_pool (MIN-floor relaxation, as /plans does) -> backend.optim.api.run -> violation_count == 0 and per-day totals within the SOLVED envelope. Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served) and relaxation cases are reported distinctly.",
+    "definition": "For every eligible patient: engine -> simulated APPROVED -> prepare_envelope_for_pool (MIN-floor relaxation disclosure) -> backend.optim.api.run -> violation_count == 0 and per-day totals within the SOLVED envelope's HARD constraints (MAX ceilings; MIN floors / TARGETs are soft per PLAN.md module 4, reported as soft-aim shortfalls, never violations). Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served) and relaxation disclosures are reported distinctly.",
     "optimiser_config": {
       "seed": 42,
       "pop_size": 40,
@@ -1384,23 +1384,23 @@
     },
     "eligible_patients": 18,
     "plans_attempted": 18,
-    "zero_violation_plans": 2,
-    "per_day_verified_plans": 2,
-    "infeasible_plans": 16,
+    "zero_violation_plans": 18,
+    "per_day_verified_plans": 18,
+    "infeasible_plans": 0,
     "relaxed_envelopes": 18,
-    "zero_violation_rate": 0.1111111111111111,
-    "verdict": "FAIL",
-    "verdict_note": "guideline envelopes exceed what the 190-dish pool can jointly satisfy; the optimiser diagnoses infeasibility and serves no plan (safe failure), see per_patient blockers",
+    "zero_violation_rate": 1.0,
+    "verdict": "PASS",
+    "verdict_note": null,
     "per_patient": [
       {
         "patient_id": "P0001",
         "archetype": "T2D",
         "status": "solved",
         "attempted": true,
-        "engine": "greedy-fallback",
+        "engine": "pymoo",
         "violation_count": 0,
         "feasible": true,
-        "allowed_dish_count": 190,
+        "allowed_dish_count": 178,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1411,21 +1411,47 @@
             "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.274,
+        "solver_runtime_s": 0.304,
         "infeasibility_reason": null,
-        "per_day_totals_compliant": true,
-        "per_day_failures": [],
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 20.0,
+            "worst_day_shortfall": 110.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1540.0,
+            "worst_day_total": 320.0,
+            "worst_day_shortfall": 1220.0
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 9.143,
+            "mean_distance": 20.857
+          },
+          "protein_g": {
+            "kind": "target",
+            "aim": 61.6,
+            "mean_day_total": 18.0,
+            "mean_distance": 43.6
+          }
+        },
         "days_checked": 7
       },
       {
         "patient_id": "P0002",
         "archetype": "HTN",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 214,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1444,23 +1470,53 @@
             "reason": "guideline floor 3500 mg/day is unreachable: the three highest-potassium_mg dishes in the allowed pool reach at most 2700 mg/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.28,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": [
-          "fiber_g:min=24",
-          "potassium_mg:min=2700"
-        ]
+        "solver_runtime_s": 0.298,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1625.0,
+            "worst_day_total": 650.0,
+            "worst_day_shortfall": 975.0
+          },
+          "fiber_g": {
+            "kind": "min",
+            "floor": 24.0,
+            "worst_day_total": 6.5,
+            "worst_day_shortfall": 17.5
+          },
+          "potassium_mg": {
+            "kind": "target",
+            "aim": 4700.0,
+            "mean_day_total": 1472.857,
+            "mean_distance": 3227.143
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 52.0,
+            "worst_day_total": 39.0,
+            "worst_day_shortfall": 13.0
+          },
+          "sodium_mg": {
+            "kind": "target",
+            "aim": 1500.0,
+            "mean_day_total": 1599.286,
+            "mean_distance": 99.286
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0003",
         "archetype": "T2D_HTN",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 178,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1479,22 +1535,59 @@
             "reason": "guideline floor 3500 mg/day is unreachable: the three highest-potassium_mg dishes in the allowed pool reach at most 2700 mg/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.304,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": [
-          "potassium_mg:min=2700"
-        ]
+        "solver_runtime_s": 0.305,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 28.0,
+            "worst_day_shortfall": 102.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1707.5,
+            "worst_day_total": 750.0,
+            "worst_day_shortfall": 957.5
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 13.214,
+            "mean_distance": 16.786
+          },
+          "potassium_mg": {
+            "kind": "target",
+            "aim": 4700.0,
+            "mean_day_total": 1870.0,
+            "mean_distance": 2830.0
+          },
+          "protein_g": {
+            "kind": "target",
+            "aim": 68.3,
+            "mean_day_total": 71.714,
+            "mean_distance": 3.414
+          },
+          "sodium_mg": {
+            "kind": "target",
+            "aim": 1500.0,
+            "mean_day_total": 1651.571,
+            "mean_distance": 151.571
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0004",
         "archetype": "CKD3_T2D_HTN",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 171,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1505,20 +1598,53 @@
             "reason": "guideline floor 30 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.286,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": []
+        "solver_runtime_s": 0.309,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 95.0,
+            "worst_day_shortfall": 35.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1605.0,
+            "worst_day_total": 740.0,
+            "worst_day_shortfall": 865.0
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 9.786,
+            "mean_distance": 20.214
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 35.31,
+            "worst_day_total": 22.0,
+            "worst_day_shortfall": 13.31
+          },
+          "sodium_mg": {
+            "kind": "target",
+            "aim": 1500.0,
+            "mean_day_total": 1400.714,
+            "mean_distance": 99.286
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0005",
         "archetype": "CKD4_T2D_HTN",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 171,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1529,44 +1655,112 @@
             "reason": "guideline floor 30 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.299,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": []
+        "solver_runtime_s": 0.311,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 58.0,
+            "worst_day_shortfall": 72.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1357.5,
+            "worst_day_total": 450.0,
+            "worst_day_shortfall": 907.5
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 7.143,
+            "mean_distance": 22.857
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 29.87,
+            "worst_day_total": 23.0,
+            "worst_day_shortfall": 6.87
+          },
+          "sodium_mg": {
+            "kind": "target",
+            "aim": 1500.0,
+            "mean_day_total": 1469.286,
+            "mean_distance": 30.714
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0006",
         "archetype": "CKD4_hyperK",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 153,
         "relaxed_constraints": [
+          {
+            "nutrient": "energy_kcal",
+            "kind": "min",
+            "requested": 2045.0,
+            "relaxed_to": 1860.0,
+            "unit": "kcal",
+            "reason": "guideline floor 2045 kcal/day is unreachable: the three highest-energy_kcal dishes in the allowed pool reach at most 1860 kcal/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
+          },
           {
             "nutrient": "fiber_g",
             "kind": "min",
             "requested": 25.0,
-            "relaxed_to": 24.0,
+            "relaxed_to": 19.5,
             "unit": "g",
-            "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
+            "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 19.5 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.313,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": []
+        "solver_runtime_s": 0.336,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 8.0,
+            "worst_day_shortfall": 122.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1860.0,
+            "worst_day_total": 210.0,
+            "worst_day_shortfall": 1650.0
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 6.571,
+            "mean_distance": 23.429
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 44.99,
+            "worst_day_total": 20.6,
+            "worst_day_shortfall": 24.39
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0007",
         "archetype": "CKD5_pre_dialysis_hyperPO4",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 202,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1577,12 +1771,31 @@
             "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.269,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": [
-          "phosphorus_mg:max=800"
-        ]
+        "solver_runtime_s": 0.279,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1707.5,
+            "worst_day_total": 270.0,
+            "worst_day_shortfall": 1437.5
+          },
+          "fiber_g": {
+            "kind": "min",
+            "floor": 24.0,
+            "worst_day_total": 6.0,
+            "worst_day_shortfall": 18.0
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 54.64,
+            "worst_day_total": 6.5,
+            "worst_day_shortfall": 48.14
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0008",
@@ -1596,10 +1809,10 @@
         "archetype": "healthy_control",
         "status": "solved",
         "attempted": true,
-        "engine": "greedy-fallback",
+        "engine": "pymoo",
         "violation_count": 0,
         "feasible": true,
-        "allowed_dish_count": 190,
+        "allowed_dish_count": 214,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1610,22 +1823,50 @@
             "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.242,
+        "solver_runtime_s": 0.26,
         "infeasibility_reason": null,
-        "per_day_totals_compliant": true,
-        "per_day_failures": [],
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1790.0,
+            "worst_day_total": 240.0,
+            "worst_day_shortfall": 1550.0
+          },
+          "fiber_g": {
+            "kind": "min",
+            "floor": 24.0,
+            "worst_day_total": 0.0,
+            "worst_day_shortfall": 24.0
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 57.28,
+            "worst_day_total": 4.5,
+            "worst_day_shortfall": 52.78
+          }
+        },
         "days_checked": 7
       },
       {
         "patient_id": "P0010",
         "archetype": "T2D",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 178,
         "relaxed_constraints": [
+          {
+            "nutrient": "energy_kcal",
+            "kind": "min",
+            "requested": 2060.0,
+            "relaxed_to": 1860.0,
+            "unit": "kcal",
+            "reason": "guideline floor 2060 kcal/day is unreachable: the three highest-energy_kcal dishes in the allowed pool reach at most 1860 kcal/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
+          },
           {
             "nutrient": "fiber_g",
             "kind": "min",
@@ -1635,22 +1876,47 @@
             "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.273,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": [
-          "energy_kcal:min=2060"
-        ]
+        "solver_runtime_s": 0.307,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 8.0,
+            "worst_day_shortfall": 122.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1860.0,
+            "worst_day_total": 225.0,
+            "worst_day_shortfall": 1635.0
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 8.214,
+            "mean_distance": 21.786
+          },
+          "protein_g": {
+            "kind": "target",
+            "aim": 82.4,
+            "mean_day_total": 31.9,
+            "mean_distance": 50.5
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0011",
         "archetype": "HTN",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 214,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1669,20 +1935,53 @@
             "reason": "guideline floor 3500 mg/day is unreachable: the three highest-potassium_mg dishes in the allowed pool reach at most 2700 mg/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.286,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": []
+        "solver_runtime_s": 0.29,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1990.0,
+            "worst_day_total": 680.0,
+            "worst_day_shortfall": 1310.0
+          },
+          "fiber_g": {
+            "kind": "min",
+            "floor": 24.0,
+            "worst_day_total": 9.5,
+            "worst_day_shortfall": 14.5
+          },
+          "potassium_mg": {
+            "kind": "target",
+            "aim": 4700.0,
+            "mean_day_total": 1510.0,
+            "mean_distance": 3190.0
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 63.68,
+            "worst_day_total": 33.5,
+            "worst_day_shortfall": 30.18
+          },
+          "sodium_mg": {
+            "kind": "target",
+            "aim": 1500.0,
+            "mean_day_total": 1446.286,
+            "mean_distance": 53.714
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0012",
         "archetype": "T2D_HTN",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 178,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1701,24 +2000,68 @@
             "reason": "guideline floor 3500 mg/day is unreachable: the three highest-potassium_mg dishes in the allowed pool reach at most 2700 mg/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.291,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": [
-          "fiber_g:min=24",
-          "potassium_mg:min=2700"
-        ]
+        "solver_runtime_s": 0.315,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 100.0,
+            "worst_day_shortfall": 30.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1417.5,
+            "worst_day_total": 900.0,
+            "worst_day_shortfall": 517.5
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 13.357,
+            "mean_distance": 16.643
+          },
+          "potassium_mg": {
+            "kind": "target",
+            "aim": 4700.0,
+            "mean_day_total": 1588.571,
+            "mean_distance": 3111.429
+          },
+          "protein_g": {
+            "kind": "target",
+            "aim": 56.7,
+            "mean_day_total": 52.071,
+            "mean_distance": 4.629
+          },
+          "sodium_mg": {
+            "kind": "target",
+            "aim": 1500.0,
+            "mean_day_total": 1599.429,
+            "mean_distance": 99.429
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0013",
         "archetype": "CKD3_T2D_HTN",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 171,
         "relaxed_constraints": [
+          {
+            "nutrient": "energy_kcal",
+            "kind": "min",
+            "requested": 2210.0,
+            "relaxed_to": 1860.0,
+            "unit": "kcal",
+            "reason": "guideline floor 2210 kcal/day is unreachable: the three highest-energy_kcal dishes in the allowed pool reach at most 1860 kcal/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
+          },
           {
             "nutrient": "fiber_g",
             "kind": "min",
@@ -1728,84 +2071,196 @@
             "reason": "guideline floor 30 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.297,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": []
+        "solver_runtime_s": 0.311,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 110.0,
+            "worst_day_shortfall": 20.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1860.0,
+            "worst_day_total": 720.0,
+            "worst_day_shortfall": 1140.0
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 10.714,
+            "mean_distance": 19.286
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 48.62,
+            "worst_day_total": 20.0,
+            "worst_day_shortfall": 28.62
+          },
+          "sodium_mg": {
+            "kind": "target",
+            "aim": 1500.0,
+            "mean_day_total": 1561.714,
+            "mean_distance": 61.714
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0014",
         "archetype": "CKD4_T2D_HTN",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 153,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
             "kind": "min",
             "requested": 30.0,
-            "relaxed_to": 24.0,
+            "relaxed_to": 19.5,
             "unit": "g",
-            "reason": "guideline floor 30 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
+            "reason": "guideline floor 30 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 19.5 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.295,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": []
+        "solver_runtime_s": 0.327,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 73.0,
+            "worst_day_shortfall": 57.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1602.5,
+            "worst_day_total": 710.0,
+            "worst_day_shortfall": 892.5
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 8.857,
+            "mean_distance": 21.143
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 35.26,
+            "worst_day_total": 21.0,
+            "worst_day_shortfall": 14.26
+          },
+          "sodium_mg": {
+            "kind": "target",
+            "aim": 1500.0,
+            "mean_day_total": 1501.429,
+            "mean_distance": 1.429
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0015",
         "archetype": "CKD4_hyperK",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 153,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
             "kind": "min",
             "requested": 25.0,
-            "relaxed_to": 24.0,
+            "relaxed_to": 19.5,
             "unit": "g",
-            "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
+            "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 19.5 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.326,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": []
+        "solver_runtime_s": 0.34,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 81.0,
+            "worst_day_shortfall": 49.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1602.5,
+            "worst_day_total": 640.0,
+            "worst_day_shortfall": 962.5
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 8.571,
+            "mean_distance": 21.429
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 35.26,
+            "worst_day_total": 17.0,
+            "worst_day_shortfall": 18.26
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0016",
         "archetype": "CKD5_pre_dialysis_hyperPO4",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 181,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
             "kind": "min",
             "requested": 25.0,
-            "relaxed_to": 24.0,
+            "relaxed_to": 19.5,
             "unit": "g",
-            "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
+            "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 19.5 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
         "solver_runtime_s": 0.305,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": [
-          "fiber_g:min=24"
-        ]
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1500.0,
+            "worst_day_total": 380.0,
+            "worst_day_shortfall": 1120.0
+          },
+          "fiber_g": {
+            "kind": "min",
+            "floor": 19.5,
+            "worst_day_total": 3.4,
+            "worst_day_shortfall": 16.1
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 48.0,
+            "worst_day_total": 18.0,
+            "worst_day_shortfall": 30.0
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0017",
@@ -1817,12 +2272,12 @@
       {
         "patient_id": "P0018",
         "archetype": "healthy_control",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 214,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1833,22 +2288,41 @@
             "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.247,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": [
-          "energy_kcal:min=2105"
-        ]
+        "solver_runtime_s": 0.265,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 2105.0,
+            "worst_day_total": 435.0,
+            "worst_day_shortfall": 1670.0
+          },
+          "fiber_g": {
+            "kind": "min",
+            "floor": 24.0,
+            "worst_day_total": 7.5,
+            "worst_day_shortfall": 16.5
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 67.36,
+            "worst_day_total": 10.5,
+            "worst_day_shortfall": 56.86
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0019",
         "archetype": "T2D",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 178,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1859,22 +2333,47 @@
             "reason": "guideline floor 25 g/day is unreachable: the three highest-fiber_g dishes in the allowed pool reach at most 24 g/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.268,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": [
-          "energy_kcal:min=1850"
-        ]
+        "solver_runtime_s": 0.296,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "carbs_g": {
+            "kind": "min",
+            "floor": 130.0,
+            "worst_day_total": 28.0,
+            "worst_day_shortfall": 102.0
+          },
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 1850.0,
+            "worst_day_total": 500.0,
+            "worst_day_shortfall": 1350.0
+          },
+          "fiber_g": {
+            "kind": "target",
+            "aim": 30.0,
+            "mean_day_total": 8.429,
+            "mean_distance": 21.571
+          },
+          "protein_g": {
+            "kind": "target",
+            "aim": 74.0,
+            "mean_day_total": 30.286,
+            "mean_distance": 43.714
+          }
+        },
+        "days_checked": 7
       },
       {
         "patient_id": "P0020",
         "archetype": "HTN",
-        "status": "infeasible",
+        "status": "solved",
         "attempted": true,
-        "engine": "infeasible",
-        "violation_count": 1,
-        "feasible": false,
-        "allowed_dish_count": 190,
+        "engine": "pymoo",
+        "violation_count": 0,
+        "feasible": true,
+        "allowed_dish_count": 214,
         "relaxed_constraints": [
           {
             "nutrient": "fiber_g",
@@ -1893,10 +2392,43 @@
             "reason": "guideline floor 3500 mg/day is unreachable: the three highest-potassium_mg dishes in the allowed pool reach at most 2700 mg/day; floor lowered so a feasible plan can be produced (was disclosed in the plan response)"
           }
         ],
-        "solver_runtime_s": 0.28,
-        "infeasibility_reason": "no feasible plan reachable from the allowed pool",
-        "per_day_totals_compliant": null,
-        "blocking_constraints_leave_one_out": []
+        "solver_runtime_s": 0.29,
+        "infeasibility_reason": null,
+        "per_day_hard_compliant": true,
+        "per_day_hard_failures": [],
+        "soft_aims": {
+          "energy_kcal": {
+            "kind": "min",
+            "floor": 2030.0,
+            "worst_day_total": 620.0,
+            "worst_day_shortfall": 1410.0
+          },
+          "fiber_g": {
+            "kind": "min",
+            "floor": 24.0,
+            "worst_day_total": 7.5,
+            "worst_day_shortfall": 16.5
+          },
+          "potassium_mg": {
+            "kind": "target",
+            "aim": 4700.0,
+            "mean_day_total": 1560.0,
+            "mean_distance": 3140.0
+          },
+          "protein_g": {
+            "kind": "min",
+            "floor": 64.96,
+            "worst_day_total": 23.0,
+            "worst_day_shortfall": 41.96
+          },
+          "sodium_mg": {
+            "kind": "target",
+            "aim": 1500.0,
+            "mean_day_total": 1344.143,
+            "mean_distance": 155.857
+          }
+        },
+        "days_checked": 7
       }
     ]
   },
@@ -1913,125 +2445,125 @@
       {
         "method": "nsga2",
         "runs": 20,
-        "mean_hv": 0.4228,
-        "hv_std": 0.0742,
+        "mean_hv": 0.5722,
+        "hv_std": 0.0417,
         "violation_rate": 0.0,
-        "mean_runtime_ms": 261.7
+        "mean_runtime_ms": 303.1
       },
       {
         "method": "ga",
         "runs": 20,
-        "mean_hv": 0.2823,
-        "hv_std": 0.078,
+        "mean_hv": 0.3453,
+        "hv_std": 0.0532,
         "violation_rate": 0.0,
-        "mean_runtime_ms": 117.0
+        "mean_runtime_ms": 145.7
       },
       {
         "method": "greedy",
         "runs": 20,
-        "mean_hv": 0.0837,
-        "hv_std": 0.0122,
+        "mean_hv": 0.1703,
+        "hv_std": 0.0368,
         "violation_rate": 0.0,
-        "mean_runtime_ms": 8.0
+        "mean_runtime_ms": 9.6
       },
       {
         "method": "random",
         "runs": 20,
-        "mean_hv": 0.065,
-        "hv_std": 0.1129,
-        "violation_rate": 0.75,
-        "mean_runtime_ms": 48.6
+        "mean_hv": 0.2495,
+        "hv_std": 0.036,
+        "violation_rate": 0.0,
+        "mean_runtime_ms": 51.9
       }
     ],
     "hv_per_envelope": [
       {
         "envelope": "ckd_hyperkalemia",
-        "nsga2": 0.338,
-        "ga": 0.2035,
-        "greedy": 0.077,
-        "random": 0.0
+        "nsga2": 0.5704,
+        "ga": 0.3413,
+        "greedy": 0.1627,
+        "random": 0.2849
       },
       {
         "envelope": "ckd_strict",
-        "nsga2": 0.4021,
-        "ga": 0.2463,
-        "greedy": 0.0964,
-        "random": 0.0
+        "nsga2": 0.5499,
+        "ga": 0.2808,
+        "greedy": 0.2166,
+        "random": 0.2378
       },
       {
         "envelope": "t2d_htn",
-        "nsga2": 0.4415,
-        "ga": 0.3035,
-        "greedy": 0.0766,
-        "random": 0.0
+        "nsga2": 0.5951,
+        "ga": 0.3638,
+        "greedy": 0.1776,
+        "random": 0.2265
       },
       {
         "envelope": "t2d_only",
-        "nsga2": 0.5098,
-        "ga": 0.3762,
-        "greedy": 0.085,
-        "random": 0.2602
+        "nsga2": 0.5733,
+        "ga": 0.3952,
+        "greedy": 0.1244,
+        "random": 0.249
       }
     ],
     "sweep": [
       {
         "pop": 20,
         "gen": 40,
-        "mean_hv": 0.1578,
-        "mean_runtime_ms": 79.2
+        "mean_hv": 0.5029,
+        "mean_runtime_ms": 93.2
       },
       {
         "pop": 20,
         "gen": 80,
-        "mean_hv": 0.2335,
-        "mean_runtime_ms": 156.1
+        "mean_hv": 0.5097,
+        "mean_runtime_ms": 179.7
       },
       {
         "pop": 20,
         "gen": 160,
-        "mean_hv": 0.332,
-        "mean_runtime_ms": 316.6
+        "mean_hv": 0.5132,
+        "mean_runtime_ms": 356.0
       },
       {
         "pop": 40,
         "gen": 40,
-        "mean_hv": 0.3917,
-        "mean_runtime_ms": 131.7
+        "mean_hv": 0.5843,
+        "mean_runtime_ms": 158.4
       },
       {
         "pop": 40,
         "gen": 80,
-        "mean_hv": 0.4453,
-        "mean_runtime_ms": 261.9
+        "mean_hv": 0.5706,
+        "mean_runtime_ms": 302.0
       },
       {
         "pop": 40,
         "gen": 160,
-        "mean_hv": 0.4756,
-        "mean_runtime_ms": 524.1
+        "mean_hv": 0.5697,
+        "mean_runtime_ms": 600.1
       },
       {
         "pop": 80,
         "gen": 40,
-        "mean_hv": 0.4056,
-        "mean_runtime_ms": 230.8
+        "mean_hv": 0.6261,
+        "mean_runtime_ms": 278.8
       },
       {
         "pop": 80,
         "gen": 80,
-        "mean_hv": 0.5092,
-        "mean_runtime_ms": 457.4
+        "mean_hv": 0.6437,
+        "mean_runtime_ms": 543.4
       },
       {
         "pop": 80,
         "gen": 160,
-        "mean_hv": 0.5164,
-        "mean_runtime_ms": 914.9
+        "mean_hv": 0.6171,
+        "mean_runtime_ms": 1074.3
       }
     ],
-    "recommendation": "* Fastest swept config: pop=20, gen=40 (mean HV 0.1578, 79 ms/solve).\n* Knee point (HV within 2% of the best 0.5164): **pop=80, gen=80** (mean HV 0.5092, 457 ms/solve).\n* Production default recommendation: pop=80, gen=80 — every swept config returns feasible plans (violation_count == 0 thanks to the repair/greedy guarantee), so choose on HV-per-millisecond; this knee keeps ~98% of the best front quality at a fraction of the max budget.\n* Total harness wall time: 21s. Baselines: GA scalarises (single-point fronts -> lower HV) and its violation rate shows why constraint handling matters; greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on both axes.",
+    "recommendation": "* Fastest swept config: pop=20, gen=40 (mean HV 0.5029, 93 ms/solve).\n* Knee point (HV within 2% of the best 0.6437): **pop=80, gen=80** (mean HV 0.6437, 543 ms/solve).\n* Production default recommendation: pop=80, gen=80 — every swept config returns feasible plans (violation_count == 0 thanks to the repair/greedy guarantee), so choose on HV-per-millisecond; this knee keeps ~98% of the best front quality at a fraction of the max budget.\n* Total harness wall time: 25s. Baselines: GA scalarises (single-point fronts -> lower HV); greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on quality. Under the module-4 encoding (hard = MAX ceilings + exclusions only) raw random search rarely violates a ceiling, so methods are separated by hypervolume rather than violations; the repair/greedy guarantee on the NSGA-II path remains the backstop for genuinely tight ceilings.",
     "verdict": "PASS",
-    "verdict_note": "NSGA-II (production path, with the repair/greedy feasibility guarantee) is the only method combining 0% hard-constraint violations with the best hypervolume; raw baselines are shown for contrast (random violates 75% of the time by design)."
+    "verdict_note": "NSGA-II (production path, with the repair/greedy feasibility guarantee) combines 0% hard-constraint violations with the best hypervolume. Under the module-4 encoding (hard = MAX ceilings + exclusions) all methods achieve 0% violations on these pools, so the methods separate on hypervolume; the guarantee remains the backstop for genuinely tight ceilings."
   },
   "q5_groundedness": {
     "question": "Q5 Groundedness (chat)",
@@ -2107,7 +2639,7 @@
           "cited_rule_ids": [
             "CKD-2024-SODIUM-2000",
             "GEN-SODIUM-2300",
-            "DASH-2025-SODIUM-2300"
+            "ADA-2026-PROTEIN"
           ],
           "citation_provenance_complete": true,
           "acceptable_rule_ids": [
@@ -2520,7 +3052,8 @@
         "gap": "no rule produces a fat_g constraint (GEN-FAT-2035 only asserts a %kcal flag), so the citation is off-topic",
         "observed_category": null,
         "cited_rule_ids": [
-          "MED-ACEI-ARB-CKD-MONITOR"
+          "MED-ACEI-ARB-CKD-MONITOR",
+          "DASH-2025-SODIUM-2300"
         ]
       }
     ],

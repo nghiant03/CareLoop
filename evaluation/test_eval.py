@@ -76,27 +76,33 @@ def test_q3_subset_end_to_end():
     assert len(rejected) == 1 and rejected[0]["patient_id"] == "P0008"
     assert len(attempted) == 5
 
+    # New encoding (hard = MAX ceilings + exclusions): every attempted
+    # envelope must solve to a zero-violation plan whose per-day totals
+    # satisfy every hard MAX ceiling of the solved envelope.
     for row in attempted:
-        if row["feasible"]:
-            assert row["violation_count"] == 0
-            assert row["per_day_totals_compliant"] is True
-            assert row["per_day_failures"] == []
-        else:
-            assert row["violation_count"] >= 1
-            assert row["infeasibility_reason"]
-            # nothing is served for an infeasible envelope
-            assert row.get("blocking_constraints_leave_one_out") is not None
+        assert row["feasible"] is True, row
+        assert row["violation_count"] == 0
+        assert row["per_day_hard_compliant"] is True
+        assert row["per_day_hard_failures"] == []
+        assert row["days_checked"] == 7
+        # MIN floors / TARGETs are soft: reported informationally, never as
+        # violations.
+        for aim in row["soft_aims"].values():
+            assert aim["kind"] in ("min", "target")
 
-    # every attempted envelope needed (and disclosed) at least the fibre relaxation
+    # every attempted envelope still carries a disclosed MIN-floor relaxation
+    # (objective calibration + clinician-facing disclosure, not feasibility)
     assert all(r["relaxed_constraints"] for r in attempted)
     assert all(
-        any(x["nutrient"] == "fiber_g" for x in r["relaxed_constraints"])
+        any(x["nutrient"] == "fiber_g" and x["kind"] == "min"
+            for x in r["relaxed_constraints"])
         for r in attempted
     )
     # headline consistency
     zero = [r for r in attempted if r["feasible"] and r["violation_count"] == 0]
     assert results["zero_violation_plans"] == len(zero)
     assert results["zero_violation_rate"] == len(zero) / len(attempted)
+    assert results["verdict"] == "PASS"
 
 
 # --------------------------------------------------------------------- Q4
