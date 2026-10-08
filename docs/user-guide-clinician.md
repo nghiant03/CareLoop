@@ -84,15 +84,17 @@ curl -sS -X POST http://127.0.0.1:8000/envelopes/ENV-P0005-001/reject \
   -H 'content-type: application/json' -d '{"reason":"too restrictive for this patient"}'
 ```
 
-Until an envelope is `APPROVED`, every downstream consumer is blocked: the plan
-endpoint answers `HTTP 409 {"error": "envelope_not_approved", "status": "..."}`,
-and chat answers flag the envelope as not yet approved. Editing re-opens the
-gate on purpose — the edited numbers must be re-confirmed by a clinician.
+Live planning requires an `APPROVED`, scope-eligible envelope with nonempty
+targets; otherwise the plan endpoint answers
+`HTTP 409 {"error": "envelope_not_approved", "status": "..."}`. Informational
+views remain available, and chat does not present unapproved numbers as personal
+guidance. Editing clears approval — the edited numbers must be re-confirmed.
+See [the approval-gate contract](ARCHITECTURE.md#2-the-approval-gate-invariant).
 
 Two more guards:
 
-- **Scope cannot be overridden through approval.** Approving a REJECTED or
-  empty-target (out-of-scope) envelope returns
+- **Scope cannot be overridden through approval.** Approving a REJECTED,
+  scope-ineligible, or empty-target envelope returns
   `HTTP 422 {"error": "out_of_scope_envelope"}` instead of approving it.
 - **Re-running the engine never overwrites history.** A fresh `/rules/run`
   for a patient who already has an envelope mints the next sequential id
@@ -112,27 +114,30 @@ curl -sS -X POST http://127.0.0.1:8000/plans \
 Key fields:
 
 - **`feasible` / `engine` / `violation_count`** — the optimiser guarantees
-  `violation_count == 0` for any plan it returns (`engine` is `pymoo`, or
-  `greedy-fallback` when the GA front needed repair).
-- **`days[]`** — 7 days × 3 meals; each slot carries the dish with its nutrient
-  profile.
+  `violation_count == 0` for any delivered plan. `engine` identifies the search
+  path, including main/side composition or a single-dish fallback; it is not
+  itself a measure of nutritional adequacy.
+- **`days[]`** — 7 days × 3 meals; slots can contain a main and optional side,
+  with dish nutrient profiles and combined meal totals.
 - **`totals[]`** — per nutrient per day: the achieved `value`, the `targets`
   (min/max/target with units) and a `compliant` flag. Compare totals against
   targets to sanity-check the plan.
-- **`relaxed_constraints`** — disclosed MIN-floor adjustments. Guideline floors
-  the dish pool provably cannot reach (today: fibre — the 214-dish pool tops
-  out at 8 g/dish, so 3 meals reach at most 24 g/day against a 30 g guideline
-  floor) are lowered to the achievable bound **before** solving, and every
-  adjustment is reported here with `requested`, `relaxed_to` and the reason.
-  This is the one place where a guideline value is knowingly not met, and it is
-  always explicit.
-- **`infeasibility_reason`** — when the allowed pool cannot satisfy the
-  envelope at all, the response is an explicit diagnosis:
+- **`relaxed_constraints`** — disclosed soft MIN-floor adjustments retained
+  when the single-dish fallback is used, with `requested`, `relaxed_to` and a
+  reason. Its three-dish-per-day bound does not limit main/side composition,
+  which scores the original aims and clears these adjustments on success.
+- **`adequacy[]`** — delivery against the original approved MIN/TARGET aims,
+  even when a fallback floor was relaxed. MIN shortfall and absolute TARGET
+  deviation are separate from hard feasibility: a feasible plan can miss an
+  aim without any retained relaxation. The compatibility fields `shortfall`
+  and `shortfall_pct` cover both kinds of gap.
+- **`infeasibility_reason` / `infeasibility_status`** — when no hard-feasible
+  plan is found, the response is an explicit diagnosis:
   `feasible=false`, `engine="infeasible"`, `violations[]` naming the problem
   (e.g. "no feasible plan reachable from the allowed pool"), `days: []`.
-  Strict renal envelopes (narrow protein/energy windows plus sodium ceilings)
-  can hit this on the current dish pool; the response is safe to show — nothing
-  infeasible is silently plated.
+  The status distinguishes a proven single-dish limit from search exhaustion;
+  neither is a proof that every possible composed meal is impossible. Strict
+  renal envelopes can be difficult to satisfy; nothing infeasible is plated.
 - **`explanation`** — the patient-facing view (plain-language daily targets,
   avoid-list, "why" bullets with guideline attributions, and
   `relaxation_notes` when floors were relaxed). Review it as part of sign-off:
@@ -144,14 +149,16 @@ Key fields:
 curl -sS http://127.0.0.1:8000/mining/trends | jq
 ```
 
-Theil–Sen slopes over the 6 most-recent monthly K⁺ and PO₄ values for every
-patient. Each flag: `patient_id`, `analyte`, `slope_per_month`, an
+Theil–Sen slopes over dated K⁺/PO₄ observations when present, otherwise the
+fixture monthly series. Sparse dated series can still flag an urgent latest
+value. Each flag: `patient_id`, `analyte`, `slope_per_month`, an
 EWMA-weighted `ewma_slope_per_month` (half-life 2 months — recent months count
 more), the chronological `values`, `projected_3mo`, `severity` (`urgent` when
 the latest value already exceeds the alert level — K⁺ ≥ 5.0, PO₄ ≥ 4.6 — or
 the projection crosses the threshold; `review` otherwise) and a one-line
 `reason`. When the Theil–Sen slope trips the threshold but the EWMA slope does
-not, an urgent flag is de-escalated and the reason says so. Sorted
+not, an urgent trend can be de-escalated and the reason says so; an urgent latest
+dated observation remains urgent. Sorted
 urgent-first. Use these to prioritise which patients need a new envelope.
 
 ## 6. Dish substitutions
@@ -164,15 +171,20 @@ Renal-weighted nutrient-distance-ranked alternative dishes for a plan item
 (sodium/potassium/phosphorus count double — the minerals CKD patients must
 watch), with a plain
 `reason` (same category/cuisine, lower sodium/potassium/phosphorus, ...).
-Useful when a patient wants to swap a dish without breaking the envelope.
+These generic suggestions are not validated against a patient's plan. Supply
+`patient_id` for plan-context validation and per-day deltas; unapproved
+suggestions are informational. Applying a swap via `/mining/swaps/apply`
+requires a ready approved envelope and saves a new derived plan.
 
 ## 7. Adherence: what the patient actually ate
 
 Patients log their real meals in the web UI (Adherence screen) or via the API,
-and the logged reality is measured against the patient's **latest** envelope:
+and each logged date is measured against its **historically effective approved**
+envelope. Dates without approval coverage remain unattributed; current targets
+are never applied retroactively:
 
 ```bash
-# log a meal (upsert per slot — logging lunch again replaces the lunch dish)
+# log a meal (upsert per slot — logging lunch again replaces its saved items)
 curl -sS -X POST http://127.0.0.1:8000/adherence/log \
   -H 'content-type: application/json' \
   -d '{"patient_id":"P0005","date":"2026-10-08","meal":"lunch","dish_id":"SG0001"}'
@@ -192,10 +204,13 @@ How to read the summary:
   floor** or missing a **TARGET** is a `soft_gap` (a soft aim, not a
   violation). `aggregate` rolls this up into `hard_violation_days` and
   per-nutrient counts.
-- The comparison always uses the *latest* envelope. If that envelope is not
-  APPROVED, every response carries `informational_only: true` plus a notice —
-  the numbers are still computed, but explicitly labelled as not
-  clinician-approved guidance.
+- Per-day `envelope_id`/`envelope_version` and `envelope_versions_used` identify
+  the historical comparison targets. Uncovered dates appear in
+  `unattributed_days`, not in target comparisons. Top-level envelope status and
+  `informational_only` describe the latest envelope for compatibility; they do
+  not replace historical approval coverage.
+- Only complete days (breakfast, lunch and dinner logged) enter soft-gap
+  aggregates and trends. Partial-day hard violations remain visible.
 - The deviation endpoint returns a per-nutrient exposure series (magnitude in
   the "bad" direction per day) and Theil–Sen trend flags: `direction`
   `worsening`/`improving`, `severity` `alert` (worsening with the latest or

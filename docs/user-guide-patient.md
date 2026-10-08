@@ -11,7 +11,7 @@ What you will see in the CareLoop app, in plain language.
 
 On the **Meal plan** screen, pick your name and press **Generate 7-day plan**.
 You get seven day cards, one per day. Each card shows three meals — breakfast,
-lunch and dinner — with the actual dish chosen for each (for example, "Chicken
+lunch and dinner — with a main dish and sometimes a side (for example, "Chicken
 Rice (Hainanese)"). The dishes are picked to fit the limits your clinician
 approved for you: salt, protein, potassium, phosphorus, calories and more.
 
@@ -28,13 +28,14 @@ Above your meals there is a short explanation in everyday words:
   "Get at least 130 g of carbohydrate a day".
 - **What to avoid** — for example "potassium-based salt substitutes",
   "processed foods with phosphate additives", "sugar-sweetened drinks".
-- **Why** — each target comes from a published medical guideline, and the panel
-  tells you which one (for example "KDIGO 2024 CKD Guideline recommends: …").
-  These are the same guidelines kidney and diabetes specialists use.
+- **Why** — the panel explains the guideline source of a target (for example
+  "KDIGO 2024 CKD Guideline recommends: …") or identifies a clinician adjustment.
+  A clinician's changed number is not presented as a guideline recommendation.
 
-If a guideline goal could not be met with today's food database (for example a
-fibre goal), you will see a note saying your goal was lowered and that a
-clinician can review it. Nothing is hidden from you.
+If the planner used a lowered goal during its fallback search, you will see a
+note explaining that adjustment. A plan can also miss a goal without lowering
+it: check the adequacy information against your original approved goals and
+discuss any gaps with your clinician.
 
 ## The daily bars and "over limit"
 
@@ -52,11 +53,13 @@ goal.
 
 On the **Adherence** screen you can record what you really ate. Pick your
 name, a day, and the meal (breakfast, lunch or dinner), then choose the dish
-from a searchable list (type part of a dish name, e.g. "chicken rice"). One
-dish per meal slot — if you log the same meal again, the new dish replaces
-the old one.
+from a searchable list (type part of a dish name, e.g. "chicken rice"). Add
+multiple dishes and their serving quantities before saving. Saving the same
+meal again replaces its previous items, rather than adding another meal.
 
-The app compares your logged meals with the targets your clinician approved:
+The app compares each logged date with the approved targets effective on that
+date, not today's newest proposal. Dates without approval coverage are listed
+as unattributed and are not compared with targets:
 
 - A day can show **"Over limit"** (red) — the logged food went past a hard
   ceiling, such as a sodium or potassium limit. This is the same "over the
@@ -71,10 +74,14 @@ The app compares your logged meals with the targets your clinician approved:
   moving away from your target, you will see a **worsening banner** — a
   signal worth bringing up with your care team, not an emergency.
 
+Log breakfast, lunch and dinner for a day to count toward trends and below-aim
+summaries. A partly logged day can still show an over-limit warning.
+
 The numbers are only as good as the dish estimates behind them, and only you
 know what portion you really ate — treat the results as a conversation
-starter, not a lab report. If your clinician has not approved your targets
-yet, the comparison is clearly marked as informational only.
+starter, not a lab report. An informational notice about your latest targets
+does not change the older approvals used for historical comparisons; days with
+no approval coverage remain unattributed.
 
 ## Using chat
 

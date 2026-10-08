@@ -1,7 +1,8 @@
 # CareLoop — demo script (~6 minutes)
 
-Screen-by-screen walkthrough. Every command below has been run against the
-current codebase. Start both processes first.
+Screen-by-screen walkthrough. Results depend on the current patient observations,
+approval history and dish catalogue; rehearse with an isolated database first.
+Start both processes before presenting.
 
 ## Start the stack
 
@@ -51,9 +52,9 @@ Optionally open `/envelopes/ENV-P0005-001/explanation` (or
 
 - Press **Approve**. Status badge flips to **APPROVED**.
 
-Say: *"Nothing downstream — no meal plan, no patient view, no chat numbers —
-can use these constraints until a clinician approves them. That's a hard gate
-in the API, enforced as HTTP 409, not a convention."*
+Say: *"Live planning needs approved, scope-eligible, nonempty targets. Chat
+does not quote pending targets as personal guidance, though informational views
+remain available. Planning's gate is enforced as HTTP 409, not a convention."*
 
 (Demo the gate if you like: press **Generate 7-day plan** for this patient
 *before* approving on a fresh envelope and show the 409 "not approved" message.)
@@ -61,20 +62,22 @@ in the API, enforced as HTTP 409, not a convention."*
 ## 4. Generate a 7-day plan (~1.5 min)
 
 - Go to **Meal plan**, pick **P0001** (T2D-only — produces a feasible plan on
-  today's 214-dish pool), press **Generate 7-day plan**.
+  the demo pool). Generate and approve an envelope for P0001 first, then press
+  **Generate 7-day plan**.
 
 Say: *"The optimiser is a multi-objective NSGA-II over 21 meal slots — nutrient
-deviation, preference, variety, cost — with the approved limits as hard
-constraints. It guarantees zero hard-constraint violations: repair, then greedy
-fallback."*
+deviation, preference, variety, cost — followed by main/optional-side composition
+against the original aims. MAX ceilings and exclusions are hard; MIN floors and
+TARGETs are soft. Any delivered plan has zero hard violations, but can still
+miss a nutritional aim."*
 
-- Open a day card: three dishes per day, and the **Daily totals vs targets**
+- Open a day card: three meals, possibly including sides, and **Daily totals vs targets**
   bars — sodium under the 2300 mg ceiling, calories inside the range, etc.
-- Back on P0005 (strict renal envelope), the plan endpoint returns an explicit
-  **infeasibility diagnosis** (`feasible=false`, reason disclosed) instead of a
-  violating plan — say: *"when the dish pool can't satisfy the envelope, the
-  system says so rather than plating an unsafe plan; and unreachable guideline
-  floors are lowered with a `relaxed_constraints` disclosure, never silently."*
+- Back on P0005 (strict renal envelope), inspect feasibility and adequacy rather
+  than promising a particular outcome. If no plan is found, show the reason and
+  `infeasibility_status` (search exhaustion versus a proven single-dish limit).
+  Say: *"Nothing unsafe is plated. A feasible plan can still miss original aims;
+  any retained fallback floor adjustment is disclosed in `relaxed_constraints`."*
 
 ## 5. Chat: grounded, cited answers (~1 min)
 
@@ -83,7 +86,7 @@ fallback."*
   > **why is my sodium limit 2000?**
 
 Say: *"The answer is assembled only from the versioned knowledge base — BM25
-retrieval over rule chunks — plus her approved envelope numbers. It cites the
+retrieval over rule chunks — plus his approved envelope numbers. It cites the
 guidelines behind the number: KDIGO 2024 (the 2000 mg ceiling that won) and
 AHA/ACC 2025 (the DASH 2300 that lost). No citation, no answer."*
 
@@ -98,22 +101,28 @@ are not."*
 
 ## 6. The loop: log actual meals and see adherence (~1.5 min)
 
-- Go to **Adherence**, pick **P0005**, and log a few days of **Chicken Rice
-  (Hainanese)** for all three meals (search "chicken" in the dish picker).
+- Go to **Adherence**, pick **P0005**, and log **Chicken Rice (Hainanese)** for
+  all three meals on dates covered by approval (search "chicken"). To demonstrate
+  a trend, prepare at least five consecutive covered dates: keep breakfast and
+  dinner fixed and increase the lunch serving quantity from 1 to 5 across them.
+  If approval was only created today, collect future logs or use a prepared demo
+  database; logging older dates does not backfill their approval coverage.
 
 Say: *"This is the loop in CareLoop: the plan proposes, the patient logs
-reality, and the system measures one against the other — against the same
-envelope the clinician approved."*
+reality, and the system compares each logged date with the approval effective
+on that date."*
 
 - The **summary** shows per-day totals with **Over limit** rows: three chicken
-  rice a day is ~3600 mg sodium against her 2000 mg KDIGO ceiling — a hard
-  violation on every logged day, flagged per nutrient.
-- The **trends** panel shows the deviation series and a **worsening banner**
-  (with these logs, the fibre shortfall is flagged worsening/alert).
+  rice servings a day is about 3600 mg sodium against his 2000 mg KDIGO ceiling.
+  Check the actual catalogue totals; increasing lunch servings increase exposure.
+- The **trends** panel can flag worsening sodium exposure for the increasing,
+  complete-day series above. Identical meals and quantities on every day give
+  constant exposure, not a worsening trend.
 
 Say: *"Hard ceilings are hard violations; MIN floors are soft aims reported
-separately — same semantics as the optimiser. And if the envelope hadn't been
-approved yet, every comparison would be labelled informational-only."*
+separately — same semantics as the optimiser. Dates without historical approval
+remain unattributed. The latest envelope's informational notice is metadata;
+it does not supply retrospective targets."*
 
 ## 7. Optional 30-second extras
 
@@ -125,7 +134,7 @@ curl -sS 'http://127.0.0.1:8000/mining/substitutions?dish_id=SG0001&k=3' | jq
 
 ## If the UI is unavailable
 
-The same loop with curl (all verified):
+The same loop with curl (inspect the returned results during rehearsal):
 
 ```bash
 P=http://127.0.0.1:8000
@@ -139,7 +148,7 @@ curl -sS -X POST $P/chat -H 'content-type: application/json' \
       -d '{"patient_id":"P0005","message":"why is my sodium limit 2000?"}' | jq
 curl -sS -X POST $P/chat -H 'content-type: application/json' \
       -d '{"patient_id":"P0005","message":"do I have kidney failure?"}' | jq
-# adherence loop (upsert per slot; today's date in UTC)
+# adherence loop (upsert per slot; run in the server's local timezone)
 for meal in breakfast lunch dinner; do
   curl -sS -X POST $P/adherence/log -H 'content-type: application/json' \
         -d "{\"patient_id\":\"P0005\",\"date\":\"$(date -I)\",\"meal\":\"$meal\",\"dish_id\":\"SG0001\"}" | jq
@@ -152,7 +161,8 @@ curl -sS "$P/adherence/P0005/deviation" | jq '.flags'
 
 - Backend clinical state persists in SQLite across restarts. Use a temporary
   `CARELOOP_APP_DB` for an isolated demonstration.
-- Rule engine output is deterministic — the same patient always yields the same
-  envelope and trace, so this demo reproduces exactly.
+- Rule content and trace are deterministic for unchanged patient facts; persisted
+  proposals receive fresh identities/times. Observations and approval history can
+  change the demo outcome. Adherence windows use the server's local date, not UTC.
 - Dish nutrient values are curated estimates (`data/README.md`); present
   numbers as prototype-grade, not clinically validated.

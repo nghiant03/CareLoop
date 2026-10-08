@@ -25,25 +25,37 @@ Rules:
   `models/` package only re-exports it.
 - Per-kg guideline rules (protein g/kg/d, energy kcal/kg/d) are expanded to
   absolute grams/kcal by the engine, not carried as coefficients.
-- Per-constraint provenance is carried by the fired rule's citation plus the
-  trace row's `action_summary` (`[guideline / section]` attribution), a
-  deliberate consequence of the frozen constraint schema.
+- Nutrient constraints can carry explicit `ConstraintProvenance`: the exact
+  nutrient, kind, value, unit, envelope identity/version, author, and citation.
+  `shared/provenance.py` fills missing provenance from matching trace actions;
+  clinician target replacements receive clinician-authored provenance. Embedded
+  rule traces retain the supporting decision history.
 
 ## 2. The approval gate invariant
 
-> Only `APPROVED` envelopes may be consumed downstream (optimiser, RAG chat,
-> patient-facing views).
+> Live planning requires an `APPROVED`, scope-eligible envelope with nonempty
+> targets. Personal target guidance requires approval; informational views and
+> chat may inspect other lifecycle states without presenting unapproved targets
+> as personal guidance.
 
 Enforced in the API layer (`backend/app/core/approval_gate.py`), not by
 convention:
 
-- `POST /rules/run` produces a `PROPOSED` envelope and stores it in
+- `POST /rules/run` produces a `PROPOSED` or scope-rejected envelope and stores it in
   the SQLite journal (transactionally allocated IDs; durable live authority).
-- Clinician actions move it: `/approve → APPROVED`, `/edit → EDITED` (clears
+- `core/envelope_lifecycle.py` handles clinician transitions:
+  `/approve → APPROVED`, `/edit → EDITED` (clears
   approval; re-approval required), `/reject → REJECTED`. Approving an
-  out-of-scope envelope (REJECTED status or no nutrient targets) is refused
-  with `HTTP 422 {"error": "out_of_scope_envelope"}` — scope decisions are not
-  overridable through the approval endpoint.
+  envelope with REJECTED status, false `scope_eligible`, or no nutrient targets
+  is refused with `HTTP 422 {"error": "out_of_scope_envelope"}` — scope decisions are not
+  overridable through edits or approval. Proposal-owned `scope_eligible` is
+  independent of editable notes. Rejected proposals require a fresh rule run.
+- `lifecycle_revision` advances on every durable transition. SQLite checks the
+  previous revision under a write reservation before appending a snapshot;
+  stale updates return HTTP 409 `envelope_conflict`. Clients can also send
+  `expected_revision` to detect changes since they viewed the envelope. This
+  optional request field preserves older clients; the web UI always sends it.
+  `version` remains the content-edit version for compatibility with saved plans.
 - Re-running the rule engine for a patient never overwrites an existing
   envelope: `put_envelope` mints the next sequential id (`ENV-<pid>-002`,
   ...) and stamps a fresh `proposed_at`, so prior envelopes — including
@@ -51,19 +63,18 @@ convention:
 - Clinician edits append an explicit `CLINICIAN-EDIT` trace row: edited
   numbers carry no rule citations, so chat and explanation views can never
   attribute a human override to a guideline.
-- Downstream endpoints depend on `require_approved_envelope` (path-keyed) or
+- Planning-gated endpoints depend on `require_approved_envelope` (path-keyed) or
   `require_approved_envelope_for_patient` (body-keyed, used by `/plans`).
-  Non-APPROVED status raises `EnvelopeNotApprovedError`, rendered by `main.py`
-  as `HTTP 409 {"error": "envelope_not_approved", "status": "..."}`.
+  Failure of any gate condition raises `EnvelopeNotApprovedError`, rendered by
+  `main.py` as `HTTP 409 {"error": "envelope_not_approved", "status": "..."}`.
 - The rule engine itself rejects out-of-scope patients (pregnancy, paediatric,
   dialysis — by diagnosis or `CKD_stage_5` — eGFR < 15, ketoacid-risk) as
   `REJECTED` with no nutrient targets — they never reach the gate or the
   optimiser.
 
-The gate contract is storage-agnostic: `trace_store.py` pins each envelope's
-`RuleFire` trace beside it so `/envelopes/{id}/explanation` reconstructs the
-decision exactly as proposed. Embedded traces in the durable envelope snapshot
-provide the same explanation after restart.
+The durable envelope's embedded `RuleFire` trace is authoritative for explanations.
+`trace_store.py` serializes that trace; legacy side-store data is used only for
+inputs lacking an embedded trace, never to override a durable snapshot.
 
 ## 3. Versioned knowledge base
 
@@ -95,25 +106,29 @@ patient ──▶ rules.run_rules ──▶ PROPOSED envelope + RuleFire trace
                 │ SUPERSEDED markers, scope gates (REJECTED)
                 ▼
         clinician gate (approve / edit / reject)          409 ◀── /plans (not approved)
-                │ APPROVED only
+                │ APPROVED, scope-eligible, nonempty targets
                 ▼
-        plan_service.prepare_envelope_for_pool
-                │ lowers provably-unreachable MIN floors,
+        plan_service.plan_meals
+                │ prepares MIN floors for the single-dish search,
                 │ discloses them in relaxed_constraints
                 ▼
-        optim.api.run (pymoo NSGA-II)
+        optim.api.run (pymoo NSGA-II) → main/side composition
                 │ repair → greedy fallback ⇒ violation_count == 0
                 │ or explicit infeasibility diagnosis
                 ▼
         map_plan_result ──▶ UI: days → slots / totals-vs-targets
                             + patient explanation (+ relaxation notes)
 
-patient logs actual meals ──▶ adherence.analysis ──▶ per-day totals vs the
-                             (upsert per slot)       latest envelope: hard
-                                                     violations (MAX) vs soft
-                                                     gaps (MIN/TARGET) +
-                                                     deviation series + flags
+patient logs actual meals ──▶ adherence.analysis ──▶ per-day totals vs approval
+                             (upsert per slot)       effective on the logged date
+                                                     (uncovered dates unattributed)
+                                                     hard violations vs soft gaps
+                                                     + deviation series + flags
 ```
+
+Plan generation, what-if simulations, and Q3 evaluation share `plan_meals`.
+It performs no persistence. `core/plan_storage.py` saves generated/swapped plan
+documents, while simulations save only their comparison records.
 
 The adherence loop scores each logged date against the most recent approval
 effective on that date. Dates without approval coverage are explicitly
@@ -124,7 +139,7 @@ trend calculations and soft-gap aggregates; partial-day hard violations remain v
   meal-log store (multiple dishes and serving quantities per meal, newest save wins) and
   a pure analysis module. `MAX` totals that are exceeded are **hard
   violations** (the same semantics the optimiser treats as unbreakable);
-  `MIN`/`TARGET` shortfalls are **soft gaps**. The deviation endpoint builds
+  `MIN` shortfalls and absolute `TARGET` deviations are **soft gaps**. The deviation endpoint builds
   a per-nutrient exposure series (magnitude in the "bad" direction) and flags
   Theil–Sen trends as `worsening`/`improving` with `alert`/`review` severity.
 - **Dish catalogue** (`api/dishes.py`): deterministic read-only views over
@@ -143,8 +158,10 @@ trend calculations and soft-gap aggregates; partial-day hard violations remain v
   preference, variety, cost); hard daily MAX ceilings + exclusions (MIN floors
   and TARGETs are soft objective terms per PLAN.md module 4).
   `run()` never returns a violating plan: NSGA-II front → `repair_plan` →
-  greedy construction; if the pool provably cannot satisfy the envelope the
-  result is `feasible=false` + `infeasibility_reason`. The feasibility
+  greedy construction; if no hard-feasible plan is found, the result is
+  `feasible=false` + `infeasibility_reason`. `infeasibility_status` distinguishes
+  exact single-dish infeasibility from heuristic search exhaustion; neither
+  establishes impossibility for the broader main/side encoding. The feasibility
   guarantee is method-agnostic — every pymoo algorithm comparison runs through
   the same `solve(..., method=, guarantee=)` path (`guarantee=False` for raw
   violation-rate measurement). A 13-row algorithm benchmark (NSGA-II/III,
@@ -152,9 +169,10 @@ trend calculations and soft-gap aggregates; partial-day hard violations remain v
   the production default: SMSEMOA posts the best hypervolume (~+24% over
   NSGA-II) at ~2.5× the runtime, and all guaranteed rows hold 0% violations.
   Benchmarks and engine choices: `backend/optim/benchmark_results.md`.
-- **Mining** (`backend/mining/`): read-only over the dataset — K⁺/PO₄ trend
-  flags (Theil–Sen raises flags; an EWMA-weighted slope with a 2-month
-  half-life can de-escalate an urgent flag when recent months flatten, exposed
+- **Mining** (`backend/mining/`): analysis over patient observations and fixture
+  data, plus substitution validation — K⁺/PO₄ trend flags (Theil–Sen raises
+  flags; an EWMA-weighted slope with a 2-month half-life can de-escalate an urgent
+  trend when recent months flatten, but not an urgent latest dated observation, exposed
   as `ewma_slope_per_month`), k-means cohort clustering, renal-weighted
   substitution ranking (sodium/potassium/phosphorus count double). Method
   choices and comparisons: `backend/mining/COMPARISON.md`.
@@ -213,6 +231,8 @@ LLM adapter only rephrases an already-grounded answer:
 - Clinical state survives restart in SQLite, selected by `CARELOOP_APP_DB`.
   Timestamped observations overlay profiles and feed rules and lab trends.
   Observations never automatically approve a new envelope.
+- Adherence windows and journal effective dates use the server's local date.
+  Logged dates have no timezone; UTC window boundaries are not enforced.
 - The KB is rebuilt in memory per process from `rules/rules.json` +
   `data/dishes.json`; dish values are manual-curation estimates
   (`verified: false`, see `data/README.md`).

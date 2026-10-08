@@ -1,8 +1,8 @@
 # CareLoop Backend
 
 FastAPI service for CareLoop. It exposes the API surface that the React UI talks
-to and enforces the **approval-gate invariant** that keeps unapproved clinical
-constraints away from the optimiser and any patient-facing view.
+to and enforces the **approval-gate invariant** for live planning and personal
+target guidance. Informational views may inspect unapproved envelopes.
 
 ## Layout
 
@@ -20,17 +20,17 @@ backend/
     │   ├── envelopes.py      # GET envelope, /explanation, /approve, /edit, /reject
     │   ├── plans.py          # POST /plans (gated on APPROVED; MIN-relaxation disclosure)
     │   ├── chat.py           # POST /chat (grounded RAG pipeline, escalation filter)
-    │   ├── mining.py         # GET /mining/trends, GET /mining/substitutions
+    │   ├── mining.py         # trend/substitution queries + persistent validated swaps
     │   └── kb.py             # GET /kb/stats (versioned-KB observability)
     ├── core/
     │   ├── approval_gate.py  # envelope store + gate dependencies (409 invariant)
-    │   ├── trace_store.py    # side-store pinning the RuleFire trace per envelope id
+    │   ├── trace_store.py    # embedded trace serialization + legacy side-store fallback
     │   ├── kb_loader.py      # process KB singleton (rules.json + dishes.json -> KBGraph)
     │   ├── plan_service.py   # envelope prep (MIN-floor relaxation) + plan/UI mapping
     │   ├── graph_versioning.py  # SQLite + NetworkX versioned graph
     │   └── llm_choice.py     # LLM / embedding selection
     ├── chat/
-    │   ├── retrieval.py      # TF-IDF index over KB rule + dish chunks
+    │   ├── retrieval.py      # BM25 index over KB rule + dish chunks
     │   ├── answers.py        # grounded answer pipeline (citation invariant, refusal)
     │   ├── escalation.py     # regex escalation filter (emergency / diagnosis / dosing / scope)
     │   └── llm.py            # LLM adapter (template answers work with llm=None)
@@ -52,9 +52,8 @@ only re-exports them — never redefine the schema in the backend.
 
 ```bash
 # from the repo root
-source .venv/bin/activate
-uv pip install fastapi "uvicorn[standard]" httpx pyyaml networkx pytest
-# or, once installed editable: uv pip install -e backend
+uv venv .venv
+uv pip install --python .venv/bin/python -e 'backend[dev]'
 ```
 
 ## Run
@@ -65,8 +64,8 @@ PYTHONPATH=. .venv/bin/uvicorn backend.app.main:app --reload --port 8000
 # health: http://localhost:8000/healthz
 ```
 
-Startup warms the versioned knowledge base (52 rules + 190 dishes -> KBGraph +
-TF-IDF index); a KB load failure never takes the API down (endpoints fall back
+Startup warms the versioned knowledge base (rules and dishes -> KBGraph +
+BM25 index); a KB load failure never takes the API down (endpoints fall back
 to lazy loading).
 
 ## API surface
@@ -76,7 +75,7 @@ to lazy loading).
 | GET  | `/healthz` | liveness probe | no |
 | GET  | `/patients` | list patients (count + records, raw fields + UI aliases) | no |
 | GET  | `/patients/{patient_id}` | fetch one patient (404 if absent) | no |
-| POST | `/patients` | create a synthetic patient (in-memory overlay) | no |
+| POST | `/patients` | create a synthetic patient (durable SQLite profile) | no |
 | POST | `/rules/run` | patient id -> PROPOSED `NutrientEnvelope` + full `RuleFire` trace | no |
 | GET  | `/envelopes/{envelope_id}` | fetch an envelope | no |
 | GET  | `/envelopes/{envelope_id}/explanation` | clinician explanation: fired rules, conflict resolutions, citations | no |
@@ -85,7 +84,7 @@ to lazy loading).
 | POST | `/envelopes/{envelope_id}/reject` | -> REJECTED | no |
 | POST | `/plans` | generate a 7-day meal plan for a patient | **yes** |
 | POST | `/chat` | grounded RAG answer `{answer, citations, escalated, status}` | no |
-| GET  | `/mining/trends` | rising K⁺/PO₄ trend flags over `data/patients.json` | no |
+| GET  | `/mining/trends` | K⁺/PO₄ flags from observations or fixture monthly series | no |
 | GET  | `/mining/substitutions?dish_id=&k=` | substitute dishes (nutrient-distance v2) | no |
 | GET  | `/kb/stats` | KB node/edge counts, version tag, retrieval-chunk count | no |
 
@@ -103,17 +102,18 @@ Notes:
 
 ## Approval gate invariant
 
-> **Only `APPROVED` envelopes may be consumed downstream.**
+> **Live planning requires an `APPROVED`, scope-eligible envelope with nonempty targets.**
 
-This is a hard architectural invariant (PLAN.md §2.3), not a convention.
+The authoritative contract, including informational reads and chat behavior,
+is in [the architecture](../docs/ARCHITECTURE.md#2-the-approval-gate-invariant).
 
-- The rule engine produces envelopes with status `PROPOSED`.
+- The rule engine produces eligible `PROPOSED` or scope-rejected envelopes.
 - A clinician moves an envelope to `APPROVED` via `POST /envelopes/{id}/approve`.
-- Any endpoint that reads an envelope **must** depend on
+- Live planning endpoints depend on
   `require_approved_envelope` (or `require_approved_envelope_for_patient` for
   body-keyed routes such as `/plans`).
-- That dependency calls `envelope.is_ready_for_optimisation()`. If the status is
-  not `APPROVED` it raises `EnvelopeNotApprovedError`, rendered by `main.py` as:
+- That dependency calls `envelope.is_ready_for_optimisation()`. Failure of any
+  readiness condition raises `EnvelopeNotApprovedError`, rendered by `main.py` as:
 
 ```json
 HTTP 409
@@ -123,21 +123,21 @@ HTTP 409
 - Editing an approved envelope moves it to `EDITED` and clears approval, so the
   gate blocks it again until a clinician re-confirms.
 
-Envelopes live in a process-local dict (`ENVELOPE_STORE` in
-`core/approval_gate.py`) and rule traces in a side-store
-(`core/trace_store.py`) keyed by envelope id, so
-`GET /envelopes/{id}/explanation` reconstructs the decision exactly as proposed.
-Both stores are storage-agnostic by design; swapping in a persistent backing
-table does not touch the gate contract or the endpoints.
+Envelopes and their embedded rule traces live in the SQLite application journal
+(`core/persistence.py`). Lifecycle transitions are implemented in
+`core/envelope_lifecycle.py`. Proposal-owned scope eligibility cannot be edited
+away. Every transition checks and advances `lifecycle_revision` transactionally;
+clients may send `expected_revision` to reject stale reviews with HTTP 409
+`envelope_conflict`. The web UI supplies that token. `version` still counts edits.
 
 ## Plan generation (`core/plan_service.py`)
 
-`prepare_envelope_for_pool` lowers MIN floors the allowed dish pool provably
-cannot reach (e.g. the guideline fibre floor 30 g/d vs a 190-dish pool topping
-out at 8 g/dish → 24 g/day best case) **before** solving, and reports every
-adjustment in `relaxed_constraints` — the hard-constraint guarantee
-(`violation_count == 0`) holds against the envelope actually solved, and the
-relaxation is disclosed instead of silently dropping the guideline intent.
+`plan_meals` shares preparation, solver execution, and main/side composition
+between plan generation, simulations, and Q3 evaluation. It performs no storage
+writes. `prepare_envelope_for_pool` calibrates soft MIN floors to the
+single-dish-per-meal search bound and discloses changes in `relaxed_constraints`.
+If main/side composition succeeds, original aims are restored. Hard MAX ceilings
+and exclusions remain unchanged throughout.
 `map_plan_result` shapes the optimiser output into the UI contract:
 `days[] → slots[] / totals[]` (totals vs targets with per-nutrient `compliant`
 flags) plus the patient `explanation`.
@@ -181,6 +181,7 @@ PYTHONPATH=. python -m backend.app.core.llm_choice   # prints resolved choices
 
 ```bash
 .venv/bin/python -m pytest backend -q
+.venv/bin/python -m shared.export_schema --check
 # or: PYTHONPATH=. python -m backend.app.tests.test_smoke
 ```
 

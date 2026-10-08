@@ -77,8 +77,8 @@ CareLoop/
 │   │   │                        mining / kb / adherence / dishes
 │   │   ├── adherence/           meal-log store + analysis (per-day totals,
 │   │   │                        hard/soft classification, Theil–Sen trends)
-│   │   ├── core/                approval_gate, trace_store, kb_loader,
-│   │   │                        plan_service (MIN-floor relaxation), graph_versioning, llm_choice
+│   │   ├── core/                approval_gate, envelope_lifecycle, persistence,
+│   │   │                        plan_service, plan_storage, trace_store, kb_loader
 │   │   ├── chat/                retrieval (BM25), answers, escalation, llm
 │   │   ├── kb/                  versioned graph store (SQLite + NetworkX)
 │   │   ├── explain/             clinician + patient explanation views
@@ -90,7 +90,7 @@ CareLoop/
 │   └── mining/                  trends (Theil–Sen + EWMA), clustering,
 │                                renal-weighted substitutions, COMPARISON.md
 ├── data/                        Lane C — 214 SG dishes, 20 synthetic patients, USDA gap filler
-├── frontend/                    React 19 + Vite + Tailwind (4 screens)
+├── frontend/                    React 19 + Vite + Tailwind (6 screens)
 ├── notebooks/                   Exploration notebooks
 ├── docs/                        User guides, demo script, architecture
 └── evaluation/                  Generated evaluation report (EVALUATION.md)
@@ -100,8 +100,9 @@ CareLoop/
 
 ## How to run
 
-Prereqs: Python venv at `.venv/` (FastAPI, uvicorn, clipspy, pymoo, numpy,
-scikit-learn, networkx, pytest) and Node for the frontend.
+Prereqs: Python 3.11+ and Node for the frontend. Set up the backend from the
+repository root with `uv venv .venv`, then
+`uv pip install --python .venv/bin/python -e 'backend[dev]'`.
 
 ### 1. Backend (port 8000)
 
@@ -229,4 +230,6 @@ Interactive docs: `http://localhost:8000/docs`.
 .venv/bin/python -m pytest backend -q          # API, gate, chat, explain, adherence, e2e
 .venv/bin/python -m pytest backend/mining -q   # trends / clustering / substitutions
 .venv/bin/python backend/optim/test_real.py    # optimiser on the real dish pool
+.venv/bin/python -m shared.export_schema --check
+npm --prefix frontend test                   # frontend race and contract regressions
 ```

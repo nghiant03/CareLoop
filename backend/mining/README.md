@@ -14,10 +14,11 @@ endpoint.
 
 ### `clustering.cluster_patients(patients, k_range=(2, 6)) -> dict`
 
-k-means cohort clustering. Standardises the features that every patient
-actually carries (`age`, `bmi`, `hba1c_pct`, `egfr`, `serum_K_meq_L`,
-`serum_PO4_mg_dL`, `systolic_bp`, `diastolic_bp`), missing values are imputed
-with the column median, tries each k in the inclusive range, and keeps the k
+k-means cohort clustering. Retains candidate features present in at least one
+patient (`age`, `bmi`, `hba1c_pct`, `egfr`, `serum_K_meq_L`,
+`serum_PO4_mg_dL`, `systolic_bp`, `diastolic_bp`), drops wholly absent columns,
+median-imputes missing entries, standardises, tries valid k values in the
+inclusive range, and keeps the k
 with the best mean silhouette (`random_state=42`, `n_init=10`).
 
 Returns `{"k", "labels", "silhouette", "profiles", "feature_names"}` where
@@ -44,14 +45,16 @@ The query dish is always excluded; results carry
 `{dish_id, name, distance, nutrient_distance, category_match, reason}` sorted
 by `distance` ascending.
 
-> Dataset note: all 190 dishes currently have `hpb_id=None` and
+> Dataset note: all 214 dishes currently have `hpb_id=None` and
 > `verified=False`, so those tiebreaks are no-ops on today's data but are
 > honoured for future verified dishes.
 
 ### `trends.detect_trends(patients) -> list[dict]`
 
-Robust longitudinal slope (Theil–Sen: median of pairwise slopes) over
-`labs_K_monthly` / `labs_PO4_monthly`.
+Robust longitudinal slope (Theil–Sen: median of pairwise slopes) over dated
+observations when present, otherwise `labs_K_monthly` / `labs_PO4_monthly`.
+Dated observations use elapsed time rather than fixed monthly spacing; sparse
+dated series can still flag an urgent latest value.
 
 **Series orientation (important):** the brief assumed oldest→newest, but the
 data is the opposite — for every patient `labs_*_monthly[0]` equals the
@@ -68,8 +71,9 @@ Flag rules: K+ slope > 0.05 mmol/L/month or 3-month projection crossing
 level (K+ ≥ 5.0, PO4 ≥ 4.6) or the projection crosses the threshold;
 otherwise `"review"`. Output is sorted urgent-first, then by slope.
 
-Each flag: `{patient_id, analyte, slope_per_month, values, projected_3mo,
-severity, reason}`.
+EWMA (half-life 2 months) can de-escalate urgent trends that have plateaued,
+but not an urgent latest dated observation. Each flag: `{patient_id, analyte,
+slope_per_month, ewma_slope_per_month, values, projected_3mo, severity, reason}`.
 
 ## Tests
 
