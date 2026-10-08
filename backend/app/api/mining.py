@@ -1,7 +1,7 @@
-"""Mining endpoints (deterministic, read-only).
+"""Mining queries and a validated, persistent plan-swap workflow.
 
-* ``GET /mining/trends`` — longitudinal K+/PO4 trend flags over
-  ``data/patients.json`` (``backend.mining.trends.detect_trends``).
+* ``GET /mining/trends`` — longitudinal K+/PO4 flags from durable observations
+  or fixture monthly series (``backend.mining.trends.detect_trends``).
 * ``GET /mining/substitutions?dish_id=...&k=3`` — v2 substitution suggestions
   from the dish database (``backend.mining.substitutions.suggest_substitutions``).
   With the optional ``patient_id`` query param the suggestions become
@@ -204,7 +204,7 @@ def apply_swap(req: SwapApplyRequest) -> dict[str, Any]:
     the lineage stays auditable.  The source plan is never mutated.
     """
     from backend.app.core import persistence
-    from backend.app.api.plans import _persist_plan
+    from backend.app.core.plan_storage import try_save_plan_document
 
     for dish_id in (req.dish_id, req.replacement_dish_id):
         if dish_id not in _dish_index():
@@ -301,5 +301,5 @@ def apply_swap(req: SwapApplyRequest) -> dict[str, Any]:
         "occurrences_replaced": outcome.occurrences_replaced,
     }
 
-    _persist_plan(document, envelope)
+    try_save_plan_document(document, envelope)
     return document

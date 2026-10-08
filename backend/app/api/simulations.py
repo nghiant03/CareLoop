@@ -7,7 +7,7 @@ patient's current approved envelope + latest saved plan:
   (feasibility, hard violations, the 4 objectives, per-aim worst-day
   shortfall, cost);
 * the simulated side re-runs the exact ``POST /plans`` flow
-  (``prepare_envelope_for_pool`` -> optimiser ``run`` -> ``map_plan_result``)
+  (``plan_service.plan_meals`` -> ``map_plan_result``)
   against a SIMULATED envelope — a deep copy of the approved envelope with
   the proposed targets substituted, status forced to APPROVED and
   ``envelope_id`` prefixed ``SIM-``.  The simulated envelope is a pure local
@@ -41,7 +41,8 @@ from backend.app.core.approval_gate import (
     EnvelopeNotApprovedError,
     find_latest_envelope_for_patient,
 )
-from backend.app.core.plan_service import map_plan_result, prepare_envelope_for_pool
+from backend.app.core.plan_service import map_plan_result, plan_meals
+from backend.optim.real_data import load_dishes
 from backend.app.models.envelope import EnvelopeStatus, NutrientConstraint
 from backend.mining.patient_swaps import plan_from_document
 from backend.optim.problem import evaluate
@@ -58,8 +59,11 @@ class SimulationRequest(BaseModel):
     targets: list[NutrientConstraint]
 
 
-def _pooled_worst_shortfall_pct(adequacy: Optional[list[dict[str, Any]]]) -> float:
-    """Worst per-aim relative shortfall across the panel (0.0 when empty)."""
+def _worst_aim_deviation_pct(adequacy: Optional[list[dict[str, Any]]]) -> float:
+    """Worst MIN shortfall or absolute TARGET deviation (0.0 for an empty panel).
+
+    The wire field remains ``shortfall_pct`` for compatibility with saved plans.
+    """
     values = [
         float(entry.get("shortfall_pct") or 0.0)
         for entry in (adequacy or [])
@@ -107,7 +111,6 @@ def _side_summary(
 
 @router.post("", summary="What-if: re-plan against proposed nutrient targets")
 def create_simulation(req: SimulationRequest) -> dict[str, Any]:
-    from backend.app.api.plans import _load_dishes, _load_optimiser
     from backend.app.core import persistence
 
     envelope = find_latest_envelope_for_patient(req.patient_id)
@@ -119,26 +122,10 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
     if not envelope.is_ready_for_optimisation():
         raise EnvelopeNotApprovedError(envelope)
 
-    dishes = _load_dishes()
-    if dishes is None:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "dish_database_unavailable",
-                "message": "data/dishes.json could not be loaded.",
-            },
-        )
-    optimiser = _load_optimiser()
-    run = getattr(optimiser, "run", None) or getattr(optimiser, "optimise", None) if optimiser else None
-    if run is None:
-        raise HTTPException(
-            status_code=501,
-            detail={
-                "error": "optimiser_not_implemented",
-                "message": "backend.optim is not available yet (Lane B, Week 1).",
-                "envelope_id": envelope.envelope_id,
-            },
-        )
+    try:
+        dishes = load_dishes()
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail={"error": "dish_database_unavailable"}) from exc
 
     # ---- base side: the saved plan vs the ORIGINAL approved envelope ----
     plan_summary = persistence.latest_plan_for_patient(req.patient_id)
@@ -179,14 +166,8 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
     # SAFETY: simulated_envelope must never reach the envelope store or the
     # journal — this module never calls put_envelope/journal_envelope/save_plan.
 
-    solved_envelope, relaxed = prepare_envelope_for_pool(simulated_envelope, dishes)
     try:
-        result = run(solved_envelope, dishes=dishes)
-        from backend.optim.composition import improve_meals
-
-        result = improve_meals(result, simulated_envelope, dishes)
-        if result.get("meal_complete"):
-            solved_envelope, relaxed = simulated_envelope, []
+        outcome = plan_meals(simulated_envelope, dishes)
     except Exception as exc:
         raise HTTPException(
             status_code=502,
@@ -199,12 +180,13 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
 
     # The simulated explanation/adequacy describe the SIMULATED targets.
     simulated_response = map_plan_result(
-        result,
+        outcome.result,
         simulated_envelope,
         dishes,
-        relaxed_constraints=relaxed,
-        solved_envelope=solved_envelope,
+        relaxed_constraints=outcome.relaxed_constraints,
+        solved_envelope=outcome.solved_envelope,
     )
+    result = outcome.result
     simulated_plan = result.get("plan") or None
     simulated = _side_summary(
         simulated_envelope.envelope_id,
@@ -238,8 +220,8 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
                 6,
             ),
             "worst_shortfall_pct": round(
-                _pooled_worst_shortfall_pct(simulated.get("adequacy_summary"))
-                - _pooled_worst_shortfall_pct(base.get("adequacy_summary")),
+                _worst_aim_deviation_pct(simulated.get("adequacy_summary"))
+                - _worst_aim_deviation_pct(base.get("adequacy_summary")),
                 3,
             ),
             "meals_changed": _meals_changed(base_plan, simulated_plan),

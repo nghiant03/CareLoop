@@ -24,17 +24,18 @@ Two reconciliations live here (documented for the frontend contract):
    the ORIGINAL clinician-approved envelope (one entry per MIN/TARGET
    constraint, MAX ceilings excluded): ``aim`` (approved value),
    ``mean_daily`` / ``worst_day`` / ``worst_daily`` across the plan,
-   ``shortfall`` / ``shortfall_pct`` (positive = the approved aim was not met
-   on the worst day), ``met_days`` / ``total_days``, and ``relaxed_aim`` (the
+    ``shortfall`` / ``shortfall_pct`` (MIN shortfall or absolute TARGET deviation
+    on the worst day), ``met_days`` / ``total_days``, and ``relaxed_aim`` (the
    solved floor when MIN relaxation moved it, else ``null``). Because MIN
    floors are soft objective terms, ``feasible == true`` with
    ``violation_count == 0`` does not guarantee the approved aims were met —
-   ``adequacy`` makes every shortfall against the approved envelope visible.
+    ``adequacy`` makes deviations from the approved aims visible.
 """
 
 from __future__ import annotations
 
 from typing import Any, Optional
+from dataclasses import dataclass
 
 from shared.envelope_schema import (
     ConstraintKind,
@@ -43,16 +44,41 @@ from shared.envelope_schema import (
 
 from backend.app.explain.views import patient_explanation
 from backend.optim.problem import MEAL_LABELS, MEALS_PER_DAY, NUTRIENT_KEYS, allowed_dishes
+from backend.optim.api import run as optimise
+from backend.optim.composition import improve_meals
+from backend.optim.toy_data import Dish
 
-__all__ = ["prepare_envelope_for_pool", "map_plan_result"]
+__all__ = ["plan_meals", "PlanningOutcome", "prepare_envelope_for_pool", "map_plan_result"]
 
 _EPS = 1e-9
+
+
+@dataclass
+class PlanningOutcome:
+    result: dict[str, Any]
+    solved_envelope: NutrientEnvelope
+    relaxed_constraints: list[dict[str, Any]]
+
+
+def plan_meals(envelope: NutrientEnvelope, dishes: list[Dish], *, seed: int = 42,
+               pop_size: int = 40, n_gen: int = 80) -> PlanningOutcome:
+    """Solve and compose meals without persisting clinical state.
+
+    API planning, simulations, and evaluation share this policy. Composition
+    scores the original aims; only the single-dish fallback uses relaxed floors.
+    """
+    solved, relaxed = prepare_envelope_for_pool(envelope, dishes)
+    result = optimise(solved, dishes=dishes, seed=seed, pop_size=pop_size, n_gen=n_gen)
+    result = improve_meals(result, envelope, dishes, seed=seed)
+    if result.get("meal_complete"):
+        solved, relaxed = envelope, []
+    return PlanningOutcome(result, solved, relaxed)
 
 
 def prepare_envelope_for_pool(
     envelope: NutrientEnvelope, dishes: list[Any]
 ) -> tuple[NutrientEnvelope, list[dict[str, Any]]]:
-    """Lower MIN floors the allowed dish pool provably cannot reach.
+    """Calibrate soft MIN floors to the single-dish-per-meal search bound.
 
     Returns ``(envelope_to_solve, relaxed_constraints)``. The input envelope is
     never mutated; when nothing needs relaxing the original object comes back
@@ -80,11 +106,11 @@ def prepare_envelope_for_pool(
                         "relaxed_to": achievable,
                         "unit": target.unit,
                         "reason": (
-                            f"guideline floor {target.value:g} {target.unit}/day is "
-                            f"unreachable: the three highest-{target.nutrient.value} "
-                            f"dishes in the allowed pool reach at most {achievable:g} "
-                            f"{target.unit}/day; floor lowered so a feasible plan "
-                            f"can be produced (was disclosed in the plan response)"
+                            f"approved floor {target.value:g} {target.unit}/day is "
+                            f"unreachable with one dish per meal: three servings of "
+                            f"the highest-{target.nutrient.value} dish reach at most "
+                            f"{achievable:g} {target.unit}/day; the soft solver floor "
+                            f"was lowered, while adequacy retains the approved aim"
                         ),
                     }
                 )
@@ -119,8 +145,8 @@ def map_plan_result(
 
     The top-level ``adequacy[]`` array is scored against the ORIGINAL approved
     ``envelope`` (not the relaxed copy): one entry per MIN/TARGET constraint in
-    envelope order, reporting mean/worst daily delivery, shortfall vs the
-    approved aim, and the relaxed floor when it differs from the aim. Empty
+    envelope order, reporting mean/worst daily delivery, MIN shortfall or absolute
+    TARGET deviation, and the relaxed floor when it differs from the aim. Empty
     when the plan is infeasible.
     """
     solved = solved_envelope or envelope
@@ -203,10 +229,10 @@ def map_plan_result(
     )
     if relaxed_constraints:
         notes = [
-            f"Note: your {rc['nutrient'].rsplit('_', 1)[0]} goal was lowered from "
+            f"Note: the solver's {rc['nutrient'].rsplit('_', 1)[0]} floor was lowered from "
             f"{rc['requested']:g} to {rc['relaxed_to']:g} {rc['unit']} a day "
-            "because the current food database cannot reach the guideline "
-            "floor; a clinician can review this."
+            "for the one-dish-per-meal search. Your approved goal remains "
+            "unchanged in the adequacy assessment."
             for rc in relaxed_constraints
         ]
         explanation["relaxation_notes"] = notes
@@ -234,8 +260,8 @@ def map_plan_result(
             deviations = [abs(aim - value) if kind == "target" else max(0., aim - value) for value in series]
             worst_index = max(range(len(series)), key=lambda i: deviations[i])
             worst_daily = round(series[worst_index], 3)
-            shortfall = round(deviations[worst_index], 3)
-            shortfall_pct = round(shortfall / aim * 100.0, 3) if aim > _EPS else 0.0
+            deviation = round(deviations[worst_index], 3)
+            deviation_pct = round(deviation / aim * 100.0, 3) if aim > _EPS else 0.0
             relaxed_aim: Optional[float] = None
             solved_aim = solved_aim_by_key.get((key, kind))
             if solved_aim is not None and abs(solved_aim - aim) > _EPS:
@@ -249,8 +275,9 @@ def map_plan_result(
                     "mean_daily": round(sum(series) / len(series), 3),
                     "worst_day": worst_index + 1,
                     "worst_daily": worst_daily,
-                    "shortfall": shortfall,
-                    "shortfall_pct": shortfall_pct,
+                    # Retain wire keys used by saved plans; TARGET deviations include overshoots.
+                    "shortfall": deviation,
+                    "shortfall_pct": deviation_pct,
                     "met_days": sum(1 for deviation in deviations if deviation <= _EPS),
                     "total_days": len(series),
                     "relaxed_aim": relaxed_aim,

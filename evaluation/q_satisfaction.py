@@ -4,18 +4,20 @@ For every eligible patient (rule status PROPOSED):
 1. run the rule engine -> envelope,
 2. programmatically approve (status APPROVED, content untouched) — mirroring
    the clinician gate,
-3. ``prepare_envelope_for_pool`` (the /plans MIN-relaxation disclosure),
-4. ``backend.optim.api.run`` (NSGA-II + hard feasibility guarantee),
-5. verify ``violation_count == 0`` and, for feasible plans, recompute per-day
+3. ``plan_service.plan_meals`` (shared with /plans): single-dish preparation
+   and search, followed by main/optional-side composition against original aims;
+   retained fallback MIN-floor adjustments are disclosed,
+4. verify ``violation_count == 0`` and, for feasible plans, recompute per-day
    totals from the returned plan and check the HARD constraints (MAX ceilings,
    per PLAN.md module 4) against the SOLVED envelope.  MIN floors and TARGETs
    are soft: their remaining shortfall/distance is reported informationally
-   as ``soft_aim_shortfalls`` (mean per day), never as a violation.
+   in ``soft_aims`` (mean per day), never as a violation.
 
-Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served)
-and MIN-relaxation disclosures are reported distinctly.  A leave-one-out
-greedy diagnostic identifies which HARD MAX constraint(s) block feasibility
-for infeasible envelopes.
+Unsuccessful searches (explicit solver diagnosis, empty plan, nothing served)
+and MIN-relaxation disclosures are reported distinctly. ``infeasibility_status``
+distinguishes proven single-dish infeasibility from search exhaustion. A
+leave-one-out greedy diagnostic reports which removed MAX ceilings let that
+heuristic find a plan; it is not a proof that those ceilings are sole blockers.
 """
 
 from __future__ import annotations
@@ -114,8 +116,7 @@ def evaluate_q3(
 ) -> dict[str, Any]:
     """End-to-end constraint-satisfaction check over all eligible patients."""
     from shared.envelope_schema import NutrientEnvelope
-    from backend.optim.api import run as optim_run
-    from backend.app.core.plan_service import prepare_envelope_for_pool
+    from backend.app.core.plan_service import plan_meals
 
     patients = patients if patients is not None else load_patients()
     if dishes is None:
@@ -138,14 +139,10 @@ def evaluate_q3(
 
         envelope = NutrientEnvelope(**envelope_dict)
         approved = _approve(envelope)
-        solved, relaxed = prepare_envelope_for_pool(approved, dishes)
         started = time.perf_counter()
-        result = optim_run(solved, dishes=dishes, seed=seed, pop_size=pop_size, n_gen=n_gen)
-        from backend.optim.composition import improve_meals
-
-        result = improve_meals(result, approved, dishes, seed=seed)
-        if result.get("meal_complete"):
-            solved, relaxed = approved, []
+        outcome = plan_meals(approved, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen)
+        result = outcome.result
+        solved, relaxed = outcome.solved_envelope, outcome.relaxed_constraints
         runtime_s = time.perf_counter() - started
 
         feasible = bool(result.get("feasible"))
@@ -188,8 +185,9 @@ def evaluate_q3(
         "question": "Q3 Constraint satisfaction",
         "definition": (
             "For every eligible patient: engine -> simulated APPROVED -> "
-            "prepare_envelope_for_pool (MIN-floor relaxation disclosure) -> "
-            "backend.optim.api.run -> original-target main/side composition -> violation_count == 0 and per-day totals "
+            "plan_service.plan_meals (single-dish search then original-target "
+            "main/optional-side composition; fallback floor adjustments disclosed) "
+            "-> violation_count == 0 and per-day totals "
             "within the SOLVED envelope's HARD constraints (MAX ceilings; "
             "MIN floors / TARGETs are soft per PLAN.md module 4, reported as "
             "soft-aim shortfalls, never violations). Infeasible envelopes "
