@@ -36,7 +36,7 @@ instead of answering.
                    └───────┬────────────────────────────────────────┘
                    ┌───────▼────────────────────────────────────────┐
                    │ Versioned KB (SQLite + NetworkX, in-memory):   │
-                   │ 52 rules + 190 SG dishes + citations; TF-IDF   │
+                   │ 52 rules + 214 SG dishes + citations; TF-IDF   │
                    │ retrieval index for the grounded chatbot       │
                    └────────────────────────────────────────────────┘
 ```
@@ -77,7 +77,7 @@ CareLoop/
 │   │   ├── baselines.py / benchmark.py / benchmark_results.md
 │   │   └── envelopes.py / spike_pymoo.py / toy_data.py
 │   └── mining/                  trends (Theil–Sen), clustering, substitutions
-├── data/                        Lane C — 190 SG dishes, 20 synthetic patients, USDA gap filler
+├── data/                        Lane C — 214 SG dishes, 20 synthetic patients, USDA gap filler
 ├── frontend/                    React 19 + Vite + Tailwind (3 screens)
 ├── notebooks/                   Exploration notebooks
 ├── docs/                        User guides, demo script, architecture
@@ -170,11 +170,14 @@ Interactive docs: `http://localhost:8000/docs`.
    DASH/ADA 2300 mg). Losing rules keep their trace rows with an explicit
    `SUPERSEDED: superseded by <rule> ...` marker. Potassium and phosphorus are
    individualised to serum labs.
-4. **Hard constraints are never silently broken.** The optimiser guarantees
-   `violation_count == 0` (repair → greedy fallback); when the dish pool cannot
-   satisfy an envelope it returns an explicit infeasibility diagnosis, and
-   unreachable MIN floors are lowered with a full `relaxed_constraints`
-   disclosure in the plan response.
+4. **Hard constraints are never silently broken.** Hard = approved MAX
+   ceilings + exclusions (PLAN.md module 4); MIN floors and targets are soft
+   objective terms. The optimiser guarantees `violation_count == 0` (repair →
+   greedy fallback); when the pool cannot satisfy a ceiling it returns an
+   explicit infeasibility diagnosis, and unreachable MIN floors are lowered
+   with a full `relaxed_constraints` disclosure in the plan response. Rulebook
+   exclusions map to per-serving dish nutrient thresholds via
+   `backend/optim/exclusion_mapping.py`.
 5. **Chat is grounded or silent.** Answers are composed only from retrieved KB
    chunks (+ the patient's envelope numbers) and always cite
    `rule_id + guideline + section`; low-confidence questions are refused;
