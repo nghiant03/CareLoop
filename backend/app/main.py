@@ -23,7 +23,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.app import __version__
-from backend.app.api import chat, envelopes, kb, mining, patients, plans, rules
+from backend.app.api import (
+    adherence,
+    chat,
+    dishes,
+    envelopes,
+    kb,
+    mining,
+    patients,
+    plans,
+    rules,
+)
 from backend.app.core.approval_gate import EnvelopeNotApprovedError
 
 logger = logging.getLogger("careloop")
@@ -107,6 +117,8 @@ async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
 # ---------------------------------------------------------------------------
 
 app.include_router(patients.router)
+app.include_router(adherence.router)
+app.include_router(dishes.router)
 app.include_router(rules.router)
 app.include_router(envelopes.router)
 app.include_router(plans.router)
