@@ -56,34 +56,97 @@ export interface EditEnvelopePayload {
   edited_by?: string;
 }
 
-export interface MealSlot {
-  day: number;
-  meal: 'breakfast' | 'lunch' | 'dinner';
-  dish: string;
+export interface PlanSlot {
+  meal: string;
+  dish_id: string;
+  name: string;
+  category?: string;
+  nutrients: Record<string, number | null>;
 }
 
-export interface DailyNutrient {
-  name: string;
+export interface PlanTotalTarget {
+  kind: 'max' | 'min' | 'target';
   value: number;
   unit: string;
-  target?: number;
-  max?: number;
-  min?: number;
 }
 
-export interface DailySummary {
+export interface PlanTotal {
+  nutrient: string;
+  unit: string;
+  value: number;
+  targets: PlanTotalTarget[];
+  compliant: boolean | null;
+}
+
+export interface PlanDay {
   day: number;
-  slots: MealSlot[];
-  totals: DailyNutrient[];
-  explanation?: string;
+  slots: PlanSlot[];
+  totals: PlanTotal[];
+}
+
+export interface PlanViolation {
+  nutrient: string;
+  kind: 'max' | 'min' | 'target';
+  amount: number | null;
+  actual: number | null;
+  limit: number | null;
+}
+
+export interface RelaxedConstraint {
+  nutrient: string;
+  kind: 'min';
+  requested: number;
+  relaxed_to: number;
+  unit: string;
+  reason: string;
+}
+
+export interface PatientExplanationDailyTarget {
+  label: string;
+  text: string;
+}
+
+export interface PatientExplanation {
+  headline: string;
+  daily_targets: PatientExplanationDailyTarget[];
+  avoid: string[];
+  why: string[];
+  approval_note?: string | null;
+  plan_summary?: string[] | null;
+  relaxation_notes?: string[];
+}
+
+export interface AdequacyItem {
+  nutrient: string;
+  kind: 'min' | 'target';
+  unit: string;
+  aim: number;
+  mean_daily: number;
+  worst_day: number;
+  worst_daily: number;
+  shortfall: number;
+  shortfall_pct: number;
+  met_days: number;
+  total_days: number;
+  relaxed_aim: number | null;
 }
 
 export interface MealPlan {
-  id: string;
-  patient_id: string;
   envelope_id: string;
-  days: DailySummary[];
-  explanation?: string;
+  patient_id: string;
+  feasible: boolean;
+  engine?: string;
+  violation_count: number;
+  runtime_ms?: number;
+  objectives?: Record<string, number> | null;
+  allowed_dish_count?: number;
+  infeasibility_reason: string | null;
+  violations: PlanViolation[];
+  relaxed_constraints: RelaxedConstraint[];
+  days: PlanDay[];
+  explanation: PatientExplanation;
+  status: string;
+  adequacy?: AdequacyItem[];
 }
 
 export interface ChatMessageResponse {

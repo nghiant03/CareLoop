@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { listPatients, createPlan } from '../api';
-import type { Patient, MealPlan, DailySummary, DailyNutrient } from '../types';
+import type {
+  Patient,
+  MealPlan,
+  PlanDay,
+  PlanSlot,
+  PlanTotal,
+  PatientExplanation,
+  AdequacyItem,
+} from '../types';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
 
@@ -115,76 +123,375 @@ function PlanView({ plan }: { plan: MealPlan }) {
     <div className="space-y-6">
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">{plan.patient_id} — 7-day plan</h2>
-        {plan.explanation && (
-          <p className="mt-2 text-sm leading-relaxed text-slate-700">{plan.explanation}</p>
-        )}
+        <PlanStatus plan={plan} />
+        <ExplanationView explanation={plan.explanation} />
       </div>
+
+      {!plan.feasible && (
+        <InfeasibilityView
+          reason={plan.infeasibility_reason}
+          violations={plan.violations || []}
+        />
+      )}
+
+      {((plan.relaxed_constraints?.length || 0) > 0 || (plan.explanation?.relaxation_notes?.length || 0) > 0) && (
+        <RelaxationCallout
+          constraints={plan.relaxed_constraints || []}
+          notes={plan.explanation?.relaxation_notes || []}
+        />
+      )}
+
+      {plan.adequacy && plan.adequacy.length > 0 && <AdequacyPanel items={plan.adequacy} />}
 
       {plan.days?.length === 0 ? (
         <EmptyState title="No days returned" description="The meal plan response did not include daily details." />
       ) : (
-        plan.days?.map((day) => (
-          <DayCard key={day.day} day={day} />
-        ))
+        plan.days?.map((day) => <DayCard key={day.day} day={day} />)
       )}
     </div>
   );
 }
 
-function DayCard({ day }: { day: DailySummary }) {
+function PlanStatus({ plan }: { plan: MealPlan }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-slate-900">Day {day.day}</h3>
-      </div>
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+      <span
+        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+          plan.feasible
+            ? 'bg-emerald-100 text-emerald-800'
+            : 'bg-rose-100 text-rose-800'
+        }`}
+      >
+        {plan.feasible ? 'Feasible' : 'Infeasible'}
+      </span>
+      {plan.engine && (
+        <span className="text-slate-500">
+          Engine: <span className="font-medium text-slate-700">{plan.engine}</span>
+        </span>
+      )}
+      {typeof plan.violation_count === 'number' && (
+        <span className="text-slate-500">
+          Violations: <span className="font-medium text-slate-700">{plan.violation_count}</span>
+        </span>
+      )}
+      {typeof plan.runtime_ms === 'number' && (
+        <span className="text-slate-500">
+          Runtime: <span className="font-medium text-slate-700">{plan.runtime_ms} ms</span>
+        </span>
+      )}
+      {typeof plan.allowed_dish_count === 'number' && (
+        <span className="text-slate-500">
+          Allowed dishes: <span className="font-medium text-slate-700">{plan.allowed_dish_count}</span>
+        </span>
+      )}
+    </div>
+  );
+}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        {day.slots?.map((slot, idx) => (
-          <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {slot.meal}
-            </p>
-            <p className="mt-1 text-sm font-medium text-slate-900">{slot.dish}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-5">
-        <h4 className="mb-3 text-sm font-semibold text-slate-900">Daily totals vs targets</h4>
-        {day.totals?.length === 0 ? (
-          <p className="text-sm text-slate-500">No nutrient totals returned.</p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {day.totals.map((nut, idx) => (
-              <NutrientBar key={`${nut.name}-${idx}`} nutrient={nut} />
+function ExplanationView({ explanation }: { explanation?: PatientExplanation | null }) {
+  if (!explanation) return null;
+  return (
+    <div className="mt-4 rounded-lg border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
+      {explanation.headline && (
+        <h3 className="mb-2 font-semibold text-sky-900">{explanation.headline}</h3>
+      )}
+      {explanation.daily_targets && explanation.daily_targets.length > 0 && (
+        <ul className="mb-3 space-y-1">
+          {explanation.daily_targets.map((target, idx) => (
+            <li key={idx} className="leading-relaxed">
+              {target.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      {explanation.why && explanation.why.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-1 font-medium text-sky-900">Why these targets?</p>
+          <ul className="list-disc space-y-1 pl-5 text-sky-800">
+            {explanation.why.map((item, idx) => (
+              <li key={idx}>{item}</li>
             ))}
-          </div>
-        )}
-      </div>
+          </ul>
+        </div>
+      )}
+      {explanation.avoid && explanation.avoid.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-1 font-medium text-sky-900">Avoid</p>
+          <ul className="list-disc space-y-1 pl-5 text-sky-800">
+            {explanation.avoid.map((item, idx) => (
+              <li key={idx}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {explanation.plan_summary && explanation.plan_summary.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-1 font-medium text-sky-900">Plan summary</p>
+          <ul className="list-disc space-y-1 pl-5 text-sky-800">
+            {explanation.plan_summary.map((item, idx) => (
+              <li key={idx}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {explanation.approval_note && (
+        <p className="mt-2 font-medium text-amber-700">{explanation.approval_note}</p>
+      )}
+    </div>
+  );
+}
 
-      {day.explanation && (
-        <div className="mt-4 rounded-lg bg-sky-50 p-3 text-sm text-sky-800">
-          {day.explanation}
+function InfeasibilityView({
+  reason,
+  violations,
+}: {
+  reason: string | null;
+  violations: { nutrient?: string; kind?: string; amount?: number | null; actual?: number | null; limit?: number | null }[];
+}) {
+  return (
+    <section className="rounded-xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
+      <h3 className="text-base font-semibold text-rose-900">Plan could not be generated</h3>
+      {reason && <p className="mt-1 text-sm text-rose-800">{reason}</p>}
+      {violations && violations.length > 0 && (
+        <div className="mt-3">
+          <h4 className="mb-2 text-sm font-semibold text-rose-900">Constraint violations</h4>
+          <ul className="divide-y divide-rose-100 rounded-lg border border-rose-200 bg-white text-sm">
+            {violations.map((v, idx) => (
+              <li key={idx} className="p-3">
+                <span className="font-medium text-slate-900">
+                  {v.nutrient || 'Unknown nutrient'}
+                </span>
+                <span className="ml-2 text-slate-600">({v.kind || 'constraint'})</span>
+                <div className="mt-1 text-slate-600">
+                  {v.actual !== null && v.actual !== undefined && (
+                    <span>Actual: {v.actual} </span>
+                  )}
+                  {v.limit !== null && v.limit !== undefined && (
+                    <span>Limit: {v.limit} </span>
+                  )}
+                  {v.amount !== null && v.amount !== undefined && (
+                    <span className="text-rose-700">Excess: {v.amount}</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </section>
   );
 }
 
-function NutrientBar({ nutrient }: { nutrient: DailyNutrient }) {
-  const { value, target, max, min, unit } = nutrient;
+function RelaxationCallout({
+  constraints,
+  notes,
+}: {
+  constraints: { nutrient: string; requested: number; relaxed_to: number; unit: string; reason: string }[];
+  notes: string[];
+}) {
+  return (
+    <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+      <h3 className="mb-2 text-base font-semibold text-amber-900">
+        Relaxation notes
+      </h3>
+      <p className="mb-3 text-sm text-amber-800">
+        Some targets were relaxed to make a feasible plan. A clinician can review these changes.
+      </p>
+      {notes.map((note, idx) => (
+        <p key={idx} className="mb-2 text-sm text-amber-900">
+          {note}
+        </p>
+      ))}
+      {constraints.map((c, idx) => (
+        <div
+          key={idx}
+          className="mb-2 rounded-lg border border-amber-200 bg-white p-3 text-sm text-amber-900"
+        >
+          <p className="font-medium">
+            {c.nutrient}: {c.requested} → {c.relaxed_to} {c.unit}
+          </p>
+          <p className="mt-1 text-amber-800">{c.reason}</p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function AdequacyPanel({ items }: { items: AdequacyItem[] }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="mb-4 text-base font-semibold text-slate-900">
+        Adequacy vs. approved goals
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-3 py-2 text-left font-semibold text-slate-700">Nutrient</th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-700">Aim</th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-700">Mean daily</th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-700">Worst day</th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-700">Shortfall</th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-700">Met days</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.map((item, idx) => {
+              const severity = adequacySeverity(item);
+              return (
+                <tr key={idx} className="hover:bg-slate-50">
+                  <td className="px-3 py-2 font-medium text-slate-900">
+                    {item.nutrient}
+                    <span className="ml-1 text-xs font-normal text-slate-500">({item.kind})</span>
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {item.aim} {item.unit}
+                    {item.relaxed_aim !== null && (
+                      <span className="ml-1 text-xs text-amber-700">
+                        relaxed to {item.relaxed_aim}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {item.mean_daily.toFixed(1)} {item.unit}
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">
+                    Day {item.worst_day}: {item.worst_daily.toFixed(1)} {item.unit}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${severity.class}`}
+                    >
+                      {item.shortfall.toFixed(1)} {item.unit} ({item.shortfall_pct.toFixed(0)}%)
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {item.met_days} / {item.total_days}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function adequacySeverity(item: AdequacyItem) {
+  if (item.met_days === item.total_days && item.shortfall <= 0) {
+    return { class: 'bg-emerald-100 text-emerald-800' };
+  }
+  if (item.shortfall_pct >= 25 || item.met_days === 0) {
+    return { class: 'bg-rose-100 text-rose-800' };
+  }
+  if (item.shortfall_pct >= 10 || item.met_days < item.total_days / 2) {
+    return { class: 'bg-amber-100 text-amber-800' };
+  }
+  return { class: 'bg-emerald-100 text-emerald-800' };
+}
+
+function DayCard({ day }: { day: PlanDay }) {
+  const meals = groupSlotsByMeal(day.slots || []);
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-base font-semibold text-slate-900">Day {day.day}</h3>
+      </div>
+
+      <div className="space-y-4">
+        {Object.entries(meals).map(([meal, slots]) => (
+          <div key={meal}>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {meal}
+            </h4>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {slots.map((slot, idx) => (
+                <SlotCard key={idx} slot={slot} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6">
+        <h4 className="mb-3 text-sm font-semibold text-slate-900">Daily totals vs targets</h4>
+        {day.totals?.length === 0 ? (
+          <p className="text-sm text-slate-500">No nutrient totals returned.</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {day.totals.map((nut, idx) => (
+              <NutrientBar key={`${nut.nutrient}-${idx}`} nutrient={nut} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function groupSlotsByMeal(slots: PlanSlot[]) {
+  const grouped: Record<string, PlanSlot[]> = {};
+  slots.forEach((slot) => {
+    if (!grouped[slot.meal]) grouped[slot.meal] = [];
+    grouped[slot.meal].push(slot);
+  });
+  return grouped;
+}
+
+function SlotCard({ slot }: { slot: PlanSlot }) {
+  const nutrients = slot.nutrients || {};
+  const summary = [
+    nutrients.kcal ?? nutrients.energy_kcal,
+    nutrients.protein_g,
+    nutrients.sodium_mg,
+    nutrients.potassium_mg,
+    nutrients.phosphorus_mg,
+  ]
+    .filter((v) => typeof v === 'number')
+    .slice(0, 3);
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {slot.meal}
+      </p>
+      <p className="mt-1 text-sm font-medium text-slate-900">{slot.name}</p>
+      {slot.category && (
+        <p className="text-xs text-slate-500">{slot.category}</p>
+      )}
+      {summary.length > 0 && (
+        <p className="mt-2 text-xs text-slate-600">
+          {summary.map((v) => Number(v).toFixed(1)).join(' / ')} {getNutrientUnitForSummary(Object.keys(nutrients))}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function getNutrientUnitForSummary(keys: string[]) {
+  if (keys.includes('kcal') || keys.includes('energy_kcal')) return 'kcal / g / mg';
+  return '';
+}
+
+function NutrientBar({ nutrient }: { nutrient: PlanTotal }) {
+  const { value, unit, targets, compliant } = nutrient;
+  const maxTarget = targets?.find((t) => t.kind === 'max');
+  const minTarget = targets?.find((t) => t.kind === 'min');
+  const target = maxTarget || minTarget;
+
   let percentage = 0;
   let overLimit = false;
 
-  if (target && target > 0) {
-    percentage = Math.min((value / target) * 100, 100);
-    overLimit = value > target;
-  } else if (max && max > 0) {
-    percentage = Math.min((value / max) * 100, 100);
-    overLimit = value > max;
-  } else if (min && min > 0) {
-    percentage = Math.min((value / min) * 100, 100);
-    overLimit = value < min;
+  if (maxTarget && maxTarget.value > 0) {
+    percentage = Math.min((value / maxTarget.value) * 100, 100);
+    overLimit = value > maxTarget.value;
+  } else if (minTarget && minTarget.value > 0) {
+    percentage = Math.min((value / minTarget.value) * 100, 100);
+    overLimit = value < minTarget.value;
+  } else if (target && target.value > 0) {
+    percentage = Math.min((value / target.value) * 100, 100);
   }
 
   const barColor = overLimit ? 'bg-rose-500' : 'bg-sky-500';
@@ -192,16 +499,35 @@ function NutrientBar({ nutrient }: { nutrient: DailyNutrient }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
       <div className="flex items-center justify-between text-xs text-slate-600">
-        <span className="font-medium text-slate-900">{nutrient.name}</span>
+        <span className="font-medium text-slate-900">{nutrient.nutrient}</span>
         <span>
-          {value} / {target ?? max ?? min} {unit}
+          {value} {unit}
         </span>
       </div>
       <div className="mt-2 h-2 w-full rounded-full bg-slate-100">
-        <div
-          className={`h-2 rounded-full transition-all ${barColor}`}
-          style={{ width: `${percentage}%` }}
-        />
+        <div className={`h-2 rounded-full transition-all ${barColor}`} style={{ width: `${percentage}%` }} />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1">
+        {targets?.map((t, idx) => (
+          <span key={idx} className="text-xs text-slate-500">
+            {t.kind} {t.value} {t.unit}
+          </span>
+        ))}
+        {compliant === true && (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+            OK
+          </span>
+        )}
+        {compliant === false && (
+          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800">
+            Over limit
+          </span>
+        )}
+        {compliant === null && (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+            No hard rule
+          </span>
+        )}
       </div>
       {overLimit && (
         <p className="mt-1.5 text-xs font-medium text-rose-600" role="alert">

@@ -71,7 +71,7 @@ export default function ClinicianReviewScreen() {
     if (!envelope) return;
     setActionLoading(true);
     try {
-      const updated = await rejectEnvelope(envelope.id, { note: 'Rejected by clinician' });
+      const updated = await rejectEnvelope(envelope.id, { reason: 'Rejected by clinician' });
       setEnvelope(updated);
     } catch (err: any) {
       setError(err.message || 'Failed to reject envelope');

@@ -102,7 +102,7 @@ export async function editEnvelope(
 
 export async function rejectEnvelope(
   id: string,
-  payload: { note?: string }
+  payload: { reason?: string }
 ): Promise<Envelope> {
   return fetch(`${API_PREFIX}/envelopes/${id}/reject`, {
     method: 'POST',
