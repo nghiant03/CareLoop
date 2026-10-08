@@ -209,6 +209,94 @@ def test_out_of_scope_patient_rejected_envelope(client) -> None:
     assert expl.json()["error"] == "envelope_not_approved"
 
 
+def test_rejected_envelope_cannot_be_approved(client) -> None:
+    """Safety regression: a REJECTED (out-of-scope) envelope must never be
+    approvable — approving it would hand the optimiser an empty constraint
+    set with nothing to violate."""
+    body = _run_rules(client, "P0008")
+    envelope_id = body["envelope"]["envelope_id"]
+    assert body["envelope"]["status"] == "REJECTED"
+
+    approved = client.post(
+        f"/envelopes/{envelope_id}/approve",
+        json={"clinician_id": "dr-tan", "note": "override attempt"},
+    )
+    assert approved.status_code == 422, approved.text
+    assert approved.json()["error"] == "out_of_scope_envelope"
+
+    # The approval was refused: the envelope stays REJECTED and /plans stays
+    # blocked by the approval gate.
+    after = client.get(f"/envelopes/{envelope_id}")
+    assert after.status_code == 200
+    assert after.json()["status"] == "REJECTED"
+    plan = client.post("/plans", json={"patient_id": "P0008"})
+    assert plan.status_code == 409, plan.text
+    assert plan.json()["error"] == "envelope_not_approved"
+
+
+def test_chat_declined_scope_response_for_rejected_patient(client) -> None:
+    """A REJECTED (out-of-scope) patient gets the fixed see-your-clinician
+    response from chat — no numbers, no guideline content."""
+    _run_rules(client, "P0008")
+    resp = client.post(
+        "/chat",
+        json={"patient_id": "P0008", "message": "how much potassium can I have?"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["escalated"] is False
+    assert "declined" in body["answer"]
+    assert "clinician" in body["answer"]
+    assert body["citations"] == []
+
+
+def test_edit_appends_clinician_edit_trace_row(client) -> None:
+    """A clinician edit must record a CLINICIAN-EDIT trace row so chat cannot
+    attach the original rule citation to a clinician-authored number."""
+    body = _run_rules(client, "P0013")
+    envelope_id = body["envelope"]["envelope_id"]
+
+    edited = client.post(
+        f"/envelopes/{envelope_id}/edit",
+        json={
+            "targets": [
+                {"nutrient": "sodium_mg", "kind": "max", "value": 1800, "unit": "mg"}
+            ],
+            "edited_by": "dr-tan",
+            "notes": "tightened sodium",
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["status"] == "EDITED"
+
+    expl = client.get(f"/envelopes/{envelope_id}/explanation")
+    assert expl.status_code == 200, expl.text
+    rule_ids = [row["rule_id"] for row in expl.json()["fired_rules"]]
+    assert "CLINICIAN-EDIT" in rule_ids
+
+
+def test_rerun_mints_new_envelope_and_preserves_approval(client) -> None:
+    """Re-running /rules/run must not overwrite a prior (possibly approved)
+    envelope: each run gets a fresh sequential id."""
+    first = _run_rules(client, "P0011")["envelope"]
+    first_id = first["envelope_id"]
+    client.post(f"/envelopes/{first_id}/approve", json={"clinician_id": "dr-tan"})
+
+    second = _run_rules(client, "P0011")["envelope"]
+    second_id = second["envelope_id"]
+    assert second_id != first_id, "re-run must mint a new envelope id"
+
+    # Prior approval history survives under the original id.
+    still_there = client.get(f"/envelopes/{first_id}")
+    assert still_there.status_code == 200
+    assert still_there.json()["status"] == "APPROVED"
+
+    # The fresh proposal is the patient's latest envelope and is not approved.
+    latest = client.post("/plans", json={"patient_id": "P0011"})
+    assert latest.status_code == 409, latest.text
+    assert latest.json()["status"] == "PROPOSED"
+
+
 # ---------------------------------------------------------------------------
 # Mining + KB observability
 # ---------------------------------------------------------------------------

@@ -18,9 +18,18 @@ point. Pipeline order:
    speaking with a clinician.
 
 Envelope handling honours the approval gate (``core/approval_gate.py``):
-an APPROVED envelope's numbers are served as clinician-approved; a PROPOSED
-(or EDITED/REJECTED) envelope is still surfaced for transparency but the
-answer explicitly notes it has not been approved yet.
+
+* an **APPROVED** envelope's numbers are served as clinician-approved;
+* a **PROPOSED** or **EDITED** envelope is never quoted numerically — the
+  answer says a plan is pending clinician review (generic guideline content
+  may still be cited);
+* a **REJECTED** (out-of-scope) envelope yields one fixed, respectful
+  see-your-clinician response regardless of the question — no numbers, no
+  guideline content.
+
+Per-kg rulebook coefficients (25-35 kcal/kg, 0.55-1.3 g/kg protein) are never
+rendered as absolute daily doses: when the patient's weight is known the
+computed daily value is shown, otherwise the text says "per kg of body weight".
 """
 
 from __future__ import annotations
@@ -35,6 +44,28 @@ from backend.app.chat.llm import LLMAdapter
 __all__ = ["answer", "detect_nutrients", "format_value", "MAX_ANSWER_CHUNKS"]
 
 MAX_ANSWER_CHUNKS = 3
+
+# Rulebook nutrients whose constraint values are per-kg coefficients (see
+# rules/engine.py ``_PER_KG_NUTRIENTS``). They must never be rendered as
+# absolute daily doses.
+_PER_KG_NUTRIENTS = {"energy_kcal", "protein_g"}
+
+# Internal rule families that must never anchor a patient-facing citation:
+# they encode conflict-resolution bookkeeping and internal safety policy, not
+# guideline content a patient should be pointed at.
+_INTERNAL_RULE_PREFIXES = ("CONFLICT-", "SAFETY-")
+
+# Fixed, number-free responses for non-approved / declined envelopes.
+_PENDING_REVIEW_SENTENCE = (
+    "A nutrition plan has been drawn up for you, but it has not been approved "
+    "by your clinician yet, so I can't quote your personal targets. Please "
+    "talk to your clinician, who can confirm the plan with you."
+)
+_SCOPE_DECLINED_ANSWER = (
+    "This proposal was declined — please talk to your clinician. CareLoop "
+    "could not put together a suitable nutrition plan for you at the moment, "
+    "so please let your clinician or dietitian guide any dietary changes."
+)
 
 # Nutrient detection in the user's question -> canonical nutrient field.
 _NUTRIENT_PATTERNS: dict[str, list[str]] = {
@@ -118,25 +149,63 @@ def _citation_of_rule(rule: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _anchor_rule(kb: KBGraph, nutrients: list[str]) -> Optional[dict[str, Any]]:
+def _anchor_rule(
+    kb: KBGraph, nutrients: list[str], role: str = "patient"
+) -> Optional[dict[str, Any]]:
     """Highest-priority current KB rule covering the detected nutrients.
 
     ``rules_for_nutrient`` already sorts by priority DESC then rule_id, so the
     choice is deterministic (CKD rules outrank DASH/ADA/generic, and
     ``CKD-2024-*`` sorts before ``CONFLICT-*`` on ties).
+
+    For the patient role, internal rule families (``CONFLICT-*`` conflict
+    bookkeeping, ``SAFETY-*`` internal safety policy) are excluded from anchor
+    selection: patients should be anchored to guideline content, not internal
+    engine policy.
     """
     for nutrient in nutrients:
-        rules = kb.rules_for_nutrient(nutrient)
-        if rules:
-            return rules[0]
+        for rule in kb.rules_for_nutrient(nutrient):
+            if role == "patient" and str(rule.get("rule_id", "")).startswith(
+                _INTERNAL_RULE_PREFIXES
+            ):
+                continue
+            return rule
     return None
 
 
-def _envelope_context(envelope: Optional[dict[str, Any]], nutrients: list[str]) -> Optional[dict[str, Any]]:
+def _status_of(envelope: dict[str, Any]) -> str:
+    raw_status = envelope.get("status", "")
+    return str(getattr(raw_status, "value", raw_status) or "")
+
+
+def _target_is_unscaled_per_kg(envelope: dict[str, Any], target: dict[str, Any]) -> bool:
+    """True when an envelope target still carries a raw per-kg coefficient.
+
+    The engine scales per-kg coefficients by weight whenever the weight is
+    known; the producing trace row then reads
+    ``set <nutrient> <kind> = <coef> <unit>/kg/d -> <scaled> <unit>/d``.
+    A row with the ``/kg/d`` marker but no ``-> <scaled>`` clause means the
+    weight was unknown and the stored value is still the coefficient.
+    """
+    nutrient = target.get("nutrient", "")
+    if nutrient not in _PER_KG_NUTRIENTS:
+        return False
+    kind = target.get("kind", "")
+    for fired in envelope.get("fired_rules") or []:
+        summary = str(fired.get("action_summary", "")).lower()
+        if f"set {nutrient} {kind}" in summary and "/kg/d" in summary:
+            return "->" not in summary
+    return False
+
+
+def _envelope_context(
+    envelope: Optional[dict[str, Any]],
+    nutrients: list[str],
+    weight_kg: Optional[float] = None,
+) -> Optional[dict[str, Any]]:
     if not envelope:
         return None
-    raw_status = envelope.get("status", "")
-    status = str(getattr(raw_status, "value", raw_status) or "")
+    status = _status_of(envelope)
     targets = list(envelope.get("targets") or [])
     matched = [t for t in targets if t.get("nutrient") in nutrients] if nutrients else []
     if nutrients and not matched:
@@ -148,38 +217,58 @@ def _envelope_context(envelope: Optional[dict[str, Any]], nutrients: list[str]) 
     target = chosen[0]
     nutrient = target.get("nutrient", "")
     label = _PLAIN_LABELS.get(nutrient, nutrient)
-    amount = format_value(target.get("value"), target.get("unit", ""))
     kind = target.get("kind", "")
+
+    if status != "APPROVED":
+        # Numbers are only ever quoted for clinician-APPROVED envelopes.
+        # PROPOSED/EDITED -> pending-review sentence; REJECTED -> the fixed
+        # declined sentence. No numbers, no citations attached.
+        sentence = (
+            _PENDING_REVIEW_SENTENCE
+            if status in ("PROPOSED", "EDITED")
+            else _SCOPE_DECLINED_ANSWER
+        )
+        return {
+            "envelope_id": envelope.get("envelope_id"),
+            "status": status,
+            "approved": False,
+            "sentence": sentence,
+            "citation": None,
+            "target": target,
+        }
+
+    amount = format_value(target.get("value"), target.get("unit", ""))
+    if _target_is_unscaled_per_kg(envelope, target):
+        value = target.get("value")
+        try:
+            coefficient = float(value)
+        except (TypeError, ValueError):
+            coefficient = None
+        if coefficient is not None and weight_kg and weight_kg > 0:
+            amount = format_value(coefficient * weight_kg, target.get("unit", ""))
+        else:
+            amount = f"{amount} per kg of body weight"
     if kind == "max":
         core = f"a daily {label} limit of {amount}"
     elif kind == "min":
         core = f"a daily {label} minimum of {amount}"
     else:
         core = f"a daily {label} target of {amount}"
+    sentence = f"Your clinician-approved plan sets {core}."
 
-    approved = status == "APPROVED"
-    if approved:
-        sentence = f"Your clinician-approved plan sets {core}."
-    else:
-        sentence = (
-            f"Your current plan sets {core}, but note it is {status} and has "
-            f"not been approved by your clinician yet."
-        )
-
+    # Cite only the rule that actually fired for this nutrient — never fall
+    # back to citations[0], which could attach an unrelated guideline (e.g.
+    # after a clinician edit replaced the targets) to the quoted number.
     citation = None
     for fired in envelope.get("fired_rules") or []:
         summary = str(fired.get("action_summary", "")).lower()
         if nutrient.split("_")[0] in summary or nutrient in summary:
             citation = fired.get("citation")
             break
-    if citation is None:
-        for cit in envelope.get("citations") or []:
-            citation = cit
-            break
     return {
         "envelope_id": envelope.get("envelope_id"),
         "status": status,
-        "approved": approved,
+        "approved": True,
         "sentence": sentence,
         "citation": citation,
         "target": target,
@@ -201,16 +290,44 @@ def _rule_sentence(rule: dict[str, Any], role: str) -> str:
     return f"{prefix}According to {guideline} ({section}): {body}"
 
 
-def _constraint_sentences(rule: dict[str, Any], role: str) -> list[str]:
+def _constraint_sentences(
+    rule: dict[str, Any], role: str, weight_kg: Optional[float] = None
+) -> list[str]:
+    """Render a rule's constraints as patient-safe sentences.
+
+    Per-kg coefficients (25-35 kcal/kg, 0.8-1.3 g/kg protein, ...) are never
+    printed as absolute daily doses: with a known body weight the computed
+    daily value is shown, otherwise the sentence says "per kg of body weight".
+    """
     sentences = []
     for constraint in rule.get("constraints", []):
-        label = _PLAIN_LABELS.get(constraint.get("nutrient"), constraint.get("nutrient"))
+        nutrient = constraint.get("nutrient")
+        label = _PLAIN_LABELS.get(nutrient, nutrient)
         amount = format_value(constraint.get("value"), constraint.get("unit", ""))
         phrase = _kind_phrase(constraint.get("kind", ""))
         prefix = f"[{rule['rule_id']}] " if role == "clinician" else ""
-        sentences.append(
-            f"{prefix}This guideline sets a {label} {phrase} of {amount} per day."
-        )
+        if nutrient in _PER_KG_NUTRIENTS:
+            weight = None
+            try:
+                weight = float(weight_kg) if weight_kg is not None else None
+            except (TypeError, ValueError):
+                weight = None
+            if weight is not None and weight > 0:
+                daily = format_value(float(constraint.get("value", 0)) * weight,
+                                     constraint.get("unit", ""))
+                sentences.append(
+                    f"{prefix}This guideline sets a {label} {phrase} of {daily} per day "
+                    f"for a {weight:g} kg patient ({amount} per kg of body weight)."
+                )
+            else:
+                sentences.append(
+                    f"{prefix}This guideline sets a {label} {phrase} of {amount} "
+                    f"per kg of body weight per day."
+                )
+        else:
+            sentences.append(
+                f"{prefix}This guideline sets a {label} {phrase} of {amount} per day."
+            )
     return sentences
 
 
@@ -239,12 +356,28 @@ def _dish_sentences(hits: list[dict[str, Any]], role: str) -> list[str]:
     return sentences
 
 
+def _patient_weight(
+    patient: Optional[dict[str, Any]], envelope: Optional[dict[str, Any]]
+) -> Optional[float]:
+    """Best-available body weight (kg) for per-kg rendering."""
+    weight: Any = (patient or {}).get("weight_kg")
+    if weight is None and envelope:
+        snapshot = envelope.get("patient_snapshot") or {}
+        weight = snapshot.get("weight_kg")
+    try:
+        weight = float(weight)
+    except (TypeError, ValueError):
+        return None
+    return weight if weight > 0 else None
+
+
 def answer(
     question: str,
     kb: KBGraph,
     envelope: Optional[dict[str, Any]] = None,
     role: str = "patient",
     llm: Optional[LLMAdapter] = None,
+    patient: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Grounded, deterministic answer with mandatory citations.
 
@@ -252,6 +385,9 @@ def answer(
     ``escalated``), ``answer``, ``citations``, ``envelope``, ``retrieval`` and
     ``role``. ``role="clinician"`` keeps rule ids inline in the text; the
     patient view hides them from the prose (they remain in ``citations``).
+
+    ``patient`` (optional patient record dict) enables per-kg constraint
+    values to be scaled into computed daily amounts.
     """
     esc = escalation.check(question)
     if esc["escalate"]:
@@ -266,6 +402,24 @@ def answer(
             "role": role,
         }
 
+    # Out-of-scope gate: a REJECTED envelope means the patient has no CareLoop
+    # nutrition plan at all (pregnancy, dialysis, ketoacidosis risk, ...).
+    # Whatever the question, the only safe reply is the fixed see-your-
+    # clinician response — no numbers, no guideline content.
+    if role == "patient" and envelope is not None and _status_of(envelope) == "REJECTED":
+        return {
+            "status": "refused",
+            "question": question,
+            "answer": _SCOPE_DECLINED_ANSWER,
+            "citations": [],
+            "escalation": esc,
+            "envelope": None,
+            "retrieval": [],
+            "role": role,
+        }
+
+    weight_kg = _patient_weight(patient, envelope)
+
     hits = retrieval.build_index(kb).retrieve(question, k=5)
     best_score = hits[0]["score"] if hits else 0.0
     nutrients = detect_nutrients(question)
@@ -273,22 +427,22 @@ def answer(
     # patient's nutrition (detected nutrient or a relevant KB hit) — an
     # unrelated question must be refused, not answered from plan numbers.
     relevant = bool(nutrients) or best_score > retrieval.MIN_SCORE
-    env_ctx = _envelope_context(envelope, nutrients) if relevant else None
+    env_ctx = _envelope_context(envelope, nutrients, weight_kg) if relevant else None
 
     parts: list[str] = []
     citations: list[dict[str, Any]] = []
 
-    # 1) Envelope numbers (approved vs not-yet-approved note).
+    # 1) Envelope numbers (approved only; pending/declined get fixed text).
     if env_ctx is not None:
         parts.append(env_ctx["sentence"])
         if env_ctx["citation"]:
             citations.append(env_ctx["citation"])
 
     # 2) KB anchor rule for the detected nutrient(s).
-    anchor = _anchor_rule(kb, nutrients) if nutrients else None
+    anchor = _anchor_rule(kb, nutrients, role) if nutrients else None
     if anchor is not None:
         parts.append(_rule_sentence(anchor, role))
-        parts.extend(_constraint_sentences(anchor, role)[:2])
+        parts.extend(_constraint_sentences(anchor, role, weight_kg)[:2])
         citations.append(_citation_of_rule(anchor))
 
     # 3) Supporting retrieved chunks (rule chunks add citations, dish chunks

@@ -20,6 +20,17 @@ import re
 
 __all__ = ["check", "CATEGORIES"]
 
+# Drug / medication vocabulary for medication-change detection. Specific
+# agents commonly managed in CKD/T2D care plus generic medication words, so
+# e.g. "should I stop taking metformin?" or "can I skip my insulin today?"
+# are escalated even though no generic word appears.
+_DRUGS = (
+    r"(?:metformin|insulin|lisinopril|enalapril|losartan|valsartan|"
+    r"dapagliflozin|empagliflozin|furosemide|spironolactone|"
+    r"hydrochlorothiazide|warfarin|amlodipine|atorvastatin|sevelamer|"
+    r"medic\w*|medication|medicine|pills?|tablets?|capsules?|doses?|dosage)"
+)
+
 _CATEGORIES: dict[str, list[str]] = {
     "emergency": [
         r"chest pain",
@@ -32,15 +43,26 @@ _CATEGORIES: dict[str, list[str]] = {
         r"(fainted|passed out)",
         r"numb(ness)? on one side",
         r"slurred speech",
+        r"slurring (my |his |her |their )?speech",
+        r"speech (is |has |has been )?slurred",
         r"severe (bleeding|dizziness|headache)",
+        # Metabolic emergencies: ketoacidosis signs and extreme glucose reads.
+        r"keto?acidosis",
+        r"\bketones?\b",
+        r"(dizzy|dizziness|light.?headed)\W{0,20}(and|with)\W{0,10}"
+        r"(vomit\w*|nausea|confusion|ketone\w*|high sugars?)",
+        r"blood sugar (is |of |at |was |around )?(3[5-9]\d|4\d\d)\b",
+        r"sugars? (are |is |was |at |around )?(3[5-9]\d|4\d\d)\b",
+        r"sugars? (are |is |was )?(above|over) (300|3\d\d|4\d\d)\b",
     ],
     "medication_change": [
-        r"(stop|start|skip|quit)\s+(taking\s+|my\s+|the\s+)*(medic\w*|pills?|tablets?|capsules?|dose)",
-        r"(double|halve|triple) (my )?(dose|dosage|medic\w*|metformin|insulin)",
-        r"(increase|reduce|lower|raise|adjust|change) (my )?(dose|dosage|medic\w*)",
+        rf"(stop|start|skip|quit)\s+(?:taking\s+|my\s+|the\s+|to\s+)*{_DRUGS}",
+        rf"(double|halve|triple)\s+(my\s+|the\s+)?(?:dose|dosage|{_DRUGS})",
+        rf"(increase|reduce|lower|raise|adjust|change)\s+(my\s+|the\s+)?"
+        rf"(?:dose|dosage|{_DRUGS})",
         r"how much (metformin|insulin|medicine|medication|\w+ ?\w*) should i take",
         r"\bprescrib\w*",
-        r"dos(e|age) of (my )?(metformin|insulin|medic\w*|tablets?|pills?)",
+        rf"dos(e|age) of (my )?(metformin|insulin|{_DRUGS})",
         r"(switch|swap) (to |my )?(another |my )?medic\w*",
     ],
     "diagnosis": [

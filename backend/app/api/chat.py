@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.app.chat import answers
 from backend.app.core.kb_loader import get_kb
+from backend.app.api.patients import get_patient
 from backend.app.core.approval_gate import (
     find_latest_envelope_for_patient,
     get_envelope,
@@ -57,7 +58,14 @@ def chat(req: ChatRequest) -> dict[str, Any]:
 
     envelope = envelope_obj.model_dump(by_alias=True, mode="json") if envelope_obj else None
 
-    result = answers.answer(req.message, get_kb(), envelope=envelope, role="patient")
+    # The patient record lets per-kg rulebook coefficients (25-35 kcal/kg,
+    # g/kg protein) be rendered as computed daily amounts instead of raw
+    # coefficients that read like absolute daily doses.
+    patient = get_patient(req.patient_id) if req.patient_id else None
+
+    result = answers.answer(
+        req.message, get_kb(), envelope=envelope, role="patient", patient=patient
+    )
 
     return {
         "answer": result["answer"],

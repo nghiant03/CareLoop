@@ -26,6 +26,7 @@ persistent backing table without changing the gate contract.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Optional
@@ -69,9 +70,35 @@ ENVELOPE_STORE: dict[str, NutrientEnvelope] = {}
 _STORE_LOCK = Lock()
 
 
+_ENVELOPE_ID_SEQ = re.compile(r"^(?P<base>.+)-(?P<seq>\d{3})$")
+
+
 def put_envelope(envelope: NutrientEnvelope) -> NutrientEnvelope:
-    """Insert or replace an envelope in the store."""
+    """Insert or replace an envelope in the store.
+
+    Re-running the rule engine re-mints the same first id (``ENV-<pid>-001``).
+    When a *freshly built* envelope object arrives for an id that already
+    exists, that is a new proposal for the patient — not a lifecycle update —
+    so the store mints the next sequential id (``ENV-<pid>-002``, ...) and
+    stamps the real wall-clock ``proposed_at``. This keeps prior envelopes,
+    including APPROVED ones and their approval history, intact.
+
+    Lifecycle updates (approve / edit / reject) re-store the very same object
+    that was loaded from the store; that case is detected by object identity
+    and stored in place under the existing id.
+    """
     with _STORE_LOCK:
+        existing = ENVELOPE_STORE.get(envelope.envelope_id)
+        if existing is not None and existing is not envelope:
+            match = _ENVELOPE_ID_SEQ.match(envelope.envelope_id)
+            base = match["base"] if match else envelope.envelope_id
+            seq = int(match["seq"]) + 1 if match else 2
+            while f"{base}-{seq:03d}" in ENVELOPE_STORE:
+                seq += 1
+            # Mutate in place (not model_copy): callers (e.g. POST /rules/run)
+            # keep using the same object and must observe the minted id.
+            envelope.envelope_id = f"{base}-{seq:03d}"
+            envelope.proposed_at = utcnow()
         ENVELOPE_STORE[envelope.envelope_id] = envelope
     return envelope
 
@@ -89,14 +116,19 @@ def list_envelopes() -> list[NutrientEnvelope]:
 
 
 def find_latest_envelope_for_patient(patient_id: str) -> Optional[NutrientEnvelope]:
-    """Return the most recently proposed envelope for a patient, if any."""
+    """Return the most recently proposed envelope for a patient, if any.
+
+    Ordering is by ``proposed_at`` alone: each rule-engine run now mints a
+    fresh sequential envelope id, so comparing ``version`` across different
+    envelope ids is meaningless (every fresh proposal restarts at version 1).
+    """
     with _STORE_LOCK:
         candidates = [
             env for env in ENVELOPE_STORE.values() if env.patient_id == patient_id
         ]
     if not candidates:
         return None
-    return max(candidates, key=lambda env: (env.version, env.proposed_at))
+    return max(candidates, key=lambda env: env.proposed_at)
 
 
 def assert_approved(envelope: NutrientEnvelope) -> NutrientEnvelope:

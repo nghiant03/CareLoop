@@ -94,6 +94,19 @@ def test_retrieve_unknown_terms_returns_nothing(kb) -> None:
         ("What's wrong with me, doctor?", "diagnosis"),
         ("I am pregnant, what should I eat?", "out_of_scope"),
         ("My baby needs a diet plan", "out_of_scope"),
+        # Regression cases (safety review): drug names must escalate even
+        # when no generic medication word appears in the sentence.
+        ("Should I stop taking metformin?", "medication_change"),
+        ("Can I skip my insulin today?", "medication_change"),
+        ("I want to stop my warfarin", "medication_change"),
+        ("Is it safe to quit taking lisinopril?", "medication_change"),
+        ("Can I reduce my furosemide?", "medication_change"),
+        # Metabolic emergencies.
+        ("My blood sugar is 420 and I feel awful", "emergency"),
+        ("My sugars are above 300", "emergency"),
+        ("I feel dizzy and I have ketones, what should I eat?", "emergency"),
+        ("His breath smells fruity — could it be ketoacidosis?", "emergency"),
+        ("My speech is slurred since this morning", "emergency"),
     ],
 )
 def test_escalation_out_of_scope(question: str, category: str) -> None:
@@ -109,6 +122,9 @@ def test_escalation_out_of_scope(question: str, category: str) -> None:
         "why is my sodium limit 2000?",
         "What can I cook for dinner tonight?",
         "How much fibre should I eat?",
+        # Guard against over-escalation from the new drug/metabolic patterns.
+        "How much sugar is in a can of cola?",
+        "What are the guidelines about carbohydrates per day?",
     ],
 )
 def test_escalation_in_scope(question: str) -> None:
@@ -194,6 +210,146 @@ def test_proposed_envelope_flagged_not_approved(kb) -> None:
     assert "not been approved" in result["answer"]
     assert result["envelope"]["approved"] is False
     assert result["envelope"]["notice"]
+
+
+def test_proposed_envelope_never_quotes_plan_numbers(kb) -> None:
+    """Safety policy: only APPROVED envelope numbers may be quoted.
+
+    The PROPOSED answer must not present the plan's own values (2000 mg
+    sodium / 56 g protein) as the patient's limits.
+    """
+    result = answers.answer("how much salt and protein can I have?", kb, envelope=_envelope("PROPOSED"))
+    assert result["status"] == "answered"
+    assert "2000" not in result["answer"]
+    assert result["envelope"]["approved"] is False
+
+
+def test_edited_envelope_never_quotes_plan_numbers(kb) -> None:
+    result = answers.answer("why is my sodium limit 2000?", kb, envelope=_envelope("EDITED"))
+    assert result["status"] == "answered"
+    assert "not been approved" in result["answer"]
+    assert "2000" not in result["answer"]
+
+
+def test_rejected_envelope_gets_fixed_declined_response(kb) -> None:
+    """Out-of-scope (REJECTED) envelope: one fixed, respectful response —
+    regardless of the question, with no numbers and no guideline content."""
+    envelope = _envelope("REJECTED")
+    for question in (
+        "how much potassium can I have?",
+        "what should I eat for dinner?",
+        "What is the capital of France?",
+    ):
+        result = answers.answer(question, kb, envelope=envelope)
+        assert result["status"] == "refused", question
+        assert "declined" in result["answer"]
+        assert "clinician" in result["answer"]
+        assert result["citations"] == []
+        # no plan numbers, no guideline quotes leak through
+        assert "2000" not in result["answer"]
+        assert "56" not in result["answer"]
+        assert result["envelope"] is None
+
+
+def test_approved_per_kg_envelope_scaled_by_known_weight(kb) -> None:
+    """A per-kg envelope coefficient must never be quoted as an absolute
+    daily dose; with a known weight the computed daily value is shown."""
+    envelope = _envelope("APPROVED")
+    envelope["targets"].append(
+        {"nutrient": "energy_kcal", "kind": "max", "value": 35, "unit": "kcal"}
+    )
+    envelope["fired_rules"].append(
+        {
+            "rule_id": "CKD-2024-ENERGY-2535",
+            "action_summary": "set energy_kcal max = 35 kcal/kg/d (weight unknown; not scaled)",
+            "priority": 80,
+            "citation": {
+                "rule_id": "CKD-2024-ENERGY-2535",
+                "guideline": "KDIGO 2024 CKD Guideline",
+                "section": "Sec. 3.11 / Energy",
+                "url": None,
+                "verbatim_quote": None,
+            },
+        }
+    )
+    result = answers.answer(
+        "how many calories can I have?",
+        kb,
+        envelope=envelope,
+        patient={"patient_id": "SYN-0007", "weight_kg": 70.0},
+    )
+    assert result["status"] == "answered"
+    assert "2450" in result["answer"]  # 35 kcal/kg x 70 kg
+    assert "35 kcal per day" not in result["answer"]
+
+
+def test_per_kg_envelope_without_weight_says_per_kg(kb) -> None:
+    """Without a known weight the raw coefficient is rendered per kg of body
+    weight — never as '... per day'."""
+    envelope = _envelope("APPROVED")
+    envelope["targets"] = [
+        {"nutrient": "energy_kcal", "kind": "max", "value": 35, "unit": "kcal"}
+    ]
+    envelope["fired_rules"] = [
+        {
+            "rule_id": "CKD-2024-ENERGY-2535",
+            "action_summary": "set energy_kcal max = 35 kcal/kg/d (weight unknown; not scaled)",
+            "priority": 80,
+            "citation": {
+                "rule_id": "CKD-2024-ENERGY-2535",
+                "guideline": "KDIGO 2024 CKD Guideline",
+                "section": "Sec. 3.11 / Energy",
+                "url": None,
+                "verbatim_quote": None,
+            },
+        }
+    ]
+    result = answers.answer("how many calories can I have?", kb, envelope=envelope)
+    assert result["status"] == "answered"
+    assert "per kg of body weight" in result["answer"]
+    assert "35 kcal per day" not in result["answer"]
+
+
+def test_guideline_per_kg_constraints_rendered_per_kg(kb) -> None:
+    """KB rulebook constraints for energy/protein are per-kg coefficients:
+    the answer must say 'per kg of body weight' (or scale by the patient's
+    weight), never '35 kcal per day'."""
+    result = answers.answer("how many calories should I eat?", kb)
+    assert result["status"] == "answered"
+    assert "per kg of body weight" in result["answer"]
+    assert "35 kcal per day" not in result["answer"]
+    assert "25 kcal per day" not in result["answer"]
+
+    scaled = answers.answer(
+        "how many calories should I eat?", kb, patient={"weight_kg": 70.0}
+    )
+    assert "1750" in scaled["answer"]  # 25 kcal/kg x 70 kg
+    assert "2450" in scaled["answer"]  # 35 kcal/kg x 70 kg
+
+
+def test_patient_anchor_never_cites_internal_rules(kb) -> None:
+    """CONFLICT-*/SAFETY-* are internal policy, not patient-facing guideline
+    anchors: the patient-role citation set must not use them as anchors."""
+    result = answers.answer("how much protein can I have?", kb, role="patient")
+    if result["status"] == "answered":
+        for citation in result["citations"]:
+            rule_id = citation.get("rule_id") or ""
+            assert not rule_id.startswith(("CONFLICT-", "SAFETY-")), rule_id
+
+
+def test_no_citation_fallback_to_unrelated_rule(kb) -> None:
+    """Regression (clinician edit): an envelope whose fired rules do not
+    cover the quoted nutrient must NOT borrow citations[0] — the sodium rule
+    must not be cited for a protein number."""
+    envelope = _envelope("APPROVED")
+    envelope["targets"] = [
+        {"nutrient": "protein_g", "kind": "max", "value": 56, "unit": "g"}
+    ]
+    # fired_rules still only mention sodium (as after a clinician edit).
+    result = answers.answer("how much protein can I have?", kb, envelope=envelope)
+    assert result["status"] == "answered"
+    rule_ids = [c.get("rule_id") for c in result["citations"]]
+    assert "CKD-2024-SODIUM-2000" not in rule_ids
 
 
 # ---------------------------------------------------------------------------
