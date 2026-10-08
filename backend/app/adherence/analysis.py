@@ -19,9 +19,11 @@ randomness, no clocks.
 
 from __future__ import annotations
 
+from datetime import date as date_type
 from statistics import median
 from typing import Any, Iterable, Mapping
 
+from backend.optim.problem import exclusion_for
 from backend.optim.toy_data import NUTRIENT_KEYS
 from shared.envelope_schema import ConstraintKind, NutrientEnvelope, NutrientKind
 
@@ -138,6 +140,11 @@ def analyse_day(
 
     ``entries`` are meal-log dicts for the day (any meal order). Dishes are
     summed across all logged meals of the day.
+
+    Hard exclusions from the envelope are enforced per logged dish: a dish
+    hit by any exclusion flag is a hard violation for that day (mirroring the
+    optimiser's treatment of exclusions as hard constraints), independent of
+    whether its nutrients happen to stay under the ceilings.
     """
     meal_order = {m: i for i, m in enumerate(MEALS)}
     ordered = sorted(entries, key=lambda e: meal_order.get(e.get("meal", ""), 99))
@@ -148,6 +155,24 @@ def analyse_day(
         for c in sorted(envelope.targets, key=lambda c: (c.nutrient.value, c.kind.value))
     ]
     hard = [r for r in rows if r["status"] == "hard_violation"]
+    for entry in ordered:
+        dish = dish_by_id.get(entry.get("dish_id"))
+        if dish is None:
+            continue
+        flag = exclusion_for(dish, envelope)
+        if flag is None:
+            continue
+        hard.append(
+            {
+                "type": "excluded_dish",
+                "dish_id": entry.get("dish_id"),
+                "dish_name": getattr(dish, "name", None),
+                "meal": entry.get("meal"),
+                "exclusion_kind": flag.kind.value,
+                "exclusion_value": flag.value,
+                "reason": flag.reason,
+            }
+        )
     soft = [r for r in rows if r["status"] == "soft_gap"]
     return {
         "date": date,
@@ -190,7 +215,12 @@ def analyse_range(
     exposure_days: dict[str, int] = {}
     for day in days:
         for row in day["hard_violations"]:
-            hard_by_nutrient[row["nutrient"]] = hard_by_nutrient.get(row["nutrient"], 0) + 1
+            nutrient = row.get("nutrient")
+            if nutrient is None:
+                # Exclusion violations are dish-scoped (no nutrient axis);
+                # they still count towards ``hard_violation_days`` below.
+                continue
+            hard_by_nutrient[nutrient] = hard_by_nutrient.get(nutrient, 0) + 1
         for row in day["soft_gaps"]:
             soft_by_nutrient[row["nutrient"]] = soft_by_nutrient.get(row["nutrient"], 0) + 1
         for row in day["nutrients"]:
@@ -214,42 +244,89 @@ def analyse_range(
 # ---------------------------------------------------------------------------
 # Time series + trend flags
 # ---------------------------------------------------------------------------
-def _theil_sen_slope(values: list[float]) -> float:
-    """Median of all pairwise slopes (classic Theil-Sen, as mining/trends.py)."""
+def _theil_sen_slope(times: list[float], values: list[float]) -> float:
+    """Median of all pairwise slopes (classic Theil-Sen, as mining/trends.py)
+    computed against *elapsed days* rather than observation indices, so
+    unevenly spaced observations yield a true per-day rate. Pairs with zero
+    elapsed time (duplicate dates) cannot define a per-day rate and are
+    skipped."""
     n = len(values)
     slopes = [
-        (values[j] - values[i]) / (j - i) for i in range(n - 1) for j in range(i + 1, n)
+        (values[j] - values[i]) / (times[j] - times[i])
+        for i in range(n - 1)
+        for j in range(i + 1, n)
+        if times[j] - times[i] > 0
     ]
     return float(median(slopes)) if slopes else 0.0
+
+
+def _day_offsets(dates: list[Any]) -> list[float]:
+    """Elapsed-day axis for series points: ordinal day numbers for ISO dates,
+    falling back to the list position for anything unparsable."""
+    offsets: list[float] = []
+    for i, raw in enumerate(dates):
+        try:
+            offsets.append(float(date_type.fromisoformat(str(raw)).toordinal()))
+        except (TypeError, ValueError):
+            offsets.append(float(i))
+    return offsets
 
 
 def deviation_series(
     day_analyses: Iterable[Mapping[str, Any]],
     envelope: NutrientEnvelope,
 ) -> dict[str, dict[str, Any]]:
-    """Per-nutrient daily deviation time-series (chronological).
+    """Per-constraint daily deviation time-series (chronological).
 
     Each point carries the signed ``pct`` (total vs limit, signed) and the
-    ``exposure`` magnitude in the bad direction (>= 0) used for trending.
+    ``exposure`` magnitude in the bad direction (>= 0) used for trending:
+
+    * ``MAX``    — excess over the ceiling;
+    * ``MIN``    — shortfall below the floor (exposure *grows* as intake
+      falls further under the limit);
+    * ``TARGET`` — absolute distance from the desired value.
+
+    A nutrient constrained on both sides (e.g. protein MIN + MAX) gets one
+    series per constraint so each limit and direction is applied correctly
+    with exactly one point per date per series: single-constraint nutrients
+    keep the plain nutrient key, multi-constraint nutrients are keyed
+    ``"<nutrient>:<kind>"``.
     """
+    constraints = sorted(envelope.targets, key=lambda c: (c.nutrient.value, c.kind.value))
+    constraint_count: dict[str, int] = {}
+    for constraint in constraints:
+        nutrient_key = constraint.nutrient.value
+        constraint_count[nutrient_key] = constraint_count.get(nutrient_key, 0) + 1
+
     per_nutrient: dict[str, dict[str, Any]] = {}
-    for constraint in sorted(envelope.targets, key=lambda c: (c.nutrient.value, c.kind.value)):
+    days = sorted(day_analyses, key=lambda d: d["date"])
+    for constraint in constraints:
         nutrient = constraint.nutrient.value
+        key = (
+            nutrient
+            if constraint_count[nutrient] == 1
+            else f"{nutrient}:{constraint.kind.value}"
+        )
         series = per_nutrient.setdefault(
-            nutrient,
+            key,
             {
                 "nutrient": nutrient,
                 "kind": constraint.kind.value,
-                "unit": _UNITS.get(constraint.nutrient.value, ""),
+                "unit": _UNITS.get(nutrient, ""),
                 "limit": float(constraint.value),
                 "points": [],
             },
         )
         points = series["points"]
-        for day in sorted(day_analyses, key=lambda d: d["date"]):
+        for day in days:
             total = day["totals"].get(nutrient, 0.0)
             signed = _pct(total - series["limit"], series["limit"])
-            exposure = max(0.0, signed) if constraint.kind is not ConstraintKind.TARGET else abs(signed)
+            if constraint.kind is ConstraintKind.MAX:
+                exposure = max(0.0, signed)
+            elif constraint.kind is ConstraintKind.MIN:
+                exposure = max(0.0, -signed)
+            else:  # TARGET — either side of the desired value is exposure
+                exposure = abs(signed)
             points.append(
                 {
                     "date": day["date"],
@@ -268,18 +345,20 @@ def trend_flags(
 ) -> list[dict[str, Any]]:
     """Flag directional deviation trends from the exposure series.
 
-    A flag is emitted when the Theil-Sen slope of the exposure series exceeds
-    ``slope_trigger`` (worsening) or falls below ``-slope_trigger``
+    A flag is emitted when the Theil-Sen slope of the exposure series against
+    the observation *dates* (per elapsed day, not per observation index)
+    exceeds ``slope_trigger`` (worsening) or falls below ``-slope_trigger``
     (improving). Sorted worst-first (worsening before improving, larger
     |slope| first). Deterministic.
     """
     flags: list[dict[str, Any]] = []
     for nutrient in sorted(series):
         s = series[nutrient]
-        exposures = [p["exposure"] for p in s["points"]]
+        points = s["points"]
+        exposures = [p["exposure"] for p in points]
         if len(exposures) < min_len:
             continue
-        slope = _theil_sen_slope(exposures)
+        slope = _theil_sen_slope(_day_offsets([p["date"] for p in points]), exposures)
         if abs(slope) <= slope_trigger:
             continue
         direction = "worsening" if slope > 0 else "improving"
