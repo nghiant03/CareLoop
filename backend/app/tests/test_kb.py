@@ -41,10 +41,10 @@ def test_load_real_content_counts(kb: KBGraph) -> None:
     # rules.json documents 50 rules; the shipped file carries 52 — assert the
     # documented floor and the exact dish corpus.
     assert stats["node_counts"]["Rule"] >= 50
-    assert stats["node_counts"]["Dish"] == 190
-    assert stats["node_counts"]["NutrientProfile"] == 190
+    assert stats["node_counts"]["Dish"] == 214
+    assert stats["node_counts"]["NutrientProfile"] == 214
     assert stats["node_counts"]["Guideline"] >= 5
-    assert stats["edge_counts"]["HAS_PROFILE"] == 190
+    assert stats["edge_counts"]["HAS_PROFILE"] == 214
     assert stats["edge_counts"]["CITES"] == stats["node_counts"]["Rule"]
 
 
@@ -119,8 +119,8 @@ def test_dishes_meeting_impossible(kb: KBGraph) -> None:
 
 def test_graph_snapshot(kb: KBGraph) -> None:
     g = kb.graph()
-    assert g.number_of_nodes() >= 190 + 50
-    assert g.number_of_edges() >= 190 * 2
+    assert g.number_of_nodes() >= 214 + 50
+    assert g.number_of_edges() >= 214 * 2
     rule_node = g.nodes["rule:CKD-2024-SODIUM-2000"]
     assert rule_node["label"] == "Rule"
     assert rule_node["priority"] == 90
@@ -223,4 +223,4 @@ def test_stats_shape(kb: KBGraph) -> None:
         "db_path", "current_version", "node_counts", "edge_counts",
     }
     assert stats["current_version"] == T1
-    assert sum(stats["node_counts"].values()) >= 190 + 50
+    assert sum(stats["node_counts"].values()) >= 214 + 50

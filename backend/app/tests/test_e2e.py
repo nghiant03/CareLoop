@@ -13,7 +13,7 @@ included so the knowledge base warms up):
 * mining + kb observability endpoints with deterministic shapes.
 
 NOTE on fibre floors: the guideline rulebook sets hard MIN fibre floors
-(25/30 g per day) that the real 190-dish dataset cannot reach (max 8 g per
+(25/30 g per day) that the real 214-dish dataset cannot reach (max 8 g per
 dish). ``POST /plans`` lowers unreachable floors to the achievable pool bound
 and discloses them in ``relaxed_constraints`` — this is the documented
 cross-lane reconciliation; ``violation_count == 0`` holds against the envelope
@@ -255,7 +255,7 @@ def test_kb_stats(client) -> None:
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["node_counts"]["Rule"] >= 50
-    assert body["node_counts"]["Dish"] == 190
+    assert body["node_counts"]["Dish"] == 214
     assert body["retrieval_chunks"] >= body["node_counts"]["Rule"]
     assert body["current_version"]
 

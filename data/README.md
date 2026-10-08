@@ -10,7 +10,7 @@ modules built on top of this data (trends, clustering, substitutions) live in
 
 | File | Purpose |
 |---|---|
-| `dishes.json` | 190 curated Singapore dish records (energy, protein, Na, K, P, carbs, fat, sat fat, fibre, sugar). |
+| `dishes.json` | 214 curated Singapore dish records (energy, protein, Na, K, P, carbs, fat, sat fat, fibre, sugar): 190 `manual_curation` + 24 `curated_renal_replenishment`. |
 | `patient.py` | Pydantic `Patient` model — extends the canonical `shared.envelope_schema.PatientSummary` with archetype, vitals, and longitudinal labs. |
 | `patients_generator.py` | Deterministic generator for N synthetic patients from 9 clinical archetypes. |
 | `patients.json` | Generated output (default 20 patients, seed 0). |
@@ -18,8 +18,8 @@ modules built on top of this data (trends, clustering, substitutions) live in
 
 ## Dish data (`dishes.json`)
 
-190 records across 8 categories: `hawker` (60), `zi_char` (30), `kopitiam` (28),
-`cai_png` (25), `drink` (19), `soup` (16), `healthy` (6), `dessert` (6).
+214 records across 8 categories: `hawker` (62), `zi_char` (32), `kopitiam` (28),
+`cai_png` (28), `drink` (20), `soup` (19), `healthy` (18), `dessert` (7).
 
 Each record:
 
@@ -58,7 +58,15 @@ trusted as rule inputs:
 
 Provenance values:
 
-- `manual_curation` — hand-entered estimate (all current records).
+- `manual_curation` — hand-entered estimate (the 190 original records).
+- `curated_renal_replenishment` — 24 dishes (SG0191–SG0214) added so the renal /
+  diabetes envelopes are reachable: low-sodium / low-phosphorus mains with
+  enough energy, high-potassium low-phosphorus fruit and vegetable sides, and
+  higher-fibre staples. Values are curated estimates, not clinically validated
+  (see the warning above). Their potassium-rich items sit below the
+  `high_potassium` tag threshold (700 mg/serving) but above the rulebook
+  exclusion threshold — `backend/optim/exclusion_mapping.py` excludes dishes
+  over 500 mg potassium/serving for hyperkalaemia envelopes.
 - `hpb_import` — parsed from an official HPB SG FoodID download.
 - `usda_estimate` — K/P filled by `usda_fill_gaps.py`.
 
