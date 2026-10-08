@@ -181,8 +181,9 @@ export default function ClinicianReviewScreen() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleApprove}
-                  disabled={actionLoading || envelope.status === 'APPROVED'}
-                  className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-300 transition-colors"
+                  disabled={actionLoading || envelope.status === 'APPROVED' || envelope.status === 'REJECTED' || (envelope.constraints?.length ?? 0) === 0}
+                  title={envelope.status === 'REJECTED' ? 'Out-of-scope proposal — cannot be approved' : undefined}
+                  className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed transition-colors"
                 >
                   {actionLoading ? 'Working…' : 'Approve'}
                 </button>

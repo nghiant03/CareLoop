@@ -1,19 +1,21 @@
 import { Link } from 'react-router-dom';
 
 interface TopBarProps {
-  role: 'clinician' | 'patient' | 'chat';
+  role: 'clinician' | 'patient' | 'chat' | 'adherence';
 }
 
 const roleLabel: Record<TopBarProps['role'], string> = {
   clinician: 'Clinician',
   patient: 'Meal Plan',
   chat: 'Chat',
+  adherence: 'Adherence',
 };
 
 const roleClass: Record<TopBarProps['role'], string> = {
   clinician: 'bg-sky-100 text-sky-800',
   patient: 'bg-emerald-100 text-emerald-800',
   chat: 'bg-violet-100 text-violet-800',
+  adherence: 'bg-amber-100 text-amber-800',
 };
 
 export default function TopBar({ role }: TopBarProps) {
@@ -37,6 +39,7 @@ export default function TopBar({ role }: TopBarProps) {
           <NavLink to="/" label="Review" />
           <NavLink to="/plan" label="Meal Plan" />
           <NavLink to="/chat" label="Chat" />
+          <NavLink to="/adherence" label="Adherence" />
         </nav>
       </div>
     </header>
