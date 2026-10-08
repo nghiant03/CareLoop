@@ -19,6 +19,17 @@ Two reconciliations live here (documented for the frontend contract):
    (day-major, list of dish-id lists) plus objectives/violations. This module
    maps that to the UI contract: ``days[]`` with ``slots[]`` (dish entries with
    names + nutrients) and ``totals[]`` (per-nutrient daily totals vs targets).
+
+   The response also carries a top-level ``adequacy[]`` array scored against
+   the ORIGINAL clinician-approved envelope (one entry per MIN/TARGET
+   constraint, MAX ceilings excluded): ``aim`` (approved value),
+   ``mean_daily`` / ``worst_day`` / ``worst_daily`` across the plan,
+   ``shortfall`` / ``shortfall_pct`` (positive = the approved aim was not met
+   on the worst day), ``met_days`` / ``total_days``, and ``relaxed_aim`` (the
+   solved floor when MIN relaxation moved it, else ``null``). Because MIN
+   floors are soft objective terms, ``feasible == true`` with
+   ``violation_count == 0`` does not guarantee the approved aims were met —
+   ``adequacy`` makes every shortfall against the approved envelope visible.
 """
 
 from __future__ import annotations
@@ -105,6 +116,12 @@ def map_plan_result(
     module-4 encoding): a nutrient whose day total exceeds a hard MAX is
     ``False``; a nutrient with no hard MAX is ``None`` even when a soft MIN
     floor is unmet (the shortfall stays visible in ``targets``).
+
+    The top-level ``adequacy[]`` array is scored against the ORIGINAL approved
+    ``envelope`` (not the relaxed copy): one entry per MIN/TARGET constraint in
+    envelope order, reporting mean/worst daily delivery, shortfall vs the
+    approved aim, and the relaxed floor when it differs from the aim. Empty
+    when the plan is infeasible.
     """
     solved = solved_envelope or envelope
     lookup = {d.dish_id: d for d in dishes}
@@ -123,6 +140,7 @@ def map_plan_result(
 
     days = []
     day1_totals: dict[str, float] = {}
+    daily_raw_totals: list[dict[str, float]] = []
     for day in range(n_days):
         day_slots = plan[day * MEALS_PER_DAY : (day + 1) * MEALS_PER_DAY]
         slots = []
@@ -176,6 +194,7 @@ def map_plan_result(
             )
         if day == 0:
             day1_totals = {t["nutrient"]: t["value"] for t in totals}
+        daily_raw_totals.append(dict(totals_raw))
         days.append({"day": day + 1, "slots": slots, "totals": totals})
 
     envelope_dump = envelope.model_dump(by_alias=True)
@@ -193,6 +212,49 @@ def map_plan_result(
         explanation["relaxation_notes"] = notes
 
     feasible = bool(result.get("feasible"))
+
+    # Adequacy vs the ORIGINAL clinician-approved envelope: one entry per
+    # MIN/TARGET constraint in envelope order (MAX ceilings are excluded —
+    # ceiling compliance is reported via totals.compliant). Because MIN floors
+    # are soft objective terms, a plan can be feasible with zero hard
+    # violations while still missing the approved aims; this makes that gap
+    # visible instead of scoring only against the relaxed copy.
+    adequacy: list[dict[str, Any]] = []
+    if feasible and n_days:
+        solved_aim_by_key: dict[tuple[str, str], float] = {}
+        for target in solved.targets:
+            solved_aim_by_key.setdefault((target.nutrient.value, target.kind.value), target.value)
+        for constraint in envelope.targets:
+            kind = constraint.kind.value
+            if kind == "max":
+                continue
+            key = constraint.nutrient.value
+            aim = round(constraint.value, 3)
+            series = [day_totals.get(key, 0.0) for day_totals in daily_raw_totals]
+            worst_index = min(range(len(series)), key=lambda i: series[i])
+            worst_daily = round(series[worst_index], 3)
+            shortfall = round(aim - worst_daily, 3)
+            shortfall_pct = round(shortfall / aim * 100.0, 3) if aim > _EPS else 0.0
+            relaxed_aim: Optional[float] = None
+            solved_aim = solved_aim_by_key.get((key, kind))
+            if solved_aim is not None and abs(solved_aim - aim) > _EPS:
+                relaxed_aim = round(solved_aim, 3)
+            adequacy.append(
+                {
+                    "nutrient": key,
+                    "kind": kind,
+                    "unit": constraint.unit,
+                    "aim": aim,
+                    "mean_daily": round(sum(series) / len(series), 3),
+                    "worst_day": worst_index + 1,
+                    "worst_daily": worst_daily,
+                    "shortfall": shortfall,
+                    "shortfall_pct": shortfall_pct,
+                    "met_days": sum(1 for value in series if value >= aim - _EPS),
+                    "total_days": len(series),
+                    "relaxed_aim": relaxed_aim,
+                }
+            )
 
     def _json_safe_violations(violations: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """JSON has no Infinity — blank out non-finite magnitudes."""
@@ -219,6 +281,7 @@ def map_plan_result(
         "violations": _json_safe_violations(result.get("violations") or []),
         "relaxed_constraints": relaxed_constraints or [],
         "days": days if feasible else [],
+        "adequacy": adequacy,
         "explanation": explanation,
         "status": envelope.status.value if hasattr(envelope.status, "value") else str(envelope.status),
     }

@@ -7,7 +7,10 @@ solving, unreachable MIN floors are relaxed to the achievable pool bound
 (see ``core/plan_service.py`` — disclosed in the response as
 ``relaxed_constraints``). The optimiser result is mapped to the frontend
 contract: ``days[]`` with ``slots[]`` + ``totals[]`` vs targets, plus the
-plain-language patient explanation panel payload.
+plain-language patient explanation panel payload. An additive top-level
+``adequacy[]`` array scores delivery against the ORIGINAL approved envelope
+(one entry per MIN/TARGET constraint; MAX ceilings excluded) so shortfalls
+against the approved aims stay visible even when a floor was relaxed.
 
 An infeasible pool returns HTTP 200 with ``feasible: false`` and
 ``infeasibility_reason`` (the UI renders the reason); the gate still answers
