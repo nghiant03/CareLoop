@@ -1391,7 +1391,7 @@
   },
   "q3_constraint_satisfaction": {
     "question": "Q3 Constraint satisfaction",
-    "definition": "For every eligible patient: engine -> simulated APPROVED -> prepare_envelope_for_pool (MIN-floor relaxation disclosure) -> backend.optim.api.run -> original-target main/side composition -> violation_count == 0 and per-day totals within the SOLVED envelope's HARD constraints (MAX ceilings; MIN floors / TARGETs are soft per PLAN.md module 4, reported as soft-aim shortfalls, never violations). Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served) and relaxation disclosures are reported distinctly.",
+    "definition": "For every eligible patient: engine -> simulated APPROVED -> plan_service.plan_meals (single-dish search then original-target main/optional-side composition; fallback floor adjustments disclosed) -> violation_count == 0 and per-day totals within the SOLVED envelope's HARD constraints (MAX ceilings; MIN floors / TARGETs are soft per PLAN.md module 4, reported as soft-aim shortfalls, never violations). Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served) and relaxation disclosures are reported distinctly.",
     "optimiser_config": {
       "seed": 42,
       "pop_size": 40,
@@ -3113,7 +3113,7 @@
   },
   "q6_ablation": {
     "question": "Q6 Objective/selection & meal-composition ablation",
-    "definition": "P1 review comparison: current raw-unit scalar selection vs nutrient-normalised selection vs adequacy-first/lexicographic selection on the SAME NSGA-II fronts, scored against the ORIGINAL approved aims (paired patient/seed design), followed by a bounded meal-composition ablation (1 dish/slot vs main+side 2-dish encoding, production encoding unchanged) and exact-reference quality reporting for the scalar-selected plans.",
+    "definition": "P1 review comparison: single-dish raw-unit scalar selection vs nutrient-normalised selection vs adequacy-first/lexicographic selection on the SAME NSGA-II fronts, scored against the ORIGINAL approved aims (paired patient/seed design), followed by a bounded meal-composition ablation (1 dish/slot vs main+side 2-dish encoding, distinct from production optional-side search) and exact-reference quality reporting for the scalar-selected plans.",
     "selection_ablation": {
       "config": {
         "seeds": [

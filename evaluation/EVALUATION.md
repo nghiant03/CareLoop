@@ -65,7 +65,7 @@ Scripted conflict cases with expected outcomes, checked against the engine's env
 
 ## Q3 — Constraint satisfaction
 
-For every eligible patient: engine -> simulated APPROVED -> prepare_envelope_for_pool (MIN-floor relaxation disclosure) -> backend.optim.api.run -> original-target main/side composition -> violation_count == 0 and per-day totals within the SOLVED envelope's HARD constraints (MAX ceilings; MIN floors / TARGETs are soft per PLAN.md module 4, reported as soft-aim shortfalls, never violations). Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served) and relaxation disclosures are reported distinctly.
+For every eligible patient: engine -> simulated APPROVED -> plan_service.plan_meals (single-dish search then original-target main/optional-side composition; fallback floor adjustments disclosed) -> violation_count == 0 and per-day totals within the SOLVED envelope's HARD constraints (MAX ceilings; MIN floors / TARGETs are soft per PLAN.md module 4, reported as soft-aim shortfalls, never violations). Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served) and relaxation disclosures are reported distinctly.
 
 | Patient | Archetype | Outcome | Violations | Engine | Per-day OK | Relaxations | Blockers (leave-one-out) |
 |---|---|---|---|---|---|---|---|
@@ -233,7 +233,7 @@ Human reviewers score each of the five criteria below on a 1–5 scale; the chat
 
 ## Q6 — Objective/selection & meal-composition ablation
 
-P1 review comparison: current raw-unit scalar selection vs nutrient-normalised selection vs adequacy-first/lexicographic selection on the SAME NSGA-II fronts, scored against the ORIGINAL approved aims (paired patient/seed design), followed by a bounded meal-composition ablation (1 dish/slot vs main+side 2-dish encoding, production encoding unchanged) and exact-reference quality reporting for the scalar-selected plans.
+P1 review comparison: single-dish raw-unit scalar selection vs nutrient-normalised selection vs adequacy-first/lexicographic selection on the SAME NSGA-II fronts, scored against the ORIGINAL approved aims (paired patient/seed design), followed by a bounded meal-composition ablation (1 dish/slot vs main+side 2-dish encoding, distinct from production optional-side search) and exact-reference quality reporting for the scalar-selected plans.
 
 ### Selection ablation (paired: 40-pop / 80-gen NSGA-II front per patient × seed [42, 43, 44]; all strategies score the SAME front against the ORIGINAL approved aims)
 
@@ -278,9 +278,9 @@ Controlled encoding ablation; production now uses optional-side adequacy search.
 
 | Encoding | Strategy | Rows | Feasibility | Worst-day shortfall % | Mean daily shortfall | Met-days fraction | Cost (SGD) | Variety (objective) |
 |---|---|---|---|---|---|---|---|---|
-| 1-dish (production) | scalar | 8 | 100.0% | 86.895 | 401.624 | 0.095 | 79.28 | -0.661 |
-| 1-dish (production) | normalised | 8 | 100.0% | 81.5 | 299.433 | 0.182 | 90.904 | -0.699 |
-| 1-dish (production) | adequacy_first | 8 | 100.0% | 75.428 | 390.522 | 0.064 | 80.624 | -0.645 |
+| 1-dish (baseline) | scalar | 8 | 100.0% | 86.895 | 401.624 | 0.095 | 79.28 | -0.661 |
+| 1-dish (baseline) | normalised | 8 | 100.0% | 81.5 | 299.433 | 0.182 | 90.904 | -0.699 |
+| 1-dish (baseline) | adequacy_first | 8 | 100.0% | 75.428 | 390.522 | 0.064 | 80.624 | -0.645 |
 | 2-dish (main + side) | scalar | 8 | 100.0% | 48.209 | 110.228 | 0.34 | 152.349 | -0.586 |
 | 2-dish (main + side) | normalised | 8 | 100.0% | 37.664 | 112.227 | 0.367 | 152.335 | -0.565 |
 | 2-dish (main + side) | adequacy_first | 8 | 100.0% | 34.003 | 120.248 | 0.347 | 151.472 | -0.565 |
@@ -335,4 +335,3 @@ Disclosure: Variety is excluded from the exact reference (it is defined over the
 7. **Data quality.** All 214 dishes are unverified; costs are synthetic estimates. Main/side composition improves delivery but constrained patients can still have shortfalls, quantified per patient in results.json. Neither real affordability nor clinical nutrient accuracy is established.
 
 8. **Scale.** 20 synthetic patients, one dish dataset, one seed set. Statistical strength is limited; the numbers measure pipeline correctness, not clinical validity.
-

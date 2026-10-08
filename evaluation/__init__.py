@@ -1,10 +1,11 @@
 """CareLoop automated evaluation suite.
 
-Answers the five evaluation questions (traceability, conflict resolution,
-constraint satisfaction, quality/runtime, chat groundedness) over the real
+Answers six evaluation questions (traceability, conflict resolution,
+constraint satisfaction, quality/runtime, chat groundedness, and selection /
+composition ablation) over the real
 patients/rules/dishes and produces a reproducible report:
 
-* ``evaluation/results.json``  — machine-readable results for all five questions
+* ``evaluation/results.json``  — machine-readable results for all six questions
 * ``evaluation/EVALUATION.md`` — human-readable report with tables + limitations
 
 Run::

@@ -3,8 +3,8 @@
 Verifies: the labeled query set loads and its expected chunk ids resolve to
 real chunks; the benchmark runs with sane, consistent metrics (including the
 ``bm25_rrf_char`` RRF fusion row, which must fuse the union of its components'
-candidates); the as-is method reproduces production retrieval behaviour
-exactly; the fusion calibration and irrelevant-refusal checks are recorded;
+candidates); the BM25 row matches production retrieval while as-is TF-IDF
+remains a historical comparator; fusion diagnostics and refusal checks are recorded;
 the run is deterministic across two evaluations and leaves
 ``retrieval.build_index``/``retrieval.MIN_SCORE`` module state untouched; and
 the artifact is written and parses.

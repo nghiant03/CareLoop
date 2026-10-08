@@ -120,7 +120,7 @@ def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
     add(comp["note"])
     add("")
     rows = []
-    for label, key in (("1-dish (production)", "one_dish"), ("2-dish (main + side)", "two_dish")):
+    for label, key in (("1-dish (baseline)", "one_dish"), ("2-dish (main + side)", "two_dish")):
         for name in ("scalar", "normalised", "adequacy_first"):
             p = (comp["pooled"].get(key) or {}).get(name) or {}
             rows.append([label, name, p.get("rows"),

@@ -13,7 +13,7 @@ APPROVED envelope, so a content-unchanged APPROVED copy is built here — no app
 store is touched) is scored by the three selection strategies from
 ``backend.optim.selection``:
 
-* ``scalar_selection``     — status quo (raw-unit ``SCALAR_WEIGHTS``);
+* ``scalar_selection``     — single-dish baseline (raw-unit ``SCALAR_WEIGHTS``);
 * ``normalised_selection`` — per-nutrient relative deviation vs the aims;
 * ``adequacy_first_selection`` — lexicographic worst-day shortfall first.
 
@@ -22,7 +22,8 @@ MIN-relaxed copy — floors are soft under the PLAN.md module-4 encoding, so the
 plain approved envelope is solved directly).  Per selected plan we report, as
 pure functions over ``daily_totals`` (adequacy semantics mirror
 ``backend/app/core/plan_service.py``: one entry per MIN/TARGET aim, MAX
-ceilings excluded, worst day = lowest daily total, met day = total >= aim):
+ceilings excluded; MIN gap = nonnegative shortfall, TARGET gap = absolute
+distance; worst day = largest gap, met day = gap <= numerical tolerance):
 
 * per-nutrient mean daily shortfall, worst-day relative shortfall %,
   met-days fraction;
@@ -31,8 +32,9 @@ ceilings excluded, worst day = lowest daily total, met day = total >= aim):
 
 Phase 2 — meal-composition ablation (bounded, informational)
 ------------------------------------------------------------
-The production encoding (1 dish per slot) is NOT changed.  A compact GA
-searches a 2-dish encoding: each of the 21 slots holds exactly 2 dishes, a
+This controlled comparison uses a single-dish baseline and a compact GA that
+searches a 2-dish encoding; it does not run production's optional-side adequacy
+search. Each of the 21 experimental slots holds exactly 2 dishes, a
 MAIN (allowed pool minus categories ``drink``/``dessert``/``kopitiam``) and a
 SIDE (allowed pool with category in ``soup``/``healthy``/``cai_png`` or the
 ``vegetable`` tag), with no dish id twice within the same day.  Operators
@@ -202,11 +204,11 @@ def adequacy_rows(daily: list[dict[str, float]], envelope: Any) -> list[dict[str
     Semantics mirror ``backend/app/core/plan_service.py`` ``adequacy[]``:
     one entry per MIN/TARGET constraint in envelope order (MAX ceilings are
     excluded — ceiling compliance is a hard-feasibility matter); the worst
-    day is the day with the LOWEST total; ``shortfall = aim - worst_daily``
-    (negative when the worst day still exceeds the aim); the relative
-    shortfall percentage is 0 when ``aim <= 0``; a day "meets" the aim when
-    ``total >= aim - 1e-9`` (plan_service semantics; a TARGET aim is met from
-    below — two-sided deviation is scored by the selection strategies).
+    day has the largest gap: ``max(0, aim - total)`` for MIN, or
+    ``abs(aim - total)`` for TARGET. Mean and worst gaps are nonnegative;
+    the relative worst-gap percentage is 0 when ``aim <= _EPS``. A day meets
+    the aim when its gap is at most ``_EPS``. The serialized ``shortfall``
+    names also cover two-sided TARGET deviation for compatibility.
     """
     rows: list[dict[str, Any]] = []
     for constraint in envelope.targets:
@@ -1291,12 +1293,12 @@ def evaluate_q6(
     return {
         "question": "Q6 Objective/selection & meal-composition ablation",
         "definition": (
-            "P1 review comparison: current raw-unit scalar selection vs "
+            "P1 review comparison: single-dish raw-unit scalar selection vs "
             "nutrient-normalised selection vs adequacy-first/lexicographic "
             "selection on the SAME NSGA-II fronts, scored against the "
             "ORIGINAL approved aims (paired patient/seed design), followed "
             "by a bounded meal-composition ablation (1 dish/slot vs main+side "
-            "2-dish encoding, production encoding unchanged) and "
+            "2-dish encoding, distinct from production optional-side search) and "
             "exact-reference quality reporting for the scalar-selected plans."
         ),
         "selection_ablation": selection,

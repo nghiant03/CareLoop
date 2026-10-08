@@ -76,25 +76,15 @@ PROD_NAME = "bm25_word_syn"
 RRF_K = 60
 RRF_COMPONENT_DEPTH = 50
 
-# Refusal-gate threshold for the fusion row, calibrated on the RRF score
-# scale (RRF scores are ~0.001-0.05, so the BM25-scale ``retrieval.MIN_SCORE``
-# is meaningless for it). Measured with ``calibrate_fusion`` using the same
-# methodology as the production ``MIN_SCORE`` calibration — and the measured
-# distributions OVERLAP: irrelevant probes score 0.0164-0.0325 (char_wb
-# matches garbled/stopword-ish text through shared 3-5 grams; typo'd nonsense
-# reaches 0.0325) while the weakest labeled-relevant query scores 0.0164 —
-# exactly the minimum RRF quantum 1/(k+1). No threshold separates the two
-# populations, so this constant is NOT a separating threshold: it is the
-# smallest refusal-preserving value (just above the irrelevant best, with
-# headroom) so the fusion row's end-to-end spot-check still refuses
-# irrelevant questions. The absence of a clean gap is itself the documented
-# reason the fusion row is not the production default — see the *Fusion
-# threshold calibration* section of RETRIEVAL_BENCH.md.
+# Default gate for an uncalibrated fusion method, on the RRF score scale rather
+# than BM25's scale. ``evaluate`` replaces experimental gates using disjoint
+# development examples before held-out scoring. ``calibrate_fusion`` reports
+# held-out overlap diagnostically and must never retune a gate from those scores.
+# See RETRIEVAL_BENCH.md for the evaluation protocol.
 FUSION_MIN_SCORE = 0.04
 
-# End-to-end spot-check: grounded questions (mix of nutrient questions with a
-# constraint-producing anchor rule, plus sugar/fat questions where NO rule
-# produces a constraint so citations must come from retrieval itself).
+# End-to-end spot-check: supported nutrient questions need grounded citations;
+# numeric sugar/fat requests without a supporting constraint may be refused.
 END_TO_END_QUESTIONS = [
     "How much sodium can I have per day?",
     "What is the sodium limit for someone with high blood pressure?",
@@ -586,13 +576,12 @@ def _irrelevant_probes() -> list[str]:
 def calibrate_fusion(
     kb: Optional[KBGraph] = None, method: Optional[RRFMethod] = None
 ) -> dict[str, Any]:
-    """Measure the RRF-score gap between irrelevant and relevant queries.
+    """Report held-out RRF score overlap without selecting or changing a gate.
 
-    Same methodology as the production ``MIN_SCORE`` calibration: best fused
-    score over irrelevant probes vs the weakest labeled-relevant query.
-    ``FUSION_MIN_SCORE`` must sit inside that gap with headroom below the
-    weakest relevant score; if no clean gap exists, that is an honest reason
-    not to put the fusion row into production.
+    Compares the best irrelevant score with the weakest labeled-relevant score
+    and checks the method's existing threshold against that interval. Despite
+    the historical name, this is diagnostic only: ``calibrate_methods`` selects
+    experimental thresholds on development examples before evaluation.
     """
     if kb is None:
         kb = load_kb(RULES_PATH, DISHES_PATH)
