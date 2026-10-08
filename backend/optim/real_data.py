@@ -1,25 +1,26 @@
-"""Real 190-dish dataset loader + fast vectorised evaluation (CareLoop, Week 2).
+"""Real-dish dataset loader + fast vectorised evaluation (CareLoop, Week 2).
 
 ``load_dishes()`` reads ``data/dishes.json`` (flat per-dish nutrient keys) into
 the :class:`backend.optim.toy_data.Dish` contract the whole optimiser already
 speaks, so ``problem.py`` / ``baselines.py`` / pymoo code work unchanged.
 
-The file also provides the performance machinery needed at 190-dish scale:
+The file also provides the performance machinery needed at dish-pool scale:
 
 * :class:`FastEvaluator` — numpy-backed re-implementation of
   ``problem.evaluate`` for plans drawn from the allowed pool.  Objectives and
   the canonical constraint vector are computed identically (same ordering, same
   EPS tolerance) but ~50x faster, which keeps pymoo NSGA-II runs and the
   benchmark harness inside their time budget.
-* :func:`feasibility_precheck` — cheap existence test for hard constraints.
+* :func:`feasibility_precheck` — cheap existence test for the hard constraints
+  (MAX ceilings only; MIN floors and TARGETs are soft per PLAN.md module 4).
 * :func:`greedy_feasible_plan` / :func:`repair_plan` — the feasibility
   guarantee: a constructive greedy builder plus hill-climbing repair so the
   production ``run()`` NEVER returns an infeasible plan.
 
 Key structural insight used throughout: every hard constraint in the envelope
 formulation is *per-day* (MAX daily + horizon ``7 x daily`` is implied by the
-daily bound; MIN is daily).  A 21-slot plan is therefore feasible **iff every
-day is feasible**, so construction and repair decompose to 3-slot day problems.
+daily bound).  A 21-slot plan is therefore feasible **iff every day is
+feasible**, so construction and repair decompose to 3-slot day problems.
 """
 
 from __future__ import annotations
@@ -94,7 +95,7 @@ def _load_cached(path: str) -> tuple[Dish, ...]:
 
 
 def load_dishes(path: str | None = None) -> list[Dish]:
-    """Load the real 190-dish pool from ``data/dishes.json``.
+    """Load the real dish pool from ``data/dishes.json``.
 
     Returns a fresh list each call (the :class:`Dish` records themselves are
     frozen).  Raises ``FileNotFoundError`` if the dataset is missing — callers
@@ -140,14 +141,13 @@ class FastEvaluator:
             for c in envelope.targets
             if c.kind == ConstraintKind.MAX
         ]
+        # Soft terms (steer the deviation objective; never hard constraints):
         self._min_daily = [
             (col[c.nutrient.value], float(c.value))
             for c in envelope.targets
             if c.kind == ConstraintKind.MIN
         ]
-        self.n_constraints = len(self._max_daily) * (n_days + 1) + len(
-            self._min_daily
-        ) * n_days
+        self.n_constraints = len(self._max_daily) * (n_days + 1)
 
         if self.size:
             self._nut = np.array(
@@ -189,14 +189,17 @@ class FastEvaluator:
             daily = self.daily_totals(idx)
         idx = np.asarray(idx, dtype=int)
 
-        # 1. nutrient_target_deviation (mean over days of L1 to TARGETs)
-        if self._targets and self.n_days:
-            dev = 0.0
-            for col, value in self._targets:
-                dev += float(np.abs(daily[:, col] - value).sum())
-            deviation = dev / self.n_days
-        else:
-            deviation = 0.0
+        # 1. nutrient_target_deviation: mean over days of the deviation from
+        #    the envelope's nutrient band (TARGET distance, MIN shortfall,
+        #    MAX excess) — identical to problem._obj_target_deviation.
+        dev = 0.0
+        for col, value in self._targets:
+            dev += float(np.abs(daily[:, col] - value).sum())
+        for col, value in self._min_daily:
+            dev += float(np.maximum(0.0, value - daily[:, col]).sum())
+        for col, value in self._max_daily:
+            dev += float(np.maximum(0.0, daily[:, col] - value).sum())
+        deviation = dev / self.n_days if self.n_days else 0.0
 
         # 2. preference_fit
         n = int(idx.size)
@@ -221,9 +224,11 @@ class FastEvaluator:
         return np.array([deviation, preference, variety, cost])
 
     def g_vector(self, daily: np.ndarray) -> np.ndarray:
-        """Canonical constraint vector; ``G <= 0`` == satisfied.
+        """Canonical HARD-constraint vector; ``G <= 0`` == satisfied.
 
-        Each magnitude is shifted by ``-_EPS`` so the pymoo view of feasibility
+        MAX ceilings only (daily + horizon) — MIN floors and TARGETs are soft
+        objective terms per PLAN.md module 4 and never appear here.  Each
+        magnitude is shifted by ``-_EPS`` so the pymoo view of feasibility
         matches ``problem.evaluate``'s EPS tolerance exactly.
         """
         parts: list[np.ndarray] = []
@@ -234,9 +239,6 @@ class FastEvaluator:
             parts.append(
                 np.array([max(0.0, horizon - limit * self.n_days) - _EPS])
             )
-        for col, limit in self._min_daily:
-            under = np.maximum(0.0, limit - daily[:, col]) - _EPS
-            parts.append(under)
         if not parts:
             return np.zeros(0)
         return np.concatenate(parts)
@@ -259,7 +261,11 @@ class FastEvaluator:
 
     # -- per-day feasibility primitives ------------------------------------
     def day_violation(self, totals: np.ndarray) -> tuple[int, float]:
-        """(violation_count, violation_magnitude) for one day's nutrient totals."""
+        """(violation_count, violation_magnitude) for one day's nutrient totals.
+
+        HARD constraints only: MAX ceilings.  MIN floors are soft (they steer
+        the greedy heuristic and the deviation objective) and never count here.
+        """
         count = 0
         mag = 0.0
         for col, limit in self._max_daily:
@@ -267,11 +273,6 @@ class FastEvaluator:
             if over > _EPS:
                 count += 1
                 mag += over
-        for col, limit in self._min_daily:
-            under = limit - totals[col]
-            if under > _EPS:
-                count += 1
-                mag += under
         return count, mag
 
 
@@ -281,9 +282,10 @@ class FastEvaluator:
 def feasibility_precheck(envelope, dishes: list[Dish], n_days: int = DAYS):
     """Cheap necessary-condition test: can ANY 3-dish day satisfy the envelope?
 
-    Returns ``(ok, reason)``.  A failing precheck means the allowed pool is
-    provably too small for the hard constraints (empty pool, or a MIN above the
-    best 3-dish day, or a MAX below the least-possible 3-dish day).
+    Returns ``(ok, reason)``.  HARD constraints only (MAX ceilings): a failing
+    precheck means the allowed pool is provably too narrow — empty pool, or a
+    MAX below the least-possible 3-dish day.  MIN floors are soft objective
+    terms (PLAN.md module 4) and never fail the precheck.
     """
     pool = allowed_dishes(envelope, dishes)
     if not pool:
@@ -297,15 +299,8 @@ def feasibility_precheck(envelope, dishes: list[Dish], n_days: int = DAYS):
             least = 3.0 * float(values.min())  # best (smallest) possible day
             if least > float(c.value) + _EPS:
                 return False, (
-                    f"hard MAX {key} <= {c.value} impossible: the three lowest-sodium"
-                    f"-style dishes still total {least:.1f} per day"
-                )
-        elif c.kind == ConstraintKind.MIN:
-            best = 3.0 * float(values.max())  # best (largest) possible day
-            if best < float(c.value) - _EPS:
-                return False, (
-                    f"hard MIN {key} >= {c.value} impossible: the three highest-{key} "
-                    f"dishes only reach {best:.1f} per day"
+                    f"hard MAX {key} <= {c.value} impossible: the three lowest-{key} "
+                    f"dishes still total {least:.1f} per day"
                 )
     return True, None
 

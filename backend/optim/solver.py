@@ -10,7 +10,8 @@
   greedy-constructed feasible plan is used; if even that is impossible the
   result is an explicit infeasibility diagnosis (``feasible=False``,
   ``infeasibility_reason`` set, empty plan) — never a silently broken plan;
-* returned plans always satisfy the envelope's hard constraints with
+* returned plans always satisfy the envelope's hard constraints (MAX ceilings
+  + exclusions per PLAN.md module 4; MIN floors / TARGETs are soft) with
   ``violation_count == 0`` (verified with the canonical ``problem.evaluate``).
 
 Benchmark baselines (``ga_search``, ``greedy_search``, ``random_search``) are

@@ -9,8 +9,11 @@ objective/constraint below supports multi-dish meals.
 
 Objectives (all minimised)
 --------------------------
-1. ``nutrient_target_deviation`` : mean over days of the L1 distance between
-   daily totals and every ``ConstraintKind.TARGET`` value.
+1. ``nutrient_target_deviation`` : mean over days of the deviation from the
+   envelope's nutrient band — ``|total - target|`` for ``TARGET`` values,
+   shortfall ``max(0, min - total)`` for ``MIN`` floors, and excess
+   ``max(0, total - max)`` for ``MAX`` ceilings (zero for hard-feasible plans,
+   kept as a smooth penalty that helps the search).
 2. ``preference_fit``            : negative mean tag-preference score
    (placeholder weighting; Week 2 replaces with learned/patient prefs).
 3. ``variety``                   : negative (normalised Shannon entropy +
@@ -19,13 +22,22 @@ Objectives (all minimised)
 
 Hard constraints
 ----------------
+Per PLAN.md module 4 ("objectives = nutrient-target deviation, preference fit,
+variety, cost; hard constraints = approved ceilings/exclusions"):
+
 * ``ConstraintKind.MAX`` : daily total <= value for every day, and horizon total
   <= ``value * n_days``.
-* ``ConstraintKind.MIN`` : daily total >= value for every day.
 * ``ExclusionFlag``      : a dish is unusable if any ingredient / category / tag
-  matches.
+  matches literally, or if a documented semantic mapping applies
+  (``exclusion_mapping.py`` bridges rulebook values like
+  ``high_potassium_foods`` to per-serving nutrient thresholds).
 * membership            : every dish id must exist in the supplied dish pool.
 * gate                  : only ``EnvelopeStatus.APPROVED`` envelopes may be used.
+
+MIN floors and ``ConstraintKind.TARGET`` values are **soft**: they steer
+``nutrient_target_deviation`` but never count as violations and never cause
+infeasibility, so guideline floors (fibre, potassium, energy) guide the search
+instead of making envelopes unsolvable.
 
 All hard-constraint checks use a small epsilon so float noise never registers as
 a violation.  The canonical invariant: the optimiser NEVER violates a MAX
@@ -47,6 +59,8 @@ from shared.envelope_schema import (
 )
 
 from .toy_data import NUTRIENT_KEYS, Dish
+
+from .exclusion_mapping import semantic_exclusion_hit
 
 # ---------------------------------------------------------------------------
 # Problem geometry
@@ -161,10 +175,16 @@ def _matches_exclusion(flag, dish: Dish) -> bool:
         return value in ingredients
     if flag.kind == ExclusionKind.DISH_CATEGORY:
         # Match either the category field or a category-like tag, so toy and
-        # Week-2 data both work.
-        return value == category or value in tags
+        # Week-2 data both work; fall back to the documented semantic mapping
+        # for rulebook values that no dataset tag spells out (e.g.
+        # ``high_potassium_foods`` -> potassium per serving > 500 mg).
+        if value == category or value in tags:
+            return True
+        return semantic_exclusion_hit(flag.kind.value, value, dish)
     if flag.kind in (ExclusionKind.MACRO_PATTERN, ExclusionKind.DIET_PATTERN):
-        return value in tags or value == category
+        if value in tags or value == category:
+            return True
+        return semantic_exclusion_hit(flag.kind.value, value, dish)
     return False
 
 
@@ -194,17 +214,20 @@ class ConstraintSlot:
 
 
 def constraint_layout(envelope: NutrientEnvelope, n_days: int = DAYS) -> list[ConstraintSlot]:
-    """Canonical, fixed-length ordering of nutrient hard constraints."""
+    """Canonical, fixed-length ordering of the HARD nutrient constraints.
+
+    Only ``MAX`` ceilings are hard (per PLAN.md module 4): one daily slot per
+    day plus one horizon slot per MAX constraint.  ``MIN`` floors and
+    ``TARGET`` values are soft objective terms (see
+    :func:`_obj_target_deviation`) and deliberately absent here, so guideline
+    floors never make an envelope unsolvable.
+    """
     layout: list[ConstraintSlot] = []
     for c in envelope.targets:
         if c.kind == ConstraintKind.MAX:
             for day in range(n_days):
                 layout.append(ConstraintSlot("max", "daily", c.nutrient.value, day, c.value))
             layout.append(ConstraintSlot("max", "horizon", c.nutrient.value, None, c.value * n_days))
-    for c in envelope.targets:
-        if c.kind == ConstraintKind.MIN:
-            for day in range(n_days):
-                layout.append(ConstraintSlot("min", "daily", c.nutrient.value, day, c.value))
     return layout
 
 
@@ -222,7 +245,9 @@ def constraint_vector(
     """Non-negative violation magnitudes (0 == satisfied) in canonical order.
 
     Fixed length for a given envelope and horizon, so it can be fed directly to
-    pymoo as ``G`` (``G <= 0`` means satisfied).
+    pymoo as ``G`` (``G <= 0`` means satisfied).  HARD constraints only: MAX
+    ceilings (daily + horizon).  MIN floors and TARGETs are soft and never
+    appear in the constraint vector.
     """
     _require_approved(envelope)
     n = _validate_plan(plan) if n_days is None else n_days
@@ -237,12 +262,6 @@ def constraint_vector(
             vec.append(max(0.0, daily[d][key] - c.value))
         horizon = sum(daily[d][key] for d in range(n))
         vec.append(max(0.0, horizon - c.value * n))
-    for c in envelope.targets:
-        if c.kind != ConstraintKind.MIN:
-            continue
-        key = c.nutrient.value
-        for d in range(n):
-            vec.append(max(0.0, c.value - daily[d][key]))
     return vec
 
 
@@ -252,13 +271,27 @@ def constraint_vector(
 def _obj_target_deviation(
     daily: list[dict[str, float]], envelope: NutrientEnvelope
 ) -> float:
-    targets = [c for c in envelope.targets if c.kind == ConstraintKind.TARGET]
-    if not targets or not daily:
+    """Mean per-day deviation from the envelope's nutrient band (soft term).
+
+    ``TARGET`` -> ``|total - target|``; ``MIN`` -> shortfall
+    ``max(0, min - total)``; ``MAX`` -> excess ``max(0, total - max)`` (zero for
+    hard-feasible plans; kept so the search keeps a gradient inside the
+    infeasible region).  Guideline floors therefore *guide* the search without
+    ever counting as violations.
+    """
+    constraints = list(envelope.targets)
+    if not constraints or not daily:
         return 0.0
     dev = 0.0
     for totals in daily:
-        for c in targets:
-            dev += abs(totals[c.nutrient.value] - c.value)
+        for c in constraints:
+            value = totals[c.nutrient.value]
+            if c.kind == ConstraintKind.TARGET:
+                dev += abs(value - c.value)
+            elif c.kind == ConstraintKind.MIN:
+                dev += max(0.0, c.value - value)
+            else:  # MAX
+                dev += max(0.0, value - c.value)
     return dev / len(daily)
 
 
@@ -307,8 +340,11 @@ def evaluate(
     """Return ``(objectives, constraint_violations)`` for ``plan``.
 
     ``objectives`` is a dict keyed by :data:`OBJECTIVE_NAMES` (all minimise).
-    ``constraint_violations`` is a list of dicts; an empty list means feasible.
-    Raises :class:`EnvelopeNotApprovedError` for non-APPROVED envelopes.
+    ``constraint_violations`` lists HARD violations only — MAX ceilings
+    (daily + horizon), exclusions and membership.  MIN shortfalls and TARGET
+    deviations are soft objective terms and never appear here.  An empty list
+    means feasible.  Raises :class:`EnvelopeNotApprovedError` for non-APPROVED
+    envelopes.
     """
     _require_approved(envelope)
     n_days = _validate_plan(plan)
@@ -345,7 +381,7 @@ def evaluate(
                     }
                 )
 
-    # nutrient hard constraints (MAX daily + horizon, MIN daily)
+    # nutrient hard constraints (MAX daily + horizon; MIN floors are soft)
     daily = [sum_nutrients(_day_dishes(plan, d), lookup) for d in range(n_days)]
     layout = constraint_layout(envelope, n_days)
     vector = constraint_vector(plan, envelope, dishes, n_days=n_days)
@@ -383,7 +419,11 @@ def evaluate(
 
 
 def is_feasible(plan: Plan, envelope: NutrientEnvelope, dishes: list[Dish]) -> bool:
-    """True iff ``plan`` violates no hard constraint (MAX / MIN / exclusion)."""
+    """True iff ``plan`` violates no HARD constraint (MAX ceiling / exclusion).
+
+    MIN floors and TARGET values are soft objective terms and never affect
+    feasibility (see the module docstring for the PLAN.md module-4 encoding).
+    """
     _require_approved(envelope)
     _objectives, violations = evaluate(plan, envelope, dishes)
     return len(violations) == 0

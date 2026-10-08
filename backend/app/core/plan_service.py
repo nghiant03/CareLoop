@@ -2,16 +2,17 @@
 
 Two reconciliations live here (documented for the frontend contract):
 
-1. **MIN-floor relaxation.** The guideline rulebook sets hard fibre floors
-   (``GEN-FIBER-25`` min 25 g/d, ``DASH-2025-FIBER-30`` min 30 g/d) but the
-   real 190-dish dataset tops out at 8 g fibre per dish, so the best possible
-   3-dish day reaches only 24 g. The optimiser's ``feasibility_precheck``
-   therefore diagnoses *every* guideline-produced envelope as infeasible.
-   ``prepare_envelope_for_pool`` lowers unreachable MIN floors to the exact
-   achievable pool bound (3 x highest dish value) before solving and reports
-   every adjustment in ``relaxed_constraints`` — the hard-constraint guarantee
-   (``violation_count == 0``) then holds against the envelope actually solved,
-   and the relaxation is fully disclosed instead of silently dropping the
+1. **MIN-floor relaxation (objective calibration + disclosure).** Under the
+   PLAN.md module-4 encoding, MIN floors and TARGETs are *soft* objective
+   terms — they steer the nutrient-deviation objective and never cause
+   infeasibility, so relaxation is no longer required for feasibility.
+   ``prepare_envelope_for_pool`` still lowers MIN floors the allowed pool
+   provably cannot reach (e.g. the guideline fibre floors ``GEN-FIBER-25``
+   min 25 g/d / ``DASH-2025-FIBER-30`` min 30 g/d vs a pool that tops out at
+   8 g fibre per dish, 24 g per 3-dish day) and reports every adjustment in
+   ``relaxed_constraints``.  The hard-constraint guarantee
+   (``violation_count == 0``) holds against the envelope actually solved, and
+   the relaxation is fully disclosed instead of silently dropping the
    guideline intent.
 
 2. **Frontend plan shape.** The optimiser returns ``plan`` as 21 flat slots
@@ -99,6 +100,11 @@ def map_plan_result(
     explanation); ``solved_envelope`` is the possibly MIN-relaxed copy the
     optimiser actually solved (drives totals-vs-target compliance so the
     reported ``compliant`` flags match ``violation_count == 0``).
+
+    ``compliant`` reflects HARD constraints only (MAX ceilings — the PLAN.md
+    module-4 encoding): a nutrient whose day total exceeds a hard MAX is
+    ``False``; a nutrient with no hard MAX is ``None`` even when a soft MIN
+    floor is unmet (the shortfall stays visible in ``targets``).
     """
     solved = solved_envelope or envelope
     lookup = {d.dish_id: d for d in dishes}
@@ -152,7 +158,10 @@ def map_plan_result(
                 if constraint["kind"] == "max":
                     ok = value <= constraint["value"] + _EPS
                 elif constraint["kind"] == "min":
-                    ok = value >= constraint["value"] - _EPS
+                    # MIN floors are soft objective terms under the PLAN.md
+                    # module-4 encoding — a shortfall is not a hard violation
+                    # (it stays visible in `targets` for the UI).
+                    continue
                 else:
                     continue
                 compliant = ok if compliant is None else (compliant and ok)

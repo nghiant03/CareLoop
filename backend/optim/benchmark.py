@@ -12,6 +12,8 @@ Design
   construction, random search.  NSGA-II goes through ``solver.solve`` and
   therefore carries the hard feasibility guarantee; the raw baselines do not,
   so their hard-constraint violation rate is an honest measured quantity.
+  Hard constraints are MAX ceilings + exclusions (PLAN.md module 4); MIN
+  floors / TARGETs are soft objective terms for all methods alike.
 * Hypervolume: pymoo's exact HV indicator on min-max normalised objectives.
   Bounds are computed per envelope across ALL feasible fronts from the main
   phase (all methods/seeds) and reused for the sweep; reference point is
@@ -227,11 +229,13 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
     envelope_names = sorted({row["envelope"] for row in main_rows})
 
     lines: list[str] = []
-    lines.append("# CareLoop optimiser benchmark — real 190-dish dataset")
+    lines.append("# CareLoop optimiser benchmark — real dish dataset (214 dishes)")
     lines.append("")
     lines.append(
-        "Setup: 7 days x 3 meals, 190-dish pool (post-exclusion 128-184 allowed), "
-        "4 objectives, hard daily MAX/MIN constraints. HV = pymoo exact hypervolume "
+        "Setup: 7 days x 3 meals, 214-dish pool (post-exclusion counts vary by "
+        "envelope), 4 objectives, hard daily MAX ceilings + exclusions (MIN "
+        "floors / TARGETs are soft objective terms per PLAN.md module 4). "
+        "HV = pymoo exact hypervolume "
         "on min-max normalised objectives (per-envelope bounds across all methods, "
         "ref point 1.1^4). NSGA-II rows carry the hard feasibility guarantee "
         "(repair/greedy fallback); raw baselines report their true violation rate."
@@ -327,10 +331,13 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
     )
     lines.append(
         f"* Total harness wall time: {runtime_total:.0f}s. "
-        "Baselines: GA scalarises (single-point fronts -> lower HV) and its "
-        "violation rate shows why constraint handling matters; greedy is "
+        "Baselines: GA scalarises (single-point fronts -> lower HV); greedy is "
         "feasibility-aware by construction and near-instant but myopic; random "
-        "is the floor on both axes."
+        "is the floor on quality. Under the module-4 encoding (hard = MAX "
+        "ceilings + exclusions only) raw random search rarely violates a "
+        "ceiling, so methods are separated by hypervolume rather than "
+        "violations; the repair/greedy guarantee on the NSGA-II path remains "
+        "the backstop for genuinely tight ceilings."
     )
     lines.append("")
 

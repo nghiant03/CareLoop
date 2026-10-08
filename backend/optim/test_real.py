@@ -1,4 +1,4 @@
-"""Tests for the real 190-dish optimiser pipeline (no pytest required).
+"""Tests for the real-dish optimiser pipeline (no pytest required).
 
 Run either way::
 
@@ -6,7 +6,8 @@ Run either way::
     pytest backend/optim/test_real.py
 
 Covers:
-* the real dish pool loads 190 dishes;
+* the real dish pool loads 214 dishes (190 manual + 24 curated renal
+  replenishment dishes);
 * hand-built envelopes validate against ``shared.envelope_schema``;
 * FastEvaluator agrees with the canonical ``problem.evaluate``;
 * ``api.run`` returns feasible plans (violation_count == 0) with all contract
@@ -63,11 +64,14 @@ _DISHES = load_dishes()
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-def test_real_pool_loads_190_dishes():
+DISH_COUNT = 214  # 190 manual_curation + 24 curated_renal_replenishment
+
+
+def test_real_pool_loads_214_dishes():
     dishes = load_dishes()
-    assert len(dishes) == 190, f"expected 190 dishes, got {len(dishes)}"
+    assert len(dishes) == DISH_COUNT, f"expected {DISH_COUNT} dishes, got {len(dishes)}"
     ids = {d.dish_id for d in dishes}
-    assert len(ids) == 190, "dish ids are not unique"
+    assert len(ids) == DISH_COUNT, "dish ids are not unique"
     for dish in dishes[:5] + dishes[-5:]:
         assert dish.nutrient("energy_kcal") >= 0
         assert dish.category
@@ -145,15 +149,17 @@ def test_run_tiny_budget_still_feasible():
 def test_run_uses_real_dataset_by_default():
     env = _ENVELOPES["t2d_only"]
     result = run(env, seed=42, pop_size=10, n_gen=5)
-    # t2d_only excludes only 'dessert' (6 dishes) -> 184 allowed of 190
-    assert result["allowed_dish_count"] == 184
+    # t2d_only excludes only 'dessert' (7 dishes) -> 207 allowed of 214
+    assert result["allowed_dish_count"] == 207
     ids = {d for meal in result["plan"] for d in meal}
     real_ids = {d.dish_id for d in _DISHES}
     assert ids <= real_ids, "plan contains dishes outside data/dishes.json"
 
 
 def test_infeasible_envelope_returns_diagnosis():
-    # Sodium MAX of 3 mg/day is provably impossible (min possible day = 15 mg).
+    # Sodium MAX of 0 mg/day is provably impossible (the lowest-sodium dish in
+    # the pool carries 1 mg — the curated banana — so the least possible day
+    # is 3 mg > 0).
     env = _ENVELOPES["ckd_strict"].model_copy(
         update={
             "envelope_id": "env-test-impossible",
@@ -161,7 +167,7 @@ def test_infeasible_envelope_returns_diagnosis():
                 NutrientConstraint(
                     nutrient=NutrientKind.SODIUM_MG,
                     kind=ConstraintKind.MAX,
-                    value=3.0,
+                    value=0.0,
                     unit="mg",
                 )
             ],
@@ -176,15 +182,56 @@ def test_infeasible_envelope_returns_diagnosis():
 
 
 def test_exclusions_shrink_pool_as_expected():
-    # 'deep_fried' is a tag on 51 dishes; 'coconut milk' an ingredient on 13.
+    # 'deep_fried' is a tag on 51 dishes; 'coconut milk' an ingredient on 13
+    # (58 distinct dishes excluded of the 214-dish pool; none of the 24
+    # curated renal-replenishment dishes is deep-fried or coconut-milk based).
     env = _ENVELOPES["ckd_strict"]
-    assert len(allowed_dishes(env, _DISHES)) == 132
+    assert len(allowed_dishes(env, _DISHES)) == 156
     env_hk = _ENVELOPES["ckd_hyperkalemia"]
-    assert len(allowed_dishes(env_hk, _DISHES)) == 128
+    # additionally excludes the 'high_potassium' tag (6 original dishes; the
+    # curated K-rich fruit dishes sit below the 700 mg tag threshold and are
+    # caught by the rulebook semantic threshold instead)
+    assert len(allowed_dishes(env_hk, _DISHES)) == 152
+
+
+def test_semantic_exclusion_mapping_filters_real_pool():
+    """Rulebook exclusion values must now match real dishes (Q3 remediation)."""
+    from shared.envelope_schema import ExclusionFlag, ExclusionKind
+
+    from backend.optim.envelopes import ckd_strict
+
+    def pool_with_single_exclusion(kind: ExclusionKind, value: str) -> int:
+        base = ckd_strict()
+        env = base.model_copy(
+            update={
+                "envelope_id": "env-test-semantic",
+                "exclusions": [
+                    ExclusionFlag(
+                        kind=kind,
+                        value=value,
+                        reason="test",
+                        citation=base.exclusions[0].citation,
+                    )
+                ],
+            }
+        )
+        return len(allowed_dishes(env, _DISHES))
+
+    total = len(_DISHES)
+    cat, diet = ExclusionKind.DISH_CATEGORY, ExclusionKind.DIET_PATTERN
+    # Documented semantic thresholds must bite on the real pool's tails.
+    assert pool_with_single_exclusion(cat, "high_potassium_foods") < total - 20, (
+        "semantic K threshold must exclude the high-K tail"
+    )
+    assert pool_with_single_exclusion(cat, "phosphate_additive_processed") < total - 5
+    assert pool_with_single_exclusion(cat, "sugar_sweetened_beverage") < total - 10
+    assert pool_with_single_exclusion(diet, "high_glycaemic_load") < total - 10
+    # Unknown values keep literal-only behaviour (no accidental matches).
+    assert pool_with_single_exclusion(cat, "nonexistent_category_xyz") == total
 
 
 TESTS = [
-    test_real_pool_loads_190_dishes,
+    test_real_pool_loads_214_dishes,
     test_envelopes_validate_against_schema,
     test_all_envelopes_pass_precheck,
     test_fast_evaluator_matches_canonical_evaluate,
@@ -194,6 +241,7 @@ TESTS = [
     test_run_uses_real_dataset_by_default,
     test_infeasible_envelope_returns_diagnosis,
     test_exclusions_shrink_pool_as_expected,
+    test_semantic_exclusion_mapping_filters_real_pool,
 ]
 
 

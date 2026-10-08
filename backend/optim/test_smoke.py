@@ -60,12 +60,18 @@ def test_max_constraint_violation_returns_false():
     assert any(v["type"] == "max_daily" and v["nutrient"] == "sodium_mg" for v in violations)
 
 
-def test_min_constraint_violation_returns_false():
-    # 3x Vegetable Bee Hoon/day => protein 36 g < 60 g MIN.
+def test_min_shortfall_is_soft_not_a_violation():
+    # 3x Vegetable Bee Hoon/day => protein 36 g < 60 g MIN: under the PLAN.md
+    # module-4 encoding MIN floors are SOFT — no hard violation, feasible —
+    # but the shortfall must show up in the nutrient_target_deviation objective.
     plan = [["vegetable_bee_hoon"]] * 21
     objectives, violations = evaluate(plan, _envelope(), TOY_DISHES)
-    assert is_feasible(plan, _envelope(), TOY_DISHES) is False
-    assert any(v["type"] == "min_daily" and v["nutrient"] == "protein_g" for v in violations)
+    assert is_feasible(plan, _envelope(), TOY_DISHES) is True
+    assert violations == []
+    assert all(v["type"] != "min_daily" for v in violations)
+    # the protein shortfall (24 g/day below the 60 g floor) must be visible in
+    # the deviation objective: 24 g x 7 days / 7 days = 24 g mean shortfall.
+    assert objectives["nutrient_target_deviation"] >= 24.0 - 1e-6
 
 
 def test_excluded_dish_returns_false():
@@ -132,7 +138,7 @@ def test_baselines_run_and_return_plans():
 TESTS = [
     test_feasible_plan_returns_true,
     test_max_constraint_violation_returns_false,
-    test_min_constraint_violation_returns_false,
+    test_min_shortfall_is_soft_not_a_violation,
     test_excluded_dish_returns_false,
     test_unknown_dish_returns_false,
     test_evaluate_returns_four_objectives,
