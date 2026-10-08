@@ -12,7 +12,12 @@ built by the production ``KBIndex`` so the chunk contract is identical):
   TF-IDF; ``_syn`` was production until the BM25 switch) kept as a
   comparison row;
 * ``tfidf_word_sublinear_{syn,nosyn}`` — ``sublinear_tf=True``;
-* ``tfidf_char_wb_3_5_{syn,nosyn}`` — char_wb 3-5 gram TF-IDF.
+* ``tfidf_char_wb_3_5_{syn,nosyn}`` — char_wb 3-5 gram TF-IDF;
+* ``bm25_rrf_char`` — Reciprocal Rank Fusion (Cormack/Clarke/Büttcher,
+  SIGIR 2009, k=60) of the production BM25 ranking and the
+  ``tfidf_char_wb_3_5_syn`` ranking: ``score(d) = sum_m 1/(k + rank_m(d))``
+  over the union of candidate ids, top-50 candidates per component,
+  deterministic tie-break on ``chunk_id``.
 
 Each method is scored on a labeled set of 58 queries (guideline/nutrient
 questions mirroring ``evaluation/q_groundedness.py``, conflict questions,
@@ -24,6 +29,13 @@ An end-to-end spot-check re-runs ~10 grounded questions through the real
 (the ``retrieval.build_index`` module attribute is patched for the duration of
 the call and restored afterwards — no source file is modified) and counts
 citation accuracy (an cited ``rule_id`` matches the question's acceptable set).
+``answers.answer`` also reads ``retrieval.MIN_SCORE`` at call time; methods
+whose score scale differs from BM25 (the fusion row) carry a calibrated
+``min_score`` attribute that is patched into ``retrieval.MIN_SCORE`` for the
+duration of their e2e calls and restored afterwards, so the BM25-scale gate
+never judges RRF scores (RRF scores are ~0.001-0.05). The artifact also
+records an irrelevant-question refusal check for the fusion row at its
+calibrated threshold.
 
 Run: ``.venv/bin/python -m backend.app.chat.retrieval_bench``
 Deterministic: fixed query order, deterministic vectorizers/tokenizers,
@@ -57,6 +69,28 @@ RESULTS_PATH = Path(__file__).resolve().parent / "retrieval_bench_results.json"
 # Name of the production configuration row in the results (must match what
 # ``backend/app/chat/retrieval.KBIndex`` actually runs — asserted in tests).
 PROD_NAME = "bm25_word_syn"
+
+# Reciprocal Rank Fusion parameters (Cormack/Clarke/Büttcher, SIGIR 2009):
+# score(d) = sum_m 1/(RRF_K + rank_m(d)) over the union of candidate ids;
+# each component contributes its top-RRF_COMPONENT_DEPTH ranked candidates.
+RRF_K = 60
+RRF_COMPONENT_DEPTH = 50
+
+# Refusal-gate threshold for the fusion row, calibrated on the RRF score
+# scale (RRF scores are ~0.001-0.05, so the BM25-scale ``retrieval.MIN_SCORE``
+# is meaningless for it). Measured with ``calibrate_fusion`` using the same
+# methodology as the production ``MIN_SCORE`` calibration — and the measured
+# distributions OVERLAP: irrelevant probes score 0.0164-0.0325 (char_wb
+# matches garbled/stopword-ish text through shared 3-5 grams; typo'd nonsense
+# reaches 0.0325) while the weakest labeled-relevant query scores 0.0164 —
+# exactly the minimum RRF quantum 1/(k+1). No threshold separates the two
+# populations, so this constant is NOT a separating threshold: it is the
+# smallest refusal-preserving value (just above the irrelevant best, with
+# headroom) so the fusion row's end-to-end spot-check still refuses
+# irrelevant questions. The absence of a clean gap is itself the documented
+# reason the fusion row is not the production default — see the *Fusion
+# threshold calibration* section of RETRIEVAL_BENCH.md.
+FUSION_MIN_SCORE = 0.04
 
 # End-to-end spot-check: grounded questions (mix of nutrient questions with a
 # constraint-producing anchor rule, plus sugar/fat questions where NO rule
@@ -312,6 +346,50 @@ class BM25Method(BenchMethod):
         ]
 
 
+class RRFMethod(BenchMethod):
+    """Reciprocal Rank Fusion of independent ranked lists (k=60).
+
+    Fuses the union of the components' candidate ids: a chunk found by only
+    one component still contributes, so a relevant item BM25 missed can be
+    recovered by the char n-gram component (reranking BM25 hits alone could
+    not). Scores are order-free ranks, so the incompatible BM25 / cosine
+    scales never meet. Deterministic tie-break on ``chunk_id``.
+
+    ``min_score`` is set from the fusion calibration (see
+    ``calibrate_fusion``); ``_answer_with_method`` patches it into
+    ``retrieval.MIN_SCORE`` for the duration of this method's end-to-end
+    calls because the BM25-scale production gate is meaningless on RRF
+    scores (~0.001-0.05).
+    """
+
+    def __init__(
+        self,
+        name: str,
+        components: list[BenchMethod],
+        chunks: list[dict[str, Any]],
+    ) -> None:
+        self.name = name
+        self._components = components
+        self._chunks_by_id = {c["chunk_id"]: c for c in chunks}
+        self.min_score: Optional[float] = None
+
+    def retrieve(self, query: str, k: int = 5) -> list[dict[str, Any]]:
+        if not query.strip():
+            return []
+        fused: dict[str, float] = {}
+        for component in self._components:
+            for rank, hit in enumerate(
+                component.retrieve(query, k=RRF_COMPONENT_DEPTH), start=1
+            ):
+                chunk_id = hit["chunk_id"]
+                fused[chunk_id] = fused.get(chunk_id, 0.0) + 1.0 / (RRF_K + rank)
+        ranked = sorted(fused.items(), key=lambda pair: (-pair[1], pair[0]))
+        return [
+            {**self._chunks_by_id[chunk_id], "score": score}
+            for chunk_id, score in ranked[: max(k, 0)]
+        ]
+
+
 def build_methods(kb: KBGraph) -> dict[str, BenchMethod]:
     """Build every benchmark method over the production chunking.
 
@@ -354,6 +432,14 @@ def build_methods(kb: KBGraph) -> dict[str, BenchMethod]:
         PROD_NAME: ProductionMethod(prod_index, PROD_NAME),
         "bm25_word_nosyn": BM25Method("bm25_word_nosyn", chunks, None),
     }
+    # RRF fusion of the production BM25 ranking (reused verbatim — same
+    # KBIndex instance, so identical rankings) and the char_wb(3,5) TF-IDF
+    # ranking with synonym expansion.
+    methods["bm25_rrf_char"] = RRFMethod(
+        "bm25_rrf_char",
+        [methods[PROD_NAME], methods["tfidf_char_wb_3_5_syn"]],
+        chunks,
+    )
     return methods
 
 
@@ -401,17 +487,26 @@ def _answer_with_method(method: BenchMethod, kb: KBGraph, question: str) -> dict
 
     Patches the ``backend.app.chat.retrieval.build_index`` module attribute for
     the duration of one call and restores it afterwards — no source file is
-    modified.
+    modified. ``answers.answer`` also reads ``retrieval.MIN_SCORE`` at call
+    time; if the method carries a calibrated ``min_score`` (the fusion row,
+    whose RRF scores live on a different scale than BM25), that value is
+    patched into ``retrieval.MIN_SCORE`` for the call and restored in the
+    ``finally`` block, so module state never leaks between methods.
     """
     from backend.app.chat import retrieval as retrieval_module
     from backend.app.chat.answers import answer
 
-    original = retrieval_module.build_index
+    original_build_index = retrieval_module.build_index
+    original_min_score = retrieval_module.MIN_SCORE
     retrieval_module.build_index = lambda kb_: method
+    method_min_score = getattr(method, "min_score", None)
+    if method_min_score is not None:
+        retrieval_module.MIN_SCORE = method_min_score
     try:
         return answer(question, kb, envelope=None, role="patient")
     finally:
-        retrieval_module.build_index = original
+        retrieval_module.build_index = original_build_index
+        retrieval_module.MIN_SCORE = original_min_score
 
 
 def _norm_question(question: str) -> str:
@@ -424,6 +519,7 @@ def _end_to_end_spot_check(
     relevant_by_question: dict[str, set[str]],
 ) -> dict[str, Any]:
     from backend.app.chat import escalation
+    from evaluation.q_groundedness import _claims_supported
 
     rows_out: dict[str, list[dict[str, Any]]] = {}
     for name, method in methods.items():
@@ -442,7 +538,7 @@ def _end_to_end_spot_check(
                 "question": question,
                 "status": response["status"],
                 "cited_rule_ids": cited,
-                "citation_accurate": bool(cited)
+                "citation_accurate": _claims_supported(response, kb) and bool(cited)
                 and any(rid in acceptable for rid in cited),
             })
         rows_out[name] = rows
@@ -463,8 +559,149 @@ def _end_to_end_spot_check(
 
 
 # ---------------------------------------------------------------------------
+# Fusion threshold calibration (RRF score scale) + irrelevant refusal
+# ---------------------------------------------------------------------------
+
+# Typo-corrupted nonsense probes added to
+# ``evaluation.q_groundedness._IRRELEVANT`` for the fusion threshold
+# calibration. The char n-gram component can match garbled text through
+# shared 3-5 grams, so clean irrelevant probes alone understate the refusal
+# risk for a char_wb-based fusion.
+_TYPO_NONSENSE_PROBES = [
+    "wat is teh wether forcast tomorow",
+    "tel me a jok plese",
+    "hu won teh footbal mach last nite",
+    "wut is teh capitl of frnace",
+    "can u bookc me a txi to teh airprot",
+    "recomnd me a good movei to wach",
+]
+
+
+def _irrelevant_probes() -> list[str]:
+    from evaluation.q_groundedness import _IRRELEVANT
+
+    return list(_IRRELEVANT) + _TYPO_NONSENSE_PROBES
+
+
+def calibrate_fusion(
+    kb: Optional[KBGraph] = None, method: Optional[RRFMethod] = None
+) -> dict[str, Any]:
+    """Measure the RRF-score gap between irrelevant and relevant queries.
+
+    Same methodology as the production ``MIN_SCORE`` calibration: best fused
+    score over irrelevant probes vs the weakest labeled-relevant query.
+    ``FUSION_MIN_SCORE`` must sit inside that gap with headroom below the
+    weakest relevant score; if no clean gap exists, that is an honest reason
+    not to put the fusion row into production.
+    """
+    if kb is None:
+        kb = load_kb(RULES_PATH, DISHES_PATH)
+    if method is None:
+        method = build_methods(kb)["bm25_rrf_char"]
+        assert isinstance(method, RRFMethod)
+
+    probes = _irrelevant_probes()
+    irrelevant_scores: dict[str, float] = {}
+    for probe in probes:
+        hits = method.retrieve(probe, k=1)
+        irrelevant_scores[probe] = round(hits[0]["score"], 6) if hits else 0.0
+    irrelevant_best = max(irrelevant_scores.values())
+
+    relevant_rows = []
+    for q in labeled_queries(kb):
+        hits = method.retrieve(q["query"], k=1)
+        relevant_rows.append({
+            "id": q["id"],
+            "query": q["query"],
+            "category": q["category"],
+            "best_score": round(hits[0]["score"], 6) if hits else 0.0,
+        })
+    weakest = min(relevant_rows, key=lambda r: (r["best_score"], r["id"]))
+    weakest_clean = min(
+        (r for r in relevant_rows if r["category"] != "variant_typo"),
+        key=lambda r: (r["best_score"], r["id"]),
+    )
+    threshold = getattr(method, "min_score", FUSION_MIN_SCORE)
+    return {
+        "threshold": threshold,
+        "irrelevant_probes": irrelevant_scores,
+        "irrelevant_best_score": irrelevant_best,
+        "weakest_relevant": weakest,
+        "weakest_clean_relevant": weakest_clean,
+        "gap_ok": irrelevant_best < threshold < weakest["best_score"],
+        "usage": "held-out diagnostic only; never used to select the threshold",
+    }
+
+
+def _irrelevant_refusal_check(
+    methods: dict[str, BenchMethod], kb: KBGraph
+) -> dict[str, Any]:
+    """End-to-end refusal check: irrelevant probes through ``answers.answer``.
+
+    Run for the production row and the fusion row; the fusion row runs under
+    its calibrated ``min_score`` (patched via ``_answer_with_method``), the
+    production row under the production ``MIN_SCORE``. Irrelevant questions
+    must be refused, never answered.
+    """
+    out: dict[str, Any] = {}
+    for name in (PROD_NAME, "bm25_rrf_char"):
+        rows = []
+        for probe in _irrelevant_probes():
+            response = _answer_with_method(methods[name], kb, probe)
+            rows.append({"question": probe, "status": response["status"]})
+        out[name] = {
+            "probes": len(rows),
+            "refused": sum(1 for r in rows if r["status"] == "refused"),
+            "rows": rows,
+        }
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Evaluation
 # ---------------------------------------------------------------------------
+
+# Development-only examples. None belongs to the held-out ranking/e2e sets.
+_CALIBRATION_RELEVANT = [
+    "Explain dietary sodium guidance for an adult with hypertension",
+    "What guidance covers dietary fibre for adults with diabetes",
+    "Which foods have phosphate additives",
+    "Describe the nutrient content of Hainanese chicken rice",
+    "Explain potassium restrictions with hyperkalaemia",
+    "How do guidelines set protein intake for CKD",
+]
+_CALIBRATION_IRRELEVANT = [
+    "Calculate mortgage interest on a house",
+    "How do I replace a bicycle tyre",
+    "Recommend a science fiction novel",
+    "Where can I buy concert tickets",
+    "Explain how a lunar eclipse happens",
+    "Generate a JavaScript sorting function",
+]
+
+
+def calibrate_methods(methods):
+    """Freeze scale-specific gates on development examples before evaluation."""
+    from backend.app.chat.retrieval import MIN_SCORE
+
+    result = {}
+    for name, method in methods.items():
+        examples = []
+        for relevant, questions in ((True, _CALIBRATION_RELEVANT), (False, _CALIBRATION_IRRELEVANT)):
+            for question in questions:
+                hits = method.retrieve(question, k=1)
+                examples.append({"question": question, "relevant": relevant,
+                                 "score": float(hits[0]["score"]) if hits else 0.})
+        candidates = sorted({0., *(row["score"] for row in examples)})
+        def errors(threshold):
+            return sum((row["score"] > threshold) != row["relevant"] for row in examples)
+        threshold = min(candidates, key=lambda t: (errors(t), -t))
+        # Keep the deployed baseline fixed; experimental retrievers get their own gates.
+        method.min_score = MIN_SCORE if name == PROD_NAME else threshold
+        result[name] = {"threshold": method.min_score, "development_errors": errors(method.min_score),
+                        "selection": "deployed baseline" if name == PROD_NAME else "development minimum classification error",
+                        "examples": examples}
+    return result
 
 def evaluate(kb: Optional[KBGraph] = None) -> dict[str, Any]:
     """Run the full benchmark and return the results dict (deterministic)."""
@@ -472,6 +709,8 @@ def evaluate(kb: Optional[KBGraph] = None) -> dict[str, Any]:
         kb = load_kb(RULES_PATH, DISHES_PATH)
 
     methods = build_methods(kb)
+    thresholds = calibrate_methods(methods)
+    fusion_method = methods.get("bm25_rrf_char")
     queries = labeled_queries(kb)
     chunks = methods[PROD_NAME]._index.chunks  # production chunking
     all_chunk_ids = {c["chunk_id"] for c in chunks}
@@ -524,8 +763,11 @@ def evaluate(kb: Optional[KBGraph] = None) -> dict[str, Any]:
             },
         },
         "methods": method_results,
+        "threshold_calibration": thresholds,
         "ranking": ranked_names,
         "winner": ranked_names[0],
+        "fusion_calibration": calibrate_fusion(kb, fusion_method),
+        "irrelevant_refusal": _irrelevant_refusal_check(methods, kb),
         "end_to_end": {"summary": e2e_summary, "detail": e2e},
     }
 
@@ -542,7 +784,41 @@ def write_results(results: dict[str, Any], path: Optional[Path] = None) -> Path:
 def run_bench(kb: Optional[KBGraph] = None) -> tuple[dict[str, Any], Path]:
     """Evaluate + write the artifact; returns (results, artifact_path)."""
     results = evaluate(kb)
+    RESULTS_PATH.with_name("RETRIEVAL_BENCH.md").write_text(render_report(results), encoding="utf-8")
     return results, write_results(results)
+
+
+def render_report(results):
+    lines = ["# Retrieval benchmark", "", "Generated by `python -m backend.app.chat.retrieval_bench`.", "",
+             "## Protocol", "",
+             "The same 275 chunks (61 rules, 214 dishes), synonym expansion and deterministic tie-breaks are used across methods. "
+             "Experimental refusal gates are selected on 12 disjoint development questions, then frozen before scoring 58 held-out queries. "
+             "The deployed BM25 baseline retains its existing threshold. Its historical calibration was not independent of this query set.", "",
+             "RRF combines the union of BM25 and character-ngram candidates (top 50 each, k=60). "
+             "Held-out score overlap is diagnostic only and never used to retune the gate.", "",
+             "## Ranking", "", "| Method | Hit@1 | Hit@3 | Hit@5 | MRR |", "|---|---:|---:|---:|---:|"]
+    for row in results["methods"]:
+        lines.append(f"| {row['name']} | {row['hit@1']:.3f} | {row['hit@3']:.3f} | {row['hit@5']:.3f} | {row['mrr']:.3f} |")
+    lines += ["", "## Scale-specific development thresholds", "", "| Method | Threshold | Development errors / 12 |", "|---|---:|---:|"]
+    for name, row in results["threshold_calibration"].items():
+        lines.append(f"| {name} | {row['threshold']:.6f} | {row['development_errors']} |")
+    lines += ["", "## End-to-end checks", "",
+              "Ten questions use the real answer pipeline. Citation accuracy requires an on-topic citation and support for every exposed claim. "
+              "The total-fat numeric question correctly refuses because no supported numeric target exists; it is intentionally not counted as a citation success.", "",
+              "| Method | Citation accuracy | Answered / 10 |", "|---|---:|---:|"]
+    for name, row in results["end_to_end"]["summary"].items():
+        lines.append(f"| {name} | {row['citation_accuracy']:.3f} | {row['answered']} |")
+    lines += ["", "## Decision", "", f"Ranking winner: **{results['winner']}**. Keep BM25 with synonyms in production. "
+              "Fusion loses overall ranking quality and does not improve typo hit@1. "
+              "The held-out fusion score distributions overlap, so a single threshold does not cleanly separate relevance.", ""]
+    for name, row in results["irrelevant_refusal"].items():
+        lines.append(f"- {name}: {row['refused']}/{row['probes']} irrelevant probes refused.")
+    lines += ["", "## Limitations", "",
+              "Small, internally authored development/test sets and semantic relevance labels do not establish clinical validity. "
+              "Some end-to-end questions overlap ranking questions; those are complementary metrics, not independent evidence. "
+              "Q5 separately checks patient applicability, clinician overrides and exact approved values. "
+              "Full per-query results, thresholds and development examples are in `retrieval_bench_results.json`.", ""]
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -571,6 +847,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
     print()
     print(f"Winner (MRR, deterministic tie-break): {results['winner']}")
+    print()
+    calibration = results.get("fusion_calibration")
+    if calibration:
+        weakest = calibration["weakest_relevant"]
+        print(
+            f"Fusion calibration (bm25_rrf_char, threshold {calibration['threshold']}): "
+            f"irrelevant_best={calibration['irrelevant_best_score']:.4f} "
+            f"weakest_relevant={weakest['best_score']:.4f} ({weakest['id']}) "
+            f"gap_ok={calibration['gap_ok']}"
+        )
+        refusal = results.get("irrelevant_refusal", {})
+        for name, stats in refusal.items():
+            print(f"  irrelevant refusal {name:<28} "
+                  f"{stats['refused']}/{stats['probes']} refused")
     print()
     print("End-to-end citation accuracy (answers.answer spot-check, "
           f"{len(END_TO_END_QUESTIONS)} grounded questions):")

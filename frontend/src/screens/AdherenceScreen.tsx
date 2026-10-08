@@ -137,6 +137,7 @@ export default function AdherenceScreen() {
 
         {selectedPatient && activeTab === 'log' && (
           <LogMealSection
+            key={selectedPatient.id}
             patient={selectedPatient}
             onLogged={() => {
               loadData(selectedPatient.id);
@@ -165,6 +166,7 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
   const [logging, setLogging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [items, setItems] = useState<{ dish: Dish; quantity: number }[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -181,7 +183,13 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
     };
   }, [query]);
 
-  const handleSelect = async (dish: Dish) => {
+  const handleSelect = (dish: Dish) => {
+    setItems((current) => [...current, { dish, quantity: 1 }]);
+    setQuery('');
+    setResults([]);
+  };
+
+  const handleSave = async () => {
     if (!patient) return;
     setLogging(true);
     setError(null);
@@ -191,9 +199,10 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
         patient_id: patient.id,
         date,
         meal,
-        dish_id: dish.dish_id,
+        items: items.map(({ dish, quantity }) => ({ dish_id: dish.dish_id, quantity })),
       });
-      setSuccess(`Logged ${dish.name} for ${meal} on ${date}.`);
+      setSuccess(`Logged ${items.length} dishes for ${meal} on ${date}.`);
+      setItems([]);
       setQuery('');
       setResults([]);
       onLogged();
@@ -207,6 +216,31 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="mb-4 text-lg font-semibold text-slate-900">Log a meal</h2>
+      <p className="mb-4 text-sm text-slate-600">Add each dish and its servings, then save the meal. Saving replaces the existing log for this meal and date.</p>
+      {items.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {items.map(({ dish, quantity }, index) => (
+            <div key={`${dish.dish_id}-${index}`} className="flex flex-wrap items-center gap-3">
+              <span className="flex-1 text-sm text-slate-900">{dish.name}</span>
+              <label className="text-sm text-slate-700">
+                Servings
+                <input type="number" min="0.25" max="10" step="0.25" value={quantity}
+                  aria-label={`Servings of ${dish.name}`} disabled={logging}
+                  onChange={(e) => setItems((current) => current.map((item, i) => i === index ? { ...item, quantity: Number(e.target.value) } : item))}
+                  className="ml-2 w-20 rounded border border-slate-300 px-2 py-2 text-base" />
+              </label>
+              <button onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
+                disabled={logging} aria-label={`Remove ${dish.name}`}
+                className="px-3 py-2 text-sm text-rose-700 underline">Remove</button>
+            </div>
+          ))}
+          <button onClick={handleSave}
+            disabled={logging || items.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0 || item.quantity > 10)}
+            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50">
+            {logging ? 'Saving meal…' : 'Save meal'}
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
@@ -331,6 +365,9 @@ function SummarySection({
     );
   if (!summary) return null;
 
+  const versions = summary.envelope_versions_used || [];
+  const multiVersion = versions.length > 1;
+
   return (
     <div className="space-y-6">
       {summary.informational_only && summary.notice && (
@@ -339,11 +376,21 @@ function SummarySection({
         </div>
       )}
 
+      {!!summary.unattributed_days?.length && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        {summary.unattributed_days.length} logged day(s) have no historical approval and are excluded from target comparisons.
+      </p>}
+
+      {multiVersion && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+          History spans {versions.length} envelope versions.
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Days logged" value={summary.aggregate.days_logged} />
         <StatCard label="Hard violation days" value={summary.aggregate.hard_violation_days} tone="rose" />
         <StatCard
-          label="Compliant days"
+          label="Days without hard violations"
           value={summary.aggregate.days_logged - summary.aggregate.hard_violation_days}
           tone="emerald"
         />
@@ -371,6 +418,11 @@ function SummarySection({
 }
 
 function DayCard({ day }: { day: import('../types').AdherenceDay }) {
+  const completeness = day.completeness;
+  const complete = completeness ? completeness.complete : day.meals.length >= 3;
+  const mealsLogged = completeness ? completeness.meals_logged : day.meals.length;
+  const expectedMeals = completeness ? completeness.expected_meals : 3;
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -382,6 +434,19 @@ function DayCard({ day }: { day: import('../types').AdherenceDay }) {
         ) : (
           <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800">
             Hard violation
+          </span>
+        )}
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+            complete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+          }`}
+        >
+          {complete ? 'Complete' : `${mealsLogged} of ${expectedMeals} meals`}
+        </span>
+        {day.envelope_id && (
+          <span className="text-xs text-slate-400">
+            {day.envelope_id}
+            {day.envelope_version ? ` v${day.envelope_version}` : ''}
           </span>
         )}
       </div>
@@ -397,6 +462,22 @@ function DayCard({ day }: { day: import('../types').AdherenceDay }) {
           <NutrientSummaryBar key={`${n.nutrient}-${idx}`} analysis={n} />
         ))}
       </div>
+      {!day.compliant &&
+        day.hard_violations
+          .filter(
+            (v): v is import('../types').ExcludedDishViolation =>
+              'type' in v && v.type === 'excluded_dish',
+          )
+          .map((v) => (
+            <div
+              key={v.dish_id}
+              className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+            >
+              <span className="font-medium">{v.dish_name || v.dish_id}</span>
+              {v.meal ? <span className="text-rose-600"> · {v.meal}</span> : null}
+              <p className="mt-0.5">{v.reason}</p>
+            </div>
+          ))}
     </div>
   );
 }
@@ -407,6 +488,7 @@ function NutrientSummaryBar({ analysis }: { analysis: AdherenceAnalysis }) {
   const isViolation = analysis.status === 'hard_violation';
   const isGap = analysis.status === 'soft_gap';
   const barColor = isViolation ? 'bg-rose-500' : isGap ? 'bg-amber-500' : 'bg-emerald-500';
+  const contributors = analysis.contributors || [];
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
@@ -430,6 +512,14 @@ function NutrientSummaryBar({ analysis }: { analysis: AdherenceAnalysis }) {
           <span className="font-medium text-emerald-600">On track</span>
         )}
       </div>
+      {contributors.length > 0 && (
+        <div className="mt-2 text-xs text-slate-500">
+          <span className="font-medium text-slate-600">Top contributors:</span>{' '}
+          {contributors
+            .map((c: any) => `${c.dish_name || c.dish_id} ${fmt(c.amount)}${analysis.unit}`)
+            .join(', ')}
+        </div>
+      )}
     </div>
   );
 }
@@ -467,7 +557,7 @@ function TrendsSection({
           <p className="font-medium">Trends to review</p>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             {worsening.map((f) => (
-              <li key={f.nutrient}>{f.reason}</li>
+              <li key={f.series_key}>{f.reason}</li>
             ))}
           </ul>
         </div>
@@ -476,12 +566,12 @@ function TrendsSection({
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="mb-4 text-lg font-semibold text-slate-900">Nutrient trends</h3>
         {Object.values(deviation.series).length === 0 ? (
-          <EmptyState title="No trend data yet" description="Log a few meals to see trends." />
+          <EmptyState title="No trend data yet" description="Log all three meals on at least three days to assess trends." />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Object.values(deviation.series).map((s) => {
-              const flag = deviation.flags.find((f) => f.nutrient === s.nutrient);
-              return <SeriesCard key={s.nutrient} series={s} flag={flag} />;
+            {Object.entries(deviation.series).map(([seriesKey, s]) => {
+              const flag = deviation.flags.find((f) => f.series_key === seriesKey);
+              return <SeriesCard key={seriesKey} series={s} flag={flag} />;
             })}
           </div>
         )}

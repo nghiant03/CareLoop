@@ -67,7 +67,7 @@ def test_verdict_names_actual_hv_winner_not_nsga2():
     assert "sms leads the benchmark on mean hypervolume" in note
     assert "0.6459" in note
     assert "nsga2" not in note.split(".")[0]
-    assert "estimated from the algorithm configuration" in note
+    assert "record search counts" in note
 
 
 def test_verdict_fails_when_hv_winner_violates_constraints():

@@ -23,15 +23,6 @@ actually solved.
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
-
-from backend.app.main import app
-
-
-@pytest.fixture(scope="module")
-def client():
-    with TestClient(app) as c:
-        yield c
 
 
 def _run_rules(client, patient_id: str) -> dict:
@@ -98,17 +89,16 @@ def test_full_happy_path(client) -> None:
     assert plan["envelope_id"] == envelope_id
     assert len(plan["days"]) == 7
     for day in plan["days"]:
-        assert len(day["slots"]) == 3
+        assert {s["meal"] for s in day["slots"]} == {"breakfast", "lunch", "dinner"}
+        assert 3 <= len(day["slots"]) <= 6
         assert day["totals"]
         for slot in day["slots"]:
             assert slot["dish_id"] and slot["name"]
             assert slot["meal"] in ("breakfast", "lunch", "dinner")
         for total in day["totals"]:
             assert total["targets"] or total["value"]
-    # fibre floor relaxation must be disclosed (dataset cannot reach 25/30 g)
-    assert any(
-        rc["nutrient"] == "fiber_g" for rc in plan["relaxed_constraints"]
-    ), "expected the documented fibre-floor relaxation to be disclosed"
+    assert plan["relaxed_constraints"] == []
+    assert all(a["met_days"] == 7 for a in plan["adequacy"] if a["nutrient"] == "fiber_g")
     # plain-language explanation panel payload
     assert plan["explanation"]["daily_targets"]
     assert plan["explanation"]["why"]
@@ -148,12 +138,13 @@ def test_chat_grounded_answer_with_citation(client) -> None:
     body = resp.json()
     assert body["escalated"] is False
     assert body["status"] == "answered"
-    assert "KDIGO" in body["answer"]
+    assert "AHA/ACC" in body["answer"]
+    assert "KDIGO" not in body["answer"]  # P0003 has HTN/T2D, not CKD
     assert body["citations"], "grounded answers must cite"
     for citation in body["citations"]:
         assert citation["rule_id"]
         assert citation["guideline"]
-    assert any("kdigo" in (c["guideline"] or "").lower() for c in body["citations"])
+    assert any("aha/acc" in (c["guideline"] or "").lower() for c in body["citations"])
 
 
 def test_chat_escalation(client) -> None:

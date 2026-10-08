@@ -43,6 +43,7 @@ their severity.
 from __future__ import annotations
 
 import numpy as np
+from datetime import date
 
 _MIN_SERIES_LEN = 3
 
@@ -55,17 +56,19 @@ _THRESHOLDS = {
 _SLOPE_TRIGGER = 0.05
 
 
-def _theil_sen_slope(y: list[float]) -> float:
+def _theil_sen_slope(y: list[float], times=None) -> float:
     """Median of all pairwise slopes (classic Theil-Sen estimator)."""
     y = np.asarray(y, dtype=float)
     n = len(y)
+    times = list(range(n)) if times is None else times
     slopes = [
-        (y[j] - y[i]) / (j - i) for i in range(n - 1) for j in range(i + 1, n)
+        (y[j] - y[i]) / (times[j] - times[i])
+        for i in range(n - 1) for j in range(i + 1, n) if times[j] > times[i]
     ]
-    return float(np.median(slopes))
+    return float(np.median(slopes)) if slopes else 0.0
 
 
-def _ewma_slope(y: list[float], halflife: float = 2.0) -> float:
+def _ewma_slope(y: list[float], halflife: float = 2.0, times=None) -> float:
     """Exponentially weighted least-squares slope (recent months count more).
 
     Weights decay with a half-life of ``halflife`` months, so the estimate
@@ -74,12 +77,12 @@ def _ewma_slope(y: list[float], halflife: float = 2.0) -> float:
     studied in ``backend/mining/comparison.py`` (§2).
     """
     y = np.asarray(y, dtype=float)
-    x = np.arange(len(y), dtype=float)
-    w = 0.5 ** ((len(y) - 1 - x) / halflife)
+    x = np.arange(len(y), dtype=float) if times is None else np.asarray(times, dtype=float)
+    w = 0.5 ** ((x[-1] - x) / halflife)
     xbar = float(np.average(x, weights=w))
     ybar = float(np.average(y, weights=w))
     denom = float(np.sum(w * (x - xbar) ** 2))
-    return float(np.sum(w * (x - xbar) * (y - ybar)) / denom)
+    return float(np.sum(w * (x - xbar) * (y - ybar)) / denom) if denom else 0.0
 
 
 def _would_flag(slope: float, latest: float, cfg: dict) -> bool:
@@ -132,24 +135,30 @@ def detect_trends(patients: list[dict]) -> list[dict]:
     flags: list[dict] = []
     for p in patients:
         for analyte, cfg in _THRESHOLDS.items():
-            series = _oldest_first(p, cfg["field"], cfg["serum"])
-            if len(series) < _MIN_SERIES_LEN:
+            observations = {o["observed_at"]: o for o in p.get("observations", [])
+                            if o["metric"] == cfg["serum"]}
+            dates = sorted(observations)
+            series = ([observations[d]["value"] for d in dates] if dates
+                      else _oldest_first(p, cfg["field"], cfg["serum"]))
+            times = ([date.fromisoformat(d).toordinal() / 30.4375 for d in dates]
+                     if dates else None)
+            if not series or (len(series) < _MIN_SERIES_LEN and (not dates or series[-1] < cfg["urgent_now"])):
                 continue
-            slope = _theil_sen_slope(series)
+            slope = _theil_sen_slope(series, times)
             latest = series[-1]
             projected = latest + 3.0 * slope
 
-            if not _would_flag(slope, latest, cfg):
+            if not _would_flag(slope, latest, cfg) and (not dates or latest < cfg["urgent_now"]):
                 continue
 
             # Hybrid de-escalation: the EWMA slope tracks the recent regime,
             # so a Theil-Sen flag whose EWMA counterpart no longer fires is
             # a rise that has plateaued — downgrade to "review".
-            ewma = _ewma_slope(series)
+            ewma = _ewma_slope(series, times=times)
             ewma_rising = _would_flag(ewma, latest, cfg)
 
             urgent = latest >= cfg["urgent_now"] or projected >= cfg["flag"]
-            de_escalated = urgent and not ewma_rising
+            de_escalated = urgent and not ewma_rising and (not dates or latest < cfg["urgent_now"])
             if de_escalated:
                 urgent = False
 
@@ -171,6 +180,8 @@ def detect_trends(patients: list[dict]) -> list[dict]:
                     "slope_per_month": round(slope, 4),
                     "ewma_slope_per_month": round(ewma, 4),
                     "values": series,
+                    "observed_dates": dates,
+                    "observation_id": observations[dates[-1]]["observation_id"] if dates else None,
                     "projected_3mo": round(projected, 3),
                     "severity": "urgent" if urgent else "review",
                     "reason": reason,

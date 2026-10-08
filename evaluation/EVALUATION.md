@@ -10,9 +10,10 @@ Reproduce with `.venv/bin/python -m evaluation.run` (add `--rerun-benchmark` to 
 |---|---|---|
 | Q1 Traceability | PASS | 202/202 envelope items traceable (100.0%) across 18 eligible patients; 2 REJECTED patients counted separately |
 | Q2 Conflict resolution | PASS | 10/10 cases (100.0%), 37/37 checks |
-| Q3 Constraint satisfaction | PASS | 18/18 plans with zero hard violations (100.0%); 0 infeasible (diagnosed, nothing served); 18 envelopes needed a disclosed MIN relaxation |
-| Q4 Quality/runtime | PASS | sms: 0% violations, best mean HV 0.6459, 706.0 ms mean (consumed from benchmark artefacts) |
+| Q3 Constraint satisfaction | PASS | 18/18 plans with zero hard violations (100.0%); 0 infeasible (diagnosed, nothing served); 0 envelopes needed a disclosed MIN relaxation |
+| Q4 Quality/runtime | PASS | sms: 0% violations, best mean HV 0.6459, 713.6 ms mean (consumed from benchmark artefacts) |
 | Q5 Groundedness | PASS | grounded 100.0% (citation accuracy 100.0%), escalation 100.0%, refusals 100.0% |
+| Q6 Selection & composition ablation | PASS | adequacy-first worst-day shortfall 77.39% vs scalar 86.577% (Δ -9.187 pct-pts), cost +7.3% vs scalar; meal-composition ablation informational |
 
 ## Q1 — Traceability
 
@@ -64,30 +65,30 @@ Scripted conflict cases with expected outcomes, checked against the engine's env
 
 ## Q3 — Constraint satisfaction
 
-For every eligible patient: engine -> simulated APPROVED -> prepare_envelope_for_pool (MIN-floor relaxation disclosure) -> backend.optim.api.run -> violation_count == 0 and per-day totals within the SOLVED envelope's HARD constraints (MAX ceilings; MIN floors / TARGETs are soft per PLAN.md module 4, reported as soft-aim shortfalls, never violations). Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served) and relaxation disclosures are reported distinctly.
+For every eligible patient: engine -> simulated APPROVED -> prepare_envelope_for_pool (MIN-floor relaxation disclosure) -> backend.optim.api.run -> original-target main/side composition -> violation_count == 0 and per-day totals within the SOLVED envelope's HARD constraints (MAX ceilings; MIN floors / TARGETs are soft per PLAN.md module 4, reported as soft-aim shortfalls, never violations). Infeasible envelopes (explicit solver diagnosis, empty plan, nothing served) and relaxation disclosures are reported distinctly.
 
 | Patient | Archetype | Outcome | Violations | Engine | Per-day OK | Relaxations | Blockers (leave-one-out) |
 |---|---|---|---|---|---|---|---|
-| P0001 | T2D | solved | 0 | pymoo | n/a | fiber_g | — |
-| P0002 | HTN | solved | 0 | pymoo | n/a | fiber_g, potassium_mg | — |
-| P0003 | T2D_HTN | solved | 0 | pymoo | n/a | fiber_g, potassium_mg | — |
-| P0004 | CKD3_T2D_HTN | solved | 0 | pymoo | n/a | fiber_g | — |
-| P0005 | CKD4_T2D_HTN | solved | 0 | pymoo | n/a | fiber_g | — |
-| P0006 | CKD4_hyperK | solved | 0 | pymoo | n/a | energy_kcal, fiber_g | — |
-| P0007 | CKD5_pre_dialysis_hyperPO4 | solved | 0 | pymoo | n/a | fiber_g | — |
+| P0001 | T2D | solved | 0 | adequacy-composition | n/a | — | — |
+| P0002 | HTN | solved | 0 | adequacy-composition | n/a | — | — |
+| P0003 | T2D_HTN | solved | 0 | adequacy-composition | n/a | — | — |
+| P0004 | CKD3_T2D_HTN | solved | 0 | adequacy-composition | n/a | — | — |
+| P0005 | CKD4_T2D_HTN | solved | 0 | adequacy-composition | n/a | — | — |
+| P0006 | CKD4_hyperK | solved | 0 | adequacy-composition | n/a | — | — |
+| P0007 | CKD5_pre_dialysis_hyperPO4 | solved | 0 | adequacy-composition | n/a | — | — |
 | P0008 | pregnancy_T2D | REJECTED | — | — | — | — | — |
-| P0009 | healthy_control | solved | 0 | pymoo | n/a | fiber_g | — |
-| P0010 | T2D | solved | 0 | pymoo | n/a | energy_kcal, fiber_g | — |
-| P0011 | HTN | solved | 0 | pymoo | n/a | fiber_g, potassium_mg | — |
-| P0012 | T2D_HTN | solved | 0 | pymoo | n/a | fiber_g, potassium_mg | — |
-| P0013 | CKD3_T2D_HTN | solved | 0 | pymoo | n/a | energy_kcal, fiber_g | — |
-| P0014 | CKD4_T2D_HTN | solved | 0 | pymoo | n/a | fiber_g | — |
-| P0015 | CKD4_hyperK | solved | 0 | pymoo | n/a | fiber_g | — |
-| P0016 | CKD5_pre_dialysis_hyperPO4 | solved | 0 | pymoo | n/a | fiber_g | — |
+| P0009 | healthy_control | solved | 0 | adequacy-composition | n/a | — | — |
+| P0010 | T2D | solved | 0 | adequacy-composition | n/a | — | — |
+| P0011 | HTN | solved | 0 | adequacy-composition | n/a | — | — |
+| P0012 | T2D_HTN | solved | 0 | adequacy-composition | n/a | — | — |
+| P0013 | CKD3_T2D_HTN | solved | 0 | adequacy-composition | n/a | — | — |
+| P0014 | CKD4_T2D_HTN | solved | 0 | adequacy-composition | n/a | — | — |
+| P0015 | CKD4_hyperK | solved | 0 | adequacy-composition | n/a | — | — |
+| P0016 | CKD5_pre_dialysis_hyperPO4 | solved | 0 | adequacy-composition | n/a | — | — |
 | P0017 | pregnancy_T2D | REJECTED | — | — | — | — | — |
-| P0018 | healthy_control | solved | 0 | pymoo | n/a | fiber_g | — |
-| P0019 | T2D | solved | 0 | pymoo | n/a | fiber_g | — |
-| P0020 | HTN | solved | 0 | pymoo | n/a | fiber_g, potassium_mg | — |
+| P0018 | healthy_control | solved | 0 | adequacy-composition | n/a | — | — |
+| P0019 | T2D | solved | 0 | adequacy-composition | n/a | — | — |
+| P0020 | HTN | solved | 0 | adequacy-composition | n/a | — | — |
 
 **Zero-violation plans: 18/18 (100.0%) — verdict PASS.** Infeasible envelopes are diagnosed explicitly by the solver (empty plan, `infeasibility_reason` set) and never served; where a single constraint removal restores greedy feasibility it is listed as a blocker.
 
@@ -99,84 +100,86 @@ Consumes backend/optim/benchmark_results.{csv,md} (4 envelopes x 5 seeds for eve
 
 | Method | Guarantee | Runs | Mean HV | HV std | Violation rate | Mean runtime (ms) |
 |---|---|---|---|---|---|---|
-| age | yes | 20 | 0.594 | 0.024 | 0.0% | 617.2 |
-| age-raw | no | 20 | 0.594 | 0.024 | 0.0% | 525.5 |
-| ga | no | 20 | 0.371 | 0.033 | 0.0% | 134.4 |
-| greedy | no | 20 | 0.17 | 0.03 | 0.0% | 9.3 |
-| moead | yes | 20 | 0.024 | 0.012 | 0.0% | 1195 |
-| moead-raw | no | 20 | 0.014 | 0.016 | 45.0% | 1196 |
-| nsga2 | yes | 20 | 0.522 | 0.042 | 0.0% | 287.6 |
-| nsga2-raw | no | 20 | 0.522 | 0.042 | 0.0% | 287.5 |
-| nsga3 | yes | 20 | 0.553 | 0.019 | 0.0% | 314.7 |
-| nsga3-raw | no | 20 | 0.55 | 0.02 | 0.0% | 314.3 |
-| random | no | 20 | 0.237 | 0.036 | 0.0% | 50.7 |
-| sms | yes | 20 | 0.646 | 0.03 | 0.0% | 706 |
-| sms-raw | no | 20 | 0.646 | 0.03 | 0.0% | 705.9 |
+| age | yes | 20 | 0.595 | 0.024 | 0.0% | 633.7 |
+| age-raw | no | 20 | 0.595 | 0.024 | 0.0% | 530 |
+| ga | no | 20 | 0.372 | 0.031 | 0.0% | 142.2 |
+| greedy | no | 20 | 0.17 | 0.03 | 0.0% | 9.9 |
+| moead | yes | 20 | 0.02 | 0.008 | 0.0% | 1419.5 |
+| moead-raw | no | 20 | 0.012 | 0.013 | 50.0% | 1362 |
+| nsga2 | yes | 20 | 0.523 | 0.041 | 0.0% | 296 |
+| nsga2-raw | no | 20 | 0.523 | 0.041 | 0.0% | 289.3 |
+| nsga3 | yes | 20 | 0.558 | 0.016 | 0.0% | 321.4 |
+| nsga3-raw | no | 20 | 0.553 | 0.021 | 0.0% | 316.7 |
+| random | no | 20 | 0.237 | 0.035 | 0.0% | 52.9 |
+| sms | yes | 20 | 0.646 | 0.029 | 0.0% | 713.6 |
+| sms-raw | no | 20 | 0.646 | 0.029 | 0.0% | 705.7 |
 
 ### Mean hypervolume per envelope
 
 | Envelope | age | age-raw | ga | greedy | moead | moead-raw | nsga2 | nsga2-raw | nsga3 | nsga3-raw | random | sms | sms-raw |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| ckd_hyperkalemia | 0.598 | 0.598 | 0.359 | 0.185 | 0.027 | 0.027 | 0.517 | 0.517 | 0.562 | 0.557 | 0.271 | 0.665 | 0.665 |
-| ckd_strict | 0.573 | 0.573 | 0.337 | 0.204 | 0.021 | 0.011 | 0.498 | 0.498 | 0.54 | 0.542 | 0.228 | 0.622 | 0.622 |
-| t2d_htn | 0.588 | 0.588 | 0.398 | 0.154 | 0.015 | 0 | 0.507 | 0.507 | 0.543 | 0.533 | 0.198 | 0.63 | 0.63 |
-| t2d_only | 0.619 | 0.619 | 0.392 | 0.136 | 0.03 | 0.019 | 0.566 | 0.566 | 0.568 | 0.568 | 0.25 | 0.667 | 0.667 |
+| ckd_hyperkalemia | 0.598 | 0.598 | 0.359 | 0.185 | 0.022 | 0.019 | 0.517 | 0.517 | 0.56 | 0.548 | 0.271 | 0.665 | 0.665 |
+| ckd_strict | 0.572 | 0.572 | 0.342 | 0.204 | 0.021 | 0.012 | 0.497 | 0.497 | 0.546 | 0.533 | 0.229 | 0.621 | 0.621 |
+| t2d_htn | 0.592 | 0.592 | 0.396 | 0.155 | 0.012 | 0 | 0.512 | 0.512 | 0.56 | 0.562 | 0.202 | 0.634 | 0.634 |
+| t2d_only | 0.617 | 0.617 | 0.39 | 0.136 | 0.026 | 0.015 | 0.564 | 0.564 | 0.566 | 0.571 | 0.249 | 0.664 | 0.664 |
 
 ### NSGA-II pop × gen sweep (1 seed)
 
 | Pop | Gen | Mean HV | Mean runtime (ms) |
 |---|---|---|---|
-| 20 | 40 | 0.455 | 89.1 |
-| 20 | 80 | 0.468 | 171.6 |
-| 20 | 160 | 0.474 | 339.4 |
-| 40 | 40 | 0.528 | 146.9 |
-| 40 | 80 | 0.524 | 284.2 |
-| 40 | 160 | 0.534 | 564.1 |
-| 80 | 40 | 0.56 | 264.2 |
-| 80 | 80 | 0.589 | 513.3 |
-| 80 | 160 | 0.576 | 1016.4 |
+| 20 | 40 | 0.456 | 88.1 |
+| 20 | 80 | 0.469 | 171.2 |
+| 20 | 160 | 0.475 | 334.2 |
+| 40 | 40 | 0.529 | 145.1 |
+| 40 | 80 | 0.525 | 287.6 |
+| 40 | 160 | 0.534 | 577 |
+| 80 | 40 | 0.561 | 263.6 |
+| 80 | 80 | 0.59 | 509.2 |
+| 80 | 160 | 0.577 | 1006 |
 
 ### Recommendation (verbatim from `backend/optim/benchmark_results.md`)
 
-* Fastest swept NSGA-II config: pop=20, gen=40 (mean HV 0.4553, 89 ms/solve).
-* NSGA-II knee point (HV within 2% of the best 0.5892): **pop=80, gen=80** (mean HV 0.5892, 513 ms/solve).
-* Best guaranteed method by mean HV: **sms** (HV 0.6459, 706 ms/solve); NSGA-II scores 0.5220 at 288 ms/solve.
+* Fastest swept NSGA-II config: pop=20, gen=40 (mean HV 0.4562, 88 ms/solve).
+* NSGA-II knee point (HV within 2% of the best 0.5897): **pop=80, gen=80** (mean HV 0.5897, 509 ms/solve).
+* Best guaranteed method by mean HV: **sms** (HV 0.6459, 714 ms/solve); NSGA-II scores 0.5226 at 296 ms/solve.
 * Best raw method by mean HV: sms-raw (HV 0.6459, violation rate 0%) — raw and guaranteed HV figures are directly comparable: HV is computed only over feasible front members (infeasible front members are filtered out before the HV calculation), so raw HV is not inflated by infeasible members. Raw rows differ in that they report honest hard-constraint violation rates and skip the repair step that guarantees the delivered plan.
-* **Algorithm recommendation: sms** — highest mean HV among guarantee-carrying methods (0.6459 vs NSGA-II 0.5220) at 2.5x the NSGA-II runtime; it would be a drop-in ``method=`` argument to ``solve()`` (the guarantee path is method-agnostic).
-* Budget option: nsga2 is the cheapest guaranteed method (288 ms/solve, HV 0.5220) if latency ever trumps front quality.
+* **Algorithm recommendation: sms** — highest mean HV among guarantee-carrying methods (0.6459 vs NSGA-II 0.5226) at 2.4x the NSGA-II runtime; it would be a drop-in ``method=`` argument to ``solve()`` (the guarantee path is method-agnostic).
+* Budget option: nsga2 is the cheapest guaranteed method (296 ms/solve, HV 0.5226) if latency ever trumps front quality.
 * The guarantee wrapper (repair + greedy fallback) is method-agnostic: every guaranteed row reports violation rate 0% regardless of algorithm, so algorithm choice affects front quality and runtime only.
 * Interpretation caveat: the HV metric scores the whole Pareto front (front coverage), not the single delivered plan. Single-point baselines (GA scalarisation, greedy) are structurally disadvantaged on full-front HV because they emit one plan per solve; the quality of that single delivered meal plan answers a different question and is assessed separately by the constraint-satisfaction evaluation.
-* Equal-work caveat: nominal population x generations is not an equal-work budget across all methods (e.g. MOEA/D's population is tied to its reference-direction count, so its per-generation work differs from population-sized methods); evaluation counts are estimated from the algorithm configuration rather than recorded per run.
-* Total harness wall time: 141s. Baselines: GA scalarises (single-point fronts -> lower HV); greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on quality. Under the module-4 encoding (hard = MAX ceilings + exclusions only) raw methods rarely violate a ceiling on these envelopes, so methods are separated mainly by hypervolume; the repair/greedy guarantee remains the backstop for genuinely tight ceilings.
+* Work budgets: pymoo methods use actual-evaluation termination (population × generations evaluations by default); counts are recorded from algorithm.evaluator.n_eval in the CSV. Generation-boundary overshoot is possible. CARELOOP_BENCH_BUDGET=time selects wall-time termination with CARELOOP_BENCH_SECONDS (default 0.5). GA/greedy/random retain their native budgets and are not claimed to have equal work. Repair/evaluation outside pymoo is excluded from the search count but included in runtime.
+* Total harness wall time: 150s. Baselines: GA scalarises (single-point fronts -> lower HV); greedy is feasibility-aware by construction and near-instant but myopic; random is the floor on quality. Under the module-4 encoding (hard = MAX ceilings + exclusions only) raw methods rarely violate a ceiling on these envelopes, so methods are separated mainly by hypervolume; the repair/greedy guarantee remains the backstop for genuinely tight ceilings.
 
-Verdict: **PASS** — sms leads the benchmark on mean hypervolume (0.6459, level with sms-raw) with a 0% hard-constraint violation rate. The winner claim is computed from the committed artefact rows for every recorded method, not hardcoded to any algorithm. Caveats: HV scores the whole Pareto front (front coverage) — single-point baselines (GA, greedy) are structurally disadvantaged on full-front HV, and the quality of the single delivered meal plan answers a different question (see Q3). Nominal population x generations is not an equal-work budget across all methods (e.g. MOEA/D's population is tied to its reference-direction count), and evaluation counts are estimated from the algorithm configuration rather than recorded per run.
+Verdict: **PASS** — sms leads the benchmark on mean hypervolume (0.6459, level with sms-raw) with a 0% hard-constraint violation rate. The winner claim is computed from the committed artefact rows for every recorded method, not hardcoded to any algorithm. Caveats: HV scores the whole Pareto front (front coverage) — single-point baselines (GA, greedy) are structurally disadvantaged on full-front HV, and the quality of the single delivered meal plan answers a different question (see Q3). Pymoo rows use actual-evaluation termination and record search counts; generation-boundary overshoot is possible. GA/greedy/random retain native budgets.
 
 ## Q5 — Groundedness (chat)
 
-Scripted questions scored automatically: grounded nutrition questions must be answered with a citation whose rule_id is in the acceptable set (rules producing a constraint for the asked nutrient) and complete provenance; escalation cases must be escalated into the right category; irrelevant questions must be refused. Known filter gaps are reported informationally.
+Scripted questions scored automatically: grounded nutrition questions must be answered with a citation whose rule_id is in the acceptable set (rules producing a constraint for the asked nutrient) and complete provenance; escalation cases must be escalated into the right category; irrelevant questions must be refused. Every exposed claim is checked for source identity, patient applicability and exact approved numeric values. Historical failure probes affect the verdict.
 
 ### Grounded nutrition questions
 
 | Question | Envelope | Status | Cited rules | Expected (any of) | Pass |
 |---|---|---|---|---|---|
-| How much sodium can I have per day? | none | answered | CKD-2024-SODIUM-2000, DASH-2025-SODIUM-2300, ADA-2026-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| Is salt bad for my blood pressure? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, DASH-2025-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| What is the sodium limit for someone with high blood pressure? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, DASH-2025-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| Why do I need to limit sodium? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, DASH-2025-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| How much potassium should I eat each day? | none | answered | HYPERK-2024-POTASSIUM-2400, DASH-2025-POTASSIUM-4700, CONFLICT-K-DASH-VS-CKD | DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400, CONFLICT-K-DASH-VS-CKD, SAFETY-HYPERK-SEVERE | PASS |
-| How much potassium is safe if I have kidney disease? | none | answered | HYPERK-2024-POTASSIUM-2400, DASH-2025-POTASSIUM-4700, CONFLICT-K-DASH-VS-CKD | DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400, CONFLICT-K-DASH-VS-CKD, SAFETY-HYPERK-SEVERE | PASS |
+| How much sodium can I have per day? | none | answered | CKD-2024-SODIUM-2000, DASH-2025-SODIUM-2300, ADA-2026-SODIUM-2300 | ADA-2026-SODIUM-2300, CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-1500, DASH-2025-SODIUM-2300, GEN-SODIUM-2300 | PASS |
+| Is salt bad for my blood pressure? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, DASH-2025-SODIUM-2300 | ADA-2026-SODIUM-2300, CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-1500, DASH-2025-SODIUM-2300, GEN-SODIUM-2300 | PASS |
+| What is the sodium limit for someone with high blood pressure? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, DASH-2025-SODIUM-2300 | ADA-2026-SODIUM-2300, CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-1500, DASH-2025-SODIUM-2300, GEN-SODIUM-2300 | PASS |
+| Why do I need to limit sodium? | none | answered | CKD-2024-SODIUM-2000, GEN-SODIUM-2300, DASH-2025-SODIUM-2300 | ADA-2026-SODIUM-2300, CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-1500, DASH-2025-SODIUM-2300, GEN-SODIUM-2300 | PASS |
+| How much potassium should I eat each day? | none | answered | HYPERK-2024-POTASSIUM-2400, DASH-2025-POTASSIUM-4700, CONFLICT-K-DASH-VS-CKD | CONFLICT-K-DASH-VS-CKD, DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400, SAFETY-HYPERK-SEVERE | PASS |
+| How much potassium is safe if I have kidney disease? | none | answered | HYPERK-2024-POTASSIUM-2400, DASH-2025-POTASSIUM-4700, CONFLICT-K-DASH-VS-CKD | CONFLICT-K-DASH-VS-CKD, DASH-2025-POTASSIUM-4700, HYPERK-2024-POTASSIUM-2400, SAFETY-HYPERK-SEVERE | PASS |
 | Do I need to worry about phosphorus in my diet? | none | answered | HYPERPO4-2024-PHOSPHORUS-800 | HYPERPO4-2024-PHOSPHORUS-800 | PASS |
 | Are there foods I should avoid with phosphate additives? | none | answered | HYPERPO4-2024-PHOSPHORUS-800, CKD-2024-PHOSPHATE-ADDITIVE, HYPERPO4-2024-EXCLUDE-ADDITIVE | HYPERPO4-2024-PHOSPHORUS-800 | PASS |
-| How much protein can I eat per day? | none | answered | CKD-2024-PROTEIN-055-08, ADA-2026-PROTEIN | CKD-2024-PROTEIN-055-08, CKD-2024-PROTEIN-CEILING-13, ADA-2026-PROTEIN | PASS |
-| Should I eat more protein? | none | answered | CKD-2024-PROTEIN-055-08, ADA-2026-PROTEIN | CKD-2024-PROTEIN-055-08, CKD-2024-PROTEIN-CEILING-13, ADA-2026-PROTEIN | PASS |
+| How much protein can I eat per day? | none | answered | CKD-2024-PROTEIN-055-08, ADA-2026-PROTEIN | ADA-2026-PROTEIN, CKD-2024-PROTEIN-055-08, CKD-2024-PROTEIN-CEILING-13 | PASS |
+| Should I eat more protein? | none | answered | CKD-2024-PROTEIN-055-08, ADA-2026-PROTEIN | ADA-2026-PROTEIN, CKD-2024-PROTEIN-055-08, CKD-2024-PROTEIN-CEILING-13 | PASS |
 | How many calories should I eat per day? | none | answered | CKD-2024-ENERGY-2535, GEN-ENERGY-2535 | CKD-2024-ENERGY-2535, GEN-ENERGY-2535 | PASS |
 | What is my calorie target? | none | answered | CKD-2024-ENERGY-2535, DASH-2025-SODIUM-1500 | CKD-2024-ENERGY-2535, GEN-ENERGY-2535 | PASS |
-| How much fibre do I need daily? | none | answered | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | PASS |
-| How much fiber should I aim for? | none | answered | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | PASS |
-| What about saturated fat - how much is too much? | none | answered | DASH-2025-SATFAT-6PCT, ADA-2026-SATFAT-10PCT | DASH-2025-SATFAT-6PCT, ADA-2026-SATFAT-10PCT | PASS |
+| How much fibre do I need daily? | none | answered | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | ADA-2026-FIBER-25-30, DASH-2025-FIBER-30, GEN-FIBER-25 | PASS |
+| How much fiber should I aim for? | none | answered | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | ADA-2026-FIBER-25-30, DASH-2025-FIBER-30, GEN-FIBER-25 | PASS |
+| What about saturated fat - how much is too much? | none | answered | DASH-2025-SATFAT-6PCT, ADA-2026-SATFAT-10PCT | ADA-2026-SATFAT-10PCT, DASH-2025-SATFAT-6PCT | PASS |
 | How many carbohydrates can I have per day? | none | answered | ADA-2026-CARB-INDIV, DASH-2025-SODIUM-2300, CKD-2024-SODIUM-2000 | ADA-2026-CARB-INDIV | PASS |
-| How much sodium can I have per day? | proposed | answered | CKD-2024-SODIUM-2000, DASH-2025-SODIUM-2300 | CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-2300, DASH-2025-SODIUM-1500, ADA-2026-SODIUM-2300, GEN-SODIUM-2300 | PASS |
-| How much fibre do I need daily? | approved | answered | ADA-2026-FIBER-25-30, DASH-2025-FIBER-30, ADA-2026-FIBER-25-30 | DASH-2025-FIBER-30, ADA-2026-FIBER-25-30, GEN-FIBER-25 | PASS |
+| How much sodium can I have per day? | proposed | answered | ADA-2026-SODIUM-2300 | ADA-2026-SODIUM-2300, CKD-2024-SODIUM-2000, CONFLICT-SODIUM-CKD-WINS, DASH-2025-SODIUM-1500, DASH-2025-SODIUM-2300, GEN-SODIUM-2300 | PASS |
+| How much fibre do I need daily? | approved | answered | ADA-2026-FIBER-25-30, ADA-2026-FIBER-25-30 | ADA-2026-FIBER-25-30, DASH-2025-FIBER-30, GEN-FIBER-25 | PASS |
+| What is my daily sodium limit? | approved | answered | ADA-2026-SODIUM-2300, ADA-2026-SODIUM-2300 | ADA-2026-SODIUM-2300 | PASS |
+| What is my daily sodium limit? | approved | answered | CLINICIAN-EDIT, ADA-2026-SODIUM-2300 | CLINICIAN-EDIT | PASS |
 
 ### Escalation cases
 
@@ -203,18 +206,18 @@ Scripted questions scored automatically: grounded nutrition questions must be an
 | What is the capital of France? | refused | PASS |
 | Can you book me a taxi to the airport? | refused | PASS |
 
-**Grounded 18/18 (100.0%), citation accuracy 100.0%; escalation 10/10 (100.0%); refusals 5/5 (100.0%); overall 100.0% — verdict PASS.**
+**Grounded 20/20 (100.0%), citation accuracy 100.0%; escalation 10/10 (100.0%); refusals 5/5 (100.0%); overall 100.0% — verdict PASS.**
 
-### Known gaps (informational, not scored)
+### Historical failure probes (included in verdict)
 
 | Probe | Expected | Observed | Gap |
 |---|---|---|---|
-| Can you adjust my insulin dose? | escalated (medication_change) | medication_change | escalation regex requires 'adjust (my)? (dose|dosage|medic\w*)' — 'adjust my insulin dose' does not match |
-| Should I stop taking my metformin? | escalated (medication_change) | medication_change | escalation regex expects medic*/pills/tablets/capsules/dose right after 'stop taking my' — a named drug does not match |
-| Am I having a stroke? My speech is slurred. | escalated (emergency) | emergency | emergency pattern is 'slurred speech', the phrasing inverts it |
-| How much protein is safe for my kidneys? | answered with a protein citation | out_of_scope | FALSE-POSITIVE escalation: the paediatric pattern 'my (child|baby|toddler|kid|son|daughter)' matches 'my kid'neys' |
-| What should my daily sugar limit be? | answered with a sugar-rule citation | refused | no rule produces a sugar_g constraint, so the answer cites off-topic rules retrieved by TF-IDF (weak grounding) |
-| How much fat is okay in my diet? | answered with a fat-rule citation | answered | no rule produces a fat_g constraint (GEN-FAT-2035 only asserts a %kcal flag), so the citation is off-topic |
+| Can you adjust my insulin dose? | escalated (medication_change) | medication_change | Regression passed |
+| Should I stop taking my metformin? | escalated (medication_change) | medication_change | Regression passed |
+| Am I having a stroke? My speech is slurred. | escalated (emergency) | emergency | Regression passed |
+| How much protein is safe for my kidneys? | answered with a protein citation | answered | Regression passed |
+| What should my daily sugar limit be? | refused (no supported numeric target) | refused | Regression passed |
+| How much fat is okay in my diet? | refused (no supported numeric target) | refused | Regression passed |
 
 ### Expert-review rubric (human scoring — cannot be automated)
 
@@ -228,21 +231,108 @@ Human reviewers score each of the five criteria below on a 1–5 scale; the chat
 | Clarity & plain language | 1-5 | 5 = a newly diagnosed patient understands units, limits and reasons; 3 = understandable but jargon-heavy; 1 = confusing or misleading. |
 | Completeness | 1-5 | 5 = answers the question asked, includes the relevant limits/reasons and a safe next step; 1 = evasive or omits the core answer. |
 
+## Q6 — Objective/selection & meal-composition ablation
+
+P1 review comparison: current raw-unit scalar selection vs nutrient-normalised selection vs adequacy-first/lexicographic selection on the SAME NSGA-II fronts, scored against the ORIGINAL approved aims (paired patient/seed design), followed by a bounded meal-composition ablation (1 dish/slot vs main+side 2-dish encoding, production encoding unchanged) and exact-reference quality reporting for the scalar-selected plans.
+
+### Selection ablation (paired: 40-pop / 80-gen NSGA-II front per patient × seed [42, 43, 44]; all strategies score the SAME front against the ORIGINAL approved aims)
+
+| Strategy | Rows | Feasibility | Worst-day shortfall % | Mean daily shortfall | Met-days fraction | Cost (SGD) | Variety (objective) | Deviation | Mean front size |
+|---|---|---|---|---|---|---|---|---|---|
+| scalar | 54 | 100.0% | 86.577 | 434.158 | 0.07 | 79.662 | -0.681 | 2502.218 | 40 |
+| normalised | 54 | 100.0% | 83.088 | 347.71 | 0.156 | 90.919 | -0.7 | 2162.788 | 40 |
+| adequacy_first | 54 | 100.0% | 77.39 | 390.45 | 0.104 | 85.477 | -0.686 | 2394.493 | 40 |
+
+Scoring: ORIGINAL approved envelope (no MIN relaxation applied; MIN floors and TARGETs are soft under the PLAN.md module-4 encoding); all three selections score the SAME front. Worst-day shortfall % is the pooled mean over rows of the worst per-aim relative shortfall on each plan's worst day (plan_service adequacy semantics).
+
+### Paired per-patient deltas vs scalar selection (worst-day relative shortfall pct-points, mean over seeds)
+
+| Patient | Δ normalised | Δ adequacy-first |
+|---|---|---|
+| P0001 | -2.832 | -13.283 |
+| P0002 | -2.889 | -6.137 |
+| P0003 | 1.148 | -4.34 |
+| P0004 | 0 | -9.444 |
+| P0005 | 3.333 | -6.667 |
+| P0006 | -2.778 | -11.667 |
+| P0007 | -14.745 | -16.078 |
+| P0009 | -9.023 | -19.151 |
+| P0010 | -3.475 | -10.697 |
+| P0011 | 0.437 | -1.72 |
+| P0012 | 0.024 | -2.364 |
+| P0013 | -3.889 | -7.222 |
+| P0014 | 0.556 | -5 |
+| P0015 | -2.778 | -8.889 |
+| P0016 | -11.467 | -14.133 |
+| P0018 | -10.804 | -15.471 |
+| P0019 | -3.423 | -5.09 |
+| P0020 | -0.201 | -8.014 |
+
+Pooled paired deltas: normalised: 54 rows, mean Δ shortfall -3.489 pct-pts, mean Δ cost 15.415% (26 improved / 14 tied / 14 regressed); adequacy_first: 54 rows, mean Δ shortfall -9.187 pct-pts, mean Δ cost 8.466% (47 improved / 7 tied / 0 regressed).
+
+**Verdict: PASS** — adequacy-first strictly reduces the pooled mean worst-day relative shortfall at 100% feasibility and within the 10% cost cap (full rule in `evaluation/q_ablation.py` module docstring).
+
+### Meal-composition ablation: 1-dish vs 2-dish (main + side) encoding
+
+Controlled encoding ablation; production now uses optional-side adequacy search. The 2-dish encoding doubles dishes per day (6 vs 3), so cost, preference sums and per-day nutrient totals are NOT directly comparable to the 1-dish encoding. Meal-role eligibility (MAIN/SIDE sets in config) and the per-day repetition limit are heuristic annotations over an UNVERIFIED dataset (214/214 dishes unverified), not verified data. No pass/fail is assigned to this phase.
+
+| Encoding | Strategy | Rows | Feasibility | Worst-day shortfall % | Mean daily shortfall | Met-days fraction | Cost (SGD) | Variety (objective) |
+|---|---|---|---|---|---|---|---|---|
+| 1-dish (production) | scalar | 8 | 100.0% | 86.895 | 401.624 | 0.095 | 79.28 | -0.661 |
+| 1-dish (production) | normalised | 8 | 100.0% | 81.5 | 299.433 | 0.182 | 90.904 | -0.699 |
+| 1-dish (production) | adequacy_first | 8 | 100.0% | 75.428 | 390.522 | 0.064 | 80.624 | -0.645 |
+| 2-dish (main + side) | scalar | 8 | 100.0% | 48.209 | 110.228 | 0.34 | 152.349 | -0.586 |
+| 2-dish (main + side) | normalised | 8 | 100.0% | 37.664 | 112.227 | 0.367 | 152.335 | -0.565 |
+| 2-dish (main + side) | adequacy_first | 8 | 100.0% | 34.003 | 120.248 | 0.347 | 151.472 | -0.565 |
+
+Encoding: MAIN pool 140 dishes (allowed pool minus categories dessert, drink, kopitiam); SIDE pool 65 dishes (categories cai_png, healthy, soup or tag `vegetable`); no dish id twice within the same day; operators: tournament selection (k=3) on scalar_score; uniform slot-swap crossover (whole (main, side) pair swaps with p=0.5); slot-resample mutation (1-3 random slots, main and/or side index resampled uniformly); 2-scalar-elitism; infeasible offspring rejected and replaced by feasible parents.
+
+Reported informationally (no pass/fail): the eligibility sets are heuristic annotations, not verified data.
+
+### Exact-reference quality (scalar-selected plans, seed 42)
+
+| Patient | Deviation gap (mean/day) | Preference-sum gap (mean/day) | Cost gap (mean/day) | At per-day optimum (dev/pref/cost) | 7-day lower bounds (dev / pref / cost) |
+|---|---|---|---|---|---|
+| P0001 | 1098.051 | 7.743 | 2.596 | 0/0/0 | 149.8 / -32.2 / 53.13 |
+| P0002 | 2551.929 | 5.543 | 5.359 | 0/0/0 | 23863 / -30.8 / 53.13 |
+| P0003 | 1928.029 | 5.343 | 5.424 | 0/0/0 | 24585.4 / -30.8 / 53.13 |
+| P0004 | 616.374 | 4.686 | 4.667 | 0/0/0 | 2135 / -23.8 / 53.13 |
+| P0005 | 690.553 | 4.943 | 3.901 | 0/0/0 | 444.5 / -23.8 / 53.13 |
+| P0006 | 933.863 | 5.914 | 3.389 | 0/0/0 | 3430 / -23.8 / 53.13 |
+| P0007 | 1238.64 | 7.971 | 2.237 | 0/0/0 | 91 / -32.2 / 53.13 |
+| P0009 | 1340.709 | 7.771 | 2.313 | 0/0/0 | 7 / -32.2 / 53.13 |
+| P0010 | 1234.206 | 7.343 | 3.357 | 0/0/0 | 2090.2 / -32.2 / 53.13 |
+| P0011 | 2484.797 | 4.8 | 5.279 | 0/0/0 | 26243 / -30.8 / 53.13 |
+| P0012 | 2119.026 | 5.6 | 5.129 | 0/0/0 | 24264.1 / -30.8 / 53.13 |
+| P0013 | 643.443 | 4.229 | 4.629 | 0/0/0 | 5390 / -23.8 / 53.13 |
+| P0014 | 644.006 | 4.914 | 3.916 | 0/0/0 | 2117.5 / -23.8 / 53.13 |
+| P0015 | 613.077 | 4.314 | 4.174 | 0/0/0 | 906.5 / -23.8 / 53.13 |
+| P0016 | 738.514 | 6.714 | 3.61 | 0/0/0 | 84 / -32.2 / 53.13 |
+| P0018 | 1331.246 | 7.857 | 2.987 | 0/0/0 | 1225 / -32.2 / 53.13 |
+| P0019 | 1275.629 | 7.429 | 3.104 | 0/0/0 | 679 / -32.2 / 53.13 |
+| P0020 | 2852.531 | 5.314 | 4.004 | 0/0/0 | 26523 / -30.8 / 53.13 |
+
+Aggregate: nutrient_target_deviation: mean gap 1351.923, 0/18 plans at the per-day additive optimum (gap <= 1e-6); preference_sum: mean gap 6.024, 0/18 plans at the per-day additive optimum (gap <= 1e-6); cost: mean gap 3.893, 0/18 plans at the per-day additive optimum (gap <= 1e-6).
+
+Solver infeasibility_status counts across the selection-ablation solves: none 18.
+
+Disclosure: Variety is excluded from the exact reference (it is defined over the whole horizon and not per-day decomposable); the exact baseline covers nutrient_target_deviation, the raw preference sum and cost only and is NOT an optimum for all four objectives. preference_sum gaps measure distance above the raw-sum lower bound, not preference suboptimality (preference_fit negates the mean tag-preference sum).
+
 ## Limitations & known caveats
 
-1. **Encoding: hard = MAX ceilings + exclusions only (PLAN.md module 4).** MIN floors and TARGET values are soft objective terms: they steer the nutrient-deviation objective and never count as violations. This is the documented intent of the plan; the earlier hard-MIN encoding made guideline floors (fibre, potassium, energy) cause infeasibility instead of guiding the search. Consequence: `violation_count == 0` means the hard ceilings and exclusions hold — it does NOT mean the plan meets every soft floor. Residual soft shortfalls are reported per plan (see `soft_aims` in results.json and the totals panel), and with the placeholder scalar weights (deviation 0.001 vs preference/variety 0.5, cost 0.02) the search may still trade floors against preference and cost — retuning `SCALAR_WEIGHTS` is the natural next step.
+1. **Encoding: hard = MAX ceilings + exclusions only (PLAN.md module 4).** MIN floors and TARGET values are soft objective terms: they steer the nutrient-deviation objective and never count as violations. This is the documented intent of the plan; the earlier hard-MIN encoding made guideline floors (fibre, potassium, energy) cause infeasibility instead of guiding the search. Consequence: `violation_count == 0` means the hard ceilings and exclusions hold — it does NOT mean the plan meets every soft floor. Residual soft shortfalls are reported per plan (see `soft_aims` in results.json and the adequacy panel). Production main/side search uses normalised adequacy-first ranking against original aims.
 
-2. **Fibre MIN relaxation (disclosure still active).** The guideline rulebook sets fibre floors (GEN-FIBER-25 min 25 g/d, DASH-2025-FIBER-30 min 30 g/d) but the dish dataset tops out at 8 g fibre per dish, so the best possible 3-dish day reaches only 24 g. `prepare_envelope_for_pool` still lowers unreachable MIN floors in the solved copy and discloses every adjustment in `relaxed_constraints` — no longer needed for feasibility (floors are soft), it now calibrates the deviation objective to an achievable aim and keeps the clinician-facing disclosure intact. Heavier patients additionally trigger the energy-kcal floor relaxation once the semantic exclusions narrow the pool's energy ceiling.
+2. **Fibre MIN relaxation and meal encoding.** The legacy single-dish search discloses relaxed soft aims when used as fallback. Production composition uses one main and an optional side per meal, without relaxing approved aims. Roles are heuristic. Search failure for this encoding is not proof of infeasibility; the exact reference applies to single-dish days.
 
 3. **Exclusion vocabulary (fixed in this remediation).** The rulebook emits semantic exclusion values (`high_potassium_foods`, `phosphate_additive_processed`, `sugar_sweetened_beverage`, `high_glycaemic_load`) that no dataset tag spells out; before the fix every rulebook exclusion matched zero dishes. `backend/optim/exclusion_mapping.py` now bridges each value to a documented per-serving nutrient threshold (K > 500 mg, P > 300 mg, drink with sugar > 5 g, carbs > 75 g); unknown values keep literal-only matching. The dataset's own `high_potassium` tag continues to work via literal matching.
 
 4. **Newest-first labs orientation.** `labs_K_monthly` / `labs_PO4_monthly` are ordered newest-first: index 0 pairs with `months_offset_ago == 0` (current) and equals the top-level `serum_K_meq_L` / `serum_PO4_mg_dL` the rule engine consumes. Any consumer that sorts these series ascending silently reads the *oldest* lab as current and will mis-trigger the hyperkalaemia/hyperphosphataemia rules.
 
-5. **Benchmark reuse.** Q4 consumes the committed benchmark artefacts instead of re-running the optimiser benchmark methods (default); `--rerun-benchmark` regenerates them (~23 s wall time). The artefacts were regenerated after the hard/soft re-encoding, so the comparison table reflects the new objective semantics for all methods alike. Runtimes in the report are wall-clock and not deterministic.
+5. **Benchmark reuse.** Q4 consumes the committed benchmark artefacts instead of re-running the optimiser benchmark methods (default); `--rerun-benchmark` regenerates them. Actual pymoo evaluation counts are recorded; generation-boundary overshoot is possible. Runtimes in the report are wall-clock and not deterministic.
 
-6. **Chat evaluation scope.** Groundedness is scored automatically against the rules that *produce a constraint* for the asked nutrient; supporting citations retrieved by TF-IDF may legitimately mention other nutrients. Nutrients without constraint-producing rules (sugar, total fat) cannot be grounded today and are listed as known gaps. The expert-review rubric is provided for the human evaluation that cannot be automated.
+6. **Chat evaluation scope.** Claims carry source metadata and are checked for citation identity, patient applicability and approved numeric values. Unsupported numeric target questions are refused. Retrieval thresholds are calibrated on development examples before held-out evaluation. The expert-review rubric is provided for the human evaluation that cannot be automated.
 
-7. **Soft floors vs the dish pool.** Even as soft aims, some floors remain far from what the pool delivers (e.g. mean fibre ~10 g/day against the 25-30 g guideline aim) — the curated renal-replenishment dishes add fruit/vegetable and higher-fibre options, but 3 dishes/day from a 214-dish Singaporean pool cannot reach DASH-level fibre/potassium without dedicated product reformulation. The soft-aim shortfalls in results.json quantify this per patient.
+7. **Data quality.** All 214 dishes are unverified; costs are synthetic estimates. Main/side composition improves delivery but constrained patients can still have shortfalls, quantified per patient in results.json. Neither real affordability nor clinical nutrient accuracy is established.
 
 8. **Scale.** 20 synthetic patients, one dish dataset, one seed set. Statistical strength is limited; the numbers measure pipeline correctness, not clinical validity.
 

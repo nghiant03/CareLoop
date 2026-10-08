@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
@@ -63,6 +63,26 @@ class RejectRequest(BaseModel):
 
     rejected_by: str = "clinician"
     reason: Optional[str] = None
+
+
+@router.get("/latest", summary="Latest envelope for a patient")
+def read_latest_envelope_for_patient(
+    patient_id: str = Query(..., description="Patient id"),
+) -> NutrientEnvelope:
+    """The patient's most recent envelope, any status.
+
+    Lets the what-if screen prefill its target editor from the current
+    envelope (the proposal baseline) instead of retyping every constraint.
+    """
+    from backend.app.core.approval_gate import find_latest_envelope_for_patient
+
+    envelope = find_latest_envelope_for_patient(patient_id)
+    if envelope is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "envelope_not_found", "patient_id": patient_id},
+        )
+    return envelope
 
 
 @router.get("/{envelope_id}", summary="Get an envelope")
@@ -180,6 +200,10 @@ def edit_envelope(
         stored = trace_or_none(envelope) or []
     put_trace(envelope.envelope_id, list(stored) + [edit_row.model_dump(mode="json", by_alias=True)])
     envelope.fired_rules = list(envelope.fired_rules) + [edit_row]
+    if body.targets is not None:
+        from shared.provenance import attach_provenance
+
+        attach_provenance(envelope, author=body.edited_by, citation=edit_row.citation)
 
     return put_envelope(envelope)
 

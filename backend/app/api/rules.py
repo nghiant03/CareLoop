@@ -67,20 +67,31 @@ def _resolve_patient(body: dict[str, Any]) -> dict[str, Any]:
     return dict(record)
 
 
-@router.post("/run", summary="Run the rule engine -> PROPOSED envelope + trace")
-def run_rules(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
-    patient = _resolve_patient(body)
+def run_rules_service(patient: dict[str, Any]) -> dict[str, Any]:
+    """Shared service behind ``POST /rules/run`` (reused by the review queue).
+
+    Runs the CLIPS rule engine for a patient record, validates the envelope,
+    registers it with the approval gate (still PROPOSED/REJECTED — downstream
+    consumption stays blocked until a clinician approves) and pins the trace.
+
+    Returns ``{"envelope": NutrientEnvelope, "trace": [...]}``.
+    """
     result = engine_run_rules(patient)
 
     envelope = NutrientEnvelope.model_validate(result["envelope"])
     trace = [row for row in result["trace"]]
 
-    # Register with the approval gate (still PROPOSED/REJECTED — downstream
-    # consumption stays blocked until a clinician approves) and pin the trace.
-    put_envelope(envelope)
+    put_envelope(envelope, new_proposal=True)
     put_trace(envelope.envelope_id, trace)
+    return {"envelope": envelope, "trace": trace}
+
+
+@router.post("/run", summary="Run the rule engine -> PROPOSED envelope + trace")
+def run_rules(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    patient = _resolve_patient(body)
+    result = run_rules_service(patient)
 
     return {
-        "envelope": envelope.model_dump(by_alias=True),
-        "trace": trace,
+        "envelope": result["envelope"].model_dump(by_alias=True),
+        "trace": result["trace"],
     }

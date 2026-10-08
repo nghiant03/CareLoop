@@ -38,7 +38,7 @@ Enforced in the API layer (`backend/app/core/approval_gate.py`), not by
 convention:
 
 - `POST /rules/run` produces a `PROPOSED` envelope and stores it in
-  `ENVELOPE_STORE` (process-local dict behind a lock).
+  the SQLite journal (transactionally allocated IDs; durable live authority).
 - Clinician actions move it: `/approve → APPROVED`, `/edit → EDITED` (clears
   approval; re-approval required), `/reject → REJECTED`. Approving an
   out-of-scope envelope (REJECTED status or no nutrient targets) is refused
@@ -62,8 +62,8 @@ convention:
 
 The gate contract is storage-agnostic: `trace_store.py` pins each envelope's
 `RuleFire` trace beside it so `/envelopes/{id}/explanation` reconstructs the
-decision exactly as proposed. Both stores are process-local; swapping in a
-persistent backing table does not change the contracts.
+decision exactly as proposed. Embedded traces in the durable envelope snapshot
+provide the same explanation after restart.
 
 ## 3. Versioned knowledge base
 
@@ -115,13 +115,13 @@ patient logs actual meals ──▶ adherence.analysis ──▶ per-day totals 
                                                      deviation series + flags
 ```
 
-The adherence loop closes the cycle: logged meals are measured against the
-patient's *latest* envelope regardless of status, but a non-APPROVED envelope
-makes every comparison `informational_only` with an explicit notice — the
-gate is never bypassed, comparisons are just labelled.
+The adherence loop scores each logged date against the most recent approval
+effective on that date. Dates without approval coverage are explicitly
+unattributed, never backfilled with today's targets. Only complete days enter
+trend calculations and soft-gap aggregates; partial-day hard violations remain visible.
 
-- **Adherence** (`backend/app/adherence/` + `api/adherence.py`): process-local
-  meal-log store (one dish per `(patient, date, meal)` slot, newest wins) and
+- **Adherence** (`backend/app/adherence/` + `api/adherence.py`): durable SQLite
+  meal-log store (multiple dishes and serving quantities per meal, newest save wins) and
   a pure analysis module. `MAX` totals that are exceeded are **hard
   violations** (the same semantics the optimiser treats as unbreakable);
   `MIN`/`TARGET` shortfalls are **soft gaps**. The deviation endpoint builds
@@ -210,12 +210,12 @@ LLM adapter only rephrases an already-grounded answer:
 
 ## 7. Known runtime boundaries
 
-- Envelope store, trace store, created patients and adherence meal logs are
-  process-local; a backend restart resets them. The contracts are designed so
-  a persistent store drops in without endpoint changes.
+- Clinical state survives restart in SQLite, selected by `CARELOOP_APP_DB`.
+  Timestamped observations overlay profiles and feed rules and lab trends.
+  Observations never automatically approve a new envelope.
 - The KB is rebuilt in memory per process from `rules/rules.json` +
   `data/dishes.json`; dish values are manual-curation estimates
   (`verified: false`, see `data/README.md`).
-- The dish pool cannot reach some guideline MIN floors (notably fibre); the
-  optimiser path lowers them with explicit `relaxed_constraints` disclosure
-  rather than failing or silently violating.
+- Production main/side composition uses normalised original-target adequacy.
+  Main/side eligibility is heuristic; constrained patients may retain shortfalls.
+  The single-dish fallback discloses soft-floor relaxation when used.

@@ -199,3 +199,106 @@ def test_unedited_constraint_still_cites_guideline_rule(kb) -> None:
     rule_ids = [c["rule_id"] for c in result["citations"]]
     assert rule_ids[0] == "CKD-2024-SODIUM-2000", rule_ids
     assert "CLINICIAN-EDIT" not in rule_ids
+
+
+# ---------------------------------------------------------------------------
+# Regression: numeric rule conditions must actually be evaluated
+# ---------------------------------------------------------------------------
+
+
+def _numeric_rule(field: str, op: str, value) -> dict:
+    return {"rule_id": "TEST-RULE", "conditions": [{"field": field, "op": op, "value": value}]}
+
+
+@pytest.mark.parametrize(
+    ("op", "value", "num", "expected"),
+    [
+        ("ge", 5.0, 5.45, True),
+        ("ge", 5.0, 4.9, False),
+        ("gt", 5.0, 5.0, False),
+        ("gt", 5.0, 5.1, True),
+        ("le", 5.0, 4.9, True),
+        ("le", 5.0, 5.0, True),
+        ("le", 5.0, 5.1, False),
+        ("lt", 5.0, 5.0, False),
+        ("lt", 5.0, 4.9, True),
+        ("eq", 5.0, 5.0, True),
+        ("eq", 5.0, 5.1, False),
+        ("between", [18.0, 25.0], 20.0, True),
+        ("between", [18.0, 25.0], 30.0, False),
+        # Unknown sentinel / missing lab never satisfies the test.
+        ("ge", 5.0, -1.0, False),
+        ("ge", 5.0, None, False),
+    ],
+)
+def test_rule_applies_to_patient_numeric_ops(op, value, num, expected) -> None:
+    """Each known numeric op must be its own branch: a satisfied comparison
+    keeps the rule applicable, a failed one rejects it, and the unknown
+    sentinel (-1.0) / missing value never satisfies the test.
+
+    Regression: only ``between`` could ever return True — a passing ge/gt/
+    le/lt/eq fell through to the ``else: return False``."""
+    patient = {"patient_id": "PX", "serum_K_meq_L": num}
+    assert answers._rule_applies_to_patient(_numeric_rule("serum_K_meq_L", op, value), patient) is expected
+
+
+def test_rule_applies_to_patient_unknown_op_rejected() -> None:
+    patient = {"patient_id": "PX", "serum_K_meq_L": 5.45}
+    assert answers._rule_applies_to_patient(_numeric_rule("serum_K_meq_L", "regex", "5"), patient) is False
+
+
+def _hyperk_potassium_row() -> dict:
+    """Fired-rule row for HYPERK-2024-POTASSIUM-2400 (as the engine emits it)."""
+    return {
+        "rule_id": "HYPERK-2024-POTASSIUM-2400",
+        "action_summary": "set potassium_mg max = 2400 mg/d",
+        "priority": 85,
+        "citation": {
+            "rule_id": "HYPERK-2024-POTASSIUM-2400",
+            "guideline": "KDIGO 2024 CKD Guideline",
+            "section": "Sec. 3.7 / Potassium",
+            "url": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
+            "verbatim_quote": "restrict dietary potassium in hyperkalaemia",
+        },
+    }
+
+
+def test_hyperkalaemia_potassium_rule_cited_for_high_serum_k(kb) -> None:
+    """P0006-style case: serum K 5.45 mEq/L fires HYPERK-2024-POTASSIUM-2400
+    (potassium MAX 2400 mg/d). The hyperkalaemia rule must stay applicable and
+    be cited — regression: the applicability filter rejected every satisfied
+    numeric comparison except ``between``, dropping the rule (and with it the
+    KB anchor) even though the rule engine had fired it for this patient."""
+    envelope = {
+        "envelope_id": "ENV-P0006-001",
+        "patient_id": "P0006",
+        "status": "APPROVED",
+        "targets": [
+            {"nutrient": "potassium_mg", "kind": "max", "value": 2400, "unit": "mg"},
+        ],
+        "fired_rules": [_hyperk_potassium_row()],
+        "citations": [],
+    }
+    patient = {
+        "patient_id": "P0006",
+        "diagnoses": ["T2D", "CKD_stage_4", "hyperkalemia"],
+        "serum_K_meq_L": 5.45,
+        "egfr": 31.2,
+        "weight_kg": 70.0,
+    }
+
+    result = answers.answer(
+        "How much potassium should I eat each day?", kb, envelope=envelope, patient=patient
+    )
+
+    assert result["status"] == "answered"
+    assert "2.4 g" in result["answer"]
+    rule_ids = [c["rule_id"] for c in result["citations"]]
+    assert rule_ids, "answered answer must carry citations"
+    assert "HYPERK-2024-POTASSIUM-2400" in rule_ids
+    # The hyperkalaemia rule is the applicable anchor, so its verbatim quote
+    # is quoted in the answer prose.
+    assert "restrict dietary potassium in hyperkalaemia" in result["answer"]
+    # Rules that do not apply to this patient are never cited.
+    assert "CKD-2024-POTASSIUM-INDIV" not in rule_ids
+    assert "DASH-2025-POTASSIUM-4700" not in rule_ids

@@ -141,6 +141,11 @@ def evaluate_q3(
         solved, relaxed = prepare_envelope_for_pool(approved, dishes)
         started = time.perf_counter()
         result = optim_run(solved, dishes=dishes, seed=seed, pop_size=pop_size, n_gen=n_gen)
+        from backend.optim.composition import improve_meals
+
+        result = improve_meals(result, approved, dishes, seed=seed)
+        if result.get("meal_complete"):
+            solved, relaxed = approved, []
         runtime_s = time.perf_counter() - started
 
         feasible = bool(result.get("feasible"))
@@ -157,6 +162,8 @@ def evaluate_q3(
             "relaxed_constraints": relaxed,
             "solver_runtime_s": round(runtime_s, 3),  # wall-clock; not deterministic
             "infeasibility_reason": result.get("infeasibility_reason"),
+            "infeasibility_status": result.get("infeasibility_status"),
+            "meal_complete": result.get("meal_complete", False),
         }
         if feasible:
             per_day = _per_day_check(result["plan"], solved, dishes)
@@ -182,7 +189,7 @@ def evaluate_q3(
         "definition": (
             "For every eligible patient: engine -> simulated APPROVED -> "
             "prepare_envelope_for_pool (MIN-floor relaxation disclosure) -> "
-            "backend.optim.api.run -> violation_count == 0 and per-day totals "
+            "backend.optim.api.run -> original-target main/side composition -> violation_count == 0 and per-day totals "
             "within the SOLVED envelope's HARD constraints (MAX ceilings; "
             "MIN floors / TARGETs are soft per PLAN.md module 4, reported as "
             "soft-aim shortfalls, never violations). Infeasible envelopes "

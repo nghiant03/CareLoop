@@ -1,0 +1,323 @@
+"""Patient-aware meal swaps (Milestone 2 — fixes review finding E).
+
+``backend.mining.substitutions`` ranks substitutes by generic renal-weighted
+nutrient distance; it knows nothing about *this* patient's approved envelope
+or the meals they actually eat.  This module adds the patient context:
+
+* the patient's latest saved plan is reconstructed into the canonical solver
+  ``Plan`` representation (day-major, ``MEALS_PER_DAY`` meals per day);
+* ranked candidates are filtered against the envelope (an excluded dish is
+  NEVER recommended — the P0006/SG0009 -> SG0030 regression);
+* every surviving candidate is validated with the canonical evaluator
+  (:func:`backend.optim.problem.evaluate`) on each affected day: the source
+  dish is replaced by the candidate in that day and the modified day must be
+  free of HARD violations (MAX ceilings, exclusions, membership);
+* per-nutrient day deltas (after - before) and a cost delta are reported so
+  the clinician sees what the swap does to the patient's actual day.
+
+Envelopes: the swap helpers accept the patient's latest envelope regardless
+of status (callers label the response ``informational_only`` when it is not
+APPROVED).  :func:`problem.evaluate` refuses non-APPROVED envelopes, so a
+local, never-persisted APPROVED copy is used for validation only — the store
+and journal are untouched (same by-construction safety as the simulations).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from shared.envelope_schema import ConstraintKind, EnvelopeStatus, NutrientEnvelope
+
+from backend.mining.substitutions import suggest_substitutions
+from backend.optim.composition import complete_meals
+from backend.optim.problem import (
+    MEALS_PER_DAY,
+    NUTRIENT_KEYS,
+    Plan,
+    evaluate,
+    exclusion_for,
+)
+
+__all__ = [
+    "DishNotInPlanError",
+    "plan_from_document",
+    "affected_days_for",
+    "patient_substitutions",
+    "apply_patient_swap",
+    "SwapOutcome",
+]
+
+_MEAL_ORDER = ("breakfast", "lunch", "dinner")
+
+
+class DishNotInPlanError(Exception):
+    """The dish to swap does not occur anywhere in the patient's plan."""
+
+
+# ---------------------------------------------------------------------------
+# Plan reconstruction (stored UI contract -> solver Plan)
+# ---------------------------------------------------------------------------
+
+
+def plan_from_document(document: dict[str, Any]) -> Plan:
+    """Reconstruct the day-major solver ``Plan`` from a stored plan document.
+
+    The stored document is the MAPPED UI contract: ``days[]`` (sorted by
+    ``day``) each carrying ``slots[]`` with a ``meal`` label and ``dish_id``.
+    Slots are regrouped into meals in canonical meal order
+    (breakfast/lunch/dinner) and flattened day-major — exactly the
+    ``plan[day * MEALS_PER_DAY + meal_index]`` layout ``problem.evaluate``
+    expects.  Slots whose dish is unknown to the mapper are absent from the
+    document and therefore from the reconstruction.
+    """
+    days = document.get("days") or []
+    plan: Plan = []
+    for day in sorted(
+        (d for d in days if isinstance(d, dict)),
+        key=lambda d: d.get("day", 0),
+    ):
+        buckets: list[list[str]] = [[] for _ in _MEAL_ORDER]
+        for slot in day.get("slots") or []:
+            dish_id = slot.get("dish_id")
+            if not dish_id:
+                continue
+            meal = str(slot.get("meal", "")).lower()
+            index = (
+                _MEAL_ORDER.index(meal)
+                if meal in _MEAL_ORDER
+                else len(_MEAL_ORDER) - 1
+            )
+            buckets[index].append(str(dish_id))
+        plan.extend(buckets)
+    return plan
+
+
+def affected_days_for(plan: Plan, dish_id: str) -> list[int]:
+    """0-based indices of the plan days in which ``dish_id`` occurs."""
+    affected: list[int] = []
+    for day in range(len(plan) // MEALS_PER_DAY):
+        lo, hi = day * MEALS_PER_DAY, (day + 1) * MEALS_PER_DAY
+        if any(dish_id in meal for meal in plan[lo:hi]):
+            affected.append(day)
+    return affected
+
+
+def _replace_in_plan(plan: Plan, dish_id: str, replacement: str) -> Plan:
+    """Every occurrence of ``dish_id`` becomes ``replacement`` (new plan)."""
+    return [
+        [replacement if d == dish_id else d for d in meal] for meal in plan
+    ]
+
+
+def _replace_in_day(plan: Plan, day: int, dish_id: str, replacement: str) -> Plan:
+    """Replace every occurrence of ``dish_id`` within one day only."""
+    lo, hi = day * MEALS_PER_DAY, (day + 1) * MEALS_PER_DAY
+    modified = [list(meal) for meal in plan]
+    for meal in modified[lo:hi]:
+        for index, dish in enumerate(meal):
+            if dish == dish_id:
+                meal[index] = replacement
+    return modified
+
+
+def _day_totals(plan: Plan, day: int, lookup: dict[str, Any]) -> dict[str, float]:
+    lo, hi = day * MEALS_PER_DAY, (day + 1) * MEALS_PER_DAY
+    totals = {key: 0.0 for key in NUTRIENT_KEYS}
+    for meal in plan[lo:hi]:
+        for dish_id in meal:
+            dish = lookup.get(dish_id)
+            if dish is None:
+                continue
+            for key in NUTRIENT_KEYS:
+                totals[key] += dish.nutrient(key)
+    return totals
+
+
+def _approval_safe_copy(envelope: NutrientEnvelope) -> NutrientEnvelope:
+    """APPROVED copy for local evaluation only (never stored or journalled).
+
+    ``problem.evaluate`` refuses non-APPROVED envelopes.  The swap endpoints
+    deliberately accept the patient's latest envelope regardless of status
+    (labelled informational), so validation runs against a local deep copy
+    with the status forced to APPROVED.  By construction this object never
+    reaches the envelope store or the journal.
+    """
+    if getattr(envelope, "status", None) == EnvelopeStatus.APPROVED:
+        return envelope
+    local = envelope.model_copy(deep=True)
+    local.status = EnvelopeStatus.APPROVED
+    return local
+
+
+def _worst_aim_shortfall_pct(
+    day_totals: dict[int, dict[str, float]], envelope: NutrientEnvelope
+) -> float:
+    """Worst relative shortfall vs the envelope's MIN/TARGET aims.
+
+    Pooled over the supplied days only (the affected days); MAX ceilings are
+    excluded (they are hard constraints, not aims).  0.0 when nothing counts.
+    """
+    worst = 0.0
+    for totals in day_totals.values():
+        for constraint in envelope.targets:
+            if constraint.kind not in (ConstraintKind.MIN, ConstraintKind.TARGET):
+                continue
+            aim = float(constraint.value)
+            if aim <= 0.0:
+                continue
+            delta = aim - totals.get(constraint.nutrient.value, 0.0)
+            shortfall = abs(delta) if constraint.kind == ConstraintKind.TARGET else max(0., delta)
+            worst = max(worst, shortfall / aim * 100.0)
+    return round(worst, 3)
+
+
+# ---------------------------------------------------------------------------
+# Patient-aware suggestions
+# ---------------------------------------------------------------------------
+
+
+def patient_substitutions(
+    dish_id: str,
+    k: int,
+    envelope: NutrientEnvelope,
+    plan_document: dict[str, Any],
+    dishes: list[Any],
+) -> dict[str, Any]:
+    """Rank + validate substitute dishes against the patient's actual plan.
+
+    Candidates come from the existing v2 ranking (:func:`suggest_substitutions`,
+    pulled ``k * 3`` wide); each is then validated:
+
+    * exclusion filter — an excluded candidate is dropped, never recommended;
+    * whole-day hard check — for every plan day containing ``dish_id``, the
+      candidate replaces it there and :func:`problem.evaluate` must report
+      ZERO hard violations (MAX ceilings, exclusions, membership);
+    * per-nutrient day deltas (after - before) and a cost delta
+      (``price_sgd`` difference times the replaced occurrences) are attached.
+
+    ``k`` is honoured AFTER filtering: up to ``k`` validated candidates are
+    returned, possibly fewer.
+    """
+    lookup = {d.dish_id: d for d in dishes}
+    source = lookup.get(dish_id)
+    if source is None:
+        raise KeyError(f"unknown dish_id: {dish_id}")
+
+    plan = plan_from_document(plan_document)
+    affected = affected_days_for(plan, dish_id)
+    if not affected:
+        raise DishNotInPlanError(f"dish {dish_id!r} does not occur in the selected plan")
+    occurrences = sum(
+        sum(meal.count(dish_id) for meal in plan[day * MEALS_PER_DAY:(day + 1) * MEALS_PER_DAY])
+        for day in affected
+    )
+
+    candidates = suggest_substitutions(dish_id, k=max(k * 3, k), version=2)
+    validation_envelope = _approval_safe_copy(envelope)
+    before = {day: _day_totals(plan, day, lookup) for day in affected}
+
+    validated: list[dict[str, Any]] = []
+    for candidate in candidates:
+        candidate_id = candidate["dish_id"]
+        candidate_dish = lookup.get(candidate_id)
+        if candidate_dish is None:
+            continue
+        # Excluded dishes must never be recommended (review finding E).
+        if exclusion_for(candidate_dish, validation_envelope) is not None:
+            continue
+
+        after: dict[int, dict[str, float]] = {}
+        full_swap = _replace_in_plan(plan, dish_id, candidate_id)
+        _, full_violations = evaluate(full_swap, validation_envelope, dishes)
+        if full_violations:
+            continue
+        if plan_document.get("meal_encoding") == "main_optional_side" and not complete_meals(full_swap, dishes):
+            continue
+        for day in affected:
+            modified = full_swap
+            after[day] = _day_totals(modified, day, lookup)
+
+        item = dict(candidate)
+        item["day_deltas"] = {
+            str(day + 1): {
+                key: round(after[day][key] - before[day][key], 3)
+                for key in NUTRIENT_KEYS
+            }
+            for day in affected
+        }
+        item["cost_delta"] = round(
+            (candidate_dish.price_sgd - source.price_sgd) * occurrences, 4
+        )
+        item["passes_hard_checks"] = True
+        item["worst_aim_shortfall_pct"] = _worst_aim_shortfall_pct(after, envelope)
+        validated.append(item)
+        if len(validated) == k:
+            break
+
+    return {
+        "affected_days": [day + 1 for day in affected],
+        "substitutions": validated,
+        "candidates_evaluated": len(candidates),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Applying a swap
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class SwapOutcome:
+    """Result of applying a patient swap to a stored plan."""
+
+    modified_plan: Plan
+    objectives: dict[str, float]
+    violations: list[dict[str, Any]]
+    occurrences_replaced: int
+    affected_days: list[int] = field(default_factory=list)
+
+    @property
+    def feasible(self) -> bool:
+        return not self.violations
+
+
+def apply_patient_swap(
+    dish_id: str,
+    replacement_dish_id: str,
+    plan_document: dict[str, Any],
+    envelope: NutrientEnvelope,
+    dishes: list[Any],
+) -> SwapOutcome:
+    """Replace EVERY occurrence of ``dish_id`` and re-check the whole plan.
+
+    Raises :class:`KeyError` when either dish is unknown to the dish pool and
+    :class:`DishNotInPlanError` when the source dish occurs nowhere in the
+    plan.  Hard-violating swaps (MAX ceilings, exclusions, membership — an
+    excluded replacement included) come back as ``violations`` for the caller
+    to reject; nothing is persisted by this module.
+    """
+    lookup = {d.dish_id: d for d in dishes}
+    if dish_id not in lookup:
+        raise KeyError(f"unknown dish_id: {dish_id}")
+    if replacement_dish_id not in lookup:
+        raise KeyError(f"unknown dish_id: {replacement_dish_id}")
+
+    plan = plan_from_document(plan_document)
+    occurrences = sum(meal.count(dish_id) for meal in plan)
+    if occurrences == 0:
+        raise DishNotInPlanError(
+            f"dish {dish_id!r} does not occur in the patient's plan"
+        )
+
+    modified = _replace_in_plan(plan, dish_id, replacement_dish_id)
+    objectives, violations = evaluate(modified, envelope, dishes)
+    if plan_document.get("meal_encoding") == "main_optional_side" and not complete_meals(modified, dishes):
+        violations.append({"type": "meal_role", "detail": "Replacement does not fit the meal's main/side role"})
+    return SwapOutcome(
+        modified_plan=modified,
+        objectives=objectives,
+        violations=violations,
+        occurrences_replaced=occurrences,
+        affected_days=[day + 1 for day in affected_days_for(plan, dish_id)],
+    )

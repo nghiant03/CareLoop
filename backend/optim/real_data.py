@@ -89,6 +89,8 @@ def _load_cached(path: str) -> tuple[Dish, ...]:
                 ingredients=tuple(row.get("ingredients", ()) or ()),
                 tags=tuple(row.get("tags", ()) or ()),
                 price_sgd=float(row.get("price_sgd", _synthetic_price(row))),
+                price_is_estimated="price_sgd" not in row,
+                verified=bool(row.get("verified", False)),
             )
         )
     return tuple(dishes)

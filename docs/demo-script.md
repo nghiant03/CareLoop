@@ -150,8 +150,8 @@ curl -sS "$P/adherence/P0005/deviation" | jq '.flags'
 
 ## Notes for the presenter
 
-- Backend state (envelopes, traces, created patients, meal logs) is
-  process-local; a restart resets it, so re-run `/rules/run` after restarting.
+- Backend clinical state persists in SQLite across restarts. Use a temporary
+  `CARELOOP_APP_DB` for an isolated demonstration.
 - Rule engine output is deterministic — the same patient always yields the same
   envelope and trace, so this demo reproduces exactly.
 - Dish nutrient values are curated estimates (`data/README.md`); present

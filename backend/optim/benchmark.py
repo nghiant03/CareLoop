@@ -103,12 +103,16 @@ REF_MARGIN = 1.1
 
 
 def _run(method: str, env, dishes, seed: int, pop_size: int, n_gen: int) -> dict:
+    budget = os.environ.get("CARELOOP_BENCH_BUDGET", "evaluations")
+    termination = (("time", float(os.environ.get("CARELOOP_BENCH_SECONDS", "0.5")))
+                   if budget == "time" else ("n_eval", pop_size * n_gen))
+    options = {"termination": termination} if method.removesuffix("-raw") in PYMOO_METHODS else {}
     if method.endswith("-raw") and method[:-4] in PYMOO_METHODS:
         return solve(
             env, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen,
-            method=method[:-4], guarantee=False,
+            method=method[:-4], guarantee=False, **options,
         )
-    return solve(env, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen, method=method)
+    return solve(env, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen, method=method, **options)
 
 
 def _is_guaranteed(method: str) -> bool:
@@ -191,6 +195,7 @@ def main() -> int:
                             "seed": seed,
                             "pop_size": POP_SIZE,
                             "n_gen": N_GEN,
+                            "evaluations": result["evaluations"],
                             "guaranteed": int(_is_guaranteed(method)),
                             "violation_count": result["violation_count"],
                             "feasible": int(bool(result["feasible"])),
@@ -241,6 +246,7 @@ def main() -> int:
                                 "seed": SWEEP_SEED,
                                 "pop_size": pop_size,
                                 "n_gen": n_gen,
+                                "evaluations": result["evaluations"],
                                 "guaranteed": 1,
                                 "violation_count": result["violation_count"],
                                 "feasible": int(bool(result["feasible"])),
@@ -296,6 +302,16 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
 
     lines: list[str] = []
     lines.append("# CareLoop optimiser benchmark — real dish dataset (214 dishes)")
+    lines.append("")
+    budget = os.environ.get("CARELOOP_BENCH_BUDGET", "evaluations")
+    lines.append(
+        f"Budget mode: **{budget}**. "
+        + (f"Pymoo search limit: {os.environ.get('CARELOOP_BENCH_SECONDS', '0.5')} seconds per run. "
+           if budget == "time" else "Pymoo search limit: population × nominal generations evaluations. ")
+        + "Actual evaluation counts are recorded in the CSV. Nominal generations are not a stopping condition. "
+        "Wall times include cold-start/compilation overhead and repair; these are not strict latency bounds. "
+        "GA/greedy/random keep their native budgets."
+    )
     lines.append("")
     lines.append(
         "Setup: 7 days x 3 meals, 214-dish pool (post-exclusion counts vary by "
@@ -500,12 +516,13 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
         "assessed separately by the constraint-satisfaction evaluation."
     )
     lines.append(
-        "* Equal-work caveat: nominal population x generations is not an "
-        "equal-work budget across all methods (e.g. MOEA/D's population is "
-        "tied to its reference-direction count, so its per-generation work "
-        "differs from population-sized methods); evaluation counts are "
-        "estimated from the algorithm configuration rather than recorded per "
-        "run."
+        "* Work budgets: pymoo methods use actual-evaluation termination "
+        "(population × generations evaluations by default); counts are recorded "
+        "from algorithm.evaluator.n_eval in the CSV. Generation-boundary overshoot "
+        "is possible. CARELOOP_BENCH_BUDGET=time selects wall-time termination "
+        "with CARELOOP_BENCH_SECONDS (default 0.5). GA/greedy/random retain their "
+        "native budgets and are not claimed to have equal work. Repair/evaluation "
+        "outside pymoo is excluded from the search count but included in runtime."
     )
     lines.append(
         f"* Total harness wall time: {runtime_total:.0f}s"

@@ -90,14 +90,9 @@ def test_q3_subset_end_to_end():
         for aim in row["soft_aims"].values():
             assert aim["kind"] in ("min", "target")
 
-    # every attempted envelope still carries a disclosed MIN-floor relaxation
-    # (objective calibration + clinician-facing disclosure, not feasibility)
-    assert all(r["relaxed_constraints"] for r in attempted)
-    assert all(
-        any(x["nutrient"] == "fiber_g" and x["kind"] == "min"
-            for x in r["relaxed_constraints"])
-        for r in attempted
-    )
+    # Production composition evaluates original aims without relaxing floors.
+    assert all(r["meal_complete"] for r in attempted)
+    assert all(not r["relaxed_constraints"] for r in attempted)
     # headline consistency
     zero = [r for r in attempted if r["feasible"] and r["violation_count"] == 0]
     assert results["zero_violation_plans"] == len(zero)
@@ -148,11 +143,13 @@ def test_run_suite_and_report(tmp_path):
     assert set(results) == {
         "meta", "q1_traceability", "q2_conflicts",
         "q3_constraint_satisfaction", "q4_benchmark", "q5_groundedness",
+        "q6_ablation",
     }
     report = render_report(results)
     for section in ("## Q1 — Traceability", "## Q2 — Conflict resolution",
                     "## Q3 — Constraint satisfaction",
                     "## Q4 — Quality/runtime", "## Q5 — Groundedness",
+                    "## Q6 — Objective/selection & meal-composition ablation",
                     "## Limitations"):
         assert section in report
     assert "fibre MIN relaxation" in report or "Fibre MIN relaxation" in report

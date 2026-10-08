@@ -231,9 +231,10 @@ def map_plan_result(
             key = constraint.nutrient.value
             aim = round(constraint.value, 3)
             series = [day_totals.get(key, 0.0) for day_totals in daily_raw_totals]
-            worst_index = min(range(len(series)), key=lambda i: series[i])
+            deviations = [abs(aim - value) if kind == "target" else max(0., aim - value) for value in series]
+            worst_index = max(range(len(series)), key=lambda i: deviations[i])
             worst_daily = round(series[worst_index], 3)
-            shortfall = round(aim - worst_daily, 3)
+            shortfall = round(deviations[worst_index], 3)
             shortfall_pct = round(shortfall / aim * 100.0, 3) if aim > _EPS else 0.0
             relaxed_aim: Optional[float] = None
             solved_aim = solved_aim_by_key.get((key, kind))
@@ -250,7 +251,7 @@ def map_plan_result(
                     "worst_daily": worst_daily,
                     "shortfall": shortfall,
                     "shortfall_pct": shortfall_pct,
-                    "met_days": sum(1 for value in series if value >= aim - _EPS),
+                    "met_days": sum(1 for deviation in deviations if deviation <= _EPS),
                     "total_days": len(series),
                     "relaxed_aim": relaxed_aim,
                 }
@@ -269,6 +270,18 @@ def map_plan_result(
         return safe
 
     out = {
+        "data_quality": {
+            "unverified_dishes": sum(not getattr(d, "verified", False) for d in dishes),
+            "dish_count": len(dishes),
+            "cost_is_estimated": any(getattr(d, "price_is_estimated", False) for d in dishes),
+        },
+        "envelope_version": envelope.version,
+        "meal_complete": result.get("meal_complete", False),
+        "meal_encoding": result.get("meal_encoding", "single_dish"),
+        "selection": result.get("selection", "scalar"),
+        "seed": result.get("seed", 42),
+        "role_annotations": result.get("role_annotations"),
+        "adequate": bool(feasible and adequacy and all(a["met_days"] == n_days for a in adequacy)),
         "envelope_id": result.get("envelope_id") or envelope.envelope_id,
         "patient_id": result.get("patient_id") or envelope.patient_id,
         "feasible": feasible,
@@ -278,6 +291,9 @@ def map_plan_result(
         "objectives": result.get("objectives"),
         "allowed_dish_count": result.get("allowed_dish_count"),
         "infeasibility_reason": result.get("infeasibility_reason"),
+        "infeasibility_status": result.get("infeasibility_status"),
+        "exact_reference": result.get("exact_reference"),
+        "hard_feasible": feasible,
         "violations": _json_safe_violations(result.get("violations") or []),
         "relaxed_constraints": relaxed_constraints or [],
         "days": days if feasible else [],

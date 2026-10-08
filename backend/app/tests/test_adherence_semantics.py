@@ -29,7 +29,6 @@ from copy import deepcopy
 from datetime import date, timedelta
 
 import pytest
-from fastapi.testclient import TestClient
 
 from backend.app.adherence import analysis, store
 from backend.app.core.approval_gate import ENVELOPE_STORE
@@ -45,18 +44,10 @@ from shared.envelope_schema import (
     PatientSummary,
 )
 
-from backend.app.main import app
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def client():
-    with TestClient(app) as c:
-        yield c
 
 
 @pytest.fixture(autouse=True)
@@ -112,6 +103,12 @@ def _logs(patient_id: str, days_and_dishes: list[tuple[str, str]]) -> list[dict[
     ]
 
 
+def _complete_logs(logs, dishes):
+    dishes["ZERO"] = StubDish("ZERO", {})
+    return logs + [dict(entry, meal=meal, dish_id="ZERO")
+                   for entry in logs for meal in ("breakfast", "dinner")]
+
+
 _CITATION = CitationSource(
     guideline="Test Guideline", section="1.0", rule_id="R-TEST"
 )
@@ -139,6 +136,7 @@ def test_min_shortfall_exposure_rises_and_flags_worsening() -> None:
     }
     days = ["2026-03-01", "2026-03-02", "2026-03-03"]
     logs = _logs(patient, list(zip(days, ["F0", "F1", "F2"])))
+    logs = _complete_logs(logs, dishes)
 
     result = analysis.analyse_patient(logs, envelope, dishes)
     series = result["series"]["fiber_g"]
@@ -277,6 +275,7 @@ def test_slope_uses_elapsed_days_not_indices() -> None:
         "P0001",
         [("2026-01-01", "S0"), ("2026-01-11", "S1"), ("2026-01-21", "S2")],
     )
+    logs = _complete_logs(logs, dishes)
 
     result = analysis.analyse_patient(logs, envelope, dishes)
     points = result["series"]["sodium_mg"]["points"]
@@ -306,6 +305,7 @@ def test_slope_uneven_spacing_is_a_true_per_day_rate() -> None:
         "P0001",
         [("2026-01-01", "S0"), ("2026-01-02", "S1"), ("2026-01-04", "S2")],
     )
+    logs = _complete_logs(logs, dishes)
     result = analysis.analyse_patient(logs, envelope, dishes)
     flags = analysis.trend_flags(result["series"], slope_trigger=0.1)
     # pairwise slopes: 5/1, 5/2, 10/3 -> median 10/3 (rounded to 4 dp)
@@ -387,6 +387,137 @@ def test_exclusion_violations_count_in_aggregate_days() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 5. Logging completeness (Milestone 3)
+# ---------------------------------------------------------------------------
+
+
+def test_day_completeness_counts_distinct_logged_meals() -> None:
+    """``completeness`` counts the distinct meal slots with >= 1 log."""
+    envelope = _envelope(
+        "P0001",
+        [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=100_000.0, unit="mg")],
+    )
+    dishes = {"A": StubDish("A", {}), "B": StubDish("B", {}), "C": StubDish("C", {})}
+    full = analysis.analyse_day(
+        "2026-03-01",
+        [
+            {"meal": "dinner", "dish_id": "C"},
+            {"meal": "breakfast", "dish_id": "A"},
+            {"meal": "lunch", "dish_id": "B"},
+        ],
+        envelope,
+        dishes,
+    )
+    assert full["completeness"] == {"meals_logged": 3, "expected_meals": 3, "complete": True}
+
+    partial = analysis.analyse_day(
+        "2026-03-02", [{"meal": "breakfast", "dish_id": "A"}], envelope, dishes
+    )
+    assert partial["completeness"] == {"meals_logged": 1, "expected_meals": 3, "complete": False}
+
+    # same slot twice is still one logged meal (upsert semantics upstream)
+    dup = analysis.analyse_day(
+        "2026-03-03",
+        [{"meal": "lunch", "dish_id": "A"}, {"meal": "lunch", "dish_id": "B"}],
+        envelope,
+        dishes,
+    )
+    assert dup["completeness"] == {"meals_logged": 1, "expected_meals": 3, "complete": False}
+
+
+def test_range_aggregate_reports_complete_days() -> None:
+    """Aggregate gains ``complete_days`` / ``fraction_complete``."""
+    envelope = _envelope(
+        "P0001",
+        [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=100_000.0, unit="mg")],
+    )
+    dishes = {"A": StubDish("A", {})}
+    logs = [
+        {"patient_id": "P0001", "date": "2026-03-01", "meal": "breakfast", "dish_id": "A"},
+        {"patient_id": "P0001", "date": "2026-03-01", "meal": "lunch", "dish_id": "A"},
+        {"patient_id": "P0001", "date": "2026-03-01", "meal": "dinner", "dish_id": "A"},
+        {"patient_id": "P0001", "date": "2026-03-02", "meal": "lunch", "dish_id": "A"},
+    ]
+    result = analysis.analyse_range(logs, envelope, dishes)
+    assert result["aggregate"]["days_logged"] == 2
+    assert result["aggregate"]["complete_days"] == 1
+    assert result["aggregate"]["fraction_complete"] == pytest.approx(0.5)
+    # empty window: no days -> fraction 0.0 (not a ZeroDivisionError)
+    empty = analysis.analyse_range([], envelope, dishes)
+    assert empty["aggregate"]["complete_days"] == 0
+    assert empty["aggregate"]["fraction_complete"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# 6. Deviation-contributor explanations (Milestone 3)
+# ---------------------------------------------------------------------------
+
+
+def test_nutrient_rows_carry_ranked_contributors() -> None:
+    """MAX excess rows rank dishes by amount DESC; MIN shortfall rows ASC;
+    always top-2 with the dish's share of the day total; ties break by id."""
+    envelope = _envelope(
+        "P0001",
+        [
+            NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=900.0, unit="mg"),
+            NutrientConstraint(nutrient=NutrientKind.FIBER_G, kind=ConstraintKind.MIN, value=30.0, unit="g"),
+            NutrientConstraint(nutrient=NutrientKind.POTASSIUM_MG, kind=ConstraintKind.MAX, value=1000.0, unit="mg"),
+        ],
+    )
+    dishes = {
+        "A": StubDish("A", {"sodium_mg": 600.0, "fiber_g": 5.0}, name="Dish A"),
+        "B": StubDish("B", {"sodium_mg": 300.0, "fiber_g": 15.0}, name="Dish B"),
+        "C": StubDish("C", {"sodium_mg": 100.0, "fiber_g": 5.0}, name="Dish C"),
+    }
+    day = analysis.analyse_day(
+        "2026-03-01",
+        [
+            {"meal": "breakfast", "dish_id": "A"},
+            {"meal": "lunch", "dish_id": "B"},
+            {"meal": "dinner", "dish_id": "C"},
+        ],
+        envelope,
+        dishes,
+    )
+    rows = {(r["nutrient"], r["kind"]): r for r in day["nutrients"]}
+
+    # sodium: 1000 total vs MAX 900 -> hard violation; contributors ranked DESC
+    sodium = rows[("sodium_mg", "max")]
+    assert sodium["status"] == "hard_violation"
+    assert sodium["contributors"] == [
+        {"dish_id": "A", "dish_name": "Dish A", "amount": 600.0, "pct_of_day_total": pytest.approx(60.0)},
+        {"dish_id": "B", "dish_name": "Dish B", "amount": 300.0, "pct_of_day_total": pytest.approx(30.0)},
+    ]
+
+    # fiber: 25 total vs MIN 30 -> shortfall; contributors ranked ASC (what was
+    # actually eaten); the 5 g tie between A and C breaks by dish_id
+    fiber = rows[("fiber_g", "min")]
+    assert fiber["status"] == "soft_gap"
+    assert [c["dish_id"] for c in fiber["contributors"]] == ["A", "C"]
+    assert [c["amount"] for c in fiber["contributors"]] == [5.0, 5.0]
+    assert fiber["contributors"][0]["pct_of_day_total"] == pytest.approx(20.0)
+
+    # zero day total: percentages guard to 0.0 instead of dividing by zero
+    potassium = rows[("potassium_mg", "max")]
+    assert potassium["status"] == "ok"
+    assert len(potassium["contributors"]) == 2
+    assert all(c["amount"] == 0.0 and c["pct_of_day_total"] == 0.0 for c in potassium["contributors"])
+
+
+def test_day_rows_carry_envelope_identity() -> None:
+    """Every day row is stamped with the attributing envelope id + version."""
+    envelope = _envelope(
+        "P0001",
+        [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=1000.0, unit="mg")],
+    )
+    day = analysis.analyse_day(
+        "2026-03-01", [{"meal": "lunch", "dish_id": "A"}], envelope, {"A": StubDish("A", {})}
+    )
+    assert day["envelope_id"] == envelope.envelope_id
+    assert day["envelope_version"] == 1
+
+
+# ---------------------------------------------------------------------------
 # End-to-end: the real P0006 envelope excludes SG0002 Roasted Chicken Rice
 # ---------------------------------------------------------------------------
 
@@ -399,6 +530,7 @@ def test_p0006_roasted_chicken_rice_excluded(client, _isolated_envelope_store) -
     run = client.post("/rules/run", json={"patient_id": "P0006"})
     assert run.status_code == 200, run.text
     envelope = run.json()["envelope"]
+    assert client.post(f"/envelopes/{envelope['envelope_id']}/approve", json={}).status_code == 200
     assert any(
         e["value"] == "high_glycaemic_load" or e["value"] == "high_potassium_foods"
         for e in envelope["exclusions"]

@@ -4,9 +4,9 @@ How to review a proposed nutrient envelope, approve it, and interpret the
 generated meal plan, adherence summaries, trend flags and knowledge-base
 stats. Command examples use
 `curl` against `http://127.0.0.1:8000`; the same flows are available in the
-web UI (Clinician review and Adherence screens). Note: envelopes, traces,
-created patients and meal logs are held in process-local stores — restarting
-the backend clears them.
+web UI (Clinician review and Adherence screens). Clinical state persists in
+SQLite across backend restarts. New observations update the profile and the next
+rule proposal; clinician approval is still required before planning.
 
 ## 1. Pick a patient and generate the proposed envelope
 

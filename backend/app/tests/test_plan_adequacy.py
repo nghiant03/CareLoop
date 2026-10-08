@@ -34,14 +34,6 @@ from shared.envelope_schema import (
     PatientSummary,
 )
 
-from backend.app.main import app
-
-
-@pytest.fixture(scope="module")
-def client():
-    with TestClient(app) as c:
-        yield c
-
 
 def _nut(fiber_g: float = 0.0, protein_g: float = 0.0, sodium_mg: float = 0.0) -> dict:
     return {
@@ -236,9 +228,10 @@ def test_adequacy_excludes_max_and_keeps_envelope_order() -> None:
     # Worst day is the LOWEST total (1-based index), not day 2.
     assert fiber["worst_day"] == 1 and fiber["worst_daily"] == 3.0
     assert fiber["mean_daily"] == 3.5
-    assert protein["worst_day"] == 1 and protein["worst_daily"] == 15.0
+    assert protein["worst_day"] == 2 and protein["worst_daily"] == 20.0
     assert protein["mean_daily"] == 17.5
-    assert protein["shortfall"] == 0.0 and protein["met_days"] == protein["total_days"] == 2
+    assert protein["shortfall"] == 5.0 and protein["met_days"] == 1
+    assert protein["total_days"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -286,9 +279,8 @@ def test_api_plan_response_includes_adequacy(client) -> None:
         assert entry["kind"] in ("min", "target")  # MAX ceilings excluded
         assert entry["total_days"] == 7
         assert 1 <= entry["worst_day"] <= 7
-    # The real dataset cannot reach the guideline fibre floors, so the fibre
-    # entry must surface the original aim + the relaxed floor + a shortfall.
+    # Composite meals can now meet the original fibre floor without relaxation.
     fiber = next(a for a in adequacy if a["nutrient"] == "fiber_g")
-    assert fiber["aim"] >= fiber["relaxed_aim"] and fiber["relaxed_aim"] is not None
-    assert fiber["shortfall"] > 0 and fiber["shortfall_pct"] > 0
-    assert fiber["met_days"] < fiber["total_days"]
+    assert fiber["relaxed_aim"] is None
+    assert fiber["shortfall"] == fiber["shortfall_pct"] == 0
+    assert fiber["met_days"] == fiber["total_days"]

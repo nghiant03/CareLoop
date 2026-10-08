@@ -23,7 +23,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
-from fastapi.testclient import TestClient
 
 from backend.app.adherence import store
 from backend.app.core.approval_gate import ENVELOPE_STORE, put_envelope
@@ -37,14 +36,6 @@ from shared.envelope_schema import (
     NutrientKind,
     PatientSummary,
 )
-
-from backend.app.main import app
-
-
-@pytest.fixture(scope="module")
-def client():
-    with TestClient(app) as c:
-        yield c
 
 
 @pytest.fixture(autouse=True)
@@ -82,6 +73,8 @@ def _hand_built_envelope(patient_id: str, sodium_max: float, protein_min: float,
         priority_basis="test fixture: tunable hard/soft limits",
     )
     put_envelope(envelope)
+    from backend.app.core import persistence
+    persistence.journal_envelope(envelope, effective_at=_today(-90))
     return envelope
 
 
@@ -158,6 +151,7 @@ def test_summary_totals_match_dish_data(client) -> None:
     # Real rules engine: gives P0001 an envelope for the summary endpoint.
     run = client.post("/rules/run", json={"patient_id": "P0001"})
     assert run.status_code == 200, run.text
+    assert client.post(f"/envelopes/{run.json()['envelope']['envelope_id']}/approve", json={}).status_code == 200
 
     day = _today()
     _log(client, "P0001", day, "breakfast", "SG0001")
@@ -213,10 +207,8 @@ def test_hard_vs_soft_classification(client) -> None:
     assert energy["direction"] == "over"
 
     # Soft gaps never count as hard violations.
-    assert body["aggregate"]["soft_gaps_by_nutrient"] == {
-        "energy_kcal": 1,
-        "protein_g": 1,
-    }
+    # Partial-day gaps remain visible, but do not enter whole-day aggregates.
+    assert body["aggregate"]["soft_gaps_by_nutrient"] == {}
 
 
 def test_compliant_day_all_ok(client) -> None:
@@ -298,7 +290,9 @@ def test_deviation_worsening_sodium_flag(client) -> None:
     for i, dish in enumerate(picks):
         day = _today(offset_days=i - 4)  # oldest -> newest, ending today
         assert _log(client, "P0009", day, "lunch", dish.dish_id).status_code == 201
-        exposures.append(max(0.0, (dish.nutrient("sodium_mg") - 100.0) / 100.0 * 100.0))
+        for meal in ("breakfast", "dinner"):
+            assert _log(client, "P0009", day, meal, by_sodium[0].dish_id).status_code == 201
+        exposures.append(max(0.0, dish.nutrient("sodium_mg") + 2 * by_sodium[0].nutrient("sodium_mg") - 100.0))
 
     resp = client.get("/adherence/P0009/deviation", params={"days": 14})
     assert resp.status_code == 200, resp.text

@@ -130,6 +130,59 @@ def classify_constraint(nutrient: str, kind: ConstraintKind, limit: float, total
     return row
 
 
+def _completeness(entries: list[Mapping[str, Any]]) -> dict[str, Any]:
+    """Logging completeness for one day.
+
+    ``meals_logged`` counts the *distinct* meal slots (breakfast / lunch /
+    dinner) with at least one log; the store's upsert semantics mean one dish
+    per slot, so this is simply how many of the three slots were filled.
+    """
+    meals_logged = len({e.get("meal") for e in entries if e.get("meal") in MEALS})
+    return {
+        "meals_logged": meals_logged,
+        "expected_meals": len(MEALS),
+        "complete": meals_logged >= len(MEALS),
+    }
+
+
+def _contributors(
+    nutrient: str,
+    highest_first: bool,
+    entries: list[Mapping[str, Any]],
+    dish_by_id: Mapping[str, Any],
+    day_total: float,
+) -> list[dict[str, Any]]:
+    """The (up to 2) logged dishes driving one nutrient row.
+
+    ``highest_first=True`` (MAX rows) ranks the dishes by that nutrient's
+    amount DESC — the dishes pushing against the ceiling; ``False`` (MIN /
+    TARGET rows) ranks ASC — what was actually eaten relative to the floor /
+    desired value. Ties break by ``dish_id`` so the result is deterministic.
+    ``pct_of_day_total`` is guarded against a zero day total (0.0 then).
+    """
+    per_dish: list[tuple[str, Any, float]] = []
+    for entry in entries:
+        dish = dish_by_id.get(entry.get("dish_id"))
+        if dish is None:
+            continue
+        per_dish.append(
+            (str(dish.dish_id), getattr(dish, "name", None), float(dish.nutrient(nutrient)) * entry.get("quantity", 1))
+        )
+    per_dish.sort(key=lambda t: ((-t[2] if highest_first else t[2]), t[0]))
+    out: list[dict[str, Any]] = []
+    for dish_id, dish_name, amount in per_dish[:2]:
+        pct = amount / day_total * 100.0 if day_total > EPS else 0.0
+        out.append(
+            {
+                "dish_id": dish_id,
+                "dish_name": dish_name,
+                "amount": round(amount, 6),
+                "pct_of_day_total": round(pct, 4),
+            }
+        )
+    return out
+
+
 def analyse_day(
     date: str,
     entries: Iterable[Mapping[str, Any]],
@@ -145,15 +198,34 @@ def analyse_day(
     hit by any exclusion flag is a hard violation for that day (mirroring the
     optimiser's treatment of exclusions as hard constraints), independent of
     whether its nutrients happen to stay under the ceilings.
+
+    Every nutrient row also carries ``contributors`` — the top-2 dishes
+    driving that row (MAX rows ranked by amount DESC, MIN/TARGET rows ASC) —
+    and the day carries ``completeness`` (how many of the three meal slots
+    were logged) plus the attributing envelope identity (``envelope_id`` /
+    ``envelope_version``) so history can be read against the envelope version
+    that was actually in force on that date.
     """
     meal_order = {m: i for i, m in enumerate(MEALS)}
     ordered = sorted(entries, key=lambda e: meal_order.get(e.get("meal", ""), 99))
-    totals = day_totals((e["dish_id"] for e in ordered), dish_by_id)
+    ordered = [dict(item, meal=entry.get("meal"))
+               for entry in ordered for item in entry.get("items", [entry])]
+    totals = {key: sum(dish_by_id[e["dish_id"]].nutrient(key) * e.get("quantity", 1)
+                       for e in ordered if e["dish_id"] in dish_by_id)
+              for key in NUTRIENT_KEYS}
 
     rows = [
         classify_constraint(c.nutrient.value, c.kind, float(c.value), totals[c.nutrient.value])
         for c in sorted(envelope.targets, key=lambda c: (c.nutrient.value, c.kind.value))
     ]
+    for row in rows:
+        row["contributors"] = _contributors(
+            row["nutrient"],
+            highest_first=row["kind"] == ConstraintKind.MAX.value,
+            entries=ordered,
+            dish_by_id=dish_by_id,
+            day_total=totals[row["nutrient"]],
+        )
     hard = [r for r in rows if r["status"] == "hard_violation"]
     for entry in ordered:
         dish = dish_by_id.get(entry.get("dish_id"))
@@ -177,13 +249,16 @@ def analyse_day(
     return {
         "date": date,
         "meals": [
-            {"meal": e.get("meal"), "dish_id": e.get("dish_id")} for e in ordered
+            {"meal": e.get("meal"), "dish_id": e.get("dish_id"), "quantity": e.get("quantity", 1)} for e in ordered
         ],
         "totals": {k: round(v, 6) for k, v in totals.items()},
         "nutrients": rows,
         "hard_violations": hard,
         "soft_gaps": soft,
         "compliant": not hard,
+        "completeness": _completeness(ordered),
+        "envelope_id": envelope.envelope_id,
+        "envelope_version": int(envelope.version),
     }
 
 
@@ -222,8 +297,12 @@ def analyse_range(
                 continue
             hard_by_nutrient[nutrient] = hard_by_nutrient.get(nutrient, 0) + 1
         for row in day["soft_gaps"]:
+            if not day["completeness"]["complete"]:
+                continue
             soft_by_nutrient[row["nutrient"]] = soft_by_nutrient.get(row["nutrient"], 0) + 1
         for row in day["nutrients"]:
+            if not day["completeness"]["complete"]:
+                continue
             exposure_sum[row["nutrient"]] = exposure_sum.get(row["nutrient"], 0.0) + row["pct_deviation"]
             exposure_days[row["nutrient"]] = exposure_days.get(row["nutrient"], 0) + 1
 
@@ -231,12 +310,15 @@ def analyse_range(
         nutrient: round(exposure_sum[nutrient] / exposure_days[nutrient], 4)
         for nutrient in sorted(exposure_sum)
     }
+    complete_days = sum(1 for day in days if day["completeness"]["complete"])
     aggregate = {
         "days_logged": len(days),
         "hard_violation_days": sum(1 for d in days if not d["compliant"]),
         "hard_violations_by_nutrient": dict(sorted(hard_by_nutrient.items())),
         "soft_gaps_by_nutrient": dict(sorted(soft_by_nutrient.items())),
         "mean_pct_deviation_by_nutrient": mean_exposure,
+        "complete_days": complete_days,
+        "fraction_complete": round(complete_days / len(days), 4) if days else 0.0,
     }
     return {"days": days, "aggregate": aggregate}
 
@@ -333,6 +415,7 @@ def deviation_series(
                     "total": round(total, 6),
                     "pct": round(signed, 4),
                     "exposure": round(exposure, 4),
+                    "complete": day.get("completeness", {}).get("complete", True),
                 }
             )
     return dict(sorted(per_nutrient.items()))
@@ -353,8 +436,9 @@ def trend_flags(
     """
     flags: list[dict[str, Any]] = []
     for nutrient in sorted(series):
+        key = nutrient
         s = series[nutrient]
-        points = s["points"]
+        points = [p for p in s["points"] if p.get("complete", True)]
         exposures = [p["exposure"] for p in points]
         if len(exposures) < min_len:
             continue
@@ -369,7 +453,8 @@ def trend_flags(
         )
         flags.append(
             {
-                "nutrient": nutrient,
+                "nutrient": s["nutrient"],
+                "series_key": key,
                 "kind": s["kind"],
                 "slope_pct_per_day": round(slope, 4),
                 "direction": direction,

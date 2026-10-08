@@ -1,9 +1,13 @@
 """Deterministic tests for the retrieval benchmark (backend/app/chat).
 
 Verifies: the labeled query set loads and its expected chunk ids resolve to
-real chunks; the benchmark runs with sane, consistent metrics; the as-is
-method reproduces production retrieval behaviour exactly; the run is
-deterministic across two evaluations; and the artifact is written and parses.
+real chunks; the benchmark runs with sane, consistent metrics (including the
+``bm25_rrf_char`` RRF fusion row, which must fuse the union of its components'
+candidates); the as-is method reproduces production retrieval behaviour
+exactly; the fusion calibration and irrelevant-refusal checks are recorded;
+the run is deterministic across two evaluations and leaves
+``retrieval.build_index``/``retrieval.MIN_SCORE`` module state untouched; and
+the artifact is written and parses.
 """
 
 from __future__ import annotations
@@ -129,6 +133,100 @@ def test_end_to_end_spot_check_shape(results):
     # The production pipeline keeps answering the grounded nutrient questions
     # regardless of retriever (anchor-rule path) — sanity floor.
     assert e2e["summary"]["tfidf_word_asis_syn"]["citation_accuracy"] >= 0.7
+
+
+# ---------------------------------------------------------------------------
+# RRF fusion row (bm25_rrf_char)
+# ---------------------------------------------------------------------------
+
+
+def test_fusion_row_present_with_sane_metrics(results):
+    names = {m["name"] for m in results["methods"]}
+    assert "bm25_rrf_char" in names
+    fusion = next(m for m in results["methods"] if m["name"] == "bm25_rrf_char")
+    for key in ("hit@1", "hit@3", "hit@5", "mrr"):
+        assert 0.0 <= fusion[key] <= 1.0, key
+    assert fusion["hit@1"] <= fusion["hit@3"] + 1e-9 <= fusion["hit@5"] + 1e-9
+    assert fusion["mrr"] >= fusion["hit@1"] - 1e-9
+    assert set(fusion["by_category"]) == {
+        "guideline_nutrient", "dish", "conflict", "topic", "variant_typo"
+    }
+
+
+def test_fusion_fuses_the_union_of_component_candidates(kb):
+    # RRF must fuse the UNION of the components' top-50 candidates (a chunk
+    # found by only one component still contributes) — not rerank BM25 hits.
+    methods = retrieval_bench.build_methods(kb)
+    fusion = methods["bm25_rrf_char"]
+    bm25 = methods[retrieval_bench.PROD_NAME]
+    char = methods["tfidf_char_wb_3_5_syn"]
+    for query in ("how much soduim per day", "is nasi lemak high in salt",
+                  "wat is teh capitl of frnace"):
+        fused_ids = {h["chunk_id"] for h in fusion.retrieve(query, k=100)}
+        bm25_ids = {h["chunk_id"] for h in bm25.retrieve(query, k=50)}
+        char_ids = {h["chunk_id"] for h in char.retrieve(query, k=50)}
+        assert fused_ids == bm25_ids | char_ids, query
+
+
+def test_fusion_retrieval_is_deterministic(kb):
+    fusion = retrieval_bench.build_methods(kb)["bm25_rrf_char"]
+    for query in ("how much soduim per day", "fibre in the mushroom corn oat porridge"):
+        first = [h["chunk_id"] for h in fusion.retrieve(query, k=5)]
+        second = [h["chunk_id"] for h in fusion.retrieve(query, k=5)]
+        assert first == second
+        scores = [h["score"] for h in fusion.retrieve(query, k=5)]
+        assert scores == sorted(scores, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# Fusion calibration + irrelevant refusal
+# ---------------------------------------------------------------------------
+
+
+def test_fusion_calibration_recorded(results):
+    cal = results["fusion_calibration"]
+    assert cal["threshold"] == results["threshold_calibration"]["bm25_rrf_char"]["threshold"]
+    probes = retrieval_bench._irrelevant_probes()
+    assert set(cal["irrelevant_probes"]) == set(probes)
+    assert cal["irrelevant_best_score"] >= 0.0
+    # Documented outcome: the RRF-score distributions overlap — no threshold
+    # separates irrelevant from relevant queries (typo'd nonsense scores above
+    # the weakest labeled-relevant query). This is the recorded reason the
+    # fusion row is not the production default.
+    assert cal["gap_ok"] is False
+    assert cal["irrelevant_best_score"] >= cal["weakest_relevant"]["best_score"]
+
+
+def test_irrelevant_questions_refused_end_to_end(results):
+    for name in (retrieval_bench.PROD_NAME, "bm25_rrf_char"):
+        stats = results["irrelevant_refusal"][name]
+        assert stats["probes"] == len(retrieval_bench._irrelevant_probes())
+        assert stats["refused"] == stats["probes"], name
+        assert all(r["status"] == "refused" for r in stats["rows"]), name
+
+
+def test_bench_e2e_restores_retrieval_module_state(kb):
+    # answers.answer reads retrieval.MIN_SCORE at call time; the bench patches
+    # it for the fusion row's e2e calls and must restore it (and build_index)
+    # — no module state may leak after a bench run.
+    original_build_index = retrieval.build_index
+    original_min_score = retrieval.MIN_SCORE
+    try:
+        retrieval_bench.evaluate(kb)
+        assert retrieval.build_index is original_build_index
+        assert retrieval.MIN_SCORE == original_min_score
+        # The restored pipeline still refuses irrelevant questions.
+        response = retrieval_bench._answer_with_method(
+            retrieval_bench.ProductionMethod(
+                retrieval.build_index(kb), retrieval_bench.PROD_NAME
+            ),
+            kb,
+            "What is the capital of France?",
+        )
+        assert response["status"] == "refused"
+    finally:
+        retrieval.build_index = original_build_index
+        retrieval.MIN_SCORE = original_min_score
 
 
 # ---------------------------------------------------------------------------

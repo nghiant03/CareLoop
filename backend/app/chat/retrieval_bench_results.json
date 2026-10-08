@@ -2,8 +2,98 @@
   "end_to_end": {
     "detail": {
       "methods": {
+        "bm25_rrf_char": {
+          "answered": 8,
+          "citation_accuracy": 0.8,
+          "rows": [
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000",
+                "DASH-2025-SODIUM-2300"
+              ],
+              "question": "How much sodium can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000",
+                "DASH-2025-SODIUM-2300",
+                "GEN-SODIUM-2300"
+              ],
+              "question": "What is the sodium limit for someone with high blood pressure?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400",
+                "DASH-2025-POTASSIUM-4700"
+              ],
+              "question": "How much potassium should I eat each day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400",
+                "DASH-2025-POTASSIUM-4700"
+              ],
+              "question": "How much potassium is safe if I have kidney disease?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERPO4-2024-PHOSPHORUS-800"
+              ],
+              "question": "Do I need to worry about phosphorus in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-PROTEIN-055-08",
+                "ADA-2026-PROTEIN"
+              ],
+              "question": "How much protein can I eat per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "DASH-2025-FIBER-30",
+                "ADA-2026-FIBER-25-30",
+                "GEN-FIBER-25"
+              ],
+              "question": "How much fibre do I need daily?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "ADA-2026-CARB-INDIV"
+              ],
+              "question": "How many carbohydrates can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "How much fat is okay in my diet?",
+              "status": "refused"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "Can I drink sweet fizzy drinks?",
+              "status": "refused"
+            }
+          ]
+        },
         "bm25_word_nosyn": {
-          "answered": 9,
+          "answered": 8,
           "citation_accuracy": 0.8,
           "rows": [
             {
@@ -19,9 +109,7 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-SODIUM-2000",
-                "GEN-SODIUM-2300",
-                "CONFLICT-SODIUM-CKD-WINS"
+                "CKD-2024-SODIUM-2000"
               ],
               "question": "What is the sodium limit for someone with high blood pressure?",
               "status": "answered"
@@ -29,9 +117,7 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "HYPERK-2024-POTASSIUM-2400",
-                "MED-WARFARIN-VITK",
-                "DASH-2025-POTASSIUM-4700"
+                "HYPERK-2024-POTASSIUM-2400"
               ],
               "question": "How much potassium should I eat each day?",
               "status": "answered"
@@ -40,8 +126,7 @@
               "citation_accurate": true,
               "cited_rule_ids": [
                 "HYPERK-2024-POTASSIUM-2400",
-                "SCOPE-EGFR-STAGE5-EXCLUDE",
-                "DASH-2025-POTASSIUM-4700"
+                "SCOPE-EGFR-STAGE5-EXCLUDE"
               ],
               "question": "How much potassium is safe if I have kidney disease?",
               "status": "answered"
@@ -49,9 +134,7 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "HYPERPO4-2024-PHOSPHORUS-800",
-                "ADA-2026-PROTEIN",
-                "MED-ACEI-ARB-CKD-MONITOR"
+                "HYPERPO4-2024-PHOSPHORUS-800"
               ],
               "question": "Do I need to worry about phosphorus in my diet?",
               "status": "answered"
@@ -59,8 +142,7 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-PROTEIN-055-08",
-                "MED-WARFARIN-VITK"
+                "CKD-2024-PROTEIN-055-08"
               ],
               "question": "How much protein can I eat per day?",
               "status": "answered"
@@ -68,9 +150,7 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "DASH-2025-FIBER-30",
-                "ADA-2026-PROTEIN",
-                "GEN-FIBER-25"
+                "DASH-2025-FIBER-30"
               ],
               "question": "How much fibre do I need daily?",
               "status": "answered"
@@ -78,23 +158,16 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "ADA-2026-CARB-INDIV",
-                "DASH-2025-SODIUM-2300",
-                "CKD-2024-SODIUM-2000"
+                "ADA-2026-CARB-INDIV"
               ],
               "question": "How many carbohydrates can I have per day?",
               "status": "answered"
             },
             {
               "citation_accurate": false,
-              "cited_rule_ids": [
-                "MED-ACEI-ARB-CKD-MONITOR",
-                "DASH-2025-SODIUM-2300",
-                "DASH-2025-SODIUM-1500",
-                "MED-WARFARIN-VITK"
-              ],
+              "cited_rule_ids": [],
               "question": "How much fat is okay in my diet?",
-              "status": "answered"
+              "status": "refused"
             },
             {
               "citation_accurate": false,
@@ -105,8 +178,8 @@
           ]
         },
         "bm25_word_syn": {
-          "answered": 9,
-          "citation_accuracy": 0.9,
+          "answered": 8,
+          "citation_accuracy": 0.8,
           "rows": [
             {
               "citation_accurate": true,
@@ -186,12 +259,10 @@
               "status": "answered"
             },
             {
-              "citation_accurate": true,
-              "cited_rule_ids": [
-                "ADA-2026-SATFAT-10PCT"
-              ],
+              "citation_accurate": false,
+              "cited_rule_ids": [],
               "question": "How much fat is okay in my diet?",
-              "status": "answered"
+              "status": "refused"
             },
             {
               "citation_accurate": false,
@@ -216,7 +287,8 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-SODIUM-2000"
+                "CKD-2024-SODIUM-2000",
+                "ADA-2026-SATFAT-10PCT"
               ],
               "question": "What is the sodium limit for someone with high blood pressure?",
               "status": "answered"
@@ -240,7 +312,8 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "HYPERPO4-2024-PHOSPHORUS-800"
+                "HYPERPO4-2024-PHOSPHORUS-800",
+                "ADA-2026-PROTEIN"
               ],
               "question": "Do I need to worry about phosphorus in my diet?",
               "status": "answered"
@@ -290,7 +363,8 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-SODIUM-2000"
+                "CKD-2024-SODIUM-2000",
+                "DASH-2025-SODIUM-2300"
               ],
               "question": "How much sodium can I have per day?",
               "status": "answered"
@@ -298,7 +372,9 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-SODIUM-2000"
+                "CKD-2024-SODIUM-2000",
+                "DASH-2025-SODIUM-2300",
+                "ADA-2026-SODIUM-2300"
               ],
               "question": "What is the sodium limit for someone with high blood pressure?",
               "status": "answered"
@@ -314,7 +390,8 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "HYPERK-2024-POTASSIUM-2400"
+                "HYPERK-2024-POTASSIUM-2400",
+                "DASH-2025-POTASSIUM-4700"
               ],
               "question": "How much potassium is safe if I have kidney disease?",
               "status": "answered"
@@ -380,7 +457,9 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-SODIUM-2000"
+                "CKD-2024-SODIUM-2000",
+                "HYPERK-2024-EXCLUDE-HIGH-K",
+                "CKD-2024-PROTEIN-CEILING-13"
               ],
               "question": "What is the sodium limit for someone with high blood pressure?",
               "status": "answered"
@@ -454,7 +533,9 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-SODIUM-2000"
+                "CKD-2024-SODIUM-2000",
+                "DASH-2025-SODIUM-2300",
+                "ADA-2026-SODIUM-2300"
               ],
               "question": "How much sodium can I have per day?",
               "status": "answered"
@@ -462,7 +543,8 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-SODIUM-2000"
+                "CKD-2024-SODIUM-2000",
+                "HYPERK-2024-EXCLUDE-HIGH-K"
               ],
               "question": "What is the sodium limit for someone with high blood pressure?",
               "status": "answered"
@@ -536,7 +618,9 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-SODIUM-2000"
+                "CKD-2024-SODIUM-2000",
+                "DASH-2025-SODIUM-2300",
+                "ADA-2026-SODIUM-2300"
               ],
               "question": "How much sodium can I have per day?",
               "status": "answered"
@@ -544,7 +628,9 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-SODIUM-2000"
+                "CKD-2024-SODIUM-2000",
+                "CKD-2024-PROTEIN-CEILING-13",
+                "HYPERK-2024-EXCLUDE-HIGH-K"
               ],
               "question": "What is the sodium limit for someone with high blood pressure?",
               "status": "answered"
@@ -552,7 +638,9 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "HYPERK-2024-POTASSIUM-2400"
+                "HYPERK-2024-POTASSIUM-2400",
+                "MED-WARFARIN-VITK",
+                "CKD-2024-SODIUM-2000"
               ],
               "question": "How much potassium should I eat each day?",
               "status": "answered"
@@ -560,7 +648,9 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "HYPERK-2024-POTASSIUM-2400"
+                "HYPERK-2024-POTASSIUM-2400",
+                "SCOPE-EGFR-STAGE5-EXCLUDE",
+                "HYPERK-2024-NO-SALT-SUB"
               ],
               "question": "How much potassium is safe if I have kidney disease?",
               "status": "answered"
@@ -568,7 +658,9 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "HYPERPO4-2024-PHOSPHORUS-800"
+                "HYPERPO4-2024-PHOSPHORUS-800",
+                "ADA-2026-PROTEIN",
+                "MED-ACEI-ARB-CKD-MONITOR"
               ],
               "question": "Do I need to worry about phosphorus in my diet?",
               "status": "answered"
@@ -576,7 +668,8 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-PROTEIN-055-08"
+                "CKD-2024-PROTEIN-055-08",
+                "MED-WARFARIN-VITK"
               ],
               "question": "How much protein can I eat per day?",
               "status": "answered"
@@ -584,7 +677,9 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "DASH-2025-FIBER-30"
+                "DASH-2025-FIBER-30",
+                "ADA-2026-PROTEIN",
+                "GEN-FIBER-25"
               ],
               "question": "How much fibre do I need daily?",
               "status": "answered"
@@ -592,7 +687,9 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "ADA-2026-CARB-INDIV"
+                "ADA-2026-CARB-INDIV",
+                "CKD-2024-SODIUM-2000",
+                "DASH-2025-SODIUM-2300"
               ],
               "question": "How many carbohydrates can I have per day?",
               "status": "answered"
@@ -618,7 +715,8 @@
             {
               "citation_accurate": true,
               "cited_rule_ids": [
-                "CKD-2024-SODIUM-2000"
+                "CKD-2024-SODIUM-2000",
+                "DASH-2025-SODIUM-2300"
               ],
               "question": "How much sodium can I have per day?",
               "status": "answered"
@@ -708,13 +806,17 @@
       ]
     },
     "summary": {
+      "bm25_rrf_char": {
+        "answered": 8,
+        "citation_accuracy": 0.8
+      },
       "bm25_word_nosyn": {
-        "answered": 9,
+        "answered": 8,
         "citation_accuracy": 0.8
       },
       "bm25_word_syn": {
-        "answered": 9,
-        "citation_accuracy": 0.9
+        "answered": 8,
+        "citation_accuracy": 0.8
       },
       "tfidf_char_wb_3_5_nosyn": {
         "answered": 8,
@@ -740,6 +842,139 @@
         "answered": 8,
         "citation_accuracy": 0.8
       }
+    }
+  },
+  "fusion_calibration": {
+    "gap_ok": false,
+    "irrelevant_best_score": 0.032522,
+    "irrelevant_probes": {
+      "Can you book me a taxi to the airport?": 0.016393,
+      "Tell me a joke.": 0.016393,
+      "What is the capital of France?": 0.016393,
+      "What is the weather forecast for tomorrow?": 0.016393,
+      "Who won the football match last night?": 0.016393,
+      "can u bookc me a txi to teh airprot": 0.032522,
+      "hu won teh footbal mach last nite": 0.032266,
+      "recomnd me a good movei to wach": 0.016393,
+      "tel me a jok plese": 0.016393,
+      "wat is teh wether forcast tomorow": 0.032018,
+      "wut is teh capitl of frnace": 0.032018
+    },
+    "threshold": 0.01639344262295082,
+    "usage": "held-out diagnostic only; never used to select the threshold",
+    "weakest_clean_relevant": {
+      "best_score": 0.016393,
+      "category": "guideline_nutrient",
+      "id": "g16",
+      "query": "How many carbohydrates can I have per day?"
+    },
+    "weakest_relevant": {
+      "best_score": 0.016393,
+      "category": "guideline_nutrient",
+      "id": "g16",
+      "query": "How many carbohydrates can I have per day?"
+    }
+  },
+  "irrelevant_refusal": {
+    "bm25_rrf_char": {
+      "probes": 11,
+      "refused": 11,
+      "rows": [
+        {
+          "question": "What is the weather forecast for tomorrow?",
+          "status": "refused"
+        },
+        {
+          "question": "Tell me a joke.",
+          "status": "refused"
+        },
+        {
+          "question": "Who won the football match last night?",
+          "status": "refused"
+        },
+        {
+          "question": "What is the capital of France?",
+          "status": "refused"
+        },
+        {
+          "question": "Can you book me a taxi to the airport?",
+          "status": "refused"
+        },
+        {
+          "question": "wat is teh wether forcast tomorow",
+          "status": "refused"
+        },
+        {
+          "question": "tel me a jok plese",
+          "status": "refused"
+        },
+        {
+          "question": "hu won teh footbal mach last nite",
+          "status": "refused"
+        },
+        {
+          "question": "wut is teh capitl of frnace",
+          "status": "refused"
+        },
+        {
+          "question": "can u bookc me a txi to teh airprot",
+          "status": "refused"
+        },
+        {
+          "question": "recomnd me a good movei to wach",
+          "status": "refused"
+        }
+      ]
+    },
+    "bm25_word_syn": {
+      "probes": 11,
+      "refused": 11,
+      "rows": [
+        {
+          "question": "What is the weather forecast for tomorrow?",
+          "status": "refused"
+        },
+        {
+          "question": "Tell me a joke.",
+          "status": "refused"
+        },
+        {
+          "question": "Who won the football match last night?",
+          "status": "refused"
+        },
+        {
+          "question": "What is the capital of France?",
+          "status": "refused"
+        },
+        {
+          "question": "Can you book me a taxi to the airport?",
+          "status": "refused"
+        },
+        {
+          "question": "wat is teh wether forcast tomorow",
+          "status": "refused"
+        },
+        {
+          "question": "tel me a jok plese",
+          "status": "refused"
+        },
+        {
+          "question": "hu won teh footbal mach last nite",
+          "status": "refused"
+        },
+        {
+          "question": "wut is teh capitl of frnace",
+          "status": "refused"
+        },
+        {
+          "question": "can u bookc me a txi to teh airprot",
+          "status": "refused"
+        },
+        {
+          "question": "recomnd me a good movei to wach",
+          "status": "refused"
+        }
+      ]
     }
   },
   "kb": {
@@ -1060,6 +1295,45 @@
       "hit@5": 0.7931,
       "mrr": 0.5888,
       "name": "bm25_word_nosyn"
+    },
+    {
+      "by_category": {
+        "conflict": {
+          "hit@1": 0.4,
+          "hit@3": 0.4,
+          "hit@5": 0.8,
+          "mrr": 0.5
+        },
+        "dish": {
+          "hit@1": 0.8462,
+          "hit@3": 0.9231,
+          "hit@5": 1.0,
+          "mrr": 0.9038
+        },
+        "guideline_nutrient": {
+          "hit@1": 0.8,
+          "hit@3": 0.85,
+          "hit@5": 0.85,
+          "mrr": 0.825
+        },
+        "topic": {
+          "hit@1": 0.25,
+          "hit@3": 0.5,
+          "hit@5": 0.5,
+          "mrr": 0.3611
+        },
+        "variant_typo": {
+          "hit@1": 0.375,
+          "hit@3": 0.375,
+          "hit@5": 0.5,
+          "mrr": 0.4062
+        }
+      },
+      "hit@1": 0.6034,
+      "hit@3": 0.6897,
+      "hit@5": 0.7586,
+      "mrr": 0.6609,
+      "name": "bm25_rrf_char"
     }
   ],
   "queries": {
@@ -1075,6 +1349,7 @@
   "ranking": [
     "bm25_word_syn",
     "tfidf_char_wb_3_5_syn",
+    "bm25_rrf_char",
     "bm25_word_nosyn",
     "tfidf_word_asis_syn",
     "tfidf_char_wb_3_5_nosyn",
@@ -1082,5 +1357,610 @@
     "tfidf_word_asis_nosyn",
     "tfidf_word_sublinear_nosyn"
   ],
+  "threshold_calibration": {
+    "bm25_rrf_char": {
+      "development_errors": 1,
+      "examples": [
+        {
+          "question": "Explain dietary sodium guidance for an adult with hypertension",
+          "relevant": true,
+          "score": 0.03252247488101534
+        },
+        {
+          "question": "What guidance covers dietary fibre for adults with diabetes",
+          "relevant": true,
+          "score": 0.03278688524590164
+        },
+        {
+          "question": "Which foods have phosphate additives",
+          "relevant": true,
+          "score": 0.03278688524590164
+        },
+        {
+          "question": "Describe the nutrient content of Hainanese chicken rice",
+          "relevant": true,
+          "score": 0.03278688524590164
+        },
+        {
+          "question": "Explain potassium restrictions with hyperkalaemia",
+          "relevant": true,
+          "score": 0.032018442622950824
+        },
+        {
+          "question": "How do guidelines set protein intake for CKD",
+          "relevant": true,
+          "score": 0.03252247488101534
+        },
+        {
+          "question": "Calculate mortgage interest on a house",
+          "relevant": false,
+          "score": 0.01639344262295082
+        },
+        {
+          "question": "How do I replace a bicycle tyre",
+          "relevant": false,
+          "score": 0.01639344262295082
+        },
+        {
+          "question": "Recommend a science fiction novel",
+          "relevant": false,
+          "score": 0.03278688524590164
+        },
+        {
+          "question": "Where can I buy concert tickets",
+          "relevant": false,
+          "score": 0.01639344262295082
+        },
+        {
+          "question": "Explain how a lunar eclipse happens",
+          "relevant": false,
+          "score": 0.01639344262295082
+        },
+        {
+          "question": "Generate a JavaScript sorting function",
+          "relevant": false,
+          "score": 0.01639344262295082
+        }
+      ],
+      "selection": "development minimum classification error",
+      "threshold": 0.01639344262295082
+    },
+    "bm25_word_nosyn": {
+      "development_errors": 0,
+      "examples": [
+        {
+          "question": "Explain dietary sodium guidance for an adult with hypertension",
+          "relevant": true,
+          "score": 8.48207297934606
+        },
+        {
+          "question": "What guidance covers dietary fibre for adults with diabetes",
+          "relevant": true,
+          "score": 7.446772863626517
+        },
+        {
+          "question": "Which foods have phosphate additives",
+          "relevant": true,
+          "score": 15.715076570878885
+        },
+        {
+          "question": "Describe the nutrient content of Hainanese chicken rice",
+          "relevant": true,
+          "score": 9.50091147352665
+        },
+        {
+          "question": "Explain potassium restrictions with hyperkalaemia",
+          "relevant": true,
+          "score": 7.305839027667593
+        },
+        {
+          "question": "How do guidelines set protein intake for CKD",
+          "relevant": true,
+          "score": 11.329589353959461
+        },
+        {
+          "question": "Calculate mortgage interest on a house",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "How do I replace a bicycle tyre",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Recommend a science fiction novel",
+          "relevant": false,
+          "score": 6.1291269580101995
+        },
+        {
+          "question": "Where can I buy concert tickets",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Explain how a lunar eclipse happens",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Generate a JavaScript sorting function",
+          "relevant": false,
+          "score": 0.0
+        }
+      ],
+      "selection": "development minimum classification error",
+      "threshold": 6.1291269580101995
+    },
+    "bm25_word_syn": {
+      "development_errors": 1,
+      "examples": [
+        {
+          "question": "Explain dietary sodium guidance for an adult with hypertension",
+          "relevant": true,
+          "score": 18.91356799728293
+        },
+        {
+          "question": "What guidance covers dietary fibre for adults with diabetes",
+          "relevant": true,
+          "score": 17.603611868296706
+        },
+        {
+          "question": "Which foods have phosphate additives",
+          "relevant": true,
+          "score": 20.7748506155528
+        },
+        {
+          "question": "Describe the nutrient content of Hainanese chicken rice",
+          "relevant": true,
+          "score": 9.50091147352665
+        },
+        {
+          "question": "Explain potassium restrictions with hyperkalaemia",
+          "relevant": true,
+          "score": 17.08088209401007
+        },
+        {
+          "question": "How do guidelines set protein intake for CKD",
+          "relevant": true,
+          "score": 19.791541483539866
+        },
+        {
+          "question": "Calculate mortgage interest on a house",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "How do I replace a bicycle tyre",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Recommend a science fiction novel",
+          "relevant": false,
+          "score": 6.1291269580101995
+        },
+        {
+          "question": "Where can I buy concert tickets",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Explain how a lunar eclipse happens",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Generate a JavaScript sorting function",
+          "relevant": false,
+          "score": 0.0
+        }
+      ],
+      "selection": "deployed baseline",
+      "threshold": 2.0
+    },
+    "tfidf_char_wb_3_5_nosyn": {
+      "development_errors": 2,
+      "examples": [
+        {
+          "question": "Explain dietary sodium guidance for an adult with hypertension",
+          "relevant": true,
+          "score": 0.23305726995743498
+        },
+        {
+          "question": "What guidance covers dietary fibre for adults with diabetes",
+          "relevant": true,
+          "score": 0.15866770007559647
+        },
+        {
+          "question": "Which foods have phosphate additives",
+          "relevant": true,
+          "score": 0.426001390943449
+        },
+        {
+          "question": "Describe the nutrient content of Hainanese chicken rice",
+          "relevant": true,
+          "score": 0.28087242835541437
+        },
+        {
+          "question": "Explain potassium restrictions with hyperkalaemia",
+          "relevant": true,
+          "score": 0.4607152019242448
+        },
+        {
+          "question": "How do guidelines set protein intake for CKD",
+          "relevant": true,
+          "score": 0.35465366469979964
+        },
+        {
+          "question": "Calculate mortgage interest on a house",
+          "relevant": false,
+          "score": 0.11156742042939966
+        },
+        {
+          "question": "How do I replace a bicycle tyre",
+          "relevant": false,
+          "score": 0.07596636006013942
+        },
+        {
+          "question": "Recommend a science fiction novel",
+          "relevant": false,
+          "score": 0.30037632407609244
+        },
+        {
+          "question": "Where can I buy concert tickets",
+          "relevant": false,
+          "score": 0.11732065899555194
+        },
+        {
+          "question": "Explain how a lunar eclipse happens",
+          "relevant": false,
+          "score": 0.09911801273727698
+        },
+        {
+          "question": "Generate a JavaScript sorting function",
+          "relevant": false,
+          "score": 0.18593588874590478
+        }
+      ],
+      "selection": "development minimum classification error",
+      "threshold": 0.18593588874590478
+    },
+    "tfidf_char_wb_3_5_syn": {
+      "development_errors": 1,
+      "examples": [
+        {
+          "question": "Explain dietary sodium guidance for an adult with hypertension",
+          "relevant": true,
+          "score": 0.2435700354248916
+        },
+        {
+          "question": "What guidance covers dietary fibre for adults with diabetes",
+          "relevant": true,
+          "score": 0.21399702494789105
+        },
+        {
+          "question": "Which foods have phosphate additives",
+          "relevant": true,
+          "score": 0.4454035150804551
+        },
+        {
+          "question": "Describe the nutrient content of Hainanese chicken rice",
+          "relevant": true,
+          "score": 0.28087242835541437
+        },
+        {
+          "question": "Explain potassium restrictions with hyperkalaemia",
+          "relevant": true,
+          "score": 0.49005631810153055
+        },
+        {
+          "question": "How do guidelines set protein intake for CKD",
+          "relevant": true,
+          "score": 0.38573152410621286
+        },
+        {
+          "question": "Calculate mortgage interest on a house",
+          "relevant": false,
+          "score": 0.11156742042939966
+        },
+        {
+          "question": "How do I replace a bicycle tyre",
+          "relevant": false,
+          "score": 0.07596636006013942
+        },
+        {
+          "question": "Recommend a science fiction novel",
+          "relevant": false,
+          "score": 0.30037632407609244
+        },
+        {
+          "question": "Where can I buy concert tickets",
+          "relevant": false,
+          "score": 0.11732065899555194
+        },
+        {
+          "question": "Explain how a lunar eclipse happens",
+          "relevant": false,
+          "score": 0.09911801273727698
+        },
+        {
+          "question": "Generate a JavaScript sorting function",
+          "relevant": false,
+          "score": 0.18593588874590478
+        }
+      ],
+      "selection": "development minimum classification error",
+      "threshold": 0.18593588874590478
+    },
+    "tfidf_word_asis_nosyn": {
+      "development_errors": 1,
+      "examples": [
+        {
+          "question": "Explain dietary sodium guidance for an adult with hypertension",
+          "relevant": true,
+          "score": 0.325390427735238
+        },
+        {
+          "question": "What guidance covers dietary fibre for adults with diabetes",
+          "relevant": true,
+          "score": 0.13533446110780148
+        },
+        {
+          "question": "Which foods have phosphate additives",
+          "relevant": true,
+          "score": 0.5871681673529148
+        },
+        {
+          "question": "Describe the nutrient content of Hainanese chicken rice",
+          "relevant": true,
+          "score": 0.40938291326212434
+        },
+        {
+          "question": "Explain potassium restrictions with hyperkalaemia",
+          "relevant": true,
+          "score": 0.28906285874830095
+        },
+        {
+          "question": "How do guidelines set protein intake for CKD",
+          "relevant": true,
+          "score": 0.3929017347669267
+        },
+        {
+          "question": "Calculate mortgage interest on a house",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "How do I replace a bicycle tyre",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Recommend a science fiction novel",
+          "relevant": false,
+          "score": 0.24180618593144107
+        },
+        {
+          "question": "Where can I buy concert tickets",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Explain how a lunar eclipse happens",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Generate a JavaScript sorting function",
+          "relevant": false,
+          "score": 0.0
+        }
+      ],
+      "selection": "development minimum classification error",
+      "threshold": 0.24180618593144107
+    },
+    "tfidf_word_asis_syn": {
+      "development_errors": 1,
+      "examples": [
+        {
+          "question": "Explain dietary sodium guidance for an adult with hypertension",
+          "relevant": true,
+          "score": 0.2995492887154248
+        },
+        {
+          "question": "What guidance covers dietary fibre for adults with diabetes",
+          "relevant": true,
+          "score": 0.15815506100534504
+        },
+        {
+          "question": "Which foods have phosphate additives",
+          "relevant": true,
+          "score": 0.5749407815143226
+        },
+        {
+          "question": "Describe the nutrient content of Hainanese chicken rice",
+          "relevant": true,
+          "score": 0.40938291326212434
+        },
+        {
+          "question": "Explain potassium restrictions with hyperkalaemia",
+          "relevant": true,
+          "score": 0.29948562449965205
+        },
+        {
+          "question": "How do guidelines set protein intake for CKD",
+          "relevant": true,
+          "score": 0.4046838788192865
+        },
+        {
+          "question": "Calculate mortgage interest on a house",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "How do I replace a bicycle tyre",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Recommend a science fiction novel",
+          "relevant": false,
+          "score": 0.24180618593144107
+        },
+        {
+          "question": "Where can I buy concert tickets",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Explain how a lunar eclipse happens",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Generate a JavaScript sorting function",
+          "relevant": false,
+          "score": 0.0
+        }
+      ],
+      "selection": "development minimum classification error",
+      "threshold": 0.24180618593144107
+    },
+    "tfidf_word_sublinear_nosyn": {
+      "development_errors": 1,
+      "examples": [
+        {
+          "question": "Explain dietary sodium guidance for an adult with hypertension",
+          "relevant": true,
+          "score": 0.3002383286704226
+        },
+        {
+          "question": "What guidance covers dietary fibre for adults with diabetes",
+          "relevant": true,
+          "score": 0.15947222373171183
+        },
+        {
+          "question": "Which foods have phosphate additives",
+          "relevant": true,
+          "score": 0.5871681673529148
+        },
+        {
+          "question": "Describe the nutrient content of Hainanese chicken rice",
+          "relevant": true,
+          "score": 0.4259704306678668
+        },
+        {
+          "question": "Explain potassium restrictions with hyperkalaemia",
+          "relevant": true,
+          "score": 0.2614826566523902
+        },
+        {
+          "question": "How do guidelines set protein intake for CKD",
+          "relevant": true,
+          "score": 0.34634058700230147
+        },
+        {
+          "question": "Calculate mortgage interest on a house",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "How do I replace a bicycle tyre",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Recommend a science fiction novel",
+          "relevant": false,
+          "score": 0.26738313788074924
+        },
+        {
+          "question": "Where can I buy concert tickets",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Explain how a lunar eclipse happens",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Generate a JavaScript sorting function",
+          "relevant": false,
+          "score": 0.0
+        }
+      ],
+      "selection": "development minimum classification error",
+      "threshold": 0.0
+    },
+    "tfidf_word_sublinear_syn": {
+      "development_errors": 1,
+      "examples": [
+        {
+          "question": "Explain dietary sodium guidance for an adult with hypertension",
+          "relevant": true,
+          "score": 0.27990128411459714
+        },
+        {
+          "question": "What guidance covers dietary fibre for adults with diabetes",
+          "relevant": true,
+          "score": 0.15551120277592617
+        },
+        {
+          "question": "Which foods have phosphate additives",
+          "relevant": true,
+          "score": 0.5779181619370612
+        },
+        {
+          "question": "Describe the nutrient content of Hainanese chicken rice",
+          "relevant": true,
+          "score": 0.4259704306678668
+        },
+        {
+          "question": "Explain potassium restrictions with hyperkalaemia",
+          "relevant": true,
+          "score": 0.272672394636594
+        },
+        {
+          "question": "How do guidelines set protein intake for CKD",
+          "relevant": true,
+          "score": 0.35569232511754556
+        },
+        {
+          "question": "Calculate mortgage interest on a house",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "How do I replace a bicycle tyre",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Recommend a science fiction novel",
+          "relevant": false,
+          "score": 0.26738313788074924
+        },
+        {
+          "question": "Where can I buy concert tickets",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Explain how a lunar eclipse happens",
+          "relevant": false,
+          "score": 0.0
+        },
+        {
+          "question": "Generate a JavaScript sorting function",
+          "relevant": false,
+          "score": 0.0
+        }
+      ],
+      "selection": "development minimum classification error",
+      "threshold": 0.26738313788074924
+    }
+  },
   "winner": "bm25_word_syn"
 }

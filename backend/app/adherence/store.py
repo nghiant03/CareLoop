@@ -1,9 +1,11 @@
-"""Process-local meal-log store (Week 1 prototype).
+"""Meal-log store — SQLite-backed (Milestone 3).
 
-Mirrors the :mod:`backend.app.core.approval_gate` ``ENVELOPE_STORE`` pattern: a
-dict keyed by a natural identifier, guarded by a lock, with storage-agnostic
-module-level functions so Week 2+ can swap in a persistent table without
-touching callers.
+Historically a process-local dict (Week 1 prototype). Since Milestone 3 the
+logs live in the shared application database
+(:mod:`backend.app.core.persistence`, table ``meal_logs``), so they survive a
+process restart and are visible to every worker. The public function
+names/signatures are unchanged — callers (``backend.app.api.adherence``,
+analysis tests) do not need to know about the storage swap.
 
 Log entry shape (plain dict)::
 
@@ -22,23 +24,11 @@ log wins) rather than accumulating rows.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from threading import Lock
 from typing import Optional
 
+from backend.app.core import persistence
+
 MEALS: tuple[str, ...] = ("breakfast", "lunch", "dinner")
-
-# Keyed by (patient_id, date, meal) -> entry dict.
-MEAL_LOGS: dict[tuple[str, str, str], dict[str, str]] = {}
-_LOCK = Lock()
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _key(patient_id: str, date: str, meal: str) -> tuple[str, str, str]:
-    return (patient_id, date, meal)
 
 
 def put_log(
@@ -47,25 +37,15 @@ def put_log(
     meal: str,
     dish_id: str,
     logged_at: Optional[str] = None,
+    items=None,
 ) -> dict[str, str]:
     """Insert or replace the log for one (patient, date, meal) slot."""
-    entry = {
-        "patient_id": patient_id,
-        "date": date,
-        "meal": meal,
-        "dish_id": dish_id,
-        "logged_at": logged_at or _now_iso(),
-    }
-    with _LOCK:
-        MEAL_LOGS[_key(patient_id, date, meal)] = entry
-    return dict(entry)
+    return persistence.put_log(patient_id, date, meal, dish_id, logged_at, items=items)
 
 
 def get_log(patient_id: str, date: str, meal: str) -> Optional[dict[str, str]]:
     """Return the log for one slot, or ``None``."""
-    with _LOCK:
-        entry = MEAL_LOGS.get(_key(patient_id, date, meal))
-    return dict(entry) if entry is not None else None
+    return persistence.get_log(patient_id, date, meal)
 
 
 def list_logs(
@@ -77,46 +57,26 @@ def list_logs(
 
     ``date_from`` / ``date_to`` are inclusive ISO date bounds.
     """
-    with _LOCK:
-        entries = [e for e in MEAL_LOGS.values() if e["patient_id"] == patient_id]
-    meal_order = {m: i for i, m in enumerate(MEALS)}
-    out = []
-    for entry in entries:
-        if date_from is not None and entry["date"] < date_from:
-            continue
-        if date_to is not None and entry["date"] > date_to:
-            continue
-        out.append(dict(entry))
-    out.sort(key=lambda e: (e["date"], meal_order.get(e["meal"], 99)))
-    return out
+    return persistence.list_logs(patient_id, date_from=date_from, date_to=date_to)
 
 
 def delete_logs_for_patient(patient_id: str) -> int:
     """Remove every log for a patient; returns the number deleted."""
-    with _LOCK:
-        stale = [k for k, e in MEAL_LOGS.items() if e["patient_id"] == patient_id]
-        for k in stale:
-            del MEAL_LOGS[k]
-    return len(stale)
+    return persistence.delete_logs_for_patient(patient_id)
 
 
 def count_logs(patient_id: Optional[str] = None) -> int:
     """Number of stored logs (optionally for one patient)."""
-    with _LOCK:
-        if patient_id is None:
-            return len(MEAL_LOGS)
-        return sum(1 for e in MEAL_LOGS.values() if e["patient_id"] == patient_id)
+    return persistence.count_logs(patient_id)
 
 
 def clear() -> None:
-    """Empty the store (test/prototype helper)."""
-    with _LOCK:
-        MEAL_LOGS.clear()
+    """Delete every meal log (test/prototype helper)."""
+    persistence.clear_logs()
 
 
 __all__ = [
     "MEALS",
-    "MEAL_LOGS",
     "put_log",
     "get_log",
     "list_logs",

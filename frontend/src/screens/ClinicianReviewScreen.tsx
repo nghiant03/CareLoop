@@ -5,8 +5,10 @@ import {
   approveEnvelope,
   rejectEnvelope,
   editEnvelope,
+  createObservation,
+  listObservations,
 } from '../api';
-import type { Patient, Envelope, NutrientConstraint } from '../types';
+import type { Patient, Envelope, NutrientConstraint, Observation } from '../types';
 import PatientCard from '../components/PatientCard';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
@@ -24,6 +26,8 @@ export default function ClinicianReviewScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [observations, setObservations] = useState<Observation[]>([]);
+  const [observationsLoading, setObservationsLoading] = useState(false);
 
   useEffect(() => {
     listPatients()
@@ -37,6 +41,19 @@ export default function ClinicianReviewScreen() {
   const handleSelect = (patient: Patient) => {
     setSelectedPatient(patient);
     setEnvelope(null);
+    loadObservations(patient.id);
+  };
+
+  const loadObservations = async (patientId: string) => {
+    setObservationsLoading(true);
+    try {
+      const result = await listObservations(patientId);
+      setObservations(result.observations || []);
+    } catch {
+      setObservations([]);
+    } finally {
+      setObservationsLoading(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -231,8 +248,194 @@ export default function ClinicianReviewScreen() {
             isSaving={savingEdit}
           />
         )}
+
+        {selectedPatient && (
+          <ObservationsSection
+            patient={selectedPatient}
+            observations={observations}
+            loading={observationsLoading}
+            onRecorded={async () => {
+              await loadObservations(selectedPatient.id);
+              try {
+                const updated = await listPatients();
+                setPatients(updated);
+                setSelectedPatient((current) => updated.find((p) => p.id === current?.id) || current);
+              } catch (err: any) {
+                setError(err.message || 'Failed to refresh patient profile');
+              }
+            }}
+          />
+        )}
       </div>
     </main>
+  );
+}
+
+function ObservationsSection({
+  patient,
+  observations,
+  loading,
+  onRecorded,
+}: {
+  patient: Patient;
+  observations: Observation[];
+  loading: boolean;
+  onRecorded: () => void;
+}) {
+  const [metric, setMetric] = useState<'serum_K_meq_L' | 'serum_PO4_mg_dL' | 'egfr' | 'hba1c_pct'>('serum_K_meq_L');
+  const [value, setValue] = useState('');
+  const [unit, setUnit] = useState('');
+  const [source, setSource] = useState('');
+  const [observedAt, setObservedAt] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const metricUnits: Record<typeof metric, string> = {
+    serum_K_meq_L: 'mEq/L',
+    serum_PO4_mg_dL: 'mg/dL',
+    egfr: 'mL/min/1.73m²',
+    hba1c_pct: '%',
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const numValue = parseFloat(value);
+    if (Number.isNaN(numValue)) {
+      setError('Enter a numeric value.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await createObservation({
+        patient_id: patient.id,
+        metric,
+        value: numValue,
+        unit: unit.trim() || metricUnits[metric],
+        source: source.trim() || undefined,
+        observed_at: observedAt || undefined,
+      });
+      setValue('');
+      setSource('');
+      onRecorded();
+    } catch (err: any) {
+      setError(err.message || 'Failed to record observation');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Clinical observations
+      </h2>
+
+      <form onSubmit={handleSubmit} className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-700">Metric</label>
+          <select
+            value={metric}
+            onChange={(e) => {
+              setMetric(e.target.value as typeof metric);
+              setUnit('');
+            }}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+          >
+            <option value="serum_K_meq_L">Serum K</option>
+            <option value="serum_PO4_mg_dL">Serum PO4</option>
+            <option value="egfr">eGFR</option>
+            <option value="hba1c_pct">HbA1c</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-700">Value</label>
+          <input
+            type="number"
+            step="any"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-700">Unit</label>
+          <input
+            type="text"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder={metricUnits[metric]}
+            className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-700">Source</label>
+          <input
+            type="text"
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            placeholder="e.g. lab"
+            className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-700">Observed at</label>
+          <input
+            type="date"
+            value={observedAt}
+            onChange={(e) => setObservedAt(e.target.value)}
+            className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={submitting || value === ''}
+          className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-300 transition-colors"
+        >
+          {submitting ? 'Recording…' : 'Record observation'}
+        </button>
+      </form>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          {error}
+          <button onClick={() => setError(null)} className="ml-2 font-medium underline">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <LoadingState text="Loading observations…" />
+      ) : observations.length === 0 ? (
+        <EmptyState title="No observations" description="Record a follow-up observation after reviewing an alert." />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200 text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-slate-700">Metric</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-700">Value</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-700">Observed at</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-700">Source</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {observations.map((obs) => (
+                <tr key={obs.observation_id} className="hover:bg-slate-50">
+                  <td className="px-3 py-2 font-medium text-slate-900">{obs.metric}</td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {obs.value} {obs.unit}
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">{obs.observed_at}</td>
+                  <td className="px-3 py-2 text-slate-700">{obs.source || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

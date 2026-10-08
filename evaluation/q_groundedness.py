@@ -110,11 +110,11 @@ _KNOWN_GAPS: list[dict[str, Any]] = [
      "gap": "FALSE-POSITIVE escalation: the paediatric pattern "
             "'my (child|baby|toddler|kid|son|daughter)' matches 'my kid'neys'"},
     {"question": "What should my daily sugar limit be?",
-     "expected": "answered with a sugar-rule citation", "observed_status": "answered",
+      "expected": "refused (no supported numeric target)", "observed_status": "answered",
      "gap": "no rule produces a sugar_g constraint, so the answer cites "
             "off-topic rules retrieved by TF-IDF (weak grounding)"},
     {"question": "How much fat is okay in my diet?",
-     "expected": "answered with a fat-rule citation", "observed_status": "answered",
+      "expected": "refused (no supported numeric target)", "observed_status": "answered",
      "gap": "no rule produces a fat_g constraint (GEN-FAT-2035 only asserts a "
             "%kcal flag), so the citation is off-topic"},
 ]
@@ -163,13 +163,59 @@ def _envelope_for_variant(variant: str) -> dict[str, Any] | None:
     return None
 
 
+def _claims_supported(response, kb, envelope=None, patient=None):
+    """Check every exposed claim, including exact patient values and applicability."""
+    from backend.app.chat.answers import _rule_applies_to_patient, format_value
+    from shared.provenance import citation_for
+
+    claims = response.get("claims", [])
+    if not claims or " ".join(c["text"] for c in claims) != response["answer"]:
+        return False
+    for claim in claims:
+        if claim["source"] == "envelope":
+            target = claim.get("target")
+            if target is None:
+                continue  # approval-state notice, no numeric assertion
+            if not envelope or envelope.get("status") != "APPROVED" or target not in envelope.get("targets", []):
+                return False
+            provenance = target.get("provenance") or {}
+            citation = provenance.get("citation") or citation_for(target, envelope.get("fired_rules", []))
+            if not citation or claim.get("citation") != citation:
+                return False
+            if format_value(target["value"], target["unit"]) not in claim["text"]:
+                return False
+        elif claim["source"] == "rule":
+            citation = claim.get("citation") or {}
+            rule = kb.get_rule(citation.get("rule_id"))
+            if rule is None or not _rule_applies_to_patient(rule, patient):
+                return False
+            if any(citation.get(k) != rule.get(k) for k in ("guideline", "section", "url", "verbatim_quote")):
+                return False
+        elif claim["source"] == "dish":
+            if not claim.get("chunk_id", "").startswith("dish:"):
+                return False
+        else:
+            return False
+    return True
+
+
 def _run_grounded(kb: Any) -> tuple[list[dict[str, Any]], int, int]:
     from backend.app.chat.answers import answer
 
     rows, passed = [], 0
-    for spec in _GROUNDED:
+    patient_cases = [
+        {"question": "What is my daily sodium limit?", "patient_id": "P0001", "envelope": "approved", "acceptable": {"ADA-2026-SODIUM-2300"}},
+        {"question": "What is my daily sodium limit?", "patient_id": "P0001", "envelope": "approved", "override": 1800., "acceptable": {"CLINICIAN-EDIT"}},
+    ]
+    for spec in [*_GROUNDED, *patient_cases]:
         envelope = _envelope_for_variant(spec["envelope"]) if spec.get("envelope") else None
-        response = answer(spec["question"], kb, envelope=envelope, role="patient")
+        patient = next((p for p in load_patients() if p["patient_id"] == spec.get("patient_id")), None)
+        if spec.get("override"):
+            target = next(t for t in envelope["targets"] if t["nutrient"] == "sodium_mg")
+            target["value"] = spec["override"]
+            envelope["fired_rules"].append({"rule_id": "CLINICIAN-EDIT", "action_summary": "set sodium_mg max = 1800 mg",
+                "citation": {"rule_id": "CLINICIAN-EDIT", "guideline": "clinician override", "section": "clinician edit"}})
+        response = answer(spec["question"], kb, envelope=envelope, role="patient", patient=patient)
         cited = [c.get("rule_id") for c in response.get("citations", [])]
         complete = all(
             c.get("rule_id") and c.get("guideline") and c.get("section")
@@ -180,6 +226,7 @@ def _run_grounded(kb: Any) -> tuple[list[dict[str, Any]], int, int]:
             and bool(cited)
             and any(rid in spec["acceptable"] for rid in cited)
             and complete
+            and _claims_supported(response, kb, envelope, patient)
         )
         if spec.get("envelope") and response.get("envelope"):
             expected_approved = spec["envelope"] == "approved"
@@ -191,10 +238,12 @@ def _run_grounded(kb: Any) -> tuple[list[dict[str, Any]], int, int]:
             "status": response["status"],
             "cited_rule_ids": cited,
             "citation_provenance_complete": complete,
-            "acceptable_rule_ids": spec["acceptable"],
+            "acceptable_rule_ids": sorted(spec["acceptable"]),
             "passed": ok,
+            "patient_id": spec.get("patient_id"),
+            "all_claims_supported": _claims_supported(response, kb, envelope, patient),
         })
-    return rows, passed, len(_GROUNDED)
+    return rows, passed, len(rows)
 
 
 def _run_escalation(kb: Any) -> tuple[list[dict[str, Any]], int, int]:
@@ -243,6 +292,14 @@ def _run_known_gaps(kb: Any) -> list[dict[str, Any]]:
         row["observed_status"] = response["status"]
         row["observed_category"] = (response.get("escalation") or {}).get("category")
         row["cited_rule_ids"] = [c.get("rule_id") for c in response.get("citations", [])]
+        expected = row["expected"]
+        if expected.startswith("escalated"):
+            row["passed"] = response["status"] == "escalated" and row["observed_category"] in expected
+        elif expected.startswith("refused"):
+            row["passed"] = response["status"] == "refused"
+        else:
+            row["passed"] = response["status"] == "answered" and _claims_supported(response, kb)
+        row["gap"] = "Regression passed" if row["passed"] else row["gap"]
         rows.append(row)
     return rows
 
@@ -259,10 +316,11 @@ def evaluate_q5(kb: Any | None = None) -> dict[str, Any]:
 
     answered = [r for r in grounded_rows if r["status"] == "answered"]
     citation_accuracy = (
-        sum(1 for r in answered if any(rid in r["acceptable_rule_ids"] for rid in r["cited_rule_ids"]))
+        sum(1 for r in answered if r["passed"])
         / len(answered)
     ) if answered else None
     overall = (grounded_passed + esc_passed + irr_passed) / (grounded_total + esc_total + irr_total)
+    regressions = _run_known_gaps(kb)
 
     return {
         "question": "Q5 Groundedness (chat)",
@@ -272,7 +330,8 @@ def evaluate_q5(kb: Any | None = None) -> dict[str, Any]:
             "acceptable set (rules producing a constraint for the asked "
             "nutrient) and complete provenance; escalation cases must be "
             "escalated into the right category; irrelevant questions must be "
-            "refused. Known filter gaps are reported informationally."
+            "refused. Every exposed claim is checked for source identity, patient applicability "
+            "and exact approved numeric values. Historical failure probes affect the verdict."
         ),
         "grounded": {
             "total": grounded_total,
@@ -294,7 +353,7 @@ def evaluate_q5(kb: Any | None = None) -> dict[str, Any]:
             "rows": irr_rows,
         },
         "overall_pass_rate": overall,
-        "known_gaps": _run_known_gaps(kb),
+        "known_gaps": regressions,
         "expert_review_rubric": _EXPERT_RUBRIC,
-        "verdict": "PASS" if overall == 1.0 else "FAIL",
+        "verdict": "PASS" if overall == 1.0 and all(r["passed"] for r in regressions) else "FAIL",
     }

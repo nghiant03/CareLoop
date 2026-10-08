@@ -9,7 +9,14 @@
   + greedy rebuild, :func:`real_data.repair_plan`); if that fails, a
   greedy-constructed feasible plan is used; if even that is impossible the
   result is an explicit infeasibility diagnosis (``feasible=False``,
-  ``infeasibility_reason`` set, empty plan) — never a silently broken plan;
+  ``infeasibility_reason`` set, empty plan) — never a silently broken plan.
+  Diagnoses are confirmed against exhaustive one-day enumeration
+  (:mod:`backend.optim.exact_reference`): ``infeasibility_status`` is
+  ``"proven_infeasible"`` when enumeration proves no feasible day exists
+  (exact for this per-day encoding), or ``"search_exhausted"`` when a feasible
+  day exists but the heuristics failed to deliver one.  The cheap
+  ``feasibility_precheck`` is only a sufficient infeasibility condition — when
+  exact enumeration contradicts a failed precheck, solving continues.
 * returned plans always satisfy the envelope's hard constraints (MAX ceilings
   + exclusions per PLAN.md module 4; MIN floors / TARGETs are soft) with
   ``violation_count == 0`` (verified with the canonical ``problem.evaluate``).
@@ -44,6 +51,7 @@ from backend.optim.problem import (  # noqa: E402
     violation_magnitude,
 )
 
+from .exact_reference import one_day_exact  # noqa: E402
 from .real_data import (  # noqa: E402
     FastEvaluator,
     feasibility_precheck,
@@ -194,8 +202,15 @@ def _build_pymoo_algorithm(method: str, pop_size: int):
     raise ValueError(f"unknown pymoo method {method!r}")
 
 
+class _SearchFront(list):
+    def __init__(self, entries, evaluations):
+        super().__init__(entries)
+        self.evaluations = evaluations
+
+
 def _pymoo_front(
-    ev: FastEvaluator, seed: int, pop_size: int, n_gen: int, method: str = "nsga2"
+    ev: FastEvaluator, seed: int, pop_size: int, n_gen: int, method: str = "nsga2",
+    termination=None,
 ) -> list[np.ndarray]:
     """Run a pymoo algorithm and return the non-dominated plans as index arrays.
 
@@ -208,11 +223,12 @@ def _pymoo_front(
     """
     problem = _build_pymoo_problem(ev, with_constraints=(method != "moead"))
     algorithm = _build_pymoo_algorithm(method, pop_size)
-    res = minimize(problem, algorithm, ("n_gen", n_gen), seed=seed, verbose=False)
+    res = minimize(problem, algorithm, termination or ("n_gen", n_gen), seed=seed, verbose=False)
+    evaluations = int(res.algorithm.evaluator.n_eval)
     if res.X is None:
-        return []
+        return _SearchFront([], evaluations)
     X = np.atleast_2d(np.asarray(res.X, dtype=int))
-    return [X[i] for i in range(len(X))]
+    return _SearchFront([X[i] for i in range(len(X))], evaluations)
 
 
 # ---------------------------------------------------------------------------
@@ -356,17 +372,72 @@ def _diagnosis(
     }
 
 
+def _exact_reference_summary(exact: dict) -> dict:
+    """Compact ``one_day_exact`` summary embedded in diagnosed results."""
+    return {
+        "feasible_day": exact["feasible_day"],
+        "feasible_combo_count": exact["feasible_combo_count"],
+        "pool_size": exact["pool_size"],
+    }
+
+
+def _diagnose_with_exact(
+    envelope, dishes, reason: str, runtime_ms: float, allowed_count: int
+) -> dict:
+    """Diagnosis enriched with the exact one-day enumeration verdict.
+
+    ``infeasibility_status`` semantics (Milestone 2):
+
+    * ``"proven_infeasible"`` — exhaustive one-day enumeration
+      (:func:`exact_reference.one_day_exact`) found NO feasible dish multiset.
+      Because every hard constraint is per-day and each slot holds exactly one
+      dish, a 7-day plan exists iff a feasible day exists, so this is an EXACT
+      infeasibility proof for the encoding.
+    * ``"search_exhausted"`` — a feasible day EXISTS, so search + repair +
+      greedy simply failed to deliver one: a heuristic failure, never
+      misreported as infeasibility.
+
+    NOTE on ``"search_exhausted"``: ``real_data.greedy_feasible_plan`` is NOT a
+    complete constructor for the 3-dish day problem — it scores every pool
+    dish per slot greedily and repairs via hill-climbing single-slot sweeps,
+    so a pathological envelope can defeat both heuristics even though a
+    feasible day exists.  In practice with the shipped envelopes greedy +
+    repair always delivers a day, so ``"search_exhausted"`` is not expected
+    today; the distinction is kept so heuristic failure is never confused
+    with proven infeasibility.
+    """
+    exact = one_day_exact(envelope, dishes)
+    diag = _diagnosis(envelope, dishes, reason, runtime_ms, allowed_count)
+    diag["infeasibility_status"] = (
+        "proven_infeasible" if not exact["feasible_day"] else "search_exhausted"
+    )
+    diag["exact_reference"] = _exact_reference_summary(exact)
+    return diag
+
+
 def _guarantee(
-    ev: FastEvaluator, entries: list[dict], seed: int, engine: str
+    ev: FastEvaluator,
+    entries: list[dict],
+    seed: int,
+    engine: str,
+    selection=None,
 ) -> tuple[dict | None, str, list[dict]]:
     """Ensure a feasible plan exists; repair / greedy-rebuild when it does not.
 
+    ``selection``: optional ``(entries, envelope, dishes) -> entry`` callable
+    used to pick the headline plan from the feasible entries instead of the
+    default ``min(..., key=scalar_score)`` (see ``backend.optim.selection``).
+    ``None`` keeps the current behaviour exactly.
+
     Returns ``(best_entry, engine_label, feasible_entries)`` or ``(None, ...)``
-    when the pool provably cannot satisfy the envelope.
+    when no feasible plan could be reached.
     """
     feasible = [e for e in entries if e["feasible"]]
     if feasible:
-        best = min(feasible, key=lambda e: scalar_score(e["objectives"]))
+        if selection is not None:
+            best = selection(feasible, ev.envelope, ev.dishes)
+        else:
+            best = min(feasible, key=lambda e: scalar_score(e["objectives"]))
         return best, engine, feasible
 
     # 1) repair the least-violating candidate
@@ -410,6 +481,8 @@ def solve(
     n_gen: int = 80,
     method: str = "nsga2",
     guarantee: bool = True,
+    selection=None,
+    termination=None,
 ) -> dict:
     """Solve for ``envelope`` over ``dishes`` with the feasibility guarantee.
 
@@ -424,24 +497,41 @@ def solve(
     measure honest hard-constraint violation rates — the headline plan is the
     least-violating/best-scalar member of the raw front.  This never weakens
     the production default; ``api.run`` never passes ``guarantee=False``.
+
+    ``selection``: optional ``(entries, envelope, dishes) -> entry`` callable
+    used instead of the default ``min(..., key=scalar_score)`` when picking the
+    headline plan from the feasible front in ``_guarantee`` (see
+    ``backend.optim.selection``).  ``None`` (default) keeps the current
+    behaviour unchanged; the success path gains no other overhead.
     """
     t0 = time.perf_counter()
     allowed = allowed_dishes(envelope, dishes)
 
     ok, reason = feasibility_precheck(envelope, dishes)
     if not ok:
-        return _diagnosis(envelope, dishes, reason, (time.perf_counter() - t0) * 1000.0, len(allowed))
+        # The precheck is only a SUFFICIENT infeasibility condition (empty
+        # pool, or a MAX below the least-possible 3-dish day).  Before
+        # diagnosing, confirm with exhaustive one-day enumeration
+        # (exact_reference): if a feasible day exists the envelope is solvable
+        # and solving CONTINUES; otherwise infeasibility is proven exactly.
+        exact = one_day_exact(envelope, dishes)
+        if not exact["feasible_day"]:
+            diag = _diagnosis(
+                envelope, dishes, reason, (time.perf_counter() - t0) * 1000.0, len(allowed)
+            )
+            diag["infeasibility_status"] = "proven_infeasible"
+            diag["exact_reference"] = _exact_reference_summary(exact)
+            return diag
+        # exact enumeration found a feasible day: fall through and keep solving.
 
     ev = FastEvaluator(envelope, dishes)
 
     if method in PYMOO_METHODS:
         if HAS_PYMOO:
             engine = "pymoo"
-            eff_pop = pop_size
-            if method == "moead" and REF_DIRS_4OBJ is not None:
-                eff_pop = len(REF_DIRS_4OBJ)
-            idxs = _pymoo_front(ev, seed, pop_size, n_gen, method=method)
-            evaluations = len(idxs) + eff_pop * n_gen
+            options = {"termination": termination} if termination is not None else {}
+            idxs = _pymoo_front(ev, seed, pop_size, n_gen, method=method, **options)
+            evaluations = getattr(idxs, "evaluations", 0)
         elif method == "nsga2":
             # Production fallback: hand-rolled GA when pymoo is unavailable.
             engine = "fallback-ga"
@@ -485,9 +575,9 @@ def solve(
             result["guaranteed"] = False
             return result
 
-        best, engine, feasible = _guarantee(ev, entries, seed, engine)
+        best, engine, feasible = _guarantee(ev, entries, seed, engine, selection)
         if best is None:
-            return _diagnosis(
+            return _diagnose_with_exact(
                 envelope, dishes, "no feasible plan reachable from the allowed pool",
                 (time.perf_counter() - t0) * 1000.0, len(allowed),
             )

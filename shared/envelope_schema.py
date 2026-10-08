@@ -87,6 +87,19 @@ class CitationSource(BaseModel):
 # ----------------------------------------------------------------------------
 
 
+class ConstraintProvenance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nutrient: NutrientKind
+    kind: ConstraintKind
+    value: float
+    unit: str
+    envelope_id: str
+    version: int
+    author: str
+    citation: CitationSource
+
+
 class NutrientConstraint(BaseModel):
     """Per-nutrient target/ceiling/floor for a 24-hour plan."""
 
@@ -96,6 +109,7 @@ class NutrientConstraint(BaseModel):
     kind: ConstraintKind
     value: float = Field(..., ge=0)
     unit: str = Field(..., description="Canonical unit, e.g. 'mg', 'g', 'kcal'")
+    provenance: Optional[ConstraintProvenance] = None
 
     @field_validator("unit")
     @classmethod

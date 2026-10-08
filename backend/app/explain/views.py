@@ -212,6 +212,8 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
             )
 
     constraints = []
+    from shared.provenance import citation_for
+
     for target in envelope.get("targets") or []:
         nutrient = target.get("nutrient")
         constraints.append(
@@ -220,7 +222,8 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
                 "kind": target.get("kind"),
                 "value": target.get("value"),
                 "unit": target.get("unit"),
-                "citation": _rule_citation_for_nutrient(fired_rules, nutrient),
+                "citation": (target.get("provenance") or {}).get("citation") or citation_for(target, fired_rules),
+                "provenance": target.get("provenance"),
             }
         )
 

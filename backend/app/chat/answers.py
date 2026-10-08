@@ -144,7 +144,7 @@ def format_value(value: Any, unit: str) -> str:
         return str(value)
     if unit == "mg" and num >= 1000:
         grams = num / 1000.0
-        text = f"{grams:.1f}".rstrip("0").rstrip(".")
+        text = f"{grams:g}"
         return f"{text} g"
     if num == int(num):
         return f"{int(num)} {unit}".strip()
@@ -218,16 +218,21 @@ def _rule_applies_to_patient(
                     lo, hi = value
                     if not (float(lo) <= num <= float(hi)):
                         return False
-                elif op == "ge" and not num >= float(value):
-                    return False
-                elif op == "gt" and not num > float(value):
-                    return False
-                elif op == "le" and not num <= float(value):
-                    return False
-                elif op == "lt" and not num < float(value):
-                    return False
-                elif op == "eq" and not num == float(value):
-                    return False
+                elif op == "ge":
+                    if not num >= float(value):
+                        return False
+                elif op == "gt":
+                    if not num > float(value):
+                        return False
+                elif op == "le":
+                    if not num <= float(value):
+                        return False
+                elif op == "lt":
+                    if not num < float(value):
+                        return False
+                elif op == "eq":
+                    if not num == float(value):
+                        return False
                 else:
                     return False
             except (TypeError, ValueError):
@@ -360,25 +365,20 @@ def _envelope_context(
     # A clinician-authored value (CLINICIAN-EDIT row) always wins over the
     # original guideline rows for the same nutrient: the edit replaced those
     # values, so the edit's provenance is the source of the answered number.
-    edit_citation: Optional[dict[str, Any]] = None
-    rule_citation: Optional[dict[str, Any]] = None
-    for fired in envelope.get("fired_rules") or []:
-        summary = str(fired.get("action_summary", "")).lower()
-        if nutrient.split("_")[0] not in summary and nutrient not in summary:
-            continue
-        if str(fired.get("rule_id", "")) == _CLINICIAN_EDIT_RULE_ID:
-            # Keep the latest matching edit row (multiple edits may be traced).
-            edit_citation = fired.get("citation")
-        elif rule_citation is None:
-            rule_citation = fired.get("citation")
-    citation = edit_citation or rule_citation
+    from shared.provenance import citation_for
+
+    provenance = target.get("provenance") or {}
+    matches = all(provenance.get(k) == target.get(k) for k in ("nutrient", "kind", "value", "unit"))
+    citation = (provenance.get("citation") if matches else None) or citation_for(
+        target, envelope.get("fired_rules") or []
+    )
     return {
         "envelope_id": envelope.get("envelope_id"),
         "status": status,
         "approved": True,
         "sentence": sentence,
         "citation": citation,
-        "edit_authored": edit_citation is not None,
+        "edit_authored": bool(citation and citation.get("rule_id") == _CLINICIAN_EDIT_RULE_ID),
         "target": target,
     }
 
@@ -539,21 +539,24 @@ def answer(
 
     parts: list[str] = []
     citations: list[dict[str, Any]] = []
+    claims: list[dict[str, Any]] = []
 
     # When the patient's APPROVED numbers are being quoted, every guideline
     # citation must be checked against this patient: a rule whose conditions
     # (diagnoses, meds, labs) do not apply must never be cited as if it
     # governed their plan. Generic guideline-only answers (no approved
     # envelope consulted) keep the plain retrieval-order anchor.
-    applicability_patient = (
-        patient if (env_ctx is not None and env_ctx.get("approved")) else None
-    )
+    applicability_patient = patient or (envelope or {}).get("patient_snapshot")
 
     # 1) Envelope numbers (approved only; pending/declined get fixed text).
     if env_ctx is not None:
         parts.append(env_ctx["sentence"])
         if env_ctx["citation"]:
             citations.append(env_ctx["citation"])
+        claims.append({"text": env_ctx["sentence"], "source": "envelope",
+                       "target": env_ctx.get("target") if env_ctx["approved"] else None,
+                       "envelope_id": envelope.get("envelope_id"),
+                       "version": envelope.get("version"), "citation": env_ctx["citation"]})
 
     # 2) KB anchor rule for the detected nutrient(s). With an approved
     #    envelope the anchor must be a rule that actually applies to this
@@ -564,9 +567,12 @@ def answer(
         if nutrients
         else None
     )
+    if nutrients and anchor is None and env_ctx is None and re.search(r"\b(how much|limit|target|daily)\b", question, re.I):
+        hits, best_score = [], 0.0
     if anchor is not None:
-        parts.append(_rule_sentence(anchor, role))
-        parts.extend(_constraint_sentences(anchor, role, weight_kg)[:2])
+        sentences = [_rule_sentence(anchor, role), *_constraint_sentences(anchor, role, weight_kg)[:2]]
+        parts.extend(sentences)
+        claims.extend({"text": text, "source": "rule", "citation": _citation_of_rule(anchor)} for text in sentences)
         citations.append(_citation_of_rule(anchor))
 
     # 3) Supporting retrieved chunks (rule chunks add citations, dish chunks
@@ -589,10 +595,12 @@ def answer(
                     ):
                         continue
                 parts.append(_rule_sentence_from_chunk(hit, role))
+                claims.append({"text": parts[-1], "source": "rule", "citation": hit["citation"]})
                 citations.append(hit["citation"])
             else:
                 sentences = _dish_sentences([hit], role)
                 parts.extend(sentences)
+                claims.extend({"text": text, "source": "dish", "chunk_id": hit["chunk_id"]} for text in sentences)
 
     if not citations:
         return {
@@ -637,6 +645,7 @@ def answer(
         "status": "answered",
         "question": question,
         "answer": answer_text,
+        "claims": claims,
         "citations": citations,
         "escalation": esc,
         "envelope": envelope_summary,

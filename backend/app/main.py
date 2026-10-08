@@ -30,9 +30,12 @@ from backend.app.api import (
     envelopes,
     kb,
     mining,
+    observations,
     patients,
     plans,
+    review,
     rules,
+    simulations,
 )
 from backend.app.core.approval_gate import EnvelopeNotApprovedError
 
@@ -99,7 +102,9 @@ async def _validation_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=422,
-        content={"error": "validation_error", "detail": exc.errors()},
+        content={"error": "validation_error", "detail": [
+            {k: v for k, v in error.items() if k != "ctx"} for error in exc.errors()
+        ]},
     )
 
 
@@ -122,6 +127,9 @@ app.include_router(dishes.router)
 app.include_router(rules.router)
 app.include_router(envelopes.router)
 app.include_router(plans.router)
+app.include_router(observations.router)
+app.include_router(review.router)
+app.include_router(simulations.router)
 app.include_router(chat.router)
 app.include_router(mining.router)
 app.include_router(kb.router)

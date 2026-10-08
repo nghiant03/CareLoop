@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from evaluation.q_ablation import per_patient_deltas
+
 __all__ = ["render_report"]
 
 
@@ -40,9 +42,158 @@ def _table(headers: list[str], rows: list[list[Any]]) -> str:
     return "\n".join(out)
 
 
+def _q6_ablation_rows(pooled: dict[str, Any]) -> list[list[Any]]:
+    rows = []
+    for name in ("scalar", "normalised", "adequacy_first"):
+        p = pooled.get(name) or {}
+        rows.append([
+            name,
+            p.get("rows"),
+            _pct(p.get("feasibility_rate")),
+            _fmt(p.get("mean_worst_day_rel_shortfall_pct")),
+            _fmt(p.get("mean_daily_shortfall")),
+            _fmt(p.get("mean_met_days_fraction")),
+            _fmt(p.get("mean_cost")),
+            _fmt(p.get("mean_variety")),
+            _fmt(p.get("mean_nutrient_target_deviation")),
+            _fmt(p.get("mean_front_size")),
+        ])
+    return rows
+
+
+def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
+    """Render the Q6 section (selection ablation, composition, exact reference)."""
+    sel = q6["selection_ablation"]
+    config = sel["config"]
+    add("## Q6 — Objective/selection & meal-composition ablation")
+    add("")
+    add(q6["definition"])
+    add("")
+    add(f"### Selection ablation (paired: {config['pop_size']}-pop / {config['n_gen']}-gen "
+        f"NSGA-II front per patient × seed {config['seeds']}; all strategies score the "
+        f"SAME front against the ORIGINAL approved aims)")
+    add("")
+    add(table(
+        ["Strategy", "Rows", "Feasibility", "Worst-day shortfall %",
+         "Mean daily shortfall", "Met-days fraction", "Cost (SGD)",
+         "Variety (objective)", "Deviation", "Mean front size"],
+        _q6_ablation_rows(sel["pooled"]),
+    ))
+    add("")
+    add(f"Scoring: {config['scored_against']}. Worst-day shortfall % is the pooled "
+        f"mean over rows of the worst per-aim relative shortfall on each plan's "
+        f"worst day (plan_service adequacy semantics).")
+    add("")
+    add("### Paired per-patient deltas vs scalar selection "
+        "(worst-day relative shortfall pct-points, mean over seeds)")
+    add("")
+    add(table(
+        ["Patient", "Δ normalised", "Δ adequacy-first"],
+        [[d["patient_id"],
+          fmt(d.get("delta_normalised_pct")),
+          fmt(d.get("delta_adequacy_first_pct"))]
+         for d in per_patient_deltas(sel.get("delta_rows") or [])],
+    ))
+    add("")
+    deltas = sel["paired_deltas"]
+    add("Pooled paired deltas: " + "; ".join(
+        f"{name}: {deltas[name]['rows']} rows, "
+        f"mean Δ shortfall {_fmt(deltas[name]['mean_delta_worst_day_rel_shortfall_pct'])} "
+        f"pct-pts, mean Δ cost {_fmt(deltas[name]['mean_delta_cost_pct'])}% "
+        f"({deltas[name]['improved']} improved / {deltas[name]['tied']} tied / "
+        f"{deltas[name]['regressed']} regressed)"
+        for name in ("normalised", "adequacy_first") if name in deltas
+    ) + ".")
+    add("")
+    verdict_note = q6.get("verdict_note")
+    add(f"**Verdict: {q6['verdict']}**"
+        + (f" — {verdict_note}" if verdict_note
+           else " — adequacy-first strictly reduces the pooled mean worst-day "
+                "relative shortfall at 100% feasibility and within the 10% cost cap "
+                "(full rule in `evaluation/q_ablation.py` module docstring)."))
+    add("")
+
+    # ------------------------------------------------------------- composition
+    comp = q6["composition_ablation"]
+    add("### Meal-composition ablation: 1-dish vs 2-dish (main + side) encoding")
+    add("")
+    add(comp["note"])
+    add("")
+    rows = []
+    for label, key in (("1-dish (production)", "one_dish"), ("2-dish (main + side)", "two_dish")):
+        for name in ("scalar", "normalised", "adequacy_first"):
+            p = (comp["pooled"].get(key) or {}).get(name) or {}
+            rows.append([label, name, p.get("rows"),
+                         _pct(p.get("feasibility_rate")),
+                         _fmt(p.get("mean_worst_day_rel_shortfall_pct")),
+                         _fmt(p.get("mean_daily_shortfall")),
+                         _fmt(p.get("mean_met_days_fraction")),
+                         _fmt(p.get("mean_cost")),
+                         _fmt(p.get("mean_variety"))])
+    add(table(["Encoding", "Strategy", "Rows", "Feasibility", "Worst-day shortfall %",
+               "Mean daily shortfall", "Met-days fraction", "Cost (SGD)",
+               "Variety (objective)"], rows))
+    add("")
+    pools = comp["pools"]
+    add(f"Encoding: MAIN pool {pools['main_pool_size']} dishes (allowed pool minus "
+        f"categories {', '.join(comp['config']['main_excluded_categories'])}); "
+        f"SIDE pool {pools['side_pool_size']} dishes (categories "
+        f"{', '.join(comp['config']['side_categories'])} or tag "
+        f"`{comp['config']['side_tag']}`); "
+        f"{comp['config']['repetition_limit']}; operators: "
+        f"{comp['config']['operators']}.")
+    add("")
+    for note in comp.get("phase_notes") or []:
+        add(f"* {note}")
+    if comp.get("phase_notes"):
+        add("")
+    add("Reported informationally (no pass/fail): the eligibility sets are heuristic "
+        "annotations, not verified data.")
+    add("")
+
+    # ---------------------------------------------------------- exact reference
+    exact = q6["exact_reference"]
+    add("### Exact-reference quality (scalar-selected plans, seed "
+        f"{exact['seed']})")
+    add("")
+    add(table(
+        ["Patient", "Deviation gap (mean/day)", "Preference-sum gap (mean/day)",
+         "Cost gap (mean/day)", "At per-day optimum (dev/pref/cost)",
+         "7-day lower bounds (dev / pref / cost)"],
+        [[r["patient_id"],
+          fmt((r.get("mean_gaps") or {}).get("nutrient_target_deviation")),
+          fmt((r.get("mean_gaps") or {}).get("preference_sum")),
+          fmt((r.get("mean_gaps") or {}).get("cost")),
+          (f"{int(r['at_per_day_optimum']['nutrient_target_deviation'])}/"
+           f"{int(r['at_per_day_optimum']['preference_sum'])}/"
+           f"{int(r['at_per_day_optimum']['cost'])}")
+          if r.get("at_per_day_optimum") else "—",
+          " / ".join(fmt((r.get("seven_day_lower_bounds") or {}).get(k))
+                     for k in ("nutrient_target_deviation", "preference_sum", "cost"))
+          if r.get("seven_day_lower_bounds") else "—"]
+         for r in exact["per_patient"]],
+    ))
+    add("")
+    agg = exact["aggregate"]
+    add("Aggregate: " + "; ".join(
+        f"{name}: mean gap {_fmt(entry['mean_gap'])}, "
+        f"{entry['patients_at_per_day_optimum']}/{entry['plans_with_reference']} "
+        f"plans at the per-day additive optimum (gap <= 1e-6)"
+        for name, entry in agg.items()
+    ) + ".")
+    add("")
+    add("Solver infeasibility_status counts across the selection-ablation solves: "
+        + (", ".join(f"{k} {v}" for k, v in sorted(exact["infeasibility_status_counts"].items()))
+           or "none recorded") + ".")
+    add("")
+    add(f"Disclosure: {exact['disclosure']}")
+    add("")
+
+
 def render_report(results: dict[str, Any]) -> str:
     q1, q2, q3 = results["q1_traceability"], results["q2_conflicts"], results["q3_constraint_satisfaction"]
     q4, q5 = results["q4_benchmark"], results["q5_groundedness"]
+    q6 = results.get("q6_ablation")
     meta = results["meta"]
 
     lines: list[str] = []
@@ -62,31 +213,44 @@ def render_report(results: dict[str, Any]) -> str:
     # ------------------------------------------------------------------ summary
     add("## Headline verdicts")
     add("")
-    add(_table(
-        ["Question", "Verdict", "Headline number"],
-        [
-            ["Q1 Traceability", q1["verdict"],
-             f"{q1['overall']['traceable']}/{q1['overall']['items']} envelope items "
-             f"traceable ({_pct(q1['overall']['rate'])}) across {q1['eligible_patients']} "
-             f"eligible patients; {q1['rejected_patients']} REJECTED patients counted "
-             f"separately"],
-            ["Q2 Conflict resolution", q2["verdict"],
-             f"{q2['cases_passed']}/{q2['cases_total']} cases "
-             f"({_pct(q2['pass_rate'])}), {q2['checks_passed']}/{q2['checks_total']} checks"],
-            ["Q3 Constraint satisfaction", q3["verdict"],
-             f"{q3['zero_violation_plans']}/{q3['plans_attempted']} plans with zero hard "
-             f"violations ({_pct(q3['zero_violation_rate'])}); "
-             f"{q3['infeasible_plans']} infeasible (diagnosed, nothing served); "
-             f"{q3['relaxed_envelopes']} envelopes needed a disclosed MIN relaxation"],
-            ["Q4 Quality/runtime", q4["verdict"], _q4_headline_text(q4)
-             + " (consumed from benchmark artefacts)"],
-            ["Q5 Groundedness", q5["verdict"],
-             f"grounded {_pct(q5['grounded']['pass_rate'])} "
-             f"(citation accuracy {_pct(q5['grounded']['citation_accuracy'])}), "
-             f"escalation {_pct(q5['escalation']['pass_rate'])}, "
-             f"refusals {_pct(q5['irrelevant_refusals']['pass_rate'])}"],
-        ],
-    ))
+    headline_rows: list[list[Any]] = [
+        ["Q1 Traceability", q1["verdict"],
+         f"{q1['overall']['traceable']}/{q1['overall']['items']} envelope items "
+         f"traceable ({_pct(q1['overall']['rate'])}) across {q1['eligible_patients']} "
+         f"eligible patients; {q1['rejected_patients']} REJECTED patients counted "
+         f"separately"],
+        ["Q2 Conflict resolution", q2["verdict"],
+         f"{q2['cases_passed']}/{q2['cases_total']} cases "
+         f"({_pct(q2['pass_rate'])}), {q2['checks_passed']}/{q2['checks_total']} checks"],
+        ["Q3 Constraint satisfaction", q3["verdict"],
+         f"{q3['zero_violation_plans']}/{q3['plans_attempted']} plans with zero hard "
+         f"violations ({_pct(q3['zero_violation_rate'])}); "
+         f"{q3['infeasible_plans']} infeasible (diagnosed, nothing served); "
+         f"{q3['relaxed_envelopes']} envelopes needed a disclosed MIN relaxation"],
+        ["Q4 Quality/runtime", q4["verdict"], _q4_headline_text(q4)
+         + " (consumed from benchmark artefacts)"],
+        ["Q5 Groundedness", q5["verdict"],
+         f"grounded {_pct(q5['grounded']['pass_rate'])} "
+         f"(citation accuracy {_pct(q5['grounded']['citation_accuracy'])}), "
+         f"escalation {_pct(q5['escalation']['pass_rate'])}, "
+         f"refusals {_pct(q5['irrelevant_refusals']['pass_rate'])}"],
+    ]
+    if q6:
+        sel = q6["selection_ablation"]["pooled"]
+        sc = sel["scalar"].get("mean_worst_day_rel_shortfall_pct")
+        adq = sel["adequacy_first"].get("mean_worst_day_rel_shortfall_pct")
+        sc_cost = sel["scalar"].get("mean_cost") or 0.0
+        adq_cost = sel["adequacy_first"].get("mean_cost") or 0.0
+        cost_pct = ((adq_cost / sc_cost - 1.0) * 100.0) if sc_cost else 0.0
+        delta = (adq - sc) if (adq is not None and sc is not None) else None
+        headline_rows.append([
+            "Q6 Selection & composition ablation", q6["verdict"],
+            f"adequacy-first worst-day shortfall {_fmt(adq)}% vs scalar "
+            f"{_fmt(sc)}% (Δ {_fmt(delta) if delta is not None else 'n/a'} "
+            f"pct-pts), cost {cost_pct:+.1f}% vs scalar; meal-composition "
+            f"ablation informational",
+        ])
+    add(_table(["Question", "Verdict", "Headline number"], headline_rows))
     add("")
 
     # ------------------------------------------------------------------ Q1
@@ -218,7 +382,7 @@ def render_report(results: dict[str, Any]) -> str:
         f"({_pct(q5['irrelevant_refusals']['pass_rate'])}); overall "
         f"{_pct(q5['overall_pass_rate'])} — verdict {q5['verdict']}.**")
     add("")
-    add("### Known gaps (informational, not scored)")
+    add("### Historical failure probes (included in verdict)")
     add("")
     add(_table(["Probe", "Expected", "Observed", "Gap"],
                [[g["question"], g["expected"],
@@ -235,6 +399,10 @@ def render_report(results: dict[str, Any]) -> str:
                [[r["criterion"], r["scale"], r["how_to_score"]] for r in q5["expert_review_rubric"]]))
     add("")
 
+    # ------------------------------------------------------------------ Q6
+    if q6:
+        _render_q6(add, q6, _table, _fmt)
+
     # ------------------------------------------------------------------ limits
     add("## Limitations & known caveats")
     add("")
@@ -246,22 +414,14 @@ def render_report(results: dict[str, Any]) -> str:
         "of guiding the search. Consequence: `violation_count == 0` means the "
         "hard ceilings and exclusions hold — it does NOT mean the plan meets "
         "every soft floor. Residual soft shortfalls are reported per plan "
-        "(see `soft_aims` in results.json and the totals panel), and with the "
-        "placeholder scalar weights (deviation 0.001 vs preference/variety 0.5, "
-        "cost 0.02) the search may still trade floors against preference and "
-        "cost — retuning `SCALAR_WEIGHTS` is the natural next step.")
+        "(see `soft_aims` in results.json and the adequacy panel). Production "
+        "main/side search uses normalised adequacy-first ranking against original aims.")
     add("")
-    add("2. **Fibre MIN relaxation (disclosure still active).** The guideline "
-        "rulebook sets fibre floors (GEN-FIBER-25 min 25 g/d, DASH-2025-FIBER-30 "
-        "min 30 g/d) but the dish dataset tops out at 8 g fibre per dish, so the "
-        "best possible 3-dish day reaches only 24 g. `prepare_envelope_for_pool` "
-        "still lowers unreachable MIN floors in the solved copy and discloses "
-        "every adjustment in `relaxed_constraints` — no longer needed for "
-        "feasibility (floors are soft), it now calibrates the deviation "
-        "objective to an achievable aim and keeps the clinician-facing "
-        "disclosure intact. Heavier patients additionally trigger the "
-        "energy-kcal floor relaxation once the semantic exclusions narrow the "
-        "pool's energy ceiling.")
+    add("2. **Fibre MIN relaxation and meal encoding.** The legacy single-dish "
+        "search discloses relaxed soft aims when used as fallback. Production "
+        "composition uses one main and an optional side per meal, without relaxing "
+        "approved aims. Roles are heuristic. Search failure for this encoding is "
+        "not proof of infeasibility; the exact reference applies to single-dish days.")
     add("")
     add("3. **Exclusion vocabulary (fixed in this remediation).** The rulebook "
         "emits semantic exclusion values (`high_potassium_foods`, "
@@ -283,25 +443,20 @@ def render_report(results: dict[str, Any]) -> str:
     add("")
     add("5. **Benchmark reuse.** Q4 consumes the committed benchmark artefacts "
         "instead of re-running the optimiser benchmark methods (default); "
-        "`--rerun-benchmark` regenerates them (~23 s wall time). The artefacts "
-        "were regenerated after the hard/soft re-encoding, so the comparison "
-        "table reflects the new objective semantics for all methods alike. "
+        "`--rerun-benchmark` regenerates them. Actual pymoo evaluation counts "
+        "are recorded; generation-boundary overshoot is possible. "
         "Runtimes in the report are wall-clock and not deterministic.")
     add("")
-    add("6. **Chat evaluation scope.** Groundedness is scored automatically against "
-        "the rules that *produce a constraint* for the asked nutrient; supporting "
-        "citations retrieved by TF-IDF may legitimately mention other nutrients. "
-        "Nutrients without constraint-producing rules (sugar, total fat) cannot be "
-        "grounded today and are listed as known gaps. The expert-review rubric is "
+    add("6. **Chat evaluation scope.** Claims carry source metadata and are checked "
+        "for citation identity, patient applicability and approved numeric values. "
+        "Unsupported numeric target questions are refused. Retrieval thresholds "
+        "are calibrated on development examples before held-out evaluation. The expert-review rubric is "
         "provided for the human evaluation that cannot be automated.")
     add("")
-    add("7. **Soft floors vs the dish pool.** Even as soft aims, some floors "
-        "remain far from what the pool delivers (e.g. mean fibre ~10 g/day "
-        "against the 25-30 g guideline aim) — the curated renal-replenishment "
-        "dishes add fruit/vegetable and higher-fibre options, but 3 dishes/day "
-        "from a 214-dish Singaporean pool cannot reach DASH-level fibre/potassium "
-        "without dedicated product reformulation. The soft-aim shortfalls in "
-        "results.json quantify this per patient.")
+    add("7. **Data quality.** All 214 dishes are unverified; costs are synthetic "
+        "estimates. Main/side composition improves delivery but constrained patients "
+        "can still have shortfalls, quantified per patient in results.json. "
+        "Neither real affordability nor clinical nutrient accuracy is established.")
     add("")
     add("8. **Scale.** 20 synthetic patients, one dish dataset, one seed set. "
         "Statistical strength is limited; the numbers measure pipeline correctness, "

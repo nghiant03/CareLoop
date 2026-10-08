@@ -1,19 +1,20 @@
 """Patient endpoints.
 
-Week 1 uses ``data/patients.json`` as a **read-only** store (Lane C owns that
-file). New synthetic patients created via ``POST /patients`` live in a
-process-local overlay until Week 2 wires a persistent store.
+Fixture patients are read-only seeds. Created profiles and timestamped
+observations live in SQLite; every read overlays current observations.
 """
 
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
 from backend.app.models.patient import Patient
+from backend.app.core import persistence
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -72,13 +73,28 @@ def _ui_view(record: dict[str, Any]) -> dict[str, Any]:
 def get_patient(patient_id: str) -> dict[str, Any] | None:
     """Return a patient record from the overlay/read-only store."""
     _ensure_loaded()
-    return _OVERLAY.get(patient_id)
+    record = persistence.saved_patients().get(patient_id) or _OVERLAY.get(patient_id)
+    if record is None:
+        return None
+    record = dict(record)
+    observations = [o for o in persistence.list_observations(patient_id)
+                    if o["observed_at"] <= date.today().isoformat()]
+    record["observations"] = observations
+    for observation in observations:
+        record[observation["metric"]] = observation["value"]
+    return record
+
+
+def list_patient_ids() -> list[str]:
+    """All known patient ids (read-only store + created overlay), sorted."""
+    _ensure_loaded()
+    return sorted(set(_OVERLAY) | set(persistence.saved_patients()))
 
 
 @router.get("", summary="List patients")
 def list_patients() -> dict[str, Any]:
     _ensure_loaded()
-    patients = [_ui_view(record) for record in _OVERLAY.values()]
+    patients = [_ui_view(get_patient(pid)) for pid in list_patient_ids()]
     return {"count": len(patients), "patients": patients}
 
 
@@ -97,5 +113,5 @@ def read_patient(patient_id: str) -> dict[str, Any]:
 def create_patient(patient: Patient) -> dict[str, Any]:
     _ensure_loaded()
     record = patient.model_dump(by_alias=True, exclude_none=True)
-    _OVERLAY[patient.patient_id] = record
+    persistence.save_patient(record)
     return record

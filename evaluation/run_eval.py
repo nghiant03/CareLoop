@@ -1,8 +1,8 @@
-"""Evaluation orchestrator: runs Q1-Q5, writes results.json + EVALUATION.md.
+"""Evaluation orchestrator: runs Q1-Q6, writes results.json + EVALUATION.md.
 
 Usage::
 
-    .venv/bin/python -m evaluation.run            # full suite (< ~5 min)
+    .venv/bin/python -m evaluation.run            # full suite (< ~8 min)
     .venv/bin/python -m evaluation.run --rerun-benchmark
 """
 
@@ -24,6 +24,7 @@ from evaluation.q_conflicts import evaluate_q2  # noqa: E402
 from evaluation.q_satisfaction import evaluate_q3  # noqa: E402
 from evaluation.q_benchmark import evaluate_q4  # noqa: E402
 from evaluation.q_groundedness import evaluate_q5  # noqa: E402
+from evaluation.q_ablation import evaluate_q6  # noqa: E402
 from evaluation.report import render_report  # noqa: E402
 
 __all__ = ["run_suite", "main"]
@@ -31,7 +32,7 @@ __all__ = ["run_suite", "main"]
 
 def run_suite(rerun_benchmark: bool = False,
               optimiser_kwargs: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Run all five question modules and return the combined results dict."""
+    """Run all six question modules and return the combined results dict."""
     from backend.optim.real_data import load_dishes
 
     optimiser_kwargs = optimiser_kwargs or {}
@@ -48,6 +49,22 @@ def run_suite(rerun_benchmark: bool = False,
     from backend.app.core.kb_loader import get_kb
     q5 = evaluate_q5(get_kb())
 
+    q6 = evaluate_q6(patients, dishes=dishes, **q6_kwargs(optimiser_kwargs))
+
+    import hashlib
+    import platform
+    import subprocess
+
+    revision = subprocess.run(
+        ["jj", "--ignore-working-copy", "log", "-r", "@", "--no-graph", "-T", "commit_id"],
+        cwd=ROOT, capture_output=True, text=True,
+    ).stdout.strip()
+    source_paths = sorted(p for directory in ("backend", "shared", "rules", "evaluation")
+                          for p in (ROOT / directory).rglob("*.py"))
+    code_hash = hashlib.sha256()
+    for path in source_paths:
+        code_hash.update(str(path.relative_to(ROOT)).encode() + b"\0" + path.read_bytes())
+
     return {
         "meta": {
             "suite": "CareLoop automated evaluation v1",
@@ -56,18 +73,39 @@ def run_suite(rerun_benchmark: bool = False,
             "n_gen": optimiser_kwargs.get("n_gen", 80),
             "patients": len(patients),
             "dishes": len(dishes),
+            "source_revision": revision,
+            "working_code_sha256": code_hash.hexdigest(),
+            "data_hashes": {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+                            for name in ("data/dishes.json", "data/patients.json", "rules/rules.json")},
+            "runtime": {"python": platform.python_version(), "platform": platform.platform()},
         },
         "q1_traceability": q1,
         "q2_conflicts": q2,
         "q3_constraint_satisfaction": q3,
         "q4_benchmark": q4,
         "q5_groundedness": q5,
+        "q6_ablation": q6,
     }
+
+
+def q6_kwargs(optimiser_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Map the shared optimiser budget onto Q6's parameters.
+
+    Seeds stay at the fixed paired triple (42, 43, 44); pop/gen follow the
+    suite budget so ``--quick`` reduces Q6 as well.
+    """
+    kwargs: dict[str, Any] = {}
+    if "pop_size" in optimiser_kwargs:
+        kwargs["pop_size"] = optimiser_kwargs["pop_size"]
+    if "n_gen" in optimiser_kwargs:
+        kwargs["n_gen"] = optimiser_kwargs["n_gen"]
+    return kwargs
 
 
 def _print_headlines(results: dict[str, Any]) -> None:
     q1, q2, q3 = results["q1_traceability"], results["q2_conflicts"], results["q3_constraint_satisfaction"]
     q4, q5 = results["q4_benchmark"], results["q5_groundedness"]
+    q6 = results.get("q6_ablation")
 
     def pct(x):
         return "n/a" if x is None else f"{x * 100:.1f}%"
@@ -89,12 +127,26 @@ def _print_headlines(results: dict[str, Any]) -> None:
           f"escalation {q5['escalation']['passed']}/{q5['escalation']['total']}, "
           f"refusals {q5['irrelevant_refusals']['passed']}/{q5['irrelevant_refusals']['total']} "
           f"[{q5['verdict']}]")
+    if q6:
+        pooled = q6["selection_ablation"]["pooled"]
+        sc = pooled["scalar"].get("mean_worst_day_rel_shortfall_pct")
+        adq = pooled["adequacy_first"].get("mean_worst_day_rel_shortfall_pct")
+        sc_cost = pooled["scalar"].get("mean_cost") or 0.0
+        adq_cost = pooled["adequacy_first"].get("mean_cost") or 0.0
+        cost_pct = ((adq_cost / sc_cost - 1.0) * 100.0) if sc_cost else 0.0
+        delta = (adq - sc) if (adq is not None and sc is not None) else None
+        print(f"  Q6 selection ablation:    adequacy-first worst-day shortfall "
+              f"{'n/a' if adq is None else f'{adq:.1f}%'} vs scalar "
+              f"{'n/a' if sc is None else f'{sc:.1f}%'} "
+              f"(Δ {'n/a' if delta is None else f'{delta:+.1f} pct-pts'}), "
+              f"cost {cost_pct:+.1f}% [{q6['verdict']}] "
+              f"(composition ablation informational)")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="evaluation.run",
-        description="CareLoop automated evaluation suite (Q1-Q5).",
+        description="CareLoop automated evaluation suite (Q1-Q6).",
     )
     parser.add_argument(
         "--rerun-benchmark", action="store_true",

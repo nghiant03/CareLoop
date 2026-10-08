@@ -79,7 +79,7 @@ _CATEGORIES: dict[str, list[str]] = {
         r"\bdialysis\b",
         r"chemotherapy",
         r"cancer treatment",
-        r"my (child|baby|toddler|kid|son|daughter)",
+        r"my (child|baby|toddler|kid|son|daughter)\b",
         r"paediatric|pediatric",
     ],
 }

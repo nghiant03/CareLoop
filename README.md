@@ -141,9 +141,12 @@ curl -sS -X POST $P/plans -H 'content-type: application/json' \
   -d '{"patient_id":"P0005"}' | jq '{feasible, engine, violation_count, infeasibility_reason, relaxed_constraints}'
 ```
 
-Envelopes, traces, created patients and adherence meal logs live in
-process-local stores; a backend restart resets them (the contracts are
-storage-agnostic by design).
+Approvals, embedded traces, created patients, saved plans, meal logs, observations,
+simulations and review actions persist in SQLite (`CARELOOP_APP_DB`, default
+`data/careloop_app.sqlite3`). Proposal IDs are allocated transactionally.
+Production plans use main-plus-optional-side meals and normalised adequacy-first
+selection. Hard feasibility and original-target adequacy are reported separately;
+nutrient values remain unverified and prices are synthetic estimates.
 
 ---
 
@@ -154,7 +157,7 @@ storage-agnostic by design).
 | GET | `/healthz` | liveness probe (+ `GET /` service banner) |
 | GET | `/patients` | list patients (reads `data/patients.json` + overlay) |
 | GET | `/patients/{patient_id}` | fetch one patient (404 if absent) |
-| POST | `/patients` | create a patient (process-local overlay) |
+| POST | `/patients` | create a patient (durable SQLite profile) |
 | POST | `/rules/run` | patient id → PROPOSED `NutrientEnvelope` + `RuleFire` trace |
 | GET | `/envelopes/{id}` | fetch an envelope |
 | GET | `/envelopes/{id}/explanation` | clinician explanation (trace, conflicts, citations) |

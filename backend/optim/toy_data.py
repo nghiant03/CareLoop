@@ -41,6 +41,8 @@ class Dish:
     ingredients: tuple[str, ...] = ()
     tags: tuple[str, ...] = ()
     price_sgd: float = 0.0
+    price_is_estimated: bool = False
+    verified: bool = False
 
     def nutrient(self, key: str) -> float:
         """Return a nutrient value, defaulting to 0.0 when absent."""

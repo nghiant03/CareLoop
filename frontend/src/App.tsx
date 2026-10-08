@@ -5,6 +5,8 @@ import ClinicianReviewScreen from './screens/ClinicianReviewScreen';
 import PatientMealPlanScreen from './screens/PatientMealPlanScreen';
 import ChatScreen from './screens/ChatScreen';
 import AdherenceScreen from './screens/AdherenceScreen';
+import ReviewQueueScreen from './screens/ReviewQueueScreen';
+import SimulationScreen from './screens/SimulationScreen';
 
 function AppContent() {
   const location = useLocation();
@@ -15,6 +17,10 @@ function AppContent() {
       ? 'chat'
       : location.pathname === '/adherence'
       ? 'adherence'
+      : location.pathname === '/review-queue'
+      ? 'review'
+      : location.pathname === '/simulations'
+      ? 'simulation'
       : 'clinician';
 
   return (
@@ -26,6 +32,8 @@ function AppContent() {
         <Route path="/plan" element={<PatientMealPlanScreen />} />
         <Route path="/chat" element={<ChatScreen />} />
         <Route path="/adherence" element={<AdherenceScreen />} />
+        <Route path="/review-queue" element={<ReviewQueueScreen />} />
+        <Route path="/simulations" element={<SimulationScreen />} />
       </Routes>
     </div>
   );

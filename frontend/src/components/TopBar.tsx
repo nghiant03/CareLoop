@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 
 interface TopBarProps {
-  role: 'clinician' | 'patient' | 'chat' | 'adherence';
+  role: 'clinician' | 'patient' | 'chat' | 'adherence' | 'review' | 'simulation';
 }
 
 const roleLabel: Record<TopBarProps['role'], string> = {
@@ -9,6 +9,8 @@ const roleLabel: Record<TopBarProps['role'], string> = {
   patient: 'Meal Plan',
   chat: 'Chat',
   adherence: 'Adherence',
+  review: 'Review Queue',
+  simulation: 'What-if',
 };
 
 const roleClass: Record<TopBarProps['role'], string> = {
@@ -16,12 +18,14 @@ const roleClass: Record<TopBarProps['role'], string> = {
   patient: 'bg-emerald-100 text-emerald-800',
   chat: 'bg-violet-100 text-violet-800',
   adherence: 'bg-amber-100 text-amber-800',
+  review: 'bg-rose-100 text-rose-800',
+  simulation: 'bg-indigo-100 text-indigo-800',
 };
 
 export default function TopBar({ role }: TopBarProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           <Link to="/" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-600 text-white font-semibold">
@@ -35,8 +39,10 @@ export default function TopBar({ role }: TopBarProps) {
             {roleLabel[role]}
           </span>
         </div>
-        <nav className="flex items-center gap-1 sm:gap-2">
+        <nav aria-label="Main navigation" className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">
           <NavLink to="/" label="Review" />
+          <NavLink to="/review-queue" label="Queue" />
+          <NavLink to="/simulations" label="What-if" />
           <NavLink to="/plan" label="Meal Plan" />
           <NavLink to="/chat" label="Chat" />
           <NavLink to="/adherence" label="Adherence" />

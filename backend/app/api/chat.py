@@ -69,6 +69,7 @@ def chat(req: ChatRequest) -> dict[str, Any]:
 
     return {
         "answer": result["answer"],
+        "claims": result.get("claims", []),
         "citations": [_citation_brief(c) for c in result["citations"]],
         "escalated": result["status"] == "escalated",
         "status": result["status"],

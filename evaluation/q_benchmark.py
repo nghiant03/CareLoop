@@ -53,6 +53,7 @@ def _summary_table(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
             "hv_std": round(statistics.pstdev(hvs), 4) if len(hvs) > 1 else 0.0,
             "violation_rate": round(sum(1 for v in violations if v > 0) / len(violations), 3),
             "mean_runtime_ms": round(statistics.fmean(runtimes), 1),
+            "mean_search_evaluations": statistics.fmean(float(r["evaluations"]) for r in runs) if all(r.get("evaluations") for r in runs) else None,
         })
     return table
 
@@ -144,11 +145,9 @@ def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
         " Caveats: HV scores the whole Pareto front (front coverage) — "
         "single-point baselines (GA, greedy) are structurally disadvantaged on "
         "full-front HV, and the quality of the single delivered meal plan "
-        "answers a different question (see Q3). Nominal population x "
-        "generations is not an equal-work budget across all methods (e.g. "
-        "MOEA/D's population is tied to its reference-direction count), and "
-        "evaluation counts are estimated from the algorithm configuration "
-        "rather than recorded per run."
+        "answers a different question (see Q3). Pymoo rows use actual-evaluation "
+        "termination and record search counts; generation-boundary overshoot is "
+        "possible. GA/greedy/random retain native budgets."
     )
     return verdict, note
 

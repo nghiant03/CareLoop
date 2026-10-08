@@ -22,7 +22,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from typing import Optional
+from typing import Callable, Optional
 
 from shared.envelope_schema import EnvelopeStatus, NutrientEnvelope  # noqa: E402
 
@@ -32,7 +32,8 @@ from backend.optim.solver import solve  # noqa: E402
 
 
 def run(envelope: NutrientEnvelope, dishes=None, seed: int = 42,
-        pop_size: int = 40, n_gen: int = 80) -> dict:
+        pop_size: int = 40, n_gen: int = 80,
+        selection: Optional[Callable] = None) -> dict:
     """Run the optimiser with the given envelope.
 
     Accepts an injected envelope so the API can pass the clinician-approved
@@ -40,12 +41,19 @@ def run(envelope: NutrientEnvelope, dishes=None, seed: int = 42,
     ``data/dishes.json`` dataset (``real_data.load_dishes``); the toy pool is
     still available by passing ``dishes=TOY_DISHES`` explicitly.
 
+    ``selection`` is an optional front-selection strategy
+    (``(entries, envelope, dishes) -> entry``, see ``backend.optim.selection``)
+    passed through to ``solver.solve``; ``None`` keeps the default
+    scalar-score selection.
+
     Hard guarantee: the returned plan NEVER violates the envelope's hard
     constraints (``violation_count == 0``, ``feasible is True``).  If the
     NSGA-II front has no feasible member the best candidate is repaired;
     failing that a greedy-constructed feasible plan is returned.  When the
     allowed pool provably cannot satisfy the envelope the result is an explicit
-    infeasibility diagnosis (``feasible=False`` + ``infeasibility_reason``).
+    infeasibility diagnosis (``feasible=False`` + ``infeasibility_reason``),
+    now carrying ``infeasibility_status`` (``"proven_infeasible"`` vs
+    ``"search_exhausted"``) from the exact one-day enumeration reference.
     """
 
     if envelope.status != EnvelopeStatus.APPROVED:
@@ -61,6 +69,7 @@ def run(envelope: NutrientEnvelope, dishes=None, seed: int = 42,
 
     result = solve(
         envelope, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen, method="nsga2",
+        selection=selection,
     )
     result["envelope_id"] = envelope.envelope_id
     result["patient_id"] = envelope.patient_id
