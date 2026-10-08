@@ -16,7 +16,10 @@
 
 Benchmark baselines (``ga_search``, ``greedy_search``, ``random_search``) are
 raw and may return infeasible plans — that is intentional so the harness can
-measure hard-constraint violation rates per method.
+measure hard-constraint violation rates per method.  The pymoo comparison
+methods (``nsga3``, ``moead``, ``age``, ``sms``) run through the SAME
+guarantee path as NSGA-II by default (``solve(..., method=...)``), and can be
+run raw with ``guarantee=False`` for honest violation-rate measurement.
 """
 
 from __future__ import annotations
@@ -65,41 +68,146 @@ except Exception as exc:  # noqa: BLE001
     HAS_PYMOO = False
     PYMOO_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
+# Extra pymoo algorithms for the benchmark comparison.  Kept in a *separate*
+# guarded block so a broken optional dependency (e.g. AGEMOEA needs numba)
+# can never break the production NSGA-II path above.
+try:  # pragma: no cover - depends on environment
+    from pymoo.algorithms.moo.age import AGEMOEA
+    from pymoo.algorithms.moo.moead import MOEAD
+    from pymoo.algorithms.moo.nsga3 import NSGA3
+    from pymoo.algorithms.moo.sms import SMSEMOA
+    from pymoo.decomposition.pbi import PBI
+    from pymoo.util.ref_dirs import get_reference_directions
+
+    HAS_PYMOO_EXTRAS = HAS_PYMOO
+    PYMOO_EXTRAS_IMPORT_ERROR: str | None = None
+except Exception as exc:  # noqa: BLE001
+    HAS_PYMOO_EXTRAS = False
+    PYMOO_EXTRAS_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
+
+# Methods that run through the pymoo front search (NSGA-II + the benchmark
+# comparison set).  All of them share the hard feasibility guarantee in
+# ``solve()`` unless ``guarantee=False`` is passed explicitly (raw mode).
+PYMOO_METHODS = ("nsga2", "nsga3", "moead", "age", "sms")
+
 
 # ---------------------------------------------------------------------------
 # pymoo problem wrapper over FastEvaluator
 # ---------------------------------------------------------------------------
-def _build_pymoo_problem(ev: FastEvaluator):
+def _build_pymoo_problem(ev: FastEvaluator, with_constraints: bool = True):
     class _FastMealPlanProblem(Problem):  # type: ignore[misc, valid-type]
         def __init__(self):
             super().__init__(
                 n_var=ev.slots,
                 n_obj=len(OBJECTIVE_NAMES),
-                n_ieq_constr=ev.n_constraints,
+                n_ieq_constr=ev.n_constraints if with_constraints else 0,
                 xl=0,
                 xu=ev.size - 1,
                 vtype=int,
             )
             self._ev = ev
+            self._with_constraints = with_constraints
 
         def _evaluate(self, X, out, *args, **kwargs):
             F, G = self._ev.eval_batch(X)
             out["F"] = F
-            out["G"] = G
+            if self._with_constraints:
+                out["G"] = G
 
     return _FastMealPlanProblem()
 
 
-def _nsga2_front(ev: FastEvaluator, seed: int, pop_size: int, n_gen: int) -> list[np.ndarray]:
-    """Run pymoo NSGA-II and return the non-dominated plans as index arrays."""
-    problem = _build_pymoo_problem(ev)
-    algorithm = NSGA2(
-        pop_size=pop_size,
-        sampling=IntegerRandomSampling(),
-        crossover=SBX(prob=0.9, eta=15),
-        mutation=PM(eta=20),
-        eliminate_duplicates=True,
-    )
+# Das-Dennis reference directions for 4 objectives, divergence p=4 ->
+# 35 uniformly spread directions.  Used by NSGA-III (survival) and MOEA/D
+# (weight vectors); 35 is close to the benchmark's pop=40 budget so all
+# methods compare at a similar evaluation count.
+REF_DIRS_4OBJ = None
+if HAS_PYMOO_EXTRAS:  # pragma: no branch
+    REF_DIRS_4OBJ = get_reference_directions("das-dennis", 4, n_partitions=4)
+
+
+def _build_pymoo_algorithm(method: str, pop_size: int):
+    """Instantiate the pymoo algorithm for ``method``.
+
+    All genetic operators are shared with the production NSGA-II config
+    (IntegerRandomSampling + SBX + PM) so the comparison isolates the
+    *selection/survival* mechanism, not the variation operators.
+
+    Parameter choices for the 4-objective problem:
+
+    * ``nsga3`` — das-dennis p=4 reference directions (35 dirs, pop_size 40
+      covers them); NSGA-III survival niches onto the directions.
+    * ``moead`` — same 35 weight vectors, T=15 neighbours, PBI decomposition
+      (theta default 5), neighbourhood mating prob 0.9.  Its population size
+      is tied to the weight-vector count (35), noted in the benchmark.
+    * ``age`` — AGE-MOEA survival (geometry-adaptive crowding); numba-backed.
+    * ``sms`` — SMSEMOA, exact hypervolume contribution survival in 4-D;
+      pop_size kept at 40 to bound the HV-contribution cost.
+    """
+    sampling = IntegerRandomSampling()
+    crossover = SBX(prob=0.9, eta=15)
+    mutation = PM(eta=20)
+    if method == "nsga2":
+        return NSGA2(
+            pop_size=pop_size,
+            sampling=sampling,
+            crossover=crossover,
+            mutation=mutation,
+            eliminate_duplicates=True,
+        )
+    if method == "nsga3":
+        return NSGA3(
+            ref_dirs=REF_DIRS_4OBJ,
+            pop_size=pop_size,
+            sampling=sampling,
+            crossover=crossover,
+            mutation=mutation,
+            eliminate_duplicates=True,
+        )
+    if method == "moead":
+        # MOEA/D: population size is len(ref_dirs) = 35 (not pop_size).
+        return MOEAD(
+            ref_dirs=REF_DIRS_4OBJ,
+            n_neighbors=15,
+            decomposition=PBI(theta=5.0),
+            prob_neighbor_mating=0.9,
+            sampling=sampling,
+            crossover=crossover,
+            mutation=mutation,
+        )
+    if method == "age":
+        return AGEMOEA(
+            pop_size=pop_size,
+            sampling=sampling,
+            crossover=crossover,
+            mutation=mutation,
+            eliminate_duplicates=True,
+        )
+    if method == "sms":
+        return SMSEMOA(
+            pop_size=pop_size,
+            sampling=sampling,
+            crossover=crossover,
+            mutation=mutation,
+            eliminate_duplicates=True,
+        )
+    raise ValueError(f"unknown pymoo method {method!r}")
+
+
+def _pymoo_front(
+    ev: FastEvaluator, seed: int, pop_size: int, n_gen: int, method: str = "nsga2"
+) -> list[np.ndarray]:
+    """Run a pymoo algorithm and return the non-dominated plans as index arrays.
+
+    MOEA/D's pymoo implementation cannot represent inequality constraints, so
+    it runs on the unconstrained view of the same problem (objectives
+    unchanged, hard-constraint vector dropped) — infeasible members can then
+    dominate feasible ones inside its decomposition; the guarantee wrapper in
+    ``solve()`` still fences the *reported* plan.  This is noted in the
+    benchmark report.
+    """
+    problem = _build_pymoo_problem(ev, with_constraints=(method != "moead"))
+    algorithm = _build_pymoo_algorithm(method, pop_size)
     res = minimize(problem, algorithm, ("n_gen", n_gen), seed=seed, verbose=False)
     if res.X is None:
         return []
@@ -301,11 +409,21 @@ def solve(
     pop_size: int = 40,
     n_gen: int = 80,
     method: str = "nsga2",
+    guarantee: bool = True,
 ) -> dict:
     """Solve for ``envelope`` over ``dishes`` with the feasibility guarantee.
 
-    ``method``: ``"nsga2"`` (production), or raw baselines ``"ga"``,
-    ``"greedy"``, ``"random"`` used by the benchmark harness.
+    ``method``: ``"nsga2"`` (production), the benchmark comparison set
+    ``"nsga3"`` / ``"moead"`` / ``"age"`` / ``"sms"`` (all pymoo, all through
+    the same guarantee path), or raw baselines ``"ga"``, ``"greedy"``,
+    ``"random"`` used by the benchmark harness.
+
+    ``guarantee``: when True (the default, and the production behaviour) the
+    result carries the hard feasibility guarantee (repair / greedy fallback).
+    When False the raw search front is returned untouched so the benchmark can
+    measure honest hard-constraint violation rates — the headline plan is the
+    least-violating/best-scalar member of the raw front.  This never weakens
+    the production default; ``api.run`` never passes ``guarantee=False``.
     """
     t0 = time.perf_counter()
     allowed = allowed_dishes(envelope, dishes)
@@ -316,17 +434,57 @@ def solve(
 
     ev = FastEvaluator(envelope, dishes)
 
-    if method == "nsga2":
+    if method in PYMOO_METHODS:
         if HAS_PYMOO:
             engine = "pymoo"
-            idxs = _nsga2_front(ev, seed, pop_size, n_gen)
-            evaluations = len(idxs) + pop_size * n_gen
-        else:
+            eff_pop = pop_size
+            if method == "moead" and REF_DIRS_4OBJ is not None:
+                eff_pop = len(REF_DIRS_4OBJ)
+            idxs = _pymoo_front(ev, seed, pop_size, n_gen, method=method)
+            evaluations = len(idxs) + eff_pop * n_gen
+        elif method == "nsga2":
+            # Production fallback: hand-rolled GA when pymoo is unavailable.
             engine = "fallback-ga"
             raw = ga_search(envelope, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen)
             evaluations = raw["evaluations"]
             idxs = [ev.plan_to_idx(raw["plan"])] if raw["plan"] else []
+        else:
+            raise RuntimeError(
+                f"method {method!r} requires pymoo (import failed: {PYMOO_IMPORT_ERROR})"
+            )
         entries = [_entry(ev, i) for i in idxs]
+
+        if not guarantee:
+            # Raw mode: report the raw front untouched.  Headline plan is the
+            # least-violating / best-scalar member (same ranking the raw
+            # baselines use), so honest violation rates are measurable.
+            engine = "pymoo-raw"
+            if entries:
+                best = min(
+                    entries,
+                    key=lambda e: (
+                        e["violation_count"],
+                        violation_magnitude(e["violations"]),
+                        scalar_score(e["objectives"]),
+                    ),
+                )
+            else:
+                best = None
+            runtime = (time.perf_counter() - t0) * 1000.0
+            result = baselines._make_result(
+                method,
+                best["plan"] if best else [],
+                envelope,
+                dishes,
+                evaluations,
+                runtime,
+                front=entries,
+                front_size=len(entries),
+            )
+            result["engine"] = engine
+            result["guaranteed"] = False
+            return result
+
         best, engine, feasible = _guarantee(ev, entries, seed, engine)
         if best is None:
             return _diagnosis(
@@ -335,7 +493,7 @@ def solve(
             )
         runtime = (time.perf_counter() - t0) * 1000.0
         result = baselines._make_result(
-            "nsga2",
+            method,
             best["plan"],
             envelope,
             dishes,
@@ -345,6 +503,7 @@ def solve(
             front_size=len(feasible),
         )
         result["engine"] = engine
+        result["guaranteed"] = True
         return result
 
     if method == "ga":
@@ -367,7 +526,10 @@ def solve(
 
 __all__ = [
     "HAS_PYMOO",
+    "HAS_PYMOO_EXTRAS",
+    "PYMOO_METHODS",
     "PYMOO_IMPORT_ERROR",
+    "PYMOO_EXTRAS_IMPORT_ERROR",
     "ga_search",
     "greedy_search",
     "random_search",

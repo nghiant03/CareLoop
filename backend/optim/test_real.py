@@ -14,12 +14,19 @@ Covers:
   keys and sane runtimes for every test envelope;
 * determinism under a fixed seed;
 * the feasibility guarantee holds even with a tiny compute budget;
-* infeasible pools produce an explicit diagnosis instead of a broken plan.
+* infeasible pools produce an explicit diagnosis instead of a broken plan;
+* the benchmark comparison methods (nsga3 / moead / age / sms) stay feasible,
+  finite and deterministic through ``solve()``, the raw mode reports the
+  untouched front, and ``api.run`` keeps the NSGA-II + guarantee default;
+* benchmark artifact regeneration works (smoke-mode subprocess run).
 """
 
 from __future__ import annotations
 
+import csv
+import math
 import os
+import subprocess
 import sys
 import time
 
@@ -44,6 +51,7 @@ from backend.optim.real_data import (  # noqa: E402
     feasibility_precheck,
     load_dishes,
 )
+from backend.optim.solver import solve  # noqa: E402
 
 CONTRACT_KEYS = {
     "engine",
@@ -230,6 +238,111 @@ def test_semantic_exclusion_mapping_filters_real_pool():
     assert pool_with_single_exclusion(cat, "nonexistent_category_xyz") == total
 
 
+# ---------------------------------------------------------------------------
+# Benchmark algorithm-comparison tests (nsga3 / moead / age / sms)
+# ---------------------------------------------------------------------------
+NEW_METHODS = ("nsga3", "moead", "age", "sms")
+_HERE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def test_new_algorithms_guaranteed_feasible_and_finite():
+    """Every comparison method through solve() stays feasible with finite objectives."""
+    env = _ENVELOPES["t2d_only"]
+    for method in NEW_METHODS:
+        result = solve(env, _DISHES, seed=11, pop_size=40, n_gen=10, method=method)
+        assert result["feasible"] is True, (method, result.get("violations", [])[:3])
+        assert result["violation_count"] == 0, method
+        assert result.get("guaranteed") is True, method
+        assert result["front_size"] >= 1, method
+        assert len(result["plan"]) == 21, method
+        assert set(result["objectives"]) == set(OBJECTIVE_NAMES), method
+        for value in result["objectives"].values():
+            assert math.isfinite(value), (method, value)
+
+
+def test_new_algorithms_deterministic_under_fixed_seed():
+    env = _ENVELOPES["t2d_htn"]
+    for method in NEW_METHODS:
+        a = solve(env, _DISHES, seed=9, pop_size=40, n_gen=8, method=method)
+        b = solve(env, _DISHES, seed=9, pop_size=40, n_gen=8, method=method)
+        assert a["plan"] == b["plan"], method
+        assert a["objectives"] == b["objectives"], method
+        assert a["engine"] == b["engine"], method
+
+
+def test_raw_mode_returns_untouched_front_and_default_still_guaranteed():
+    env = _ENVELOPES["ckd_strict"]
+    raw = solve(env, _DISHES, seed=2, pop_size=40, n_gen=10, method="nsga3", guarantee=False)
+    assert raw.get("guaranteed") is False
+    assert raw["engine"] == "pymoo-raw"
+    assert raw["front_size"] >= 1
+    assert len(raw["plan"]) == 21
+    assert all(math.isfinite(v) for v in raw["objectives"].values())
+    # The guarantee path remains available and effective for the same method.
+    guaranteed = solve(env, _DISHES, seed=2, pop_size=40, n_gen=10, method="nsga3")
+    assert guaranteed["feasible"] is True
+    assert guaranteed["violation_count"] == 0
+    assert guaranteed.get("guaranteed") is True
+
+
+def test_production_api_run_defaults_unchanged():
+    """api.run keeps the NSGA-II + guarantee default (no method injection)."""
+    env = _ENVELOPES["t2d_only"]
+    result = run(env, seed=42, pop_size=10, n_gen=5)
+    assert result["feasible"] is True
+    assert result["violation_count"] == 0
+    assert result.get("guaranteed", True) is True
+    assert result["engine"] != "pymoo-raw"
+    assert len(result["plan"]) == 21
+
+
+def test_benchmark_artifacts_regen_and_parse():
+    """Smoke-mode regeneration works and full artifacts stay parseable."""
+    smoke_csv = os.path.join(_HERE_DIR, "benchmark_results_smoke.csv")
+    smoke_md = os.path.join(_HERE_DIR, "benchmark_results_smoke.md")
+    for path in (smoke_csv, smoke_md):
+        if os.path.exists(path):
+            os.remove(path)
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "backend.optim.benchmark"],
+        env={**os.environ, "CARELOOP_BENCH_SMOKE": "1"},
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert os.path.exists(smoke_csv) and os.path.exists(smoke_md)
+
+    with open(smoke_csv, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    assert rows, "smoke CSV has no data rows"
+    header = set(rows[0])
+    assert {"method", "guaranteed", "hypervolume", "runtime_ms", "feasible"} <= header
+    methods = {r["method"] for r in rows}
+    assert {"nsga2", "nsga3", "moead", "age", "sms"} <= methods
+    assert "nsga3-raw" in methods and "sms-raw" in methods
+    for row in rows:
+        assert math.isfinite(float(row["hypervolume"])), row
+        assert float(row["runtime_ms"]) >= 0.0
+    smoke_md_text = open(smoke_md, encoding="utf-8").read()
+    assert "## Recommendation" in smoke_md_text
+    assert "nsga3" in smoke_md_text and "sms" in smoke_md_text
+    for path in (smoke_csv, smoke_md):  # keep the package tree clean
+        os.remove(path)
+
+    # Full artifacts (regenerated by `python -m backend.optim.benchmark`).
+    full_csv = os.path.join(_HERE_DIR, "benchmark_results.csv")
+    full_md = os.path.join(_HERE_DIR, "benchmark_results.md")
+    assert os.path.exists(full_csv) and os.path.exists(full_md)
+    with open(full_csv, newline="", encoding="utf-8") as fh:
+        full_rows = list(csv.DictReader(fh))
+    assert full_rows
+    assert {"method", "hypervolume", "runtime_ms"} <= set(full_rows[0])
+    assert "## Recommendation" in open(full_md, encoding="utf-8").read()
+
+
 TESTS = [
     test_real_pool_loads_214_dishes,
     test_envelopes_validate_against_schema,
@@ -242,6 +355,11 @@ TESTS = [
     test_infeasible_envelope_returns_diagnosis,
     test_exclusions_shrink_pool_as_expected,
     test_semantic_exclusion_mapping_filters_real_pool,
+    test_new_algorithms_guaranteed_feasible_and_finite,
+    test_new_algorithms_deterministic_under_fixed_seed,
+    test_raw_mode_returns_untouched_front_and_default_still_guaranteed,
+    test_production_api_run_defaults_unchanged,
+    test_benchmark_artifacts_regen_and_parse,
 ]
 
 
