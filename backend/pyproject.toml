@@ -15,11 +15,19 @@ dependencies = [
   "httpx>=0.27",
   "pyyaml>=6.0",
   "networkx>=3.2",
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "scikit-learn>=1.3",
+  "rank-bm25>=0.2.2",
+  "clipspy>=1.0.6",
+  "pymoo>=0.6.1,<0.7",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
+  "jsonschema>=4.18",
+  "numba>=0.59", # AGE-MOEA benchmark/test dependency; not needed for production NSGA-II
 ]
 
 [build-system]
