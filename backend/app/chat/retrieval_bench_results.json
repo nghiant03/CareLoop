@@ -1,0 +1,1086 @@
+{
+  "end_to_end": {
+    "detail": {
+      "methods": {
+        "bm25_word_nosyn": {
+          "answered": 9,
+          "citation_accuracy": 0.8,
+          "rows": [
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000",
+                "DASH-2025-SODIUM-2300",
+                "DASH-2025-SODIUM-1500"
+              ],
+              "question": "How much sodium can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000",
+                "GEN-SODIUM-2300",
+                "CONFLICT-SODIUM-CKD-WINS"
+              ],
+              "question": "What is the sodium limit for someone with high blood pressure?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400",
+                "MED-WARFARIN-VITK",
+                "DASH-2025-POTASSIUM-4700"
+              ],
+              "question": "How much potassium should I eat each day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400",
+                "SCOPE-EGFR-STAGE5-EXCLUDE",
+                "DASH-2025-POTASSIUM-4700"
+              ],
+              "question": "How much potassium is safe if I have kidney disease?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERPO4-2024-PHOSPHORUS-800",
+                "ADA-2026-PROTEIN",
+                "MED-ACEI-ARB-CKD-MONITOR"
+              ],
+              "question": "Do I need to worry about phosphorus in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-PROTEIN-055-08",
+                "MED-WARFARIN-VITK"
+              ],
+              "question": "How much protein can I eat per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "DASH-2025-FIBER-30",
+                "ADA-2026-PROTEIN",
+                "GEN-FIBER-25"
+              ],
+              "question": "How much fibre do I need daily?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "ADA-2026-CARB-INDIV",
+                "DASH-2025-SODIUM-2300",
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "How many carbohydrates can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [
+                "MED-ACEI-ARB-CKD-MONITOR",
+                "DASH-2025-SODIUM-2300",
+                "DASH-2025-SODIUM-1500",
+                "MED-WARFARIN-VITK"
+              ],
+              "question": "How much fat is okay in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "Can I drink sweet fizzy drinks?",
+              "status": "refused"
+            }
+          ]
+        },
+        "bm25_word_syn": {
+          "answered": 9,
+          "citation_accuracy": 0.9,
+          "rows": [
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000",
+                "DASH-2025-SODIUM-2300",
+                "ADA-2026-SODIUM-2300"
+              ],
+              "question": "How much sodium can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000",
+                "GEN-SODIUM-2300",
+                "DASH-2025-SODIUM-2300"
+              ],
+              "question": "What is the sodium limit for someone with high blood pressure?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400",
+                "DASH-2025-POTASSIUM-4700",
+                "CONFLICT-K-DASH-VS-CKD"
+              ],
+              "question": "How much potassium should I eat each day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400",
+                "DASH-2025-POTASSIUM-4700",
+                "CONFLICT-K-DASH-VS-CKD"
+              ],
+              "question": "How much potassium is safe if I have kidney disease?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERPO4-2024-PHOSPHORUS-800"
+              ],
+              "question": "Do I need to worry about phosphorus in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-PROTEIN-055-08",
+                "ADA-2026-PROTEIN"
+              ],
+              "question": "How much protein can I eat per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "DASH-2025-FIBER-30",
+                "ADA-2026-FIBER-25-30",
+                "GEN-FIBER-25"
+              ],
+              "question": "How much fibre do I need daily?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "ADA-2026-CARB-INDIV",
+                "DASH-2025-SODIUM-2300",
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "How many carbohydrates can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "ADA-2026-SATFAT-10PCT"
+              ],
+              "question": "How much fat is okay in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "Can I drink sweet fizzy drinks?",
+              "status": "refused"
+            }
+          ]
+        },
+        "tfidf_char_wb_3_5_nosyn": {
+          "answered": 8,
+          "citation_accuracy": 0.8,
+          "rows": [
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "How much sodium can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "What is the sodium limit for someone with high blood pressure?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium should I eat each day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium is safe if I have kidney disease?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERPO4-2024-PHOSPHORUS-800"
+              ],
+              "question": "Do I need to worry about phosphorus in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-PROTEIN-055-08"
+              ],
+              "question": "How much protein can I eat per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "DASH-2025-FIBER-30"
+              ],
+              "question": "How much fibre do I need daily?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "ADA-2026-CARB-INDIV"
+              ],
+              "question": "How many carbohydrates can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "How much fat is okay in my diet?",
+              "status": "refused"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "Can I drink sweet fizzy drinks?",
+              "status": "refused"
+            }
+          ]
+        },
+        "tfidf_char_wb_3_5_syn": {
+          "answered": 8,
+          "citation_accuracy": 0.8,
+          "rows": [
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "How much sodium can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "What is the sodium limit for someone with high blood pressure?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium should I eat each day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium is safe if I have kidney disease?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERPO4-2024-PHOSPHORUS-800"
+              ],
+              "question": "Do I need to worry about phosphorus in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-PROTEIN-055-08"
+              ],
+              "question": "How much protein can I eat per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "DASH-2025-FIBER-30"
+              ],
+              "question": "How much fibre do I need daily?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "ADA-2026-CARB-INDIV"
+              ],
+              "question": "How many carbohydrates can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "How much fat is okay in my diet?",
+              "status": "refused"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "Can I drink sweet fizzy drinks?",
+              "status": "refused"
+            }
+          ]
+        },
+        "tfidf_word_asis_nosyn": {
+          "answered": 8,
+          "citation_accuracy": 0.8,
+          "rows": [
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "How much sodium can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "What is the sodium limit for someone with high blood pressure?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium should I eat each day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium is safe if I have kidney disease?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERPO4-2024-PHOSPHORUS-800"
+              ],
+              "question": "Do I need to worry about phosphorus in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-PROTEIN-055-08"
+              ],
+              "question": "How much protein can I eat per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "DASH-2025-FIBER-30"
+              ],
+              "question": "How much fibre do I need daily?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "ADA-2026-CARB-INDIV"
+              ],
+              "question": "How many carbohydrates can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "How much fat is okay in my diet?",
+              "status": "refused"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "Can I drink sweet fizzy drinks?",
+              "status": "refused"
+            }
+          ]
+        },
+        "tfidf_word_asis_syn": {
+          "answered": 8,
+          "citation_accuracy": 0.8,
+          "rows": [
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "How much sodium can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "What is the sodium limit for someone with high blood pressure?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium should I eat each day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium is safe if I have kidney disease?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERPO4-2024-PHOSPHORUS-800"
+              ],
+              "question": "Do I need to worry about phosphorus in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-PROTEIN-055-08"
+              ],
+              "question": "How much protein can I eat per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "DASH-2025-FIBER-30"
+              ],
+              "question": "How much fibre do I need daily?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "ADA-2026-CARB-INDIV"
+              ],
+              "question": "How many carbohydrates can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "How much fat is okay in my diet?",
+              "status": "refused"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "Can I drink sweet fizzy drinks?",
+              "status": "refused"
+            }
+          ]
+        },
+        "tfidf_word_sublinear_nosyn": {
+          "answered": 8,
+          "citation_accuracy": 0.8,
+          "rows": [
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "How much sodium can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "What is the sodium limit for someone with high blood pressure?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium should I eat each day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium is safe if I have kidney disease?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERPO4-2024-PHOSPHORUS-800"
+              ],
+              "question": "Do I need to worry about phosphorus in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-PROTEIN-055-08"
+              ],
+              "question": "How much protein can I eat per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "DASH-2025-FIBER-30"
+              ],
+              "question": "How much fibre do I need daily?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "ADA-2026-CARB-INDIV"
+              ],
+              "question": "How many carbohydrates can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "How much fat is okay in my diet?",
+              "status": "refused"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "Can I drink sweet fizzy drinks?",
+              "status": "refused"
+            }
+          ]
+        },
+        "tfidf_word_sublinear_syn": {
+          "answered": 8,
+          "citation_accuracy": 0.8,
+          "rows": [
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "How much sodium can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-SODIUM-2000"
+              ],
+              "question": "What is the sodium limit for someone with high blood pressure?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium should I eat each day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERK-2024-POTASSIUM-2400"
+              ],
+              "question": "How much potassium is safe if I have kidney disease?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "HYPERPO4-2024-PHOSPHORUS-800"
+              ],
+              "question": "Do I need to worry about phosphorus in my diet?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "CKD-2024-PROTEIN-055-08"
+              ],
+              "question": "How much protein can I eat per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "DASH-2025-FIBER-30"
+              ],
+              "question": "How much fibre do I need daily?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": true,
+              "cited_rule_ids": [
+                "ADA-2026-CARB-INDIV"
+              ],
+              "question": "How many carbohydrates can I have per day?",
+              "status": "answered"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "How much fat is okay in my diet?",
+              "status": "refused"
+            },
+            {
+              "citation_accurate": false,
+              "cited_rule_ids": [],
+              "question": "Can I drink sweet fizzy drinks?",
+              "status": "refused"
+            }
+          ]
+        }
+      },
+      "questions": [
+        "How much sodium can I have per day?",
+        "What is the sodium limit for someone with high blood pressure?",
+        "How much potassium should I eat each day?",
+        "How much potassium is safe if I have kidney disease?",
+        "Do I need to worry about phosphorus in my diet?",
+        "How much protein can I eat per day?",
+        "How much fibre do I need daily?",
+        "How many carbohydrates can I have per day?",
+        "How much fat is okay in my diet?",
+        "Can I drink sweet fizzy drinks?"
+      ]
+    },
+    "summary": {
+      "bm25_word_nosyn": {
+        "answered": 9,
+        "citation_accuracy": 0.8
+      },
+      "bm25_word_syn": {
+        "answered": 9,
+        "citation_accuracy": 0.9
+      },
+      "tfidf_char_wb_3_5_nosyn": {
+        "answered": 8,
+        "citation_accuracy": 0.8
+      },
+      "tfidf_char_wb_3_5_syn": {
+        "answered": 8,
+        "citation_accuracy": 0.8
+      },
+      "tfidf_word_asis_nosyn": {
+        "answered": 8,
+        "citation_accuracy": 0.8
+      },
+      "tfidf_word_asis_syn": {
+        "answered": 8,
+        "citation_accuracy": 0.8
+      },
+      "tfidf_word_sublinear_nosyn": {
+        "answered": 8,
+        "citation_accuracy": 0.8
+      },
+      "tfidf_word_sublinear_syn": {
+        "answered": 8,
+        "citation_accuracy": 0.8
+      }
+    }
+  },
+  "kb": {
+    "chunks": 275,
+    "dishes": 214,
+    "distinct_chunk_ids": 275,
+    "rules": 61
+  },
+  "methods": [
+    {
+      "by_category": {
+        "conflict": {
+          "hit@1": 0.4,
+          "hit@3": 0.8,
+          "hit@5": 1.0,
+          "mrr": 0.6067
+        },
+        "dish": {
+          "hit@1": 0.7692,
+          "hit@3": 0.8462,
+          "hit@5": 0.9231,
+          "mrr": 0.8269
+        },
+        "guideline_nutrient": {
+          "hit@1": 0.3,
+          "hit@3": 0.6,
+          "hit@5": 0.85,
+          "mrr": 0.4992
+        },
+        "topic": {
+          "hit@1": 0.5,
+          "hit@3": 0.6667,
+          "hit@5": 0.6667,
+          "mrr": 0.5694
+        },
+        "variant_typo": {
+          "hit@1": 0.375,
+          "hit@3": 0.375,
+          "hit@5": 0.5,
+          "mrr": 0.4062
+        }
+      },
+      "hit@1": 0.4655,
+      "hit@3": 0.6552,
+      "hit@5": 0.7931,
+      "mrr": 0.5836,
+      "name": "tfidf_word_asis_syn"
+    },
+    {
+      "by_category": {
+        "conflict": {
+          "hit@1": 0.4,
+          "hit@3": 0.4,
+          "hit@5": 0.8,
+          "mrr": 0.48
+        },
+        "dish": {
+          "hit@1": 0.6923,
+          "hit@3": 0.8462,
+          "hit@5": 0.9231,
+          "mrr": 0.7885
+        },
+        "guideline_nutrient": {
+          "hit@1": 0.25,
+          "hit@3": 0.6,
+          "hit@5": 0.65,
+          "mrr": 0.41
+        },
+        "topic": {
+          "hit@1": 0.5,
+          "hit@3": 0.6667,
+          "hit@5": 0.75,
+          "mrr": 0.5861
+        },
+        "variant_typo": {
+          "hit@1": 0.25,
+          "hit@3": 0.375,
+          "hit@5": 0.5,
+          "mrr": 0.3229
+        }
+      },
+      "hit@1": 0.4138,
+      "hit@3": 0.6207,
+      "hit@5": 0.7241,
+      "mrr": 0.5253,
+      "name": "tfidf_word_asis_nosyn"
+    },
+    {
+      "by_category": {
+        "conflict": {
+          "hit@1": 0.4,
+          "hit@3": 0.8,
+          "hit@5": 0.8,
+          "mrr": 0.6
+        },
+        "dish": {
+          "hit@1": 0.7692,
+          "hit@3": 0.8462,
+          "hit@5": 0.9231,
+          "mrr": 0.8269
+        },
+        "guideline_nutrient": {
+          "hit@1": 0.25,
+          "hit@3": 0.5,
+          "hit@5": 0.55,
+          "mrr": 0.3708
+        },
+        "topic": {
+          "hit@1": 0.5,
+          "hit@3": 0.6667,
+          "hit@5": 0.6667,
+          "mrr": 0.5694
+        },
+        "variant_typo": {
+          "hit@1": 0.375,
+          "hit@3": 0.375,
+          "hit@5": 0.5,
+          "mrr": 0.4062
+        }
+      },
+      "hit@1": 0.4483,
+      "hit@3": 0.6207,
+      "hit@5": 0.6724,
+      "mrr": 0.5388,
+      "name": "tfidf_word_sublinear_syn"
+    },
+    {
+      "by_category": {
+        "conflict": {
+          "hit@1": 0.2,
+          "hit@3": 0.6,
+          "hit@5": 0.6,
+          "mrr": 0.3667
+        },
+        "dish": {
+          "hit@1": 0.6923,
+          "hit@3": 0.8462,
+          "hit@5": 0.9231,
+          "mrr": 0.7885
+        },
+        "guideline_nutrient": {
+          "hit@1": 0.1,
+          "hit@3": 0.4,
+          "hit@5": 0.6,
+          "mrr": 0.27
+        },
+        "topic": {
+          "hit@1": 0.5,
+          "hit@3": 0.6667,
+          "hit@5": 0.75,
+          "mrr": 0.5861
+        },
+        "variant_typo": {
+          "hit@1": 0.25,
+          "hit@3": 0.375,
+          "hit@5": 0.5,
+          "mrr": 0.3229
+        }
+      },
+      "hit@1": 0.3448,
+      "hit@3": 0.569,
+      "hit@5": 0.6897,
+      "mrr": 0.4672,
+      "name": "tfidf_word_sublinear_nosyn"
+    },
+    {
+      "by_category": {
+        "conflict": {
+          "hit@1": 0.4,
+          "hit@3": 0.4,
+          "hit@5": 0.4,
+          "mrr": 0.4
+        },
+        "dish": {
+          "hit@1": 0.8462,
+          "hit@3": 0.9231,
+          "hit@5": 0.9231,
+          "mrr": 0.8846
+        },
+        "guideline_nutrient": {
+          "hit@1": 0.75,
+          "hit@3": 0.75,
+          "hit@5": 0.8,
+          "mrr": 0.7625
+        },
+        "topic": {
+          "hit@1": 0.25,
+          "hit@3": 0.6667,
+          "hit@5": 0.75,
+          "mrr": 0.4611
+        },
+        "variant_typo": {
+          "hit@1": 0.5,
+          "hit@3": 0.625,
+          "hit@5": 0.625,
+          "mrr": 0.5417
+        }
+      },
+      "hit@1": 0.6034,
+      "hit@3": 0.7241,
+      "hit@5": 0.7586,
+      "mrr": 0.6658,
+      "name": "tfidf_char_wb_3_5_syn"
+    },
+    {
+      "by_category": {
+        "conflict": {
+          "hit@1": 0.0,
+          "hit@3": 0.4,
+          "hit@5": 0.4,
+          "mrr": 0.1667
+        },
+        "dish": {
+          "hit@1": 0.7692,
+          "hit@3": 0.9231,
+          "hit@5": 0.9231,
+          "mrr": 0.8462
+        },
+        "guideline_nutrient": {
+          "hit@1": 0.25,
+          "hit@3": 0.55,
+          "hit@5": 0.8,
+          "mrr": 0.4517
+        },
+        "topic": {
+          "hit@1": 0.4167,
+          "hit@3": 0.9167,
+          "hit@5": 0.9167,
+          "mrr": 0.6389
+        },
+        "variant_typo": {
+          "hit@1": 0.375,
+          "hit@3": 0.5,
+          "hit@5": 0.625,
+          "mrr": 0.4417
+        }
+      },
+      "hit@1": 0.3966,
+      "hit@3": 0.6897,
+      "hit@5": 0.7931,
+      "mrr": 0.5529,
+      "name": "tfidf_char_wb_3_5_nosyn"
+    },
+    {
+      "by_category": {
+        "conflict": {
+          "hit@1": 0.4,
+          "hit@3": 1.0,
+          "hit@5": 1.0,
+          "mrr": 0.6667
+        },
+        "dish": {
+          "hit@1": 0.7692,
+          "hit@3": 0.9231,
+          "hit@5": 1.0,
+          "mrr": 0.8615
+        },
+        "guideline_nutrient": {
+          "hit@1": 0.85,
+          "hit@3": 0.9,
+          "hit@5": 0.9,
+          "mrr": 0.875
+        },
+        "topic": {
+          "hit@1": 0.3333,
+          "hit@3": 0.5833,
+          "hit@5": 0.5833,
+          "mrr": 0.4444
+        },
+        "variant_typo": {
+          "hit@1": 0.375,
+          "hit@3": 0.375,
+          "hit@5": 0.5,
+          "mrr": 0.4062
+        }
+      },
+      "hit@1": 0.6207,
+      "hit@3": 0.7759,
+      "hit@5": 0.8103,
+      "mrr": 0.7003,
+      "name": "bm25_word_syn"
+    },
+    {
+      "by_category": {
+        "conflict": {
+          "hit@1": 0.4,
+          "hit@3": 0.6,
+          "hit@5": 1.0,
+          "mrr": 0.6
+        },
+        "dish": {
+          "hit@1": 0.7692,
+          "hit@3": 0.9231,
+          "hit@5": 0.9231,
+          "mrr": 0.8462
+        },
+        "guideline_nutrient": {
+          "hit@1": 0.35,
+          "hit@3": 0.7,
+          "hit@5": 0.8,
+          "mrr": 0.5367
+        },
+        "topic": {
+          "hit@1": 0.3333,
+          "hit@3": 0.75,
+          "hit@5": 0.75,
+          "mrr": 0.5139
+        },
+        "variant_typo": {
+          "hit@1": 0.375,
+          "hit@3": 0.375,
+          "hit@5": 0.5,
+          "mrr": 0.4062
+        }
+      },
+      "hit@1": 0.4483,
+      "hit@3": 0.7069,
+      "hit@5": 0.7931,
+      "mrr": 0.5888,
+      "name": "bm25_word_nosyn"
+    }
+  ],
+  "queries": {
+    "by_category": {
+      "conflict": 5,
+      "dish": 13,
+      "guideline_nutrient": 20,
+      "topic": 12,
+      "variant_typo": 8
+    },
+    "total": 58
+  },
+  "ranking": [
+    "bm25_word_syn",
+    "tfidf_char_wb_3_5_syn",
+    "bm25_word_nosyn",
+    "tfidf_word_asis_syn",
+    "tfidf_char_wb_3_5_nosyn",
+    "tfidf_word_sublinear_syn",
+    "tfidf_word_asis_nosyn",
+    "tfidf_word_sublinear_nosyn"
+  ],
+  "winner": "bm25_word_syn"
+}

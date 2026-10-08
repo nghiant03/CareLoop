@@ -1,4 +1,4 @@
-"""TF-IDF retrieval over the knowledge base.
+"""BM25 retrieval over the knowledge base.
 
 Chunks the KB into citable units:
 
@@ -7,28 +7,52 @@ Chunks the KB into citable units:
   synonyms for nutrients and bound kinds so user phrasing matches);
 * **dish chunks** — one per current dish with a nutrient-profile summary.
 
-The index uses scikit-learn's ``TfidfVectorizer`` (documented default for the
-prototype per ``rules/SCHEMA_DECISION.md`` scale; embeddings per
-``backend/app/core/llm_choice.py`` can replace it later without changing the
-chunk contract). Every chunk carries its citable ids so downstream answers can
-be fully grounded.
+Scoring is Okapi BM25 (``rank_bm25.BM25Okapi``) over the same word
+tokenization the retrieval benchmark's ``bm25_word_syn`` method used
+(``re.findall(r"[a-z0-9]+", text.lower())``) with the existing synonym
+expansion applied to every query. ``bm25_word_syn`` is the benchmark winner
+(see ``backend/app/chat/RETRIEVAL_BENCH.md``): best hit@5 and the best
+guideline-nutrient / conflict retrieval of the eight configurations measured.
+Every chunk carries its citable ids so downstream answers can be fully
+grounded.
+
+Revert note: the previous production scorer was scikit-learn word TF-IDF
+(``TfidfVectorizer(stop_words="english")`` cosine over the identical chunking,
+with the identical ``_expand_query``). To revert, swap the ``BM25Okapi`` index
+below back to a fitted ``TfidfVectorizer`` + cosine matrix (one
+``fit_transform`` in ``__init__``, one ``transform`` dot ``matrix.T`` in
+``retrieve``) and set ``MIN_SCORE = 0.05`` — see git history of this file.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional, Union
 from weakref import WeakKeyDictionary
 
-from sklearn.feature_extraction.text import TfidfVectorizer
+from rank_bm25 import BM25Okapi
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
 from backend.app.kb.graph_store import KBGraph
 
 __all__ = ["Chunk", "KBIndex", "build_index", "retrieve", "MIN_SCORE"]
 
-# Cosine similarity below this is treated as "no grounded match".
-MIN_SCORE = 0.05
+# BM25 score below this is treated as "no grounded match".
+#
+# Calibrated for BM25 with stopword-filtered tokenization (the previous
+# TF-IDF gate was 0.05 on the cosine scale, with ``stop_words="english"``).
+# Stopwords MUST stay out of the BM25 tokens: measured with the raw bench
+# tokenizer, stopword-only overlap drives irrelevant queries ("What is the
+# capital of France?") to BM25 scores of 5-12 — above genuinely weak-but-
+# relevant queries — so no threshold could preserve the refusal gate. With
+# the filtered tokenizer the measured gap is: irrelevant queries 0.0
+# (no vocabulary overlap) vs weakest labeled-relevant query 2.44 (a
+# typo-corrupted dish query; clean relevant queries score >= 3.8).
+# 2.0 sits inside that gap with headroom below the weakest relevant score;
+# see RETRIEVAL_BENCH.md.
+MIN_SCORE = 2.0
 
-# Plain-language synonyms appended to chunk/query text so TF-IDF matches
+# Plain-language synonyms appended to chunk/query text so BM25 matches
 # everyday phrasing ("salt", "calories", "fibre") to canonical nutrients.
 _NUTRIENT_SYNONYMS: dict[str, str] = {
     "sodium_mg": "sodium salt na mg",
@@ -51,6 +75,21 @@ _KIND_SYNONYMS: dict[str, str] = {
 
 Chunk = dict[str, Any]
 IndexSource = Union[KBGraph, "KBIndex"]
+
+
+def _tokenize(text: str) -> list[str]:
+    """Word tokens shared with ``retrieval_bench.BM25Method``.
+
+    Same regex as the benchmark's tokenizer, minus English stopwords — the
+    previous TF-IDF vectorizer scored with ``stop_words="english"``, and
+    keeping stopwords out of the BM25 tokens is what keeps the ``MIN_SCORE``
+    refusal gate meaningful (stopword-only overlap must not look relevant).
+    """
+    return [
+        token
+        for token in re.findall(r"[a-z0-9]+", text.lower())
+        if token not in ENGLISH_STOP_WORDS
+    ]
 
 
 def _rule_text(rule: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
@@ -100,7 +139,7 @@ def _dish_text(dish: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 
 
 class KBIndex:
-    """TF-IDF index over KB rule + dish chunks."""
+    """BM25 (Okapi) index over KB rule + dish chunks."""
 
     def __init__(self, kb: KBGraph) -> None:
         self.chunks: list[Chunk] = []
@@ -142,8 +181,7 @@ class KBIndex:
         corpus = [c["text"] for c in self.chunks]
         if not corpus:
             corpus = ["empty knowledge base"]
-        self._vectorizer = TfidfVectorizer(stop_words="english")
-        self._matrix = self._vectorizer.fit_transform(corpus)
+        self._bm25 = BM25Okapi([_tokenize(text) for text in corpus])
 
     def _expand_query(self, query: str) -> str:
         expanded = [query]
@@ -157,15 +195,15 @@ class KBIndex:
         return " ".join(expanded)
 
     def retrieve(self, query: str, k: int = 5) -> list[dict[str, Any]]:
-        """Return the top-``k`` chunks ranked by TF-IDF cosine similarity.
+        """Return the top-``k`` chunks ranked by BM25 score.
 
         Each hit is the chunk dict plus a ``score`` field. Chunks with score 0
-        (no vocabulary overlap) are omitted.
+        (no vocabulary overlap) are omitted. Ranking is deterministic:
+        ties are broken by ``chunk_id``.
         """
         if not query.strip():
             return []
-        vec = self._vectorizer.transform([self._expand_query(query)])
-        scores = (vec @ self._matrix.T).toarray()[0]
+        scores = self._bm25.get_scores(_tokenize(self._expand_query(query)))
         ranked = sorted(
             (
                 (float(score), idx)
@@ -186,7 +224,7 @@ _CACHE: "WeakKeyDictionary[KBGraph, KBIndex]" = WeakKeyDictionary()
 
 
 def build_index(kb: KBGraph) -> KBIndex:
-    """Build (or fetch the cached) TF-IDF index for a KBGraph."""
+    """Build (or fetch the cached) BM25 index for a KBGraph."""
     index = _CACHE.get(kb)
     if index is None:
         index = KBIndex(kb)
