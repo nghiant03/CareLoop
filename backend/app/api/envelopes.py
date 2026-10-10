@@ -1,9 +1,9 @@
 """Envelope lifecycle endpoints: approve / edit / reject.
 
 Only ``POST /envelopes/{envelope_id}/approve`` moves an envelope into the
-APPROVED state that satisfies the downstream approval gate. ``edit`` moves it to
-EDITED (awaiting re-confirmation) and ``reject`` to REJECTED — both remain
-blocked downstream.
+APPROVED state. Live planning also requires scope eligibility and nonempty
+targets. ``edit`` clears approval and moves to EDITED; ``reject`` moves to
+REJECTED. Both block live planning and personal target guidance.
 """
 
 from __future__ import annotations

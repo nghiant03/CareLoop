@@ -156,7 +156,7 @@ def test_multi_item_quantities_and_validation(api):
     assert api.post("/adherence/log", json={**payload, "items": []}).status_code == 422
 
 
-def test_constraint_provenance_survives_edit_and_restart_read(api):
+def test_constraint_provenance_survives_edit_and_durable_reread(api):
     e = approve(api)
     targets = e["targets"]
     for t in targets:

@@ -1,1 +1,1 @@
-"""Core cross-cutting concerns: approval gate, graph versioning, LLM choice."""
+"""Clinical lifecycle, durable storage, planning services, and process configuration."""

@@ -1,9 +1,8 @@
 """Process-wide knowledge-base singleton for the API layer.
 
 Loads ``rules/rules.json`` + ``data/dishes.json`` into the versioned
-``KBGraph`` (in-memory SQLite — the prototype decision in
-``rules/SCHEMA_DECISION.md``) once per process and caches the retrieval index
-per built KBGraph. Called from the app lifespan (warm-up) and lazily by the
+``KBGraph`` in in-memory SQLite and caches the retrieval index per built graph.
+Called from the app lifespan for warm-up and lazily by the
 chat / kb-stats endpoints, so tests and tools can import the module without
 side effects.
 """
@@ -47,7 +46,7 @@ def get_index() -> KBIndex:
 
 
 def reset_kb() -> None:
-    """Drop the cached KB (used by tests)."""
+    """Clear and close the process KB; the next access loads source files again."""
     global _KB
     if _KB is not None:
         _KB.close()

@@ -1,1 +1,1 @@
-"""HTTP API routers for CareLoop."""
+"""HTTP API routers."""

@@ -1,20 +1,9 @@
-"""Rule-engine endpoint.
+"""Create a fresh PROPOSED or scope-rejected envelope with its embedded trace.
 
-``POST /rules/run`` turns a patient into a **PROPOSED** nutrient envelope via
-the real CLIPS rule engine (``rules.engine.run_rules``) and returns the
-frontend contract ``{envelope, trace}``. The envelope is validated against the
-canonical ``shared.envelope_schema.NutrientEnvelope`` and registered in the
-approval-gate store (still PROPOSED — the gate keeps blocking downstream until
-a clinician approves). The trace is embedded in the durable envelope snapshot
-so explanations can replay the decision across workers and restarts.
-
-Request body (both accepted):
-* ``{"patient_id": "P0001"}`` — the patient is looked up in the patient store;
-* a full patient record (``data/patients.json`` shape) — used inline.
-
-Out-of-scope patients (pregnancy, dialysis, ketoacidosis) yield a REJECTED
-envelope with empty targets and a clear ``notes`` reason — returned with HTTP
-200 so the UI can render the explanation.
+Accept a patient ID for lookup or an inline patient record. Validate the engine
+output against the shared model and persist a fresh proposal identity. Scope
+rejection returns HTTP 200 with empty targets so the UI can explain the refusal;
+eligible proposals still need clinician approval before live planning.
 """
 
 from __future__ import annotations
@@ -67,13 +56,10 @@ def _resolve_patient(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def run_rules_service(patient: dict[str, Any]) -> dict[str, Any]:
-    """Shared service behind ``POST /rules/run`` (reused by the review queue).
+    """Run rules and persist a fresh proposal with its embedded decision trace.
 
-    Runs the CLIPS rule engine for a patient record, validates the envelope,
-    registers it with its embedded trace (still PROPOSED/REJECTED — downstream
-    consumption stays blocked until a clinician approves).
-
-    Returns ``{"envelope": NutrientEnvelope, "trace": [...]}``.
+    Returns ``{"envelope": NutrientEnvelope, "trace": [...]}``. The review
+    queue uses the same service; neither call path grants live approval.
     """
     result = engine_run_rules(patient)
 

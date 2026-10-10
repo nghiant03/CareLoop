@@ -1,6 +1,6 @@
-"""Clinician review queue + envelope-version attribution (Milestone 3).
+"""Review-queue workflows and historical envelope-version attribution.
 
-Covers the M3 acceptance criteria end to end:
+Covers review workflows end to end:
 
 * **Envelope-version attribution**: history is scored against the envelope
   effective on each consumption date. After approve → log day A → edit +
@@ -47,11 +47,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.fixture(scope="module", autouse=True)
 def _mount_review_router():
-    """Make ``/review`` reachable in this module's TestClient.
+    """Attach the review router only if the imported app lacks its queue route.
 
-    ``backend/app/main.py`` is mounted by the orchestrator lane; until that
-    lands (or if this module runs standalone) attach the router here. The
-    check keeps it a no-op when the router is already included.
+    Normal application imports already include it; standalone test app setups
+    may omit the route.
     """
     from backend.app.api import review as review_module
     from backend.app.main import app
@@ -299,7 +298,7 @@ def test_queue_lab_trend_item_for_fixture_patient(client) -> None:
 
 
 def test_closed_loop_flag_acknowledge_action_proposal_observation(client) -> None:
-    """The M3 acceptance loop: worsening sodium trend -> queue item ->
+    """Closed clinical loop: worsening sodium trend -> queue item ->
     acknowledge -> recorded action -> linked PROPOSED envelope proposal ->
     subsequent clinical observation."""
     envelope = _hand_built_envelope("P0009", sodium_max=100.0)
@@ -361,7 +360,7 @@ def test_closed_loop_flag_acknowledge_action_proposal_observation(client) -> Non
     )
     assert bad.status_code == 422
 
-    # Actioned items never reappear as open even though the condition persists.
+    # Sequential re-derivation preserves the recorded action despite a persistent condition.
     open_again = _queue(client, patient_id="P0009", status="open")
     assert review_id not in [i["review_id"] for i in open_again["items"]]
     actioned_view = client.get(

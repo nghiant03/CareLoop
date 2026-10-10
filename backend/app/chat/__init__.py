@@ -1,6 +1,6 @@
 """Retrieval-grounded chat pipeline.
 
-Public surface (wired into the API in a later wave):
+Public surface used by the chat API:
 
 * :func:`backend.app.chat.answers.answer` — grounded Q&A with mandatory
   citations, refusal on low confidence and escalation filtering.

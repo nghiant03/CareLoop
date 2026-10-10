@@ -1,33 +1,11 @@
-"""Clinician what-if simulations (Milestone 2).
+"""Compare local target changes without updating live envelopes or saved plans.
 
-``POST /simulations`` compares a PROPOSED target change against the
-patient's current approved envelope + latest saved plan:
+The base side evaluates the latest saved plan against the current ready
+envelope. The simulated side runs shared planning with a local ``SIM-`` copy;
+its explanation and adequacy describe the simulated aims, not the live aims.
 
-* the base side scores the saved plan against the ORIGINAL approved envelope
-  (feasibility, hard violations, the 4 objectives, per-aim worst-day
-  shortfall, cost);
-* the simulated side re-runs the exact ``POST /plans`` flow
-  (``plan_service.plan_meals`` -> ``map_plan_result``)
-  against a SIMULATED envelope — a deep copy of the approved envelope with
-  the proposed targets substituted, status forced to APPROVED and
-  ``envelope_id`` prefixed ``SIM-``.  The simulated envelope is a pure local
-  object: it is NEVER written to the envelope store or the lifecycle journal
-  (safety by construction — nothing in this module calls ``put_envelope``),
-  and no plan row is created, so simulations are read-only over live state.
-* ``deltas`` quantifies the change (cost, deviation, variety, pooled
-  worst-day shortfall, count of changed meal slots when a base plan exists).
-  An infeasible simulated solve is reported (``feasible: false`` +
-  ``infeasibility_reason``/``infeasibility_status``) with the delta fields
-  that still make sense; the rest are ``null``.
-
-Note on the simulated explanation: ``map_plan_result`` is called with the
-SIMULATED envelope as the "original", so the simulated adequacy panel (and
-explanation) describes the SIMULATED targets — that is the point of the
-what-if.  The base side keeps scoring against the real approved aims.
-
-Comparisons are persisted via ``persistence.save_simulation`` (base
-envelope id + proposed targets + full comparison) and listed with
-``GET /simulations?patient_id=`` in chronological order.
+Only the comparison record is persisted. All delta fields are null when the
+simulated solve is infeasible or no comparable base plan exists.
 """
 
 from __future__ import annotations
@@ -163,8 +141,7 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
     simulated_envelope.targets = list(req.targets)
     simulated_envelope.status = EnvelopeStatus.APPROVED
     simulated_envelope.envelope_id = f"SIM-{envelope.envelope_id}"
-    # SAFETY: simulated_envelope must never reach the envelope store or the
-    # journal — this module never calls put_envelope/journal_envelope/save_plan.
+    # Local approval authorizes evaluation only; never persist this envelope or its plan.
 
     try:
         outcome = plan_meals(simulated_envelope, dishes)
@@ -227,8 +204,7 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
             "meals_changed": _meals_changed(base_plan, simulated_plan),
         }
     else:
-        # Infeasible simulated solve (or no base plan): only the deltas that
-        # still make sense are reported; the rest stay null.
+        # A delta needs both a comparable base and a feasible simulated plan.
         deltas = {
             "cost": None,
             "nutrient_target_deviation": None,

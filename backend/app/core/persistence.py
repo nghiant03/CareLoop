@@ -1,40 +1,17 @@
-"""Durable application store for CareLoop (Milestone 3 persistence foundation).
+"""Durable SQLite storage for clinical workflows.
 
-Single SQLite database (stdlib ``sqlite3`` only) holding everything that
-previously lived in process-local dicts:
+Stores patient profiles, plans, meal logs, envelope history, observations,
+simulations, and review items. Reads use fresh connections rather than process
+caches. Each operation owns its connection and transaction.
 
-* ``plans``            — generated meal plans (POST /plans output documents)
-* ``meal_logs``        — adherence item lists per (patient, date, meal)
-* ``envelope_journal`` — append-only lifecycle history of nutrient envelopes
-* ``observations``     — longitudinal clinical observations (labs, eGFR, ...)
-* ``simulations``      — clinician what-if simulations
-* ``review_items``     — clinician review queue (alerts -> acknowledgement ->
-                         recorded action)
+``CARELOOP_APP_DB`` is resolved at call time, defaulting to the tracked
+``data/careloop_app.sqlite3``. Tests must select an isolated path before using
+the store. Schema initialization is cached per path.
 
-Connection policy
------------------
-Unlike ``backend.app.kb.graph_store.KBGraph`` (one long-lived connection per
-instance, ``check_same_thread=False``), this module opens a **short-lived
-connection per call** — the pattern already used by
-``backend.app.core.graph_versioning.GraphStore``. Rationale:
-
-* every read goes straight to disk, so "survives restart" is trivially true
-  and demonstrable (no cached in-memory state);
-* no connection is shared across threads, so ``check_same_thread`` is moot;
-* the prototype's write volume is tiny, so per-call connect cost is negligible.
-
-The database path is resolved **lazily, at call time**, from the
-``CARELOOP_APP_DB`` environment variable (default
-``<repo>/data/careloop_app.sqlite3``). Lazy resolution is deliberate: pytest
-conftest files set the env var before the first store call without needing to
-import-order gymnastics.
-
-Identifier minting mirrors the existing sequential patterns (envelope ids
-``ENV-<pid>-001``, plan ids ``PLAN-<pid>-001``): ids are
-``<PREFIX>-<patient_id>-<NNN>``, minted under a SQLite write reservation by
-scanning existing rows for the highest suffix and incrementing. Ids are never reused
-because rows are never deleted from the keyed tables (except meal logs, which
-are keyed by a natural id and have no minted id).
+Sequential IDs are minted under a SQLite write reservation, protecting the
+read-max/insert sequence across workers. Normal workflows retain minted rows;
+test cleanup can delete them. Live envelope writes use ``store_envelope`` for
+revision checks; ``journal_envelope`` is an unchecked history-seeding helper.
 """
 
 from __future__ import annotations
@@ -175,13 +152,10 @@ CREATE INDEX IF NOT EXISTS idx_review_status ON review_items(status, created_at)
 CREATE INDEX IF NOT EXISTS idx_review_patient ON review_items(patient_id);
 """
 
-# Serialises mint-and-insert sequences so concurrent callers cannot mint the
-# same sequential id. SQLite's own write locking covers the actual writes; this
-# lock keeps the read-max-then-insert idiom atomic within the process.
+# Serialise local writes; SQLite write reservations protect ID/revision checks across workers.
 _LOCK = Lock()
 
-# Schema is applied once per resolved path (paths are resolved lazily, so a
-# test that repoints CARELOOP_APP_DB gets a fresh initialisation).
+# Cache schema initialization per path so isolated test databases initialize independently.
 _INIT_LOCK = Lock()
 _INITIALIZED: set[str] = set()
 
@@ -233,16 +207,16 @@ class _Connection(sqlite3.Connection):
 
 
 def init_db() -> None:
-    """Idempotently create the schema (and the database file if missing)."""
+    """Initialize the selected database unless its path was initialized this process."""
     conn = _connect()
     conn.close()
 
 
 def _mint_id(conn: sqlite3.Connection, table: str, prefix: str, column: str) -> str:
-    """Next sequential ``<prefix><NNN>`` id for ``table`` (collision-safe).
+    """Mint the next ``<prefix><NNN>`` ID under the caller's write transaction.
 
-    Scans the existing ids under ``prefix`` for the highest numeric suffix;
-    never reuses an id because rows are never deleted from ``table``.
+    Reserve writes before scanning existing numeric suffixes. Normal workflows
+    retain those rows, so IDs are not reused unless test cleanup deletes them.
     """
     # Acquire the write reservation before reading ids, including across workers.
     if not conn.in_transaction:
@@ -289,9 +263,8 @@ def save_plan(
 ) -> str:
     """Persist one generated meal plan; returns the minted plan id.
 
-    ``document`` (optional) is the full API response document, stored verbatim
-    so ``get_plan`` can reconstruct it byte-for-byte. ``created_at`` defaults
-    to the current UTC timestamp.
+    ``document`` stores the full response as JSON; ``get_plan`` adds storage
+    identity and time when reading it. ``created_at`` defaults to UTC now.
     """
     created_at = created_at or _utcnow()
     with _LOCK, _connect() as conn:
@@ -406,7 +379,12 @@ def put_log(
     logged_at: Optional[str] = None,
     items: Optional[list[dict[str, Any]]] = None,
 ) -> dict[str, Any]:
-    """Insert or replace the log for one (patient, date, meal) slot."""
+    """Replace a meal slot, defaulting its receipt time to UTC now.
+
+    Nonempty ``items`` replace the complete item list. None or an empty list
+    clears stored items and retains the single ``dish_id`` representation.
+    This storage helper does not validate dates, quantities, or dish membership.
+    """
     entry = {
         "patient_id": patient_id,
         "date": date,
@@ -454,7 +432,7 @@ def list_logs(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    """All logs for a patient, chronological (date, then meal order).
+    """All logs for a patient, ordered by date then meal order.
 
     ``date_from`` / ``date_to`` are inclusive ISO date bounds.
     """
@@ -501,7 +479,7 @@ def delete_logs_for_patient(patient_id: str) -> int:
 
 
 def count_logs(patient_id: Optional[str] = None) -> int:
-    """Number of stored logs (optionally for one patient)."""
+    """Count stored meal slots, optionally for one patient, not individual dishes."""
     sql = "SELECT COUNT(*) AS n FROM meal_logs"
     params: tuple[Any, ...] = ()
     if patient_id is not None:
@@ -513,7 +491,7 @@ def count_logs(patient_id: Optional[str] = None) -> int:
 
 
 def clear_logs() -> None:
-    """Delete every meal log (test/prototype helper)."""
+    """Delete every patient's meal logs; use only with an isolated database."""
     with _LOCK, _connect() as conn:
         conn.execute("DELETE FROM meal_logs")
         conn.commit()
@@ -607,16 +585,15 @@ def journal_envelope(
     event: Optional[str] = None,
     effective_at: Optional[str] = None,
 ) -> int:
-    """Append one lifecycle row for ``envelope``; returns the journal id.
+    """Seed a history row without checking or advancing the lifecycle revision.
 
-    ``envelope`` may be a :class:`NutrientEnvelope` or an already-dumped
-    mapping; the **full snapshot** (``model_dump(by_alias=True, mode="json")``)
-    is stored per row so any historical version can be reconstructed.
-    ``event`` labels the lifecycle transition (defaults to the envelope
-    status); ``effective_at`` is the ISO date from which the envelope governs
-    the patient (defaults to today) and may carry a full timestamp — only the
-    first 10 characters (the calendar date) participate in
-    :func:`envelope_effective_at` comparisons.
+    Intended for historical test fixtures, not live transitions; use
+    ``store_envelope`` for revision-checked writes. Accepts a model or dumped
+    mapping, stores its full snapshot, and returns the journal row ID.
+
+    ``event`` defaults to status. ``effective_at`` defaults to the server's
+    local date; timestamps are accepted, but coverage filtering uses their
+    first ten characters as the calendar date.
     """
     if isinstance(envelope, dict):
         envelope = NutrientEnvelope.model_validate(envelope)
@@ -712,7 +689,8 @@ def add_observation(
 
     ``observed_at`` defaults to today (ISO date); ``recorded_at`` is always the
     wall-clock UTC receipt time. Observation ids are sequential per patient
-    (``OBS-<patient_id>-001``, ...) and never reused.
+    (``OBS-<patient_id>-001``, ...). They are not reused while minted rows remain;
+    test cleanup can reset the sequence.
     """
     observed_at = observed_at or _today()
     recorded_at = _utcnow()
@@ -902,7 +880,11 @@ def get_review_item(review_id: str) -> Optional[dict[str, Any]]:
 
 
 def acknowledge_review_item(review_id: str) -> Optional[dict[str, Any]]:
-    """Mark a review item ACKNOWLEDGED; returns the updated item or ``None``."""
+    """Set ACKNOWLEDGED unconditionally; return the item or ``None`` if absent.
+
+    This write does not check the previous status. The API's separate OPEN check
+    is not atomic with it, so concurrent actions can be regressed.
+    """
     acknowledged_at = _utcnow()
     with _LOCK, _connect() as conn:
         cur = conn.execute(
@@ -927,9 +909,8 @@ def record_review_action(
 ) -> Optional[dict[str, Any]]:
     """Record the clinician's action on a review item; returns the item.
 
-    The action payload (``{action, note, linked_envelope_id, recorded_at}``) is
-    stored verbatim in ``action_json`` and the item moves to
-    ``ACTION_RECORDED``.
+    The item moves to ``ACTION_RECORDED`` regardless of its previous status.
+    A subsequent call replaces the action payload; it does not append history.
     """
     action_payload = {
         "action": action,
@@ -959,7 +940,7 @@ def record_review_action(
 
 
 def clear_all() -> None:
-    """Delete every row from every table (test helper; schema is kept)."""
+    """Delete all application records while retaining schema; only use in isolated tests."""
     with _LOCK, _connect() as conn:
         for table in (
             "plans", "meal_logs", "envelope_journal", "observations",

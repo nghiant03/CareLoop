@@ -2,15 +2,15 @@
 
 FastAPI service for CareLoop. It exposes the API surface that the React UI talks
 to and enforces the **approval-gate invariant** for live planning and personal
-target guidance. Informational views may inspect unapproved envelopes.
+target guidance.
 
 ## Layout
 
 ```
 backend/
-├── pyproject.toml            # project + deps + pytest config
+├── pyproject.toml            
 ├── README.md
-├── mining/                   # trends / clustering / substitutions (see mining/README.md)
+├── mining/                   # trends, clustering, substitutions (see mining/README.md)
 ├── optim/                    # meal-plan optimiser (see optim/README.md)
 └── app/
     ├── main.py               # FastAPI app: lifespan, CORS, handlers, routers

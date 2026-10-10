@@ -1,11 +1,7 @@
-"""Longitudinal clinical observations (Milestone 3).
+"""Record dated clinical observations for patient profiles, rules, and lab trends.
 
-Timestamped lab-style observations per patient, stored durably in the
-application database (:mod:`backend.app.core.persistence`, table
-``observations``). Each row carries the observed value, unit, source and the
-``observed_at`` measurement date (distinct from ``recorded_at``, the wall-clock
-receipt time) so downstream workflows (adherence trend analysis, envelope
-re-derivation, clinician review) can reason about freshness.
+``observed_at`` is the measurement date; ``recorded_at`` is the UTC receipt
+time. Recording an observation does not approve or edit an envelope.
 """
 
 from __future__ import annotations

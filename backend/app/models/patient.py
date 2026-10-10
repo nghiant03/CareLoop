@@ -2,7 +2,8 @@
 
 ``PatientSummary`` is the canonical audit-friendly subset frozen inside every
 envelope (re-exported from ``shared/``). ``Patient`` is the richer synthetic
-record used by the patient API and synthetic generator.
+profile accepted by the patient API. The richer dataset-generator model is
+``data.patient.Patient``.
 """
 
 from __future__ import annotations

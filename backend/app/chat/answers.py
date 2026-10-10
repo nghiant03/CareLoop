@@ -1,39 +1,14 @@
-"""Retrieval-grounded answer pipeline.
+"""Compose cited nutrition answers from applicable KB rules and envelope context.
 
-``answer(question, kb, envelope=None, role="patient")`` is the single entry
-point. Pipeline order:
+Escalation runs before retrieval. Patient-role requests with a REJECTED envelope
+are refused; PROPOSED/EDITED envelope values are not quoted as personal targets.
+APPROVED values prefer exact constraint provenance, with legacy trace matching
+as a fallback. Guideline anchors and supporting rules are checked for patient
+applicability when context is available. Dish facts supplement rule citations.
 
-1. **Escalation filter** (``escalation.check``) — out-of-scope requests are
-   escalated, never answered.
-2. **Retrieval** (``retrieval.build_index``) — BM25 over KB rule + dish
-   chunks.
-3. **Composition** — the answer text is assembled *only* from retrieved chunk
-   content plus (when an envelope is supplied) the envelope's own numbers.
-   Nothing is invented: templates pick sentences, they never generate facts.
-4. **Citation invariant** — an ``answered`` response always carries at least
-   one citation with ``rule_id`` + ``guideline`` + ``section``. If no rule
-   can be cited for the question, the answer is refused instead. The first
-   citation always reflects the provenance of the answered number: a
-   clinician-edited constraint cites the CLINICIAN-EDIT trace row, and
-   guideline rules appear only as additional context and only when they
-   apply to the patient.
-5. **Low-confidence refusal** — if no nutrient is detected and the best
-   retrieval score is below ``retrieval.MIN_SCORE``, refuse and suggest
-   speaking with a clinician.
-
-Envelope handling honours the approval gate (``core/approval_gate.py``):
-
-* an **APPROVED** envelope's numbers are served as clinician-approved;
-* a **PROPOSED** or **EDITED** envelope is never quoted numerically — the
-  answer says a plan is pending clinician review (generic guideline content
-  may still be cited);
-* a **REJECTED** (out-of-scope) envelope yields one fixed, respectful
-  see-your-clinician response regardless of the question — no numbers, no
-  guideline content.
-
-Per-kg rulebook coefficients (25-35 kcal/kg, 0.55-1.3 g/kg protein) are never
-rendered as absolute daily doses: when the patient's weight is known the
-computed daily value is shown, otherwise the text says "per kg of body weight".
+An answered response requires a citation. The default path is deterministic;
+an injected LLM adapter receives the assembled text but its output is not
+revalidated here. See ``docs/ARCHITECTURE.md`` for grounding and scope policy.
 """
 
 from __future__ import annotations
@@ -59,10 +34,7 @@ _PER_KG_NUTRIENTS = {"energy_kcal", "protein_g"}
 # guideline content a patient should be pointed at.
 _INTERNAL_RULE_PREFIXES = ("CONFLICT-", "SAFETY-")
 
-# Trace rule id the envelope lifecycle records for a clinician-authored edit
-# (see ``api/envelopes.py``). A value backed by this row was set by a
-# clinician, not derived from a guideline rule, so it must be cited as the
-# source of the number instead of any guideline rule for the nutrient.
+# Lifecycle edits use this source ID so clinician-authored values do not claim guideline authorship.
 _CLINICIAN_EDIT_RULE_ID = "CLINICIAN-EDIT"
 
 # Condition fields from the rulebook (mirrors rules/engine.py).
@@ -106,7 +78,8 @@ _COMPILED_NUTRIENTS = {
     for nutrient, patterns in _NUTRIENT_PATTERNS.items()
 }
 
-# Longer/more specific patterns first so e.g. "saturated fat" also claims fat_g.
+# This order determines which nutrient receives the anchor when several match.
+# Saturated-fat questions can also match total fat; prefer sat_fat_g first.
 _NUTRIENT_ORDER = [
     "sodium_mg", "potassium_mg", "phosphorus_mg", "protein_g", "energy_kcal",
     "fiber_g", "sat_fat_g", "carbs_g", "fat_g", "sugar_g",
@@ -174,13 +147,10 @@ def _rule_applies_to_patient(
 ) -> bool:
     """Best-effort re-evaluation of a rulebook rule's conditions for a patient.
 
-    Mirrors ``rules/engine.py`` semantics: multislot membership for
-    ``diagnoses``/``meds``, ``pregnant`` equality (the engine also encodes
-    pregnancy as a diagnosis), and numeric comparisons where a missing lab
-    (or the ``-1.0`` unknown sentinel, or NaN) never satisfies the test.
-
-    With no patient context (``patient`` falsy) every rule is treated as
-    applicable so pure-KB behaviour is unchanged.
+    Handles diagnosis/medication membership, pregnancy equality, and numeric
+    comparisons. Missing numeric values and NaN fail; guarded fields also reject
+    negative unknown sentinels. Pregnancy diagnoses count as pregnancy.
+    Without patient context, all rules are treated as applicable.
     """
     if not patient:
         return True
@@ -248,20 +218,11 @@ def _anchor_rule(
     role: str = "patient",
     patient: Optional[dict[str, Any]] = None,
 ) -> Optional[dict[str, Any]]:
-    """Highest-priority current KB rule covering the detected nutrients.
+    """First applicable rule for the first detected nutrient with an eligible anchor.
 
-    ``rules_for_nutrient`` already sorts by priority DESC then rule_id, so the
-    choice is deterministic (CKD rules outrank DASH/ADA/generic, and
-    ``CKD-2024-*`` sorts before ``CONFLICT-*`` on ties).
-
-    For the patient role, internal rule families (``CONFLICT-*`` conflict
-    bookkeeping, ``SAFETY-*`` internal safety policy) are excluded from anchor
-    selection: patients should be anchored to guideline content, not internal
-    engine policy.
-
-    When a patient context is passed, rules whose conditions do not apply to
-    this patient (diagnoses, meds, labs) are skipped: a guideline rule must
-    never be anchored for a patient it does not cover.
+    Nutrient order takes precedence; rules within each nutrient are sorted by
+    decreasing priority then rule ID. Patient-role anchors exclude internal
+    CONFLICT/SAFETY rules. Return None when no eligible rule exists.
     """
     for nutrient in nutrients:
         for rule in kb.rules_for_nutrient(nutrient):
@@ -322,9 +283,7 @@ def _envelope_context(
     kind = target.get("kind", "")
 
     if status != "APPROVED":
-        # Numbers are only ever quoted for clinician-APPROVED envelopes.
-        # PROPOSED/EDITED -> pending-review sentence; REJECTED -> the fixed
-        # declined sentence. No numbers, no citations attached.
+        # Unapproved envelope context supplies a notice, never personal target numbers.
         sentence = (
             _PENDING_REVIEW_SENTENCE
             if status in ("PROPOSED", "EDITED")
@@ -359,12 +318,8 @@ def _envelope_context(
         core = f"a daily {label} target of {amount}"
     sentence = f"Your clinician-approved plan sets {core}."
 
-    # Cite the trace row that actually produced the quoted number — never fall
-    # back to citations[0], which could attach an unrelated guideline (e.g.
-    # after a clinician edit replaced the targets) to the quoted number.
-    # A clinician-authored value (CLINICIAN-EDIT row) always wins over the
-    # original guideline rows for the same nutrient: the edit replaced those
-    # values, so the edit's provenance is the source of the answered number.
+    # Match exact constraint provenance before legacy trace inference; citations[0]
+    # could attribute an edited number to an unrelated guideline.
     from shared.provenance import citation_for
 
     provenance = target.get("provenance") or {}
@@ -487,15 +442,15 @@ def answer(
     llm: Optional[LLMAdapter] = None,
     patient: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Grounded, deterministic answer with mandatory citations.
+    """Compose an answered, refused, or escalated response without changing clinical state.
 
     Returns a dict with keys: ``status`` (``answered`` | ``refused`` |
     ``escalated``), ``answer``, ``citations``, ``envelope``, ``retrieval`` and
     ``role``. ``role="clinician"`` keeps rule ids inline in the text; the
-    patient view hides them from the prose (they remain in ``citations``).
-
-    ``patient`` (optional patient record dict) enables per-kg constraint
-    values to be scaled into computed daily amounts.
+    patient view hides them from the prose but retains citation IDs.
+    ``patient`` supplies applicability context and weight for per-kg rendering.
+    The template path is deterministic. An optional ``llm`` may transform the
+    final text; this function does not verify that transformation's grounding.
     """
     esc = escalation.check(question)
     if esc["escalate"]:
@@ -510,10 +465,7 @@ def answer(
             "role": role,
         }
 
-    # Out-of-scope gate: a REJECTED envelope means the patient has no CareLoop
-    # nutrition plan at all (pregnancy, dialysis, ketoacidosis risk, ...).
-    # Whatever the question, the only safe reply is the fixed see-your-
-    # clinician response — no numbers, no guideline content.
+    # Patient-role scope refusal follows escalation and does not expose guideline content.
     if role == "patient" and envelope is not None and _status_of(envelope) == "REJECTED":
         return {
             "status": "refused",
@@ -531,9 +483,7 @@ def answer(
     hits = retrieval.build_index(kb).retrieve(question, k=5)
     best_score = hits[0]["score"] if hits else 0.0
     nutrients = detect_nutrients(question)
-    # The envelope is only consulted when the question is actually about the
-    # patient's nutrition (detected nutrient or a relevant KB hit) — an
-    # unrelated question must be refused, not answered from plan numbers.
+    # Do not use personal target numbers to answer an unrelated question.
     relevant = bool(nutrients) or best_score > retrieval.MIN_SCORE
     env_ctx = _envelope_context(envelope, nutrients, weight_kg) if relevant else None
 
@@ -541,11 +491,7 @@ def answer(
     citations: list[dict[str, Any]] = []
     claims: list[dict[str, Any]] = []
 
-    # When the patient's APPROVED numbers are being quoted, every guideline
-    # citation must be checked against this patient: a rule whose conditions
-    # (diagnoses, meds, labs) do not apply must never be cited as if it
-    # governed their plan. Generic guideline-only answers (no approved
-    # envelope consulted) keep the plain retrieval-order anchor.
+    # Prefer the current profile for rule applicability, then the frozen snapshot.
     applicability_patient = patient or (envelope or {}).get("patient_snapshot")
 
     # 1) Envelope numbers (approved only; pending/declined get fixed text).
@@ -558,10 +504,7 @@ def answer(
                        "envelope_id": envelope.get("envelope_id"),
                        "version": envelope.get("version"), "citation": env_ctx["citation"]})
 
-    # 2) KB anchor rule for the detected nutrient(s). With an approved
-    #    envelope the anchor must be a rule that actually applies to this
-    #    patient — a guideline rule that did not fire for the patient must
-    #    never be cited as if it governed their plan.
+    # 2) Choose an applicable nutrient anchor independently of envelope approval.
     anchor = (
         _anchor_rule(kb, nutrients, role, applicability_patient)
         if nutrients

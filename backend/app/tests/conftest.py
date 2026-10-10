@@ -1,19 +1,10 @@
 """Shared fixtures for the ``backend.app.tests`` suite.
 
-Isolation contract
-------------------
-Every pytest session runs against its **own** SQLite application database:
-``CARELOOP_APP_DB`` is pointed at a fresh temp file before any store call
-happens (the repo-root ``conftest.py`` normally sets it first; this module
-repeats the guard so ``pytest backend`` — where the root conftest is not
-collected — is isolated too). Because
-``backend.app.core.persistence`` resolves the path lazily per call, setting
-the env var here is sufficient regardless of import order.
-
-A session-scoped autouse fixture additionally clears all persistent tables and
-the in-memory envelope store at session start, so a stale database file (or a
-leftover in-process state from another suite in the same session) can never
-leak into a run.
+When ``CARELOOP_APP_DB`` is absent, select a temporary database before store
+calls. Repository-root fixtures normally select it first; backend-only pytest
+roots may not load those fixtures. An explicitly configured path is respected
+and must already be isolated: the session fixture deletes all its records.
+It also clears the compatibility envelope cache before backend tests begin.
 """
 
 from __future__ import annotations

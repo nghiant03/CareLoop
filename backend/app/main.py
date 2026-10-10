@@ -49,9 +49,8 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 async def lifespan(app: FastAPI):
     logger.info("CareLoop backend starting (version=%s)", __version__)
     try:
-        # Warm the versioned knowledge base + BM25 index once per process
-        # (in-memory SQLite per rules/SCHEMA_DECISION.md). Failure to load must
-        # not take the API down; endpoints fall back to lazy loading.
+        # Warm the in-memory KB and BM25 index. A failed warm-up must not block
+        # startup; endpoints retry lazy loading and may still fail if data is absent.
         from backend.app.core.kb_loader import get_kb
 
         stats = get_kb().stats()

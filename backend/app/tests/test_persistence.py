@@ -1,10 +1,10 @@
-"""Milestone-3 persistence foundation tests.
+"""Durable application-store operations and restart behavior.
 
 Covers the durable SQLite app store (``backend.app.core.persistence``) and its
 API integration:
 
-* plans: save -> read back through a FRESH SQLite handle (simulated restart)
-  and through ``GET /plans/{id}`` on a NEW TestClient instance; summaries via
+* plans: save -> read back through a fresh SQLite handle and through
+  ``GET /plans/{id}`` on a new TestClient in the same process; summaries via
   ``GET /plans``; 404 for unknown ids;
 * meal logs: upsert per (patient, date, meal), persistence across handles,
   chronological ordering (date, then breakfast/lunch/dinner), inclusive bounds;
@@ -181,11 +181,11 @@ def test_plans_api_list_get_and_restart(client) -> None:
     assert all(set(row) >= {"plan_id", "patient_id", "envelope_id", "created_at"}
                for row in payload["plans"])
 
-    # RESTART: a brand-new TestClient reads the plan from SQLite
+    # A new client lifespan in the same process reads the plan from SQLite.
     with TestClient(app) as fresh_client:
         reread = fresh_client.get(f"/plans/{plan_id}")
     assert reread.status_code == 200, reread.text
-    assert reread.json() == plan  # identical document after "restart"
+    assert reread.json() == plan  # identical document after client recreation
 
     # unknown plan id -> documented 404 body
     missing = client.get("/plans/PLAN-P0001-NOPE")

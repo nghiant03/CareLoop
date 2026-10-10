@@ -388,7 +388,7 @@ def build_methods(kb: KBGraph) -> dict[str, BenchMethod]:
     (word TF-IDF + expansion) is kept as the ``tfidf_word_asis_syn`` row for
     comparison; ``tfidf_word_asis_syn`` is no longer production.
     """
-    # Imported here so importing this module never mutates module state.
+    # Load the process KB only when constructing methods, not at module import.
     from backend.app.chat import retrieval as production_retrieval
 
     prod_index = production_retrieval.build_index(kb)

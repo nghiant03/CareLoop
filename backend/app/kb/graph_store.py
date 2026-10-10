@@ -5,7 +5,8 @@ Implements the logical model documented in ``rules/neo4j_schema_design.md``
 
 ``Patient -> Diagnosis -> Guideline -> Rule -> NutrientConstraint -> Dish -> NutrientProfile``
 
-Storage is **append-only and bi-temporal-lite** (neo4j_schema_design.md §3):
+Storage uses **versioned validity intervals**, not separate valid-time and
+transaction-time axes:
 
 * ``nodes(logical_id, version, label, props, source, checksum, valid_from, valid_to)``
   — one row per version, PK ``(logical_id, version)``. Writing a new version
@@ -183,9 +184,10 @@ class KBGraph:
     ) -> int:
         """Append a new version of a node; returns the version number.
 
-        Never mutates history: the previous open version is closed by setting
-        its ``valid_to`` (the one documented write), and the new row is
-        inserted. Content of existing rows cannot change (enforced by trigger).
+        Close the previous interval by setting ``valid_to`` and insert a row.
+        A trigger protects existing content. If the current props checksum
+        matches, return its existing version without appending, even when other
+        metadata differs. ``valid_from`` defaults to UTC now.
         """
         ts = valid_from or _utcnow()
         props_json = json.dumps(props, sort_keys=True, separators=(",", ":"))
@@ -394,7 +396,12 @@ class KBGraph:
         label: Optional[str] = None,
         version: Optional[str] = None,
     ) -> list[dict[str, Any]]:
-        """List node versions (``version=None`` -> current state, else point-in-time)."""
+        """List active nodes, optionally filtered by label.
+
+        ``version`` is an ISO timestamp, not a numeric node revision. None means
+        current state; timestamps select valid_from <= t < valid_to, with an
+        open valid_to extending indefinitely. Return nodes by logical ID.
+        """
         where, params = [], []
         if label is not None:
             where.append("label = ?")
@@ -412,7 +419,11 @@ class KBGraph:
         return [self._node_row(r) for r in rows]
 
     def edges(self, version: Optional[str] = None) -> list[dict[str, Any]]:
-        """List edges whose endpoints are active (current or point-in-time)."""
+        """List edges by ID whose pinned endpoint versions are active.
+
+        ``version`` is an ISO snapshot timestamp, or None for current state.
+        Activity is determined from endpoint intervals, not the edge timestamp.
+        """
         if version is None:
             node_pred: tuple[str, list[str]] = ("{alias}.valid_to IS NULL", [])
         else:

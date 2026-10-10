@@ -1,15 +1,9 @@
-"""LLM adapter boundary for the chat pipeline.
+"""Chat adapter boundary with an offline template implementation.
 
-Per ``backend/app/core/llm_choice.py`` the documented default chat model is a
-local Ollama model (``llama3.2:3b``) with optional OpenAI/Google overrides.
-The active implementation is a **deterministic template adapter** (:class:`TemplateLLM`);
-the prototype must never fabricate content, and
-deterministic template assembly makes the grounded-answer contract testable.
-
-A real API-backed adapter can be plugged in later by implementing
-:class:`LLMAdapter` and registering it in :func:`build_adapter`; the resolved
-provider/model from ``llm_choice.py`` is surfaced in the adapter metadata so
-wiring code can report which backend *would* serve traffic.
+``build_adapter`` always returns TemplateLLM. Provider/model resolution is
+metadata only, not an active hosted or Ollama connection. Future adapters must
+preserve the grounding contract; the answer pipeline does not enforce it on
+their generated text.
 """
 
 from __future__ import annotations
@@ -25,7 +19,7 @@ __all__ = ["LLMAdapter", "TemplateLLM", "build_adapter", "active_adapter_info"]
 
 @runtime_checkable
 class LLMAdapter(Protocol):
-    """Any object with ``generate(prompt, context) -> str``."""
+    """Adapter expected to preserve facts and citations in already-grounded text."""
 
     def generate(self, prompt: str, context: Optional[dict[str, Any]] = None) -> str:
         """Produce a completion for ``prompt`` grounded in ``context``."""
@@ -35,10 +29,8 @@ class LLMAdapter(Protocol):
 class TemplateLLM:
     """Deterministic, offline template adapter.
 
-    Assembles a completion purely from the prompt plus the supplied context
-    key/value facts — no generation, no network, fully reproducible. Serves as
-    the default adapter and as the reference output shape for future
-    API-backed adapters.
+    Returns the prompt followed by supplied context key/value lines. No network
+    calls or generated facts are involved.
     """
 
     name = "template-llm"

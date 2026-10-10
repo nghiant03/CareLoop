@@ -1,12 +1,12 @@
-"""Week 1 smoke test.
+"""Backend import, HTTP, and approval-gate smoke tests.
 
-Exercises imports plus the FastAPI skeleton over an in-process ASGI transport
+Exercises imports and HTTP workflows over an in-process ASGI transport
 (httpx). Also asserts the approval-gate invariant: ``POST /plans`` returns 409
 for a PROPOSED envelope and only passes the gate once APPROVED.
 
-Run directly::
+Standalone runs must use an isolated database, not the tracked default::
 
-    PYTHONPATH=. python -m backend.app.tests.test_smoke
+    CARELOOP_APP_DB=/tmp/opencode/careloop-smoke.sqlite3 python -m backend.app.tests.test_smoke
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def test_healthz() -> None:
 
 
 def test_get_patient_may_be_404() -> None:
-    # data/patients.json is owned by Lane C and may be empty in Week 1.
+    # This ID is not required by the fixture contract; absence must return the structured error.
     resp = _request("GET", "/patients/p-1")
     assert resp.status_code in (200, 404), resp.text
     if resp.status_code == 404:

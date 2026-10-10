@@ -1,7 +1,7 @@
 """Pattern-based escalation filter for out-of-scope chat requests.
 
-CareLoop chat answers *nutrition-guidance* questions only. Anything outside
-that envelope is escalated to a clinician rather than answered:
+Detect configured patterns for requests that should be escalated rather than
+answered as nutrition guidance:
 
 * **emergency** symptoms (chest pain, breathing trouble, stroke signs, ...) —
   advise urgent care immediately;
@@ -10,8 +10,9 @@ that envelope is escalated to a clinician rather than answered:
 * **out-of-scope topics** (pregnancy, dialysis, paediatrics, cancer treatment
   and other non-nutrition clinical domains).
 
-The filter is deliberately conservative: false-positive escalations are safe,
-false-negative answers are not. It is deterministic (regex only, no model).
+The regex filter prioritizes escalation when a configured safety pattern matches.
+No match is not proof that a question is safe or in scope; this is not a clinical
+classifier. Matching is deterministic and uses no model.
 """
 
 from __future__ import annotations
@@ -113,7 +114,11 @@ CATEGORIES = ["emergency", "medication_change", "diagnosis", "out_of_scope"]
 
 
 def check(question: str) -> dict[str, object]:
-    """Return ``{"escalate": bool, "reason": str|None, "category": str|None}``."""
+    """Return the first matching safety category in CATEGORIES order.
+
+    Result keys are ``escalate``, ``reason``, and ``category``. With no match,
+    return False and null reason/category; downstream grounding still applies.
+    """
     text = str(question or "")
     for category in CATEGORIES:
         for pattern in _COMPILED[category]:

@@ -1,28 +1,11 @@
-"""Versioned knowledge-graph PoC — SQLite + NetworkX.
+"""Standalone versioned-graph prototype, separate from the application's KBGraph.
 
-Per the Week 1 decision gate (PLAN.md §1), CareLoop uses **SQLite + NetworkX**
-rather than Neo4j for the prototype.
+Nodes and relationships retain JSON payload versions with valid_from/valid_to
+intervals. Appending closes the current interval and inserts a new row; NetworkX
+materializes current state on demand. This is one time axis, not bitemporal
+storage. The default database is ``data/careloop_graph.sqlite3``.
 
-Model
------
-The graph is *append-only and bi-temporal-ish*: every logical entity
-(``label`` + ``id``) has a version chain. A row is "current" while its
-``valid_to`` is ``NULL``. Writing a new version closes the previous current row
-(``valid_to`` = new ``valid_from``) and inserts a new open row. History is
-therefore never lost.
-
-Storage: ``data/careloop_graph.sqlite3`` with two tables:
-
-- ``nodes(node_key, label, node_id, version, payload, valid_from, valid_to)``
-- ``edges(edge_key, rel_type, src_key, dst_key, version, payload,
-  valid_from, valid_to)``
-
-``payload`` holds arbitrary JSON. NetworkX materialises the current-state
-subgraph on demand for in-memory algorithms.
-
-Demo::
-
-    PYTHONPATH=. python -m backend.app.core.graph_versioning
+Demo: ``python -m backend.app.core.graph_versioning``.
 """
 
 from __future__ import annotations
@@ -62,7 +45,7 @@ def _split_ref(ref: NodeRef) -> tuple[str, str]:
 
 
 class GraphStore:
-    """Append-only versioned graph store backed by SQLite."""
+    """Versioned SQLite graph that appends payload versions and closes intervals."""
 
     def __init__(self, db_path: str | Path = DEFAULT_DB_PATH) -> None:
         self.db_path = Path(db_path)
@@ -274,7 +257,7 @@ class GraphStore:
             )
         return graph
 
-    def close(self) -> None:  # symmetry / future connection pooling
+    def close(self) -> None:
         """No-op: connections are short-lived per operation."""
 
 

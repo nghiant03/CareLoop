@@ -104,9 +104,9 @@ def list_envelopes() -> list[NutrientEnvelope]:
 def find_latest_envelope_for_patient(patient_id: str) -> Optional[NutrientEnvelope]:
     """Return the most recently proposed envelope for a patient, if any.
 
-    Ordering is by ``proposed_at`` alone: each rule-engine run now mints a
+    Ordering is by ``proposed_at`` alone: each persisted rule-engine run mints a
     fresh sequential envelope id, so comparing ``version`` across different
-    envelope ids is meaningless (every fresh proposal restarts at version 1).
+    envelope ids is meaningless. Every fresh proposal starts at version 1.
     """
     candidates = [env for env in list_envelopes() if env.patient_id == patient_id]
     if not candidates:
@@ -155,10 +155,11 @@ class PlanRequest(BaseModel):
 def require_approved_envelope_for_patient(
     req: PlanRequest,
 ) -> NutrientEnvelope:
-    """Dependency: gate ``POST /plans`` on the patient's approved envelope.
+    """Dependency: require planning readiness of the patient's latest proposal.
 
     ``req`` is parsed from the request body by FastAPI; the endpoint declares the
-    same model so the parsed body is shared (FastAPI caches body parsing).
+    same model. A newer pending proposal blocks planning even if an older
+    envelope was approved.
     """
     envelope = find_latest_envelope_for_patient(req.patient_id)
     if envelope is None:

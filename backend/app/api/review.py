@@ -1,39 +1,17 @@
-"""Clinician review queue — the closed adherence loop (Milestone 3).
+"""Derive and persist clinician review items from adherence and lab observations.
 
-``GET /review/queue`` derives review items **live** from three sources and
-persists them idempotently:
+``GET /review/queue`` writes newly seen conditions even when filtering for a
+later status. IDs are stable hashes of patient, source, and condition key;
+re-derivation preserves the first stored payload and current status.
 
-* ``adherence_flag``    — worsening deviation trend flags from the patient's
-  envelope-attributed deviation analysis (same 14-day window logic as
-  ``GET /adherence/{id}/deviation``). One item per flag, keyed
-  ``"<envelope-label>::<series_key>@<latest_point_date>"``.
-* ``hard_violation_day`` — logged days with ``compliant=false``. Keyed
-  ``"day@<date>"``.
-* ``lab_trend``         — rising potassium / phosphate trends from
-  :func:`backend.mining.trends.detect_trends` over the fixture patient record
-  (skipped silently for patients without a lab series). Keyed
-  ``"lab@<patient_id>:<analyte>"``.
+Adherence uses a 14-day historically attributed window. Lab trends prefer dated
+observations over fixture series; dated alerts include the latest observation
+ID in their key, allowing a new observation to create a distinct review item.
 
-**Deterministic identity.** Every derived condition maps to a stable review id
-— the first 12 hex chars of ``sha1("{patient_id}|{source}|{key}")`` — so
-repeated derivations (and process restarts) map to the *same* row instead of
-duplicating it. On first sight the item is created via
-``persistence.create_review_item``; afterwards the persisted row (its status in
-particular) is authoritative.
-
-**One-shot acknowledgement semantics.** Status flows ``OPEN → ACKNOWLEDGED →
-ACTION_RECORDED`` ("actioned"). Because the id is a pure function of the
-condition, an actioned item can never reappear as open even when the
-underlying condition persists — acknowledging/recording an action once retires
-that condition's queue entry for good. Re-derivation simply finds the existing
-row and reports its stored status.
-
-The clinician closes the loop on an item with ``POST /review/{id}/action``
-(free-text action + note) or ``POST /review/{id}/proposal`` — the latter runs
-the same rule-engine service as ``POST /rules/run`` (no HTTP hop), links the
-freshly minted PROPOSED envelope to the item, and records a
-``proposal_created`` action. The clinician then edits/approves the proposal
-through the existing envelope endpoints.
+Acknowledgement, actions, and proposal links update stored review state. The
+acknowledgement read/check and write are separate, so monotonic status is not
+guaranteed under concurrent actions. Proposals use the shared rule service and
+still require separate clinician approval before live planning.
 """
 
 from __future__ import annotations
@@ -129,12 +107,7 @@ def _upsert_derived(
     reason: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    """Derive-to-row: create on first sight, then always read stored state.
-
-    The stored row is authoritative (its status in particular), so a persisted
-    ACKNOWLEDGED/ACTION_RECORDED item keeps its status even when the underlying
-    condition still derives — one-shot acknowledgement semantics.
-    """
+    """Create on first sight; repeated derivation preserves stored payload and status."""
     review_id = _review_id(patient_id, source, key)
     persistence.create_review_item(
         patient_id,
@@ -176,8 +149,7 @@ def _derive_for_patient(patient_id: str) -> list[dict[str, Any]]:
         patient_id, logs, _dish_index(), with_series=True
     )
 
-    # 1. Worsening deviation trend flags (improving flags are good news and
-    #    never enqueue; "alert" severity only ever co-occurs with worsening).
+    # Improving trends do not require review; enqueue only worsening flags.
     for group in attributed["groups"]:
         envelope = group["envelope"]
         for flag in group["result"]["flags"]:
@@ -299,8 +271,8 @@ def acknowledge_review(review_id: str) -> dict[str, Any]:
         )
     if row["status"] == "OPEN":
         row = persistence.acknowledge_review_item(review_id)
-    # Idempotent: re-acknowledging (or acknowledging a later-stage item)
-    # returns the item unchanged rather than regressing its status.
+    # Sequential repeats preserve later status. The OPEN check and write above
+    # are separate, so this does not protect against a concurrent recorded action.
     return _compose_item(row)
 
 
@@ -333,8 +305,7 @@ def proposal_review(review_id: str) -> dict[str, Any]:
                 "patient_id": row["patient_id"],
             },
         )
-    # Same code path as POST /rules/run (no HTTP hop): engine -> PROPOSED
-    # envelope and embedded trace persisted together.
+    # Persist a fresh proposal and embedded trace through the shared rule service.
     result = run_rules_service(dict(patient))
     envelope = result["envelope"]
     updated = persistence.record_review_action(

@@ -1,8 +1,7 @@
 """Envelope model re-export.
 
-The single source of truth is ``shared/envelope_schema.py`` (authored jointly
-with Lane A). We re-export it here so backend code has a stable import path
-(``backend.app.models.envelope``) while the contract stays canonical.
+The source of truth is ``shared/envelope_schema.py``. This module preserves the
+backend import path without defining a second contract.
 
 Do NOT redefine the models here — edits belong in ``shared/``.
 """

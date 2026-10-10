@@ -1,7 +1,7 @@
-"""LLM / embedding model selection (Week 1 decision).
+"""Resolve LLM and embedding configuration without constructing clients.
 
-Chosen defaults (PLAN.md §1, §7)
---------------------------------
+Configured defaults
+-------------------
 Embeddings
     - default: ``nomic-embed-text`` served by a local **Ollama** instance.
     - override: set ``CARE_LOOP_LLM_BACKEND=local_st`` to use
@@ -14,14 +14,15 @@ Chat LLM
 
 Resolution priority (first match wins)
 --------------------------------------
-1. Explicit override ``CARE_LOOP_LLM_BACKEND`` / ``CARE_LOOP_LLM_MODEL``.
-2. ``OPENAI_API_KEY`` present  -> OpenAI.
-3. ``GOOGLE_API_KEY`` present  -> Google.
-4. Otherwise                   -> local Ollama (no key needed).
+1. ``CARE_LOOP_LLM_BACKEND=openai|google|ollama`` selects that chat provider.
+2. With no backend override, ``OPENAI_API_KEY`` selects OpenAI, then
+   ``GOOGLE_API_KEY`` selects Google.
+3. Otherwise resolve Ollama. Unrecognised backend names also use this fallback.
+``CARE_LOOP_LLM_MODEL`` overrides the chosen provider's model, not its provider.
+Embedding resolution is independent of API-key detection.
 
-This ordering keeps a fully offline demo working out of the box while letting a
-developer with API keys opt into a hosted model by exporting one variable.
-Nothing here makes network calls; it only resolves configuration.
+These are resolved choices, not evidence that a provider serves traffic.
+The active chat adapter is selected separately in ``chat/llm.py``.
 """
 
 from __future__ import annotations
@@ -59,7 +60,11 @@ class LLMChoice:
 
 
 def choose_embedding(env: dict[str, str] | None = None) -> EmbeddingChoice:
-    """Resolve the embedding model per the documented priority."""
+    """Resolve local_st for backend aliases local_st/st/sentence-transformers.
+
+    Otherwise resolve Ollama with CARE_LOOP_EMBED_MODEL or nomic-embed-text.
+    No client is constructed and provider availability is not checked.
+    """
     env = os.environ if env is None else env
     backend = env.get("CARE_LOOP_LLM_BACKEND", "").strip().lower()
     if backend in {"local_st", "sentence-transformers", "st"}:

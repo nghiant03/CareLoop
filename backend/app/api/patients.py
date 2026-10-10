@@ -27,7 +27,7 @@ _SEEDS_LOADED = False
 
 
 def _normalise(raw: Any) -> dict[str, dict[str, Any]]:
-    """Accept either a list of patients or {"patients": [...]}."""
+    """Index patient records from a list, wrapped list, or ID-keyed mapping."""
     if isinstance(raw, dict):
         raw = raw.get("patients", raw)
     if isinstance(raw, list):

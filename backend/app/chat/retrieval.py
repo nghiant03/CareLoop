@@ -1,27 +1,10 @@
-"""BM25 retrieval over the knowledge base.
+"""Okapi BM25 retrieval over current rule and dish chunks.
 
-Chunks the KB into citable units:
-
-* **rule chunks** — one per current rule; text is built from guideline, section,
-  verbatim quote, notes and the constraint actions (with plain-language
-  synonyms for nutrients and bound kinds so user phrasing matches);
-* **dish chunks** — one per current dish with a nutrient-profile summary.
-
-Scoring is Okapi BM25 (``rank_bm25.BM25Okapi``) over the same word
-tokenization the retrieval benchmark's ``bm25_word_syn`` method used
-(``re.findall(r"[a-z0-9]+", text.lower())``) with the existing synonym
-expansion applied to every query. ``bm25_word_syn`` is the benchmark winner
-(see ``backend/app/chat/RETRIEVAL_BENCH.md``): best hit@5 and the best
-guideline-nutrient / conflict retrieval of the eight configurations measured.
-Every chunk carries its citable ids so downstream answers can be fully
-grounded.
-
-Revert note: the previous production scorer was scikit-learn word TF-IDF
-(``TfidfVectorizer(stop_words="english")`` cosine over the identical chunking,
-with the identical ``_expand_query``). To revert, swap the ``BM25Okapi`` index
-below back to a fitted ``TfidfVectorizer`` + cosine matrix (one
-``fit_transform`` in ``__init__``, one ``transform`` dot ``matrix.T`` in
-``retrieve``) and set ``MIN_SCORE = 0.05`` — see git history of this file.
+Rule chunks include citation text, actions, notes, and nutrient synonyms;
+dish chunks include per-serving nutrient summaries. Queries expand everyday
+nutrient names and use stopword-filtered tokens. Ranking and citation metadata
+feed the answer pipeline; retrieval alone does not establish claim support.
+Method comparisons and gate calibration are in ``RETRIEVAL_BENCH.md``.
 """
 
 from __future__ import annotations
@@ -37,19 +20,9 @@ from backend.app.kb.graph_store import KBGraph
 
 __all__ = ["Chunk", "KBIndex", "build_index", "retrieve", "MIN_SCORE"]
 
-# BM25 score below this is treated as "no grounded match".
-#
-# Calibrated for BM25 with stopword-filtered tokenization (the previous
-# TF-IDF gate was 0.05 on the cosine scale, with ``stop_words="english"``).
-# Stopwords MUST stay out of the BM25 tokens: measured with the raw bench
-# tokenizer, stopword-only overlap drives irrelevant queries ("What is the
-# capital of France?") to BM25 scores of 5-12 — above genuinely weak-but-
-# relevant queries — so no threshold could preserve the refusal gate. With
-# the filtered tokenizer the measured gap is: irrelevant queries 0.0
-# (no vocabulary overlap) vs weakest labeled-relevant query 2.44 (a
-# typo-corrupted dish query; clean relevant queries score >= 3.8).
-# 2.0 sits inside that gap with headroom below the weakest relevant score;
-# see RETRIEVAL_BENCH.md.
+# The answer pipeline accepts supporting hits strictly above this BM25 score.
+# Stopword filtering prevents irrelevant overlap from defeating the refusal gate;
+# threshold calibration depends on this tokenizer. See RETRIEVAL_BENCH.md.
 MIN_SCORE = 2.0
 
 # Plain-language synonyms appended to chunk/query text so BM25 matches
@@ -78,13 +51,7 @@ IndexSource = Union[KBGraph, "KBIndex"]
 
 
 def _tokenize(text: str) -> list[str]:
-    """Word tokens shared with ``retrieval_bench.BM25Method``.
-
-    Same regex as the benchmark's tokenizer, minus English stopwords — the
-    previous TF-IDF vectorizer scored with ``stop_words="english"``, and
-    keeping stopwords out of the BM25 tokens is what keeps the ``MIN_SCORE``
-    refusal gate meaningful (stopword-only overlap must not look relevant).
-    """
+    """Lowercase alphanumeric tokens without English stopwords; shared with benchmarks."""
     return [
         token
         for token in re.findall(r"[a-z0-9]+", text.lower())
@@ -224,7 +191,11 @@ _CACHE: "WeakKeyDictionary[KBGraph, KBIndex]" = WeakKeyDictionary()
 
 
 def build_index(kb: KBGraph) -> KBIndex:
-    """Build (or fetch the cached) BM25 index for a KBGraph."""
+    """Return the index cached by KBGraph identity, building it on first use.
+
+    Graph updates do not invalidate this snapshot; rebuild the graph or clear
+    the cache before expecting new chunks to participate in retrieval.
+    """
     index = _CACHE.get(kb)
     if index is None:
         index = KBIndex(kb)

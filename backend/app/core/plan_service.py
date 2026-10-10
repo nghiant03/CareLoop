@@ -1,35 +1,9 @@
-"""Planning service: envelope preparation + optimiser result mapping.
+"""Shared planning policy and frontend response mapping.
 
-Two reconciliations live here (documented for the frontend contract):
-
-1. **MIN-floor relaxation (objective calibration + disclosure).** Under the
-   PLAN.md module-4 encoding, MIN floors and TARGETs are *soft* objective
-   terms — they steer the nutrient-deviation objective and never cause
-   infeasibility, so relaxation is no longer required for feasibility.
-   ``prepare_envelope_for_pool`` still lowers MIN floors the allowed pool
-   provably cannot reach (e.g. the guideline fibre floors ``GEN-FIBER-25``
-   min 25 g/d / ``DASH-2025-FIBER-30`` min 30 g/d vs a pool that tops out at
-   8 g fibre per dish, 24 g per 3-dish day) and reports every adjustment in
-   ``relaxed_constraints``.  The hard-constraint guarantee
-   (``violation_count == 0``) holds against the envelope actually solved, and
-   the relaxation is fully disclosed instead of silently dropping the
-   guideline intent.
-
-2. **Frontend plan shape.** The optimiser returns ``plan`` as 21 flat slots
-   (day-major, list of dish-id lists) plus objectives/violations. This module
-   maps that to the UI contract: ``days[]`` with ``slots[]`` (dish entries with
-   names + nutrients) and ``totals[]`` (per-nutrient daily totals vs targets).
-
-   The response also carries a top-level ``adequacy[]`` array scored against
-   the ORIGINAL clinician-approved envelope (one entry per MIN/TARGET
-   constraint, MAX ceilings excluded): ``aim`` (approved value),
-   ``mean_daily`` / ``worst_day`` / ``worst_daily`` across the plan,
-    ``shortfall`` / ``shortfall_pct`` (MIN shortfall or absolute TARGET deviation
-    on the worst day), ``met_days`` / ``total_days``, and ``relaxed_aim`` (the
-   solved floor when MIN relaxation moved it, else ``null``). Because MIN
-   floors are soft objective terms, ``feasible == true`` with
-   ``violation_count == 0`` does not guarantee the approved aims were met —
-    ``adequacy`` makes deviations from the approved aims visible.
+Single-dish search may calibrate unreachable soft MIN floors; main/side
+composition and adequacy reporting retain the original input aims. Floor
+changes are disclosed separately from hard feasibility. See
+``docs/ARCHITECTURE.md`` for the planning workflow and clinical contracts.
 """
 
 from __future__ import annotations
@@ -133,21 +107,16 @@ def map_plan_result(
 ) -> dict[str, Any]:
     """Map the optimiser result to the frontend plan contract.
 
-    ``envelope`` is the clinician-approved envelope (drives the patient
-    explanation); ``solved_envelope`` is the possibly MIN-relaxed copy the
-    optimiser actually solved (drives totals-vs-target compliance so the
-    reported ``compliant`` flags match ``violation_count == 0``).
+    ``envelope`` supplies original aims and the explanation; simulations pass
+    their local input here. ``solved_envelope`` supplies displayed constraints
+    and may have lower MIN floors. Neither input is mutated.
 
-    ``compliant`` reflects HARD constraints only (MAX ceilings — the PLAN.md
-    module-4 encoding): a nutrient whose day total exceeds a hard MAX is
-    ``False``; a nutrient with no hard MAX is ``None`` even when a soft MIN
-    floor is unmet (the shortfall stays visible in ``targets``).
-
-    The top-level ``adequacy[]`` array is scored against the ORIGINAL approved
-    ``envelope`` (not the relaxed copy): one entry per MIN/TARGET constraint in
-    envelope order, reporting mean/worst daily delivery, MIN shortfall or absolute
-    TARGET deviation, and the relaxed floor when it differs from the aim. Empty
-    when the plan is infeasible.
+    Flat day-major meals become ``days[].slots`` and per-nutrient totals.
+    ``compliant`` checks MAX ceilings only and is ``None`` without a MAX.
+    ``adequacy`` assesses each original MIN/TARGET aim in envelope order:
+    mean delivery, largest-deviation day, met-day count, and any relaxed floor.
+    Compatibility keys ``shortfall``/``shortfall_pct`` also cover TARGET
+    overshoots. Infeasible results have empty days and adequacy arrays.
     """
     solved = solved_envelope or envelope
     lookup = {d.dish_id: d for d in dishes}
@@ -202,9 +171,7 @@ def map_plan_result(
                 if constraint["kind"] == "max":
                     ok = value <= constraint["value"] + _EPS
                 elif constraint["kind"] == "min":
-                    # MIN floors are soft objective terms under the PLAN.md
-                    # module-4 encoding — a shortfall is not a hard violation
-                    # (it stays visible in `targets` for the UI).
+                    # Soft floors do not change hard-compliance flags.
                     continue
                 else:
                     continue
@@ -239,12 +206,7 @@ def map_plan_result(
 
     feasible = bool(result.get("feasible"))
 
-    # Adequacy vs the ORIGINAL clinician-approved envelope: one entry per
-    # MIN/TARGET constraint in envelope order (MAX ceilings are excluded —
-    # ceiling compliance is reported via totals.compliant). Because MIN floors
-    # are soft objective terms, a plan can be feasible with zero hard
-    # violations while still missing the approved aims; this makes that gap
-    # visible instead of scoring only against the relaxed copy.
+    # Score original aims, not solver-calibrated floors, so relaxation cannot hide gaps.
     adequacy: list[dict[str, Any]] = []
     if feasible and n_days:
         solved_aim_by_key: dict[tuple[str, str], float] = {}

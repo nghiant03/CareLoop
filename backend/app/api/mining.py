@@ -1,18 +1,9 @@
-"""Mining queries and a validated, persistent plan-swap workflow.
+"""Lab trends, generic substitutions, and patient-aware meal swaps.
 
-* ``GET /mining/trends`` — longitudinal K+/PO4 flags from durable observations
-  or fixture monthly series (``backend.mining.trends.detect_trends``).
-* ``GET /mining/substitutions?dish_id=...&k=3`` — v2 substitution suggestions
-  from the dish database (``backend.mining.substitutions.suggest_substitutions``).
-  With the optional ``patient_id`` query param the suggestions become
-  patient-aware meal swaps (Milestone 2, review finding E): candidates are
-  filtered against the patient's envelope exclusions and validated with the
-  canonical evaluator against every plan day containing the dish, with
-  per-nutrient day deltas and cost deltas attached.
-* ``POST /mining/swaps/apply`` — apply a validated swap: replaces EVERY
-  occurrence of the dish in the patient's saved plan, refuses hard-violating
-  swaps (422), and persists the result as a NEW plan row with a
-  ``derived_from`` lineage field (minimal "meal locking").
+Patient-aware suggestions require a saved plan and label unapproved envelope
+comparisons informational. Applying a swap requires live planning readiness,
+validates the whole modified plan, and attempts to save a new derived document.
+Persistence is best-effort through ``plan_storage.try_save_plan_document``.
 """
 
 from __future__ import annotations
@@ -115,7 +106,7 @@ def substitutions(
     plan_id: Optional[str] = Query(default=None, description="Exact saved plan to preview"),
 ) -> dict:
     if patient_id is None:
-        # Legacy behaviour, byte-identical: generic similarity ranking only.
+        # Preserve the generic response shape without patient-specific validation.
         try:
             results = suggest_substitutions(dish_id, k=k, version=2)
         except KeyError:
@@ -125,7 +116,7 @@ def substitutions(
             )
         return {"dish_id": dish_id, "k": k, "substitutions": results}
 
-    # ---- patient-aware meal swaps (Milestone 2, review finding E) ----
+    # Patient-aware previews use an exact saved plan or the patient's latest plan.
     from backend.app.core import persistence
 
     if dish_id not in _dish_index():
@@ -198,10 +189,10 @@ def apply_swap(req: SwapApplyRequest) -> dict[str, Any]:
     """Replace every occurrence of ``dish_id`` in the patient's saved plan.
 
     The modified plan is validated with the canonical evaluator against the
-    APPROVED envelope; a hard violation (MAX ceiling, exclusion, membership)
-    answers 422 and nothing is persisted.  A valid swap is saved as a NEW
-    plan row whose document carries ``derived_from`` (the source plan id) so
-    the lineage stays auditable.  The source plan is never mutated.
+    latest ready envelope; a hard violation returns 422 without saving a plan.
+    A valid response carries ``derived_from`` and is saved as a new plan on a
+    best-effort basis; storage failure returns the response without a saved ID.
+    The source plan is never mutated.
     """
     from backend.app.core import persistence
     from backend.app.core.plan_storage import try_save_plan_document
@@ -275,9 +266,7 @@ def apply_swap(req: SwapApplyRequest) -> dict[str, Any]:
             },
         )
 
-    # Re-map through the canonical frontend mapper so the new document keeps
-    # the same shape as a generated plan (days/totals/adequacy/explanation),
-    # scored against the ORIGINAL approved envelope.
+    # Use the generation mapper so swaps retain the response contract and original-aim scoring.
     document = map_plan_result(
         {
             "plan": outcome.modified_plan,
