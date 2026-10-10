@@ -1,4 +1,4 @@
-"""Patient-aware meal swaps (Milestone 2 — fixes review finding E).
+"""Validate ranked dish swaps against an envelope and saved-plan context.
 
 ``backend.mining.substitutions`` ranks substitutes by generic renal-weighted
 nutrient distance; it knows nothing about *this* patient's approved envelope
@@ -6,14 +6,14 @@ or the meals they actually eat.  This module adds the patient context:
 
 * the patient's latest saved plan is reconstructed into the canonical solver
   ``Plan`` representation (day-major, ``MEALS_PER_DAY`` meals per day);
-* ranked candidates are filtered against the envelope (an excluded dish is
-  NEVER recommended — the P0006/SG0009 -> SG0030 regression);
+* ranked candidates are filtered against the envelope (excluded dishes are
+  not recommended);
 * every surviving candidate is validated with the canonical evaluator
   (:func:`backend.optim.problem.evaluate`) on each affected day: the source
   dish is replaced by the candidate in that day and the modified day must be
   free of HARD violations (MAX ceilings, exclusions, membership);
 * per-nutrient day deltas (after - before) and a cost delta are reported so
-  the clinician sees what the swap does to the patient's actual day.
+  the clinician sees what the swap changes in the saved plan, not logged intake.
 
 Envelopes: suggestion helpers may evaluate any lifecycle status; the API labels
 unapproved suggestions ``informational_only``. Applying a swap requires a ready
@@ -154,8 +154,8 @@ def _worst_aim_deviation_pct(
 ) -> float:
     """Worst MIN shortfall or absolute TARGET deviation as a percentage.
 
-    Pooled over the supplied days only (the affected days); MAX ceilings are
-    excluded (they are hard constraints, not aims).  0.0 when nothing counts.
+    Pool only the supplied affected days. Exclude MAX ceilings because they are
+    hard constraints, not aims. Return 0.0 when no positive aim contributes.
     """
     worst = 0.0
     for totals in day_totals.values():
@@ -183,7 +183,7 @@ def patient_substitutions(
     plan_document: dict[str, Any],
     dishes: list[Any],
 ) -> dict[str, Any]:
-    """Rank + validate substitute dishes against the patient's actual plan.
+    """Rank and validate substitute dishes against the supplied saved plan.
 
     Candidates come from the existing v2 ranking (:func:`suggest_substitutions`,
     pulled ``k * 3`` wide); each is then validated:
@@ -222,7 +222,7 @@ def patient_substitutions(
         candidate_dish = lookup.get(candidate_id)
         if candidate_dish is None:
             continue
-        # Excluded dishes must never be recommended (review finding E).
+        # Generic similarity ranking alone does not enforce the patient's exclusions.
         if exclusion_for(candidate_dish, validation_envelope) is not None:
             continue
 

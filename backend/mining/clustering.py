@@ -2,10 +2,11 @@
 
 `cluster_patients` standardises the available numeric features, runs k-means
 over a small range of k, and selects the k with the best mean silhouette.
-Everything is deterministic (fixed ``random_state``).
+Fixed ``random_state`` makes repeated fits reproducible for the same inputs
+and numerical environment.
 
-Candidate features (retained when present in at least one patient; missing
-entries are median-imputed and wholly absent columns are dropped):
+Candidate features are retained when present in at least one patient. Missing
+entries are median-imputed; wholly absent columns are dropped:
 
     age, bmi, hba1c_pct, egfr, serum_K_meq_L, serum_PO4_mg_dL,
     systolic_bp, diastolic_bp
@@ -66,7 +67,11 @@ def cluster_patients(
         List of patient dicts (as in ``data/patients.json``).
     k_range:
         Inclusive ``(min_k, max_k)``; each k is tried and scored by mean
-        silhouette on the standardised features.
+        silhouette on the standardised features. Only 2 <= k < len(patients)
+        is eligible. Equal scores retain the smaller k.
+
+    Raises ValueError for empty input, no usable features, no eligible k, or
+    a fitted labeling with too few distinct clusters for silhouette scoring.
 
     Returns
     -------

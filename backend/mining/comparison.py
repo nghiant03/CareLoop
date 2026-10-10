@@ -20,7 +20,7 @@ The study compares, per module:
    (orientation handling reused from ``trends``).
 3. **Substitution metrics** — v1 euclidean (nutrient-only, current v1 mode)
    vs a renal-weighted nutrient distance (Na/K/P weighted heavier) vs the v2
-   composite (nutrient + category + cuisine + healthier-choice prior). Rank
+   composite (nutrient + category + cuisine + lower-mineral-load prior). Rank
    agreement via Kendall tau, plus a qualitative top-3 table for three
    example dishes.
 
@@ -30,7 +30,8 @@ structured dict by :func:`run_comparison` and rendered to
 
 Private helpers of the sibling modules (``_feature_matrix``,
 ``_theil_sen_slope``, ``_oldest_first``, ``_candidates``, ...) are reused
-deliberately so the study always evaluates exactly what production runs.
+deliberately for shared input handling. Some comparisons preserve historical
+scorers as explicit alternatives; they do not all reproduce current production.
 """
 
 from __future__ import annotations
@@ -356,9 +357,8 @@ def _ols_slope(y: list[float]) -> float:
     return float(np.polyfit(x, y, 1)[0])
 
 
-# The EWMA estimator lives in production (trends._ewma_slope) since the
-# hybrid de-escalation was adopted; the study reuses it so both sides stay
-# in sync (see "Adopted changes" in COMPARISON.md).
+# Reuse the production EWMA estimator so the study measures the same slope
+# used for trend de-escalation.
 
 
 ESTIMATORS: dict[str, callable] = {
@@ -598,14 +598,11 @@ def _weighted_distance(dish_a: dict, dish_b: dict) -> float:
 
 
 def _v2_scores(query: dict, candidates: list[dict]) -> dict[str, float]:
-    """Replicates the v2 composite score *as studied* (plain euclidean
-    nutrient term).
+    """Score the study's composite alternative using plain Euclidean distance.
 
-    Production v2 has since adopted the renal-weighted nutrient term
-    (``substitutions.renal_nutrient_distance``, Na/K/P ×2) — see the
-    "Adopted changes" section of COMPARISON.md. This replication is kept on
-    the pre-adoption definition so the study's three metrics remain the
-    distinct alternatives that were compared.
+    Production v2 uses renal-weighted distance. Keep this alternative unweighted
+    so the study compares distinct nutrient-only, renal-weighted, and composite
+    scorers rather than duplicating production under two labels.
     """
     nds = [(c, substitutions.nutrient_distance(query, c)) for c in candidates]
     best = min(nd for _, nd in nds)
@@ -617,7 +614,7 @@ def _v2_scores(query: dict, candidates: list[dict]) -> dict[str, float]:
         if query.get("cuisine") and query["cuisine"] == cand.get("cuisine"):
             adj -= substitutions._CUISINE_BONUS
         if nd <= best + substitutions._NEAR_TOLERANCE:
-            adj += substitutions._HEALTH_WEIGHT * substitutions._health_term(cand)
+            adj += substitutions._MINERAL_LOAD_WEIGHT * substitutions._mineral_load(cand)
         adj -= substitutions._tiebreak(cand)
         scores[cand["dish_id"]] = adj
     return scores

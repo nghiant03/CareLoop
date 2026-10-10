@@ -5,8 +5,8 @@ Modules:
     substitutions   - food substitution engine (v1 nutrient distance, v2 ranked)
     trends          - longitudinal lab trend detection (Theil-Sen slopes)
 
-Data lives in ``<repo>/data/``; every loader resolves the repo root from this
-file's location, so paths work from any working directory.
+Default data paths resolve ``<repo>/data/`` from module locations, independent
+of the working directory. Explicit relative paths remain relative to the caller.
 """
 
 from backend.mining import clustering, substitutions, trends  # noqa: F401

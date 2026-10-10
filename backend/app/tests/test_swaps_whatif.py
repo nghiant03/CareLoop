@@ -1,11 +1,11 @@
-"""Milestone 2 tests: patient-aware swaps + clinician what-if simulations.
+"""Patient-aware swaps and isolated clinician what-if simulations.
 
 Covers:
 
 * ``GET /mining/substitutions?...&patient_id=`` — the P0006 regression
   (source SG0009 must never recommend SG0030 Curry Mee, which P0006's
   envelope excludes via ``high_potassium_foods``), hard-check validation and
-  day deltas; the legacy (no ``patient_id``) response stays byte-identical;
+  day deltas; generic requests without patient_id omit validation metadata;
   ``plan_context_required`` 409 when the patient has no saved plan.
 * ``POST /mining/swaps/apply`` — a valid swap saves a NEW plan row with
   ``derived_from`` lineage and leaves the source plan untouched; a
@@ -26,9 +26,8 @@ from backend.app.core.approval_gate import ENVELOPE_STORE, find_latest_envelope_
 from backend.optim.problem import exclusion_for
 from backend.optim.real_data import load_dishes
 
-# The /simulations router is mounted by main.py (see the orchestrator's mount
-# lines). This guarded fallback keeps the module green when run before that
-# mount lands; it is a no-op once main.py includes the router.
+# Attach simulations only when the imported app omits its route; normal
+# application imports already mount it.
 from backend.app.main import app as _app
 
 if not any(getattr(route, "path", None) == "/simulations" for route in _app.routes):
@@ -71,7 +70,7 @@ def p0001(client):
 
 
 # ---------------------------------------------------------------------------
-# 1. Patient-aware substitutions (review finding E regression)
+# 1. Patient-aware substitutions
 # ---------------------------------------------------------------------------
 
 
@@ -122,8 +121,9 @@ def test_substitutions_without_patient_id_is_unchanged(client) -> None:
     for item in body["substitutions"]:
         assert set(item) == {
             "dish_id", "name", "distance", "nutrient_distance",
-            "category_match", "reason",
+            "category_match", "reason", "ranking_score",
         }
+        assert item["ranking_score"] == item["distance"]
 
 
 def test_substitutions_patient_without_plan_409(client) -> None:

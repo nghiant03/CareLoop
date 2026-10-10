@@ -72,7 +72,7 @@ class TestSubstitutions:
         assert 0.0 <= d_ab <= 6 ** 0.5 + 1e-9
 
     def test_v2_uses_renal_weighted_distance(self, dishes):
-        """Adopted from COMPARISON.md §3: the v2 composite's nutrient term is
+        """The v2 composite's nutrient term is
         the renal-weighted distance (Na/K/P ×2), not the plain euclidean."""
         dish = next(d for d in dishes if d["dish_id"] == "SG0001")
         results = substitutions.suggest_substitutions("SG0001", k=5, version=2, dishes=dishes)
@@ -116,8 +116,9 @@ class TestSubstitutions:
         for r in results:
             assert set(r) == {
                 "dish_id", "name", "distance", "nutrient_distance",
-                "category_match", "reason",
+                "category_match", "reason", "ranking_score",
             }
+            assert r["ranking_score"] == r["distance"]
             assert isinstance(r["reason"], str) and r["reason"]
 
     def test_category_logic_drink_never_soup(self, dishes):
@@ -167,7 +168,7 @@ class TestSubstitutions:
     def test_k_respected_with_small_pool(self, dishes):
         dessert = next(d for d in dishes if d["category"] == "dessert")
         results = substitutions.suggest_substitutions(dessert["dish_id"], k=10, version=2, dishes=dishes)
-        # dessert(6) + drink(19) - self = 24 candidates max; just cap check
+        # The compatible category pool bounds the number returned, even for large k.
         assert 0 < len(results) <= 10
 
 
@@ -214,7 +215,7 @@ class TestTrends:
             assert f["values"][-1] == pytest.approx(serum)
 
     def test_plateau_downgraded_by_ewma(self):
-        """Hybrid de-escalation (COMPARISON.md §2): a series that rose and
+        """Hybrid de-escalation: a series that rose and
         then flattened is still flagged by the full-window Theil-Sen rule,
         but the recent-regime EWMA slope no longer satisfies the flag rule,
         so severity is downgraded to review with a reason saying why."""

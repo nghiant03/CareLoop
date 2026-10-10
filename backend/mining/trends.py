@@ -4,10 +4,9 @@ Observation precedence and fixture orientation
 ------------------
 Dated observations take precedence when present for an analyte; their elapsed
 dates determine the slope. Otherwise fixture ``labs_*_monthly`` arrays are used.
-The task brief assumed oldest->newest, but the fixture dataset is the opposite:
-``labs_K_monthly[0]`` equals the
-current ``serum_K_meq_L`` and ``months_offset_ago == [0, 1, 2, 3, 4, 5]``
-(0 = this month). Values are therefore stored **newest-first**.
+Fixture arrays are stored newest-first: ``labs_K_monthly[0]`` equals the
+current ``serum_K_meq_L``. ``months_offset_ago == [0, 1, 2, 3, 4, 5]``
+identifies index 0 as this month.
 
 ``_oldest_first`` restores chronological (oldest->newest) order using, in
 order of preference:
@@ -18,8 +17,7 @@ order of preference:
    first or last element.
 3. With no signal at all, assume newest-first (the dataset convention).
 
-Slopes are fit with Theil-Sen (median of pairwise slopes — robust to outlier
-months); OLS is not used.
+Slopes use Theil-Sen, the median of pairwise slopes, to limit outlier influence.
 
 Flagging rules
 --------------
@@ -30,12 +28,10 @@ Flagging rules
   level (K+ >= 5.0, PO4 >= 4.6) or the 3-month projection crosses the flag
   threshold; otherwise "review".
 
-Hybrid de-escalation (COMPARISON.md §2)
+Hybrid de-escalation
 ---------------------------------------
 The Theil-Sen slope is fit over the full window, so a series that rose and
-then plateaued keeps flagging (synthetic plateau false-positive rate 14% vs
-EWMA's 6% in that comparison). Trend flags are raised by Theil-Sen, but each
-flag also computes the EWMA-weighted
+then plateaued can keep flagging. Each flag also computes the EWMA-weighted
 least-squares slope (half-life 2 months, exposed as ``ewma_slope_per_month``).
 If the *recent* regime no longer satisfies the same flag rule under the EWMA
 slope — i.e. EWMA would not flag this series — severity is de-escalated to
@@ -72,12 +68,11 @@ def _theil_sen_slope(y: list[float], times=None) -> float:
 
 
 def _ewma_slope(y: list[float], halflife: float = 2.0, times=None) -> float:
-    """Exponentially weighted least-squares slope (recent months count more).
+    """Exponentially weighted least-squares slope with more weight on recent months.
 
     Weights decay with a half-life of ``halflife`` months, so the estimate
     tracks the *current* regime rather than the whole history — the property
-    the full-window Theil-Sen estimator lacks. Same estimator as the one
-    studied in ``backend/mining/comparison.py`` (§2).
+    the full-window Theil-Sen estimator lacks.
     """
     y = np.asarray(y, dtype=float)
     x = np.arange(len(y), dtype=float) if times is None else np.asarray(times, dtype=float)
@@ -95,7 +90,7 @@ def _would_flag(slope: float, latest: float, cfg: dict) -> bool:
 
 
 def _is_current_first(patient: dict, field: str, serum_field: str) -> bool:
-    """Decide whether the stored series is newest-first (index 0 = today)."""
+    """Infer whether index 0 is the newest reading from offsets or the serum value."""
     offsets = patient.get("months_offset_ago")
     values = patient.get(field) or []
     if (
@@ -158,8 +153,8 @@ def detect_trends(patients: list[dict]) -> list[dict]:
                 continue
 
             # Hybrid de-escalation: the EWMA slope tracks the recent regime,
-            # so a Theil-Sen flag whose EWMA counterpart no longer fires is
-            # a rise that has plateaued. An urgent dated value remains urgent.
+            # so a Theil-Sen flag without EWMA support may reflect an older rise.
+            # An urgent dated value remains urgent.
             ewma = _ewma_slope(series, times=times)
             ewma_rising = _would_flag(ewma, latest, cfg)
 

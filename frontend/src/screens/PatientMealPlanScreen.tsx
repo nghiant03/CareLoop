@@ -752,7 +752,7 @@ function SubstitutionCard({
         <div>
           <p className="font-semibold text-slate-900">{sub.name}</p>
           <p className="text-xs text-slate-500">
-            {sub.category_match ? 'Same category' : 'Different category'} · distance {sub.distance.toFixed(2)} · cost Δ{' '}
+            {sub.category_match ? 'Same category' : 'Different category'} · ranking score {(sub.ranking_score ?? sub.distance).toFixed(2)} · cost Δ{' '}
             {sub.cost_delta.toFixed(2)}
           </p>
         </div>

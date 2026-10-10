@@ -1,8 +1,7 @@
 """Tests for backend.mining.comparison — the method-comparison study.
 
-The full study runs in a couple of seconds, so a module-scoped fixture runs
-it once (also exercising `main()`'s artifact writing) and every test asserts
-on the shared results.
+A module-scoped fixture exercises main()'s artifact writing and shares a study
+result across assertions. Runtime depends on the numerical environment.
 """
 
 import math
