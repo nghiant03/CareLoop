@@ -1,4 +1,8 @@
-"""Match a constraint to the trace that authored its exact kind and value."""
+"""Attach explicit provenance, with action-text matching for legacy constraints.
+
+Trace formatting is a compatibility contract: the fallback recognises ``set``
+actions and the hand-worked fixture's bounds, not arbitrary equivalent prose.
+"""
 import re
 
 from shared.envelope_schema import ConstraintProvenance
@@ -10,7 +14,7 @@ _SET = re.compile(
 
 
 def _canonical_summary(summary):
-    """Normalise the hand-worked fixture's explicit bounds, never keyword-match."""
+    """Translate recognised fixture bounds into the engine's ``set`` action syntax."""
     aliases = {"Na": "sodium_mg", "K": "potassium_mg", "protein": "protein_g",
                "energy": "energy_kcal", "fiber": "fiber_g", "sat fat": "sat_fat_g"}
     bound = re.match(r"^(Na|K|fiber|sat fat) (ceiling|floor|max) = ([\d.]+) (mg|g|kcal)/d", summary)
@@ -25,7 +29,11 @@ def _canonical_summary(summary):
 
 
 def citation_for(target: dict, trace: list[dict]):
-    # Recent overrides take precedence; rule matches must support the final value.
+    """Return a citation matching nutrient, kind, unit, and final value, or None.
+
+    Search edits newest first, then rules by decreasing priority. Values match
+    within 0.005 to tolerate trace rounding; per-kg actions use the scaled value.
+    """
     edits = [r for r in reversed(trace) if r.get("rule_id") == "CLINICIAN-EDIT"]
     rules = sorted((r for r in trace if r.get("rule_id") != "CLINICIAN-EDIT"),
                    key=lambda r: -r.get("priority", 0))
@@ -39,6 +47,12 @@ def citation_for(target: dict, trace: list[dict]):
 
 
 def attach_provenance(envelope, *, author=None, citation=None):
+    """Mutate targets to attach provenance using the envelope's current ID/version.
+
+    Without an author override, keep existing provenance and infer only missing
+    entries from the trace. An author override replaces matched entries; an
+    explicit citation takes precedence over trace matching.
+    """
     trace = [row.model_dump(mode="json") for row in envelope.fired_rules]
     for target in envelope.targets:
         if author is None and target.provenance is not None:

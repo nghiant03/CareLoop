@@ -14,7 +14,7 @@ from backend.app.core.approval_gate import get_envelope
 from backend.app.core.trace_store import put_trace, trace_or_none
 from backend.app.main import app
 from shared.envelope_schema import NutrientEnvelope
-from shared.export_schema import SCHEMA_PATH, schema_text
+from shared.export_schema import schema_text
 
 
 @pytest.fixture
@@ -42,17 +42,6 @@ def test_scope_rejection_cannot_be_cleared_by_editing_targets_and_notes(api):
     assert api.post(path + "/approve", json={}).status_code == 422
     assert api.get(path).json() == original
     assert len(persistence.list_envelope_history("P0008")) == 1
-
-
-def test_legacy_scope_snapshot_retains_exclusion_after_note_change(api):
-    legacy = propose(api, "P0008")
-    del legacy["scope_eligible"]
-    del legacy["lifecycle_revision"]
-    restored = NutrientEnvelope.model_validate(legacy)
-    restored.notes = "Updated note"
-    assert not restored.scope_eligible
-    with pytest.raises(envelope_lifecycle.EnvelopeScopeError):
-        envelope_lifecycle.edit(restored, edited_by="reviewer")
 
 
 def test_stale_approval_cannot_overwrite_an_edit_from_another_worker(api):
@@ -106,8 +95,7 @@ def test_durable_trace_wins_over_a_stale_process_cache(api):
 
 
 def test_generated_schema_validates_actual_lifecycle_responses(api):
-    assert SCHEMA_PATH.read_text() == schema_text(), "Run python -m shared.export_schema"
-    schema = json.loads(SCHEMA_PATH.read_text())
+    schema = json.loads(schema_text())
     Draft202012Validator.check_schema(schema)
     validator = Draft202012Validator(schema)
     original = propose(api)

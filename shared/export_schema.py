@@ -1,6 +1,7 @@
-"""Generate the cross-language envelope schema from the canonical Python model.
+"""Export the canonical model's serialization schema using wire aliases.
 
-Run ``python -m shared.export_schema`` to regenerate, or add ``--check`` in CI.
+``python -m shared.export_schema`` writes the mirror; ``--check`` only verifies
+it and exits nonzero when missing or stale.
 """
 
 import argparse
@@ -26,6 +27,6 @@ if __name__ == "__main__":
     expected = schema_text()
     if args.check:
         if not SCHEMA_PATH.exists() or SCHEMA_PATH.read_text() != expected:
-            parser.exit(1, "Envelope schema is stale: run python -m shared.export_schema\n")
+            parser.exit(1, "Envelope schema is stale.\n")
     else:
         SCHEMA_PATH.write_text(expected)
