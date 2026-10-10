@@ -318,11 +318,17 @@ def test_deviation_flat_series_no_flags(client) -> None:
     """The same dish every day -> constant exposure -> no directional flags."""
     _hand_built_envelope("P0007", sodium_max=100.0, protein_min=0.0, energy_target=50_000.0)
     for i in range(4):
-        assert _log(client, "P0007", _today(offset_days=i - 3), "lunch", "SG0001").status_code == 201
+        for meal in ("breakfast", "lunch", "dinner"):
+            assert _log(client, "P0007", _today(offset_days=i - 3), meal, "SG0001").status_code == 201
 
     resp = client.get("/adherence/P0007/deviation")
     assert resp.status_code == 200, resp.text
-    assert resp.json()["flags"] == []
+    body = resp.json()
+    for series in body["series"].values():
+        assert len(series["points"]) == 4
+        assert all(point["complete"] for point in series["points"])
+        assert len({point["exposure"] for point in series["points"]}) == 1
+    assert body["flags"] == []
 
 
 def test_deviation_unknown_patient_404(client) -> None:

@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
+from shared.provenance import citation_for
+
 __all__ = ["clinician_explanation", "patient_explanation"]
 
 # Patient-facing nutrient labels; _NUTRIENT_ORDER controls display order.
@@ -30,10 +32,8 @@ _NUTRIENT_ORDER = [
     "carbs_g", "fiber_g", "sat_fat_g", "fat_g", "sugar_g",
 ]
 
-# Nutrient detection in fired-rule action summaries (for priority overlaps
-# and constraint→rule citation matching). Handles both the hand-worked trace
-# style ("Na ceiling = 2000 mg/d") and the engine style ("set sodium_mg max =
-# 2000 mg/d") — patterns match into suffixed tokens like ``sodium_mg``.
+# Nutrient mentions identify display overlaps, not exact target provenance.
+# Patterns cover fixture aliases ("Na ceiling") and engine tokens ("sodium_mg").
 _NUTRIENT_SUMMARY_PATTERNS = {
     "sodium_mg": re.compile(r"sodium|\bna\b", re.IGNORECASE),
     "potassium_mg": re.compile(r"potassium|\bk\b", re.IGNORECASE),
@@ -62,6 +62,10 @@ def _nutrients_in_text(text: str) -> list[str]:
 
 _CONFLICT_PREFIX = "CONFLICT"
 
+# Citation marker recorded by core/envelope_lifecycle.edit for clinician
+# replacements; guideline rules never carry it.
+_CLINICIAN_EDIT_RULE_ID = "CLINICIAN-EDIT"
+
 _PLAIN_AVOID = {
     "potassium_chloride": "potassium-based salt substitutes",
     "high_potassium_foods": "high-potassium foods (such as bananas, oranges, potatoes and tomatoes)",
@@ -81,49 +85,29 @@ def _format_amount(value: Any, unit: str) -> str:
     except (TypeError, ValueError):
         return f"{value} {unit}".strip()
     if unit == "mg" and num >= 1000:
-        grams = num / 1000.0
-        text = f"{grams:.1f}".rstrip("0").rstrip(".")
-        return f"{text} g"
+        if num % 10 == 0:
+            # Grams render only when exact to hundredths of a gram: rounding
+            # must never loosen (or tighten) a stated MAX ceiling or MIN floor.
+            grams = num / 1000.0
+            text = f"{grams:.2f}".rstrip("0").rstrip(".")
+            return f"{text} g"
     if num == int(num):
         return f"{int(num)} {unit}".strip()
-    return f"{num:g} {unit}".strip()
+    return f"{num} {unit}".strip()
 
 
-def _citations_of(fired: dict[str, Any]) -> dict[str, Any]:
-    citation = fired.get("citation") or {}
-    return {
-        "rule_id": citation.get("rule_id") or fired.get("rule_id"),
-        "guideline": citation.get("guideline"),
-        "section": citation.get("section"),
-        "url": citation.get("url"),
-        "verbatim_quote": citation.get("verbatim_quote"),
-    }
-
-
-def _rule_citation_for_nutrient(
-    fired_rules: list[dict[str, Any]], nutrient: str
+def _target_citation(
+    target: dict[str, Any], fired_rules: list[dict[str, Any]]
 ) -> Optional[dict[str, Any]]:
-    """Choose a citation from nutrient mentions, not exact constraint provenance.
-
-    Prefer summaries not starting with exclude/assert, then higher priority and
-    lower rule ID. Ignore CONFLICT rules; return None without a matching mention.
-    """
-    candidates = []
-    for fired in fired_rules:
-        if str(fired.get("rule_id", "")).startswith(_CONFLICT_PREFIX):
-            continue
-        if nutrient in _nutrients_in_text(fired.get("action_summary", "")):
-            candidates.append(fired)
-    if not candidates:
-        return None
-
-    def sort_key(fired: dict[str, Any]) -> tuple:
-        summary = str(fired.get("action_summary", "")).strip().lower()
-        mentions_only = summary.startswith(("exclude", "assert"))
-        return (1 if mentions_only else 0, -int(fired.get("priority", 0)), str(fired.get("rule_id", "")))
-
-    candidates.sort(key=sort_key)
-    return _citations_of(candidates[0])
+    """Use exact provenance, or matching legacy actions when provenance is absent."""
+    provenance = target.get("provenance")
+    if provenance:
+        # Stale provenance cannot author a changed value. Do not borrow a trace
+        # citation when explicit provenance disagrees with the target.
+        if any(provenance.get(key) != target.get(key) for key in ("nutrient", "kind", "value", "unit")):
+            return None
+        return provenance.get("citation")
+    return citation_for(target, fired_rules)
 
 
 # ---------------------------------------------------------------------------
@@ -191,31 +175,29 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
         if len(candidates) < 2:
             continue
         candidates.sort(key=lambda f: (-int(f.get("priority", 0)), str(f.get("rule_id", ""))))
-        winner = candidates[0]
-        overridden = [
+        top_mention = candidates[0]
+        lower_mentions = [
             {"rule_id": f.get("rule_id"), "priority": f.get("priority", 0)}
             for f in candidates[1:]
-            if int(f.get("priority", 0)) < int(winner.get("priority", 0))
+            if int(f.get("priority", 0)) < int(top_mention.get("priority", 0))
         ]
-        if overridden:
+        if lower_mentions:
             priority_overlaps.append(
                 {
                     "nutrient": nutrient,
-                    "highest_priority_rule_id": winner.get("rule_id"),
-                    "highest_priority": winner.get("priority", 0),
-                    "lower_priority_mentions": overridden,
+                    "highest_priority_rule_id": top_mention.get("rule_id"),
+                    "highest_priority": top_mention.get("priority", 0),
+                    "lower_priority_mentions": lower_mentions,
                     "summary": (
-                        f"{winner.get('rule_id')} (priority "
-                        f"{winner.get('priority', 0)}) has higher priority than "
-                        f"{', '.join(o['rule_id'] for o in overridden)} on "
+                        f"{top_mention.get('rule_id')} (priority "
+                        f"{top_mention.get('priority', 0)}) has higher priority than "
+                        f"{', '.join(o['rule_id'] for o in lower_mentions)} on "
                         f"{nutrient}"
                     ),
                 }
             )
 
     constraints = []
-    from shared.provenance import citation_for
-
     for target in envelope.get("targets") or []:
         nutrient = target.get("nutrient")
         constraints.append(
@@ -224,7 +206,7 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
                 "kind": target.get("kind"),
                 "value": target.get("value"),
                 "unit": target.get("unit"),
-                "citation": (target.get("provenance") or {}).get("citation") or citation_for(target, fired_rules),
+                "citation": _target_citation(target, fired_rules),
                 "provenance": target.get("provenance"),
             }
         )
@@ -299,12 +281,18 @@ def _target_phrases(targets: list[dict[str, Any]]) -> list[dict[str, str]]:
 def patient_explanation(envelope: dict, plan: Optional[dict] = None) -> dict:
     """Plain-language patient view of an envelope.
 
-    Daily targets in "keep sodium under 2 g a day" style, short why-bullets
-    drawn from the trace citations carried on the envelope, and simple
-    avoid-choices. Rule ids and jargon stay out of the prose.
+    Render daily targets, avoid-choices, and why-bullets without rule IDs.
+    Why-bullets follow per-target provenance: clinician-edited targets are
+    attributed to the care team's decision, never to a guideline whose
+    retained rule produced a different value. Legacy targets require a matching
+    trace action, not a nutrient mention. Callers must gate personal guidance:
+    unapproved inputs still expose target numbers alongside an approval note.
     """
     targets = list(envelope.get("targets") or [])
     fired_rules = list(envelope.get("fired_rules") or [])
+    grouped: dict[str, dict[str, Any]] = {}
+    for target in targets:
+        grouped.setdefault(target.get("nutrient"), {})[target.get("kind")] = target
 
     daily_targets = [
         {"label": line["label"], "text": line["text"]}
@@ -312,13 +300,25 @@ def patient_explanation(envelope: dict, plan: Optional[dict] = None) -> dict:
     ]
 
     why = []
-    for line in _target_phrases(targets):
-        nutrient = line["nutrient"]
-        citation = _rule_citation_for_nutrient(fired_rules, nutrient)
-        if not citation:
-            continue
-        guideline = citation.get("guideline") or "your care team"
-        why.append(f"{guideline} recommends: {line['text'].lower()}")
+    for nutrient in _NUTRIENT_ORDER:
+        source_groups: list[tuple[dict, list[dict]]] = []
+        for target in grouped.get(nutrient, {}).values():
+            citation = _target_citation(target, fired_rules)
+            if not citation:
+                continue
+            for source, source_targets in source_groups:
+                if source == citation:
+                    source_targets.append(target)
+                    break
+            else:
+                source_groups.append((citation, [target]))
+        # Merge bounds only when the same source authored both of them.
+        for citation, source_targets in source_groups:
+            line = _target_phrases(source_targets)[0]
+            if citation.get("rule_id") == _CLINICIAN_EDIT_RULE_ID:
+                why.append(f"Your care team set: {line['text'].lower()}")
+            elif citation.get("guideline"):
+                why.append(f"{citation['guideline']} recommends: {line['text'].lower()}")
 
     avoid = []
     for exclusion in envelope.get("exclusions") or []:
@@ -336,9 +336,6 @@ def patient_explanation(envelope: dict, plan: Optional[dict] = None) -> dict:
     if isinstance(plan, dict):
         totals = plan.get("totals") or {}
         lines = []
-        grouped: dict[str, dict[str, Any]] = {}
-        for target in targets:
-            grouped.setdefault(target.get("nutrient"), {})[target.get("kind")] = target
         for nutrient in _NUTRIENT_ORDER:
             if nutrient not in totals or nutrient not in grouped:
                 continue

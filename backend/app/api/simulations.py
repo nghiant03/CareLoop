@@ -136,7 +136,7 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
         base = _side_summary(envelope.envelope_id, None, None, None, None, None)
         base["plan"] = None  # explicit: no saved plan to compare against
 
-    # ---- simulated side: local SIM- envelope, never stored/journalled ----
+    # ---- simulated side: local SIM- envelope ----
     simulated_envelope = envelope.model_copy(deep=True)
     simulated_envelope.targets = list(req.targets)
     simulated_envelope.status = EnvelopeStatus.APPROVED
@@ -155,7 +155,6 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
             },
         ) from exc
 
-    # The simulated explanation/adequacy describe the SIMULATED targets.
     simulated_response = map_plan_result(
         outcome.result,
         simulated_envelope,
@@ -167,7 +166,7 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
     simulated_plan = result.get("plan") or None
     simulated = _side_summary(
         simulated_envelope.envelope_id,
-        None,  # simulations never create plan rows
+        None,
         simulated_response.get("feasible"),
         simulated_response.get("violation_count", 0),
         simulated_response.get("objectives"),

@@ -16,7 +16,9 @@ transaction-time axes:
 * ``edges(rel_type, src_id, src_version, dst_id, dst_version, props, valid_from)``
   — edges are *pure appends*: each edge row is pinned to explicit node versions,
   so an old edge automatically goes inactive when its endpoint version is
-  closed. No edge is ever updated or deleted.
+  closed. No edge is ever updated or deleted. Re-asserting an edge identical
+  in type, endpoints, pinned versions, and props is idempotent, so identical
+  rule reimports do not duplicate relationships.
 
 A NetworkX ``MultiDiGraph`` view is materialised on demand for the current
 state or any point-in-time snapshot.
@@ -101,6 +103,51 @@ def profile_logical_id(dish_id: str) -> str:
 
 def diagnosis_logical_id(code: str) -> str:
     return f"diagnosis:{code}"
+
+
+def _validate_rule(rule: dict[str, Any]) -> None:
+    """Reject a malformed rule before any neighbourhood write.
+
+    Atomic rule appends depend on whole-input validation: a bad rule must fail
+    before the first write, not after a partially committed neighbourhood.
+    Action types without graph nodes (e.g. ``assert``) pass through unexamined,
+    matching what ``append_rule`` chooses not to model.
+    """
+    if not isinstance(rule, dict):
+        raise ValueError("rule must be an object")
+    for field in ("rule_id", "guideline", "section"):
+        if not rule.get(field):
+            raise ValueError(f"rule missing required field {field!r}")
+    conditions = rule.get("conditions", [])
+    if not isinstance(conditions, list):
+        raise ValueError("rule conditions must be a list")
+    for cond in conditions:
+        if not isinstance(cond, dict):
+            raise ValueError("each rule condition must be an object")
+        if (
+            cond.get("field") == "diagnoses"
+            and cond.get("op") == "in"
+            and not isinstance(cond.get("value"), list)
+        ):
+            raise ValueError("diagnoses-in condition value must be a list")
+    actions = rule.get("actions", [])
+    if not isinstance(actions, list):
+        raise ValueError("rule actions must be a list")
+    for action in actions:
+        if not isinstance(action, dict):
+            raise ValueError("each rule action must be an object")
+        if action.get("type") == "set_constraint":
+            for field in ("nutrient", "kind", "value"):
+                if field not in action:
+                    raise ValueError(f"set_constraint action missing {field!r}")
+            if isinstance(action["value"], bool) or not isinstance(
+                action["value"], (int, float)
+            ):
+                raise ValueError("set_constraint action value must be numeric")
+        elif action.get("type") == "exclude":
+            for field in ("kind", "value"):
+                if field not in action:
+                    raise ValueError(f"exclude action missing {field!r}")
 
 
 class KBGraph:
@@ -188,12 +235,32 @@ class KBGraph:
         A trigger protects existing content. If the current props checksum
         matches, return its existing version without appending, even when other
         metadata differs. ``valid_from`` defaults to UTC now.
+
+        An explicit ``version`` must be strictly newer than every existing
+        version of the node, and ``valid_from`` must not predate the currently
+        open version; both are rejected with ValueError before any write.
+        Omitting ``version`` retains automatic allocation.
         """
+        with self._conn:
+            return self._append_node(
+                label, logical_id, props, source, version, valid_from
+            )
+
+    def _append_node(
+        self,
+        label: str,
+        logical_id: str,
+        props: dict[str, Any],
+        source: Optional[str],
+        version: Optional[int],
+        valid_from: Optional[str],
+    ) -> int:
+        """Transaction-free node append; the caller owns the transaction."""
         ts = valid_from or _utcnow()
         props_json = json.dumps(props, sort_keys=True, separators=(",", ":"))
         checksum = _checksum(props)
         cur = self._conn.execute(
-            "SELECT version, checksum FROM nodes WHERE logical_id = ? "
+            "SELECT version, checksum, valid_from FROM nodes WHERE logical_id = ? "
             "AND valid_to IS NULL ORDER BY version DESC LIMIT 1",
             (logical_id,),
         ).fetchone()
@@ -205,22 +272,32 @@ class KBGraph:
             "SELECT COALESCE(MAX(version), 0) AS v FROM nodes WHERE logical_id = ?",
             (logical_id,),
         ).fetchone()
-        new_version = version if version is not None else int(row["v"]) + 1
-        with self._conn:
-            self._conn.execute(
-                "UPDATE nodes SET valid_to = ? "
-                "WHERE logical_id = ? AND valid_to IS NULL AND version < ?",
-                (ts, logical_id, new_version),
+        max_version = int(row["v"])
+        new_version = version if version is not None else max_version + 1
+        if version is not None and new_version <= max_version:
+            raise ValueError(
+                f"nonmonotone version {new_version} for node {logical_id!r}: "
+                f"latest existing version is {max_version}"
             )
-            self._conn.execute(
-                """
-                INSERT INTO nodes
-                    (logical_id, version, label, props, source, checksum,
-                     valid_from, valid_to)
-                VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
-                """,
-                (logical_id, new_version, label, props_json, source, checksum, ts),
+        if cur is not None and ts < cur["valid_from"]:
+            raise ValueError(
+                f"valid_from {ts} predates the open version of {logical_id!r} "
+                f"(valid_from {cur['valid_from']})"
             )
+        self._conn.execute(
+            "UPDATE nodes SET valid_to = ? "
+            "WHERE logical_id = ? AND valid_to IS NULL AND version < ?",
+            (ts, logical_id, new_version),
+        )
+        self._conn.execute(
+            """
+            INSERT INTO nodes
+                (logical_id, version, label, props, source, checksum,
+                 valid_from, valid_to)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+            """,
+            (logical_id, new_version, label, props_json, source, checksum, ts),
+        )
         return new_version
 
     def append_edge(
@@ -236,22 +313,49 @@ class KBGraph:
         """Append an edge pinned to explicit node versions; returns edge_id.
 
         Pure insert — edges are immutable, so no history is ever rewritten.
+        Re-asserting an edge identical in type, endpoints, pinned versions, and
+        props is idempotent and returns the existing edge_id.
         """
+        with self._conn:
+            return self._append_edge(
+                rel_type, src_id, dst_id, props, src_version, dst_version, valid_from
+            )
+
+    def _append_edge(
+        self,
+        rel_type: str,
+        src_id: str,
+        dst_id: str,
+        props: Optional[dict[str, Any]] = None,
+        src_version: Optional[int] = None,
+        dst_version: Optional[int] = None,
+        valid_from: Optional[str] = None,
+    ) -> int:
+        """Transaction-free edge append; the caller owns the transaction."""
         src_version = src_version if src_version is not None else self._current_version_of(src_id)
         dst_version = dst_version if dst_version is not None else self._current_version_of(dst_id)
         props_json = json.dumps(props or {}, sort_keys=True, separators=(",", ":"))
         ts = valid_from or _utcnow()
-        with self._conn:
-            cur = self._conn.execute(
-                """
-                INSERT INTO edges
-                    (rel_type, src_id, src_version, dst_id, dst_version,
-                     props, valid_from)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (rel_type, src_id, src_version, dst_id, dst_version, props_json, ts),
-            )
-            return int(cur.lastrowid)
+        # Idempotent re-assertion of an identical pinned relationship: an
+        # identical rule reimport must not duplicate edge rows (which would
+        # also duplicate the constraints returned for the rule).
+        existing = self._conn.execute(
+            "SELECT edge_id FROM edges WHERE rel_type = ? AND src_id = ? "
+            "AND src_version = ? AND dst_id = ? AND dst_version = ? AND props = ?",
+            (rel_type, src_id, src_version, dst_id, dst_version, props_json),
+        ).fetchone()
+        if existing is not None:
+            return int(existing["edge_id"])
+        cur = self._conn.execute(
+            """
+            INSERT INTO edges
+                (rel_type, src_id, src_version, dst_id, dst_version,
+                 props, valid_from)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (rel_type, src_id, src_version, dst_id, dst_version, props_json, ts),
+        )
+        return int(cur.lastrowid)
 
     def append_rule(
         self,
@@ -263,8 +367,13 @@ class KBGraph:
 
         Creates/updates the Guideline, Section, Rule, Diagnosis,
         NutrientConstraint and ExclusionFlag nodes and their edges per the
-        reference model. Returns the new rule version number.
+        reference model, in one transaction: a malformed rule is rejected
+        before any write and a mid-append failure rolls the whole
+        neighbourhood back, leaving existing history untouched. A shared
+        guideline revision re-pins every current section of that guideline so
+        unchanged sections stay connected. Returns the new rule version number.
         """
+        _validate_rule(rule)
         ts = valid_from or _utcnow()
         rule_id = str(rule["rule_id"])
         guideline = str(rule["guideline"])
@@ -273,97 +382,119 @@ class KBGraph:
         sid = section_logical_id(guideline, section)
         rid = rule_logical_id(rule_id)
 
-        self.append_node(
-            "Guideline",
-            gid,
-            {"name": guideline, "url": rule.get("url")},
-            source=source or "rules.json",
-            valid_from=ts,
-        )
-        self.append_node(
-            "Section",
-            sid,
-            {"title": section, "guideline": guideline},
-            source=source or f"{guideline} / {section}",
-            valid_from=ts,
-        )
-        self.append_edge("HAS_SECTION", gid, sid, valid_from=ts)
+        with self._conn:
+            self._append_node(
+                "Guideline",
+                gid,
+                {"name": guideline, "url": rule.get("url")},
+                source=source or "rules.json",
+                version=None,
+                valid_from=ts,
+            )
+            self._append_node(
+                "Section",
+                sid,
+                {"title": section, "guideline": guideline},
+                source=source or f"{guideline} / {section}",
+                version=None,
+                valid_from=ts,
+            )
+            # A guideline version bump must not disconnect its unchanged
+            # sections: re-pin every current section to the guideline's
+            # current version (idempotent when that edge already exists).
+            # Historical pinned edges are never deleted.
+            for section_lid in self._current_sections_of(guideline):
+                self._append_edge("HAS_SECTION", gid, section_lid, valid_from=ts)
 
-        props = {
-            "rule_id": rule_id,
-            "priority": rule.get("priority", 0),
-            "dsl_version": rule.get("dsl_version"),
-            "conditions": rule.get("conditions", []),
-            "actions": rule.get("actions", []),
-            "notes": rule.get("notes"),
-            "guideline": guideline,
-            "section": section,
-            "url": rule.get("url"),
-            "verbatim_quote": rule.get("verbatim_quote"),
-        }
-        self.append_node(
-            "Rule",
-            rid,
-            props,
-            source=source or f"{guideline} / {section}",
-            valid_from=ts,
-        )
-        self.append_edge("CITES", rid, sid, valid_from=ts)
+            props = {
+                "rule_id": rule_id,
+                "priority": rule.get("priority", 0),
+                "dsl_version": rule.get("dsl_version"),
+                "conditions": rule.get("conditions", []),
+                "actions": rule.get("actions", []),
+                "notes": rule.get("notes"),
+                "guideline": guideline,
+                "section": section,
+                "url": rule.get("url"),
+                "verbatim_quote": rule.get("verbatim_quote"),
+            }
+            self._append_node(
+                "Rule",
+                rid,
+                props,
+                source=source or f"{guideline} / {section}",
+                version=None,
+                valid_from=ts,
+            )
+            self._append_edge("CITES", rid, sid, valid_from=ts)
 
-        for cond in rule.get("conditions", []):
-            if cond.get("field") == "diagnoses" and cond.get("op") == "in":
-                for code in cond.get("value", []):
-                    did = diagnosis_logical_id(code)
-                    self.append_node(
-                        "Diagnosis",
-                        did,
-                        {"code": code},
-                        source=source or "rules.json",
+            for cond in rule.get("conditions", []):
+                if cond.get("field") == "diagnoses" and cond.get("op") == "in":
+                    for code in cond.get("value", []):
+                        did = diagnosis_logical_id(code)
+                        self._append_node(
+                            "Diagnosis",
+                            did,
+                            {"code": code},
+                            source=source or "rules.json",
+                            version=None,
+                            valid_from=ts,
+                        )
+                        self._append_edge("APPLIES_TO", rid, did, valid_from=ts)
+
+            for action in rule.get("actions", []):
+                if action.get("type") == "set_constraint":
+                    nutrient = action["nutrient"]
+                    kind = action["kind"]
+                    cid = constraint_logical_id(rule_id, nutrient, kind)
+                    self._append_node(
+                        "NutrientConstraint",
+                        cid,
+                        {
+                            "nutrient": nutrient,
+                            "kind": kind,
+                            "value": action["value"],
+                            "unit": action.get("unit") or unit_for_nutrient(nutrient),
+                            "rule_id": rule_id,
+                            "guideline": guideline,
+                            "section": section,
+                        },
+                        source=source or f"{guideline} / {section}",
+                        version=None,
                         valid_from=ts,
                     )
-                    self.append_edge("APPLIES_TO", rid, did, valid_from=ts)
+                    self._append_edge("PRODUCES", rid, cid, valid_from=ts)
+                elif action.get("type") == "exclude":
+                    ekind = action["kind"]
+                    evalue = action["value"]
+                    fid = exclusion_logical_id(rule_id, ekind, evalue)
+                    self._append_node(
+                        "ExclusionFlag",
+                        fid,
+                        {
+                            "kind": ekind,
+                            "value": evalue,
+                            "reason": action.get("reason", ""),
+                            "rule_id": rule_id,
+                            "guideline": guideline,
+                            "section": section,
+                        },
+                        source=source or f"{guideline} / {section}",
+                        version=None,
+                        valid_from=ts,
+                    )
+                    self._append_edge("PRODUCES", rid, fid, valid_from=ts)
+            return self._current_version_of(rid)
 
-        for action in rule.get("actions", []):
-            if action.get("type") == "set_constraint":
-                nutrient = action["nutrient"]
-                kind = action["kind"]
-                cid = constraint_logical_id(rule_id, nutrient, kind)
-                self.append_node(
-                    "NutrientConstraint",
-                    cid,
-                    {
-                        "nutrient": nutrient,
-                        "kind": kind,
-                        "value": action["value"],
-                        "unit": action.get("unit") or unit_for_nutrient(nutrient),
-                        "rule_id": rule_id,
-                        "guideline": guideline,
-                        "section": section,
-                    },
-                    source=source or f"{guideline} / {section}",
-                    valid_from=ts,
-                )
-                self.append_edge("PRODUCES", rid, cid, valid_from=ts)
-            elif action.get("type") == "exclude":
-                ekind = action["kind"]
-                evalue = action["value"]
-                fid = exclusion_logical_id(rule_id, ekind, evalue)
-                self.append_node(
-                    "ExclusionFlag",
-                    fid,
-                    {
-                        "kind": ekind,
-                        "value": evalue,
-                        "reason": action.get("reason", ""),
-                        "rule_id": rule_id,
-                        "guideline": guideline,
-                        "section": section,
-                    },
-                    source=source or f"{guideline} / {section}",
-                    valid_from=ts,
-                )
-                self.append_edge("PRODUCES", rid, fid, valid_from=ts)
-        return self._current_version_of(rid)
+    def _current_sections_of(self, guideline: str) -> list[str]:
+        """Logical ids of the guideline's currently open Section nodes."""
+        prefix = f"section:{_slug(guideline)}:"
+        rows = self._conn.execute(
+            "SELECT logical_id FROM nodes WHERE label = 'Section' AND valid_to IS NULL"
+        ).fetchall()
+        return sorted(
+            r["logical_id"] for r in rows if r["logical_id"].startswith(prefix)
+        )
 
     # -- internal reads ------------------------------------------------------
 
@@ -422,15 +553,22 @@ class KBGraph:
         """List edges by ID whose pinned endpoint versions are active.
 
         ``version`` is an ISO snapshot timestamp, or None for current state.
-        Activity is determined from endpoint intervals, not the edge timestamp.
+        Activity is determined from endpoint intervals; a snapshot additionally
+        requires the edge itself to have been created (``valid_from``) no later
+        than the snapshot time, so later-created edges never appear in earlier
+        snapshots despite append-only history.
         """
         if version is None:
             node_pred: tuple[str, list[str]] = ("{alias}.valid_to IS NULL", [])
+            edge_pred = ""
+            edge_params: list[str] = []
         else:
             node_pred = (
                 "{alias}.valid_from <= ? AND ({alias}.valid_to IS NULL OR {alias}.valid_to > ?)",
                 [version, version],
             )
+            edge_pred = "WHERE e.valid_from <= ?"
+            edge_params = [version]
         pred_template, shared_params = node_pred
         src_pred = pred_template.format(alias="n1")
         dst_pred = pred_template.format(alias="n2")
@@ -440,9 +578,10 @@ class KBGraph:
                 AND e.src_version = n1.version AND {src_pred}
             JOIN nodes n2 ON e.dst_id = n2.logical_id
                 AND e.dst_version = n2.version AND {dst_pred}
+            {edge_pred}
             ORDER BY e.edge_id
         """
-        rows = self._conn.execute(sql, shared_params + shared_params).fetchall()
+        rows = self._conn.execute(sql, shared_params + shared_params + edge_params).fetchall()
         return [
             {
                 "edge_id": r["edge_id"],

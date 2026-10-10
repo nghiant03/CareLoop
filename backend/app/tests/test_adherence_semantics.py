@@ -1,6 +1,6 @@
 """Adherence analysis semantics — regression coverage.
 
-Covers four correctness properties of :mod:`backend.app.adherence.analysis`
+Covers the contracts of :mod:`backend.app.adherence.analysis`
 beyond the endpoint-level tests in ``test_adherence.py``:
 
 * ``MIN`` exposure measures **shortfall below the floor** and grows as
@@ -16,7 +16,10 @@ beyond the endpoint-level tests in ``test_adherence.py``:
 * the envelope's hard **exclusions** are enforced per logged dish in
   ``analyse_day``: a dish hit by an exclusion flag is a hard violation even
   when every nutrient ceiling is respected (reproduced end-to-end for the
-  real P0006 envelope and SG0002 Roasted Chicken Rice).
+  real P0006 envelope and SG0002 Roasted Chicken Rice);
+* complete days require distinct breakfast, lunch, and dinner slots;
+* contributors use serving-adjusted amounts, deterministic ties, and the
+  attributing envelope's identity and version.
 
 Series/flags use the analysis layer directly with stub dishes for exact
 math; the exclusion case additionally goes through the FastAPI app with the
@@ -104,6 +107,10 @@ def _logs(patient_id: str, days_and_dishes: list[tuple[str, str]]) -> list[dict[
 
 
 def _complete_logs(logs, dishes):
+    """Add zero-nutrient meals so trend fixtures are complete without changing totals.
+
+    Register ZERO in the supplied dish mapping and return a new log list.
+    """
     dishes["ZERO"] = StubDish("ZERO", {})
     return logs + [dict(entry, meal=meal, dish_id="ZERO")
                    for entry in logs for meal in ("breakfast", "dinner")]
@@ -295,7 +302,7 @@ def test_slope_uses_elapsed_days_not_indices() -> None:
 
 
 def test_slope_uneven_spacing_is_a_true_per_day_rate() -> None:
-    """1 -> 2 -> 3 days spacing: Theil-Sen over elapsed days, not indices."""
+    """One-day then two-day intervals: use elapsed days, not indices."""
     envelope = _envelope(
         "P0001",
         [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=1000.0, unit="mg")],
@@ -426,7 +433,7 @@ def test_day_completeness_counts_distinct_logged_meals() -> None:
 
 
 def test_range_aggregate_reports_complete_days() -> None:
-    """Aggregate gains ``complete_days`` / ``fraction_complete``."""
+    """Aggregate reports the count and fraction of complete logged days."""
     envelope = _envelope(
         "P0001",
         [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=100_000.0, unit="mg")],
@@ -454,8 +461,11 @@ def test_range_aggregate_reports_complete_days() -> None:
 
 
 def test_nutrient_rows_carry_ranked_contributors() -> None:
-    """MAX excess rows rank dishes by amount DESC; MIN shortfall rows ASC;
-    always top-2 with the dish's share of the day total; ties break by id."""
+    """MAX excess ranks highest amounts first; MIN shortfall ranks lowest first.
+
+    Return up to two contributors with their percentage of the day total.
+    Dish IDs break ties.
+    """
     envelope = _envelope(
         "P0001",
         [

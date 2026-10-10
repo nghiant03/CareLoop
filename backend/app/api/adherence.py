@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from datetime import date as date_type
 from datetime import timedelta
 from functools import lru_cache
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from backend.app.adherence import analysis, store
 from backend.app.api.patients import get_patient
@@ -41,7 +41,14 @@ class MealLogRequest(BaseModel):
 
     @model_validator(mode="after")
     def one_representation(self):
-        if bool(self.dish_id) == bool(self.items):
+        # Unknown blank IDs must not create zero-nutrient complete days.
+        if self.dish_id is not None and not self.dish_id.strip():
+            raise ValueError("dish_id must not be blank")
+        if self.items is not None and any(
+            not item.dish_id.strip() for item in self.items
+        ):
+            raise ValueError("item dish_id must not be blank")
+        if (self.dish_id is None) == (self.items is None):
             raise ValueError("Provide either dish_id or items")
         return self
 
@@ -195,46 +202,6 @@ def _versions_used(attributed: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _merged_aggregate(days: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregate classified days across envelope groups using range-analysis policy.
-
-    Mirrors ``analysis.analyse_range``'s aggregate exactly, but over day rows
-    that were classified against different envelope versions.
-    """
-    hard_by_nutrient: dict[str, int] = {}
-    soft_by_nutrient: dict[str, int] = {}
-    exposure_sum: dict[str, float] = {}
-    exposure_days: dict[str, int] = {}
-    for day in days:
-        for row in day["hard_violations"]:
-            nutrient = row.get("nutrient")
-            if nutrient is None:
-                continue  # dish-scoped exclusion violations
-            hard_by_nutrient[nutrient] = hard_by_nutrient.get(nutrient, 0) + 1
-        for row in day["soft_gaps"]:
-            if not day["completeness"]["complete"]:
-                continue
-            soft_by_nutrient[row["nutrient"]] = soft_by_nutrient.get(row["nutrient"], 0) + 1
-        for row in day["nutrients"]:
-            if not day["completeness"]["complete"]:
-                continue
-            exposure_sum[row["nutrient"]] = exposure_sum.get(row["nutrient"], 0.0) + row["pct_deviation"]
-            exposure_days[row["nutrient"]] = exposure_days.get(row["nutrient"], 0) + 1
-    complete_days = sum(1 for day in days if day["completeness"]["complete"])
-    return {
-        "days_logged": len(days),
-        "hard_violation_days": sum(1 for d in days if not d["compliant"]),
-        "hard_violations_by_nutrient": dict(sorted(hard_by_nutrient.items())),
-        "soft_gaps_by_nutrient": dict(sorted(soft_by_nutrient.items())),
-        "mean_pct_deviation_by_nutrient": {
-            nutrient: round(exposure_sum[nutrient] / exposure_days[nutrient], 4)
-            for nutrient in sorted(exposure_sum)
-        },
-        "complete_days": complete_days,
-        "fraction_complete": round(complete_days / len(days), 4) if days else 0.0,
-    }
-
-
 def _flag_sort_key(flag: dict[str, Any]) -> tuple[int, float]:
     order = {"worsening": 0, "improving": 1}
     return (order.get(flag["direction"], 2), -abs(flag["slope_pct_per_day"]))
@@ -248,7 +215,7 @@ def log_meal(req: MealLogRequest) -> dict[str, Any]:
     _require_patient(req.patient_id)
     dish_ids = [item.dish_id for item in req.items] if req.items else [req.dish_id]
     missing = next((did for did in dish_ids if did not in _dish_index()), None)
-    if missing:
+    if missing is not None:
         raise HTTPException(
             status_code=404,
             detail={"error": "dish_not_found", "dish_id": missing},
@@ -304,7 +271,7 @@ def adherence_summary(
         (day for group in groups for day in group["result"]["days"]),
         key=lambda day: day["date"],
     )
-    aggregate = _merged_aggregate(merged_days)
+    aggregate = analysis.aggregate_days(merged_days)
     return {
         "patient_id": patient_id,
         "envelope_id": envelope.envelope_id,
@@ -365,7 +332,8 @@ def adherence_deviation(
             "unattributed_days": attributed["unattributed_days"],
         }
 
-    # Prefix series keys with group labels; each flag keeps its envelope identity.
+    # Series and flags share the same historical identity; local keys stay
+    # unchanged on the single-envelope compatibility path above.
     series: dict[str, dict[str, Any]] = {}
     merged_flags: list[dict[str, Any]] = []
     for group in groups:
@@ -376,6 +344,7 @@ def adherence_deviation(
             merged_flags.append(
                 dict(
                     flag,
+                    series_key=f"{label}::{flag['series_key']}",
                     envelope_id=group["envelope"].envelope_id,
                     envelope_version=int(group["envelope"].version),
                 )

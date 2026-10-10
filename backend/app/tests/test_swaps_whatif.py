@@ -2,9 +2,8 @@
 
 Covers:
 
-* ``GET /mining/substitutions?...&patient_id=`` — the P0006 regression
-  (source SG0009 must never recommend SG0030 Curry Mee, which P0006's
-  envelope excludes via ``high_potassium_foods``), hard-check validation and
+* ``GET /mining/substitutions?...&patient_id=`` — P0006 exclusion filtering,
+  hard-check validation and
   day deltas; generic requests without patient_id omit validation metadata;
   ``plan_context_required`` 409 when the patient has no saved plan.
 * ``POST /mining/swaps/apply`` — a valid swap saves a NEW plan row with
@@ -42,7 +41,7 @@ if not any(getattr(route, "path", None) == "/simulations" for route in _app.rout
 
 
 def _approve_and_plan(client, patient_id: str) -> dict:
-    """rules -> approve -> POST /plans; returns the plan document."""
+    """Approve and plan; return an envelope_id/plan wrapper."""
     rules = client.post("/rules/run", json={"patient_id": patient_id})
     assert rules.status_code == 200, rules.text
     envelope_id = rules.json()["envelope"]["envelope_id"]
@@ -75,9 +74,11 @@ def p0001(client):
 
 
 def test_p0006_regression_excluded_candidate_never_recommended(client, p0006) -> None:
-    """P0006 + SG0009: SG0030 (Curry Mee) is excluded by the envelope and
-    must never appear; every returned candidate passes the whole-day hard
-    checks and carries per-nutrient day deltas for the affected days."""
+    """Returned candidates pass whole-day hard checks and carry nutrient deltas.
+
+    The forced SG0009 -> SG0030 ranking precondition is covered separately in
+    test_downstream_audit_regressions; this case exercises real endpoint ranking.
+    """
     source, _ = _first_valid_swap(client, p0006["plan"])
     resp = client.get(
         "/mining/substitutions",
@@ -146,7 +147,8 @@ def test_substitutions_patient_without_plan_409(client) -> None:
 
 
 def _first_valid_swap(client, plan) -> tuple[str, str] | None:
-    """First (source dish, validated candidate) pair from the live endpoint."""
+    """First validated pair for the supplied immutable plan, not the latest plan."""
+    patient_id = persistence.get_plan(plan["plan_id"])["patient_id"]
     seen: set[str] = set()
     for day in plan["days"]:
         for slot in day["slots"]:
@@ -156,7 +158,7 @@ def _first_valid_swap(client, plan) -> tuple[str, str] | None:
             seen.add(dish_id)
             resp = client.get(
                 "/mining/substitutions",
-                params={"dish_id": dish_id, "k": 1, "patient_id": "P0006"},
+                params={"dish_id": dish_id, "k": 1, "patient_id": patient_id, "plan_id": plan["plan_id"]},
             )
             assert resp.status_code == 200, resp.text
             suggestions = resp.json()["substitutions"]

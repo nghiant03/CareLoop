@@ -7,6 +7,7 @@ HTN + hyperkalaemia) as the envelope/trace fixture.
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -55,14 +56,15 @@ def test_clinician_view_conflicts_resolved(sample) -> None:
     assert "CONFLICT-SODIUM-CKD-WINS" in recorded
     assert "CONFLICT-K-DASH-VS-CKD" in recorded
 
-    # Priority overlaps are display metadata, not recorded conflict decisions.
-    overrides = view["priority_overlaps"]
-    sodium_override = next(
-        c for c in overrides
+    # Priority overlaps are display metadata about mention ranking, not
+    # recorded conflict decisions.
+    overlaps = view["priority_overlaps"]
+    sodium_overlap = next(
+        c for c in overlaps
         if any(o["rule_id"] == "DASH-2025-SODIUM-2300" for o in c["lower_priority_mentions"])
     )
-    assert sodium_override["highest_priority_rule_id"] == "CKD-2024-SODIUM-2000"
-    assert sodium_override["highest_priority"] > 70
+    assert sodium_overlap["highest_priority_rule_id"] == "CKD-2024-SODIUM-2000"
+    assert sodium_overlap["highest_priority"] > 70
 
 
 def test_clinician_view_constraints_cited(sample) -> None:
@@ -159,6 +161,68 @@ def test_patient_view_with_plan(sample) -> None:
     assert "50 g of protein" in joined
 
     assert patient_explanation(envelope)["plan_summary"] is None
+
+
+def test_patient_view_non_round_bounds_keep_precision(sample) -> None:
+    """Rounding must not loosen stated approved MAX ceilings or MIN floors.
+
+    1550 mg is not "1.6 g" (a looser ceiling), and values that are not exact
+    in hundredths of a gram stay in milligrams.
+    """
+    envelope, _ = sample
+    edited = deepcopy(envelope)
+    for target in edited["targets"]:
+        if target["nutrient"] == "sodium_mg" and target["kind"] == "max":
+            target["value"] = 1550
+        if target["nutrient"] == "protein_g" and target["kind"] == "min":
+            target["value"] = 27.5
+    view = patient_explanation(edited)
+    text = " ".join(t["text"] for t in view["daily_targets"])
+    assert "Keep sodium under 1.55 g a day." in text
+    assert "Keep sodium under 1.6 g a day." not in text
+    assert "Aim for 27.5 g to 56 g of protein a day." in text
+
+    for target in edited["targets"]:
+        if target["nutrient"] == "sodium_mg" and target["kind"] == "max":
+            target["value"] = 1555
+    text = " ".join(t["text"] for t in patient_explanation(edited)["daily_targets"])
+    assert "Keep sodium under 1555 mg a day." in text
+
+
+def test_patient_view_clinician_edited_target_not_authored_to_guideline(sample) -> None:
+    """A clinician-authored replacement is the care team's decision, not a
+    retained guideline's recommendation, even though the guideline rule that
+    produced the original value is still in the trace."""
+    envelope, _ = sample
+    edited = deepcopy(envelope)
+    for target in edited["targets"]:
+        if target["nutrient"] == "sodium_mg":
+            target["value"] = 1800
+            target["provenance"] = {
+                "nutrient": "sodium_mg",
+                "kind": target["kind"],
+                "value": 1800,
+                "unit": "mg",
+                "envelope_id": envelope["envelope_id"],
+                "version": 2,
+                "author": "dr-tan",
+                "citation": {
+                    "rule_id": "CLINICIAN-EDIT",
+                    "guideline": "clinician override",
+                    "section": "clinician edit",
+                    "url": None,
+                    "verbatim_quote": None,
+                },
+            }
+    view = patient_explanation(edited)
+
+    sodium_bullets = [bullet for bullet in view["why"] if "sodium" in bullet]
+    assert sodium_bullets == ["Your care team set: keep sodium under 1.8 g a day."]
+    # KDIGO's retained rule action is 2000 mg; it must not author the edited
+    # 1800 mg value.
+    assert not any("KDIGO" in bullet and "sodium" in bullet for bullet in view["why"])
+    # Untouched nutrients keep their guideline attribution.
+    assert any("recommends" in bullet for bullet in view["why"] if "sodium" not in bullet)
 
 
 def test_patient_view_deterministic(sample) -> None:

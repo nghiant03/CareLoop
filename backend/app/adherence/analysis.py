@@ -2,7 +2,7 @@
 
 MAX ceilings and exclusions produce hard violations. MIN shortfalls and
 two-sided TARGET deviations are soft gaps. Only complete logged days contribute
-to soft-gap aggregates and trends; partial-day hard violations remain visible.
+to soft-gap aggregates and trends. Partial-day hard violations remain visible.
 Historical envelope selection belongs to the caller.
 """
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from datetime import date as date_type
 from statistics import median
+from typing import Any
 
 from backend.app.adherence.store import MEALS
 from backend.optim.problem import exclusion_for
@@ -47,10 +48,10 @@ def day_totals(
     dish_ids: Iterable[str],
     dish_by_id: Mapping[str, Any],
 ) -> dict[str, float]:
-    """Sum one serving per dish ID; skip unknown IDs and return zeros if empty.
+    """Sum one serving per supplied dish ID, counting repeated IDs separately.
 
-    This helper does not apply serving quantities. API logging validates dish IDs
-    before storage; analysis of external records may still encounter unknown IDs.
+    Skip unknown IDs and return zero totals when none match. Serving quantities
+    are not applied.
     """
     totals = {key: 0.0 for key in NUTRIENT_KEYS}
     for dish_id in dish_ids:
@@ -236,6 +237,18 @@ def analyse_range(
         for date, entries in sorted(by_date.items())
     ]
 
+    return {"days": days, "aggregate": aggregate_days(days)}
+
+
+def aggregate_days(days: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate classified day rows under the range-analysis policy.
+
+    Hard violations count on every logged day. Only complete days contribute
+    soft-gap counts and mean exposure. ``days`` rows may have been classified
+    against different envelope versions — classification already happened per
+    day; this owner never re-classifies. Empty input yields the empty-window
+    aggregate (fraction 0.0 without division).
+    """
     hard_by_nutrient: dict[str, int] = {}
     soft_by_nutrient: dict[str, int] = {}
     exposure_sum: dict[str, float] = {}
@@ -261,7 +274,7 @@ def analyse_range(
         for nutrient in sorted(exposure_sum)
     }
     complete_days = sum(1 for day in days if day["completeness"]["complete"])
-    aggregate = {
+    return {
         "days_logged": len(days),
         "hard_violation_days": sum(1 for d in days if not d["compliant"]),
         "hard_violations_by_nutrient": dict(sorted(hard_by_nutrient.items())),
@@ -270,7 +283,6 @@ def analyse_range(
         "complete_days": complete_days,
         "fraction_complete": round(complete_days / len(days), 4) if days else 0.0,
     }
-    return {"days": days, "aggregate": aggregate}
 
 
 def _theil_sen_slope(times: list[float], values: list[float]) -> float:
@@ -312,17 +324,19 @@ def deviation_series(
         nutrient_key = constraint.nutrient.value
         constraint_count[nutrient_key] = constraint_count.get(nutrient_key, 0) + 1
 
-    per_nutrient: dict[str, dict[str, Any]] = {}
+    # Series keys: a plain nutrient key for single-constraint nutrients, or
+    # ``<nutrient>:<kind>`` when one nutrient has several constraint series.
+    series_by_key: dict[str, dict[str, Any]] = {}
     days = sorted(day_analyses, key=lambda d: d["date"])
     for constraint in constraints:
         nutrient = constraint.nutrient.value
-        key = (
+        series_key = (
             nutrient
             if constraint_count[nutrient] == 1
             else f"{nutrient}:{constraint.kind.value}"
         )
-        series = per_nutrient.setdefault(
-            key,
+        series = series_by_key.setdefault(
+            series_key,
             {
                 "nutrient": nutrient,
                 "kind": constraint.kind.value,
@@ -350,7 +364,7 @@ def deviation_series(
                     "complete": day.get("completeness", {}).get("complete", True),
                 }
             )
-    return dict(sorted(per_nutrient.items()))
+    return dict(sorted(series_by_key.items()))
 
 
 def trend_flags(
@@ -366,9 +380,8 @@ def trend_flags(
     threshold. Results sort worsening first, then by decreasing absolute slope.
     """
     flags: list[dict[str, Any]] = []
-    for nutrient in sorted(series):
-        key = nutrient
-        s = series[nutrient]
+    for series_key in sorted(series):
+        s = series[series_key]
         points = [p for p in s["points"] if p.get("complete", True)]
         exposures = [p["exposure"] for p in points]
         if len(exposures) < min_len:
@@ -385,7 +398,7 @@ def trend_flags(
         flags.append(
             {
                 "nutrient": s["nutrient"],
-                "series_key": key,
+                "series_key": series_key,
                 "kind": s["kind"],
                 "slope_pct_per_day": round(slope, 4),
                 "direction": direction,
@@ -393,7 +406,7 @@ def trend_flags(
                 "latest_exposure_pct": round(latest, 4),
                 "projected_3d_exposure_pct": round(projected, 4),
                 "reason": (
-                    f"{nutrient} deviation {direction} at {slope:+.2f} pct-points/day "
+                    f"{series_key} deviation {direction} at {slope:+.2f} pct-points/day "
                     f"(latest {latest:.1f}%, 3-day projection {projected:.1f}%)"
                 ),
             }
@@ -421,6 +434,7 @@ def analyse_patient(
 
 __all__ = [
     "EPS",
+    "aggregate_days",
     "analyse_day",
     "analyse_patient",
     "analyse_range",
