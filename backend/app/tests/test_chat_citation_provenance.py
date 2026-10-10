@@ -54,7 +54,7 @@ def _ada_sodium_row() -> dict:
 
 
 def _clinician_edit_row(value: int = 1800) -> dict:
-    """CLINICIAN-EDIT trace row (mirrors api/envelopes.py)."""
+    """CLINICIAN-EDIT trace row (mirrors core/envelope_lifecycle.edit)."""
     return {
         "rule_id": "CLINICIAN-EDIT",
         "action_summary": (
@@ -95,8 +95,7 @@ def test_edited_sodium_cites_clinician_edit_first(kb) -> None:
     """P0001-style case: T2D patient, sodium MAX edited to 1800 mg by the
     clinician and the envelope re-approved. The answer must quote 1.8 g and
     cite the clinician-edit provenance first; the original guideline rule is
-    context at most, and the generic CKD rule (not applicable to a T2D-only
-    patient) must not be cited at all."""
+    context at most. CKD rules must not be cited for a T2D-only patient."""
     envelope = {
         "envelope_id": "ENV-P0001-001",
         "patient_id": "P0001",
@@ -120,8 +119,7 @@ def test_edited_sodium_cites_clinician_edit_first(kb) -> None:
     rule_ids = [c["rule_id"] for c in result["citations"]]
     assert rule_ids, "answered answer must carry citations"
     assert rule_ids[0] == "CLINICIAN-EDIT", rule_ids
-    # The generic CKD 2 g rule does not apply to a T2D-only patient and must
-    # not be presented as the source of (or context for) the number.
+    # CKD rules must not be cited for a T2D-only patient.
     assert "CKD-2024-SODIUM-2000" not in rule_ids
     assert rule_ids[0] != "ADA-2026-SODIUM-2300"
 

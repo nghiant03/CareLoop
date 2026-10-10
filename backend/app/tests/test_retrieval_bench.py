@@ -1,13 +1,19 @@
 """Deterministic tests for the retrieval benchmark (backend/app/chat).
 
-Verifies: the labeled query set loads and its expected chunk ids resolve to
-real chunks; the benchmark runs with sane, consistent metrics (including the
-``bm25_rrf_char`` RRF fusion row, which must fuse the union of its components'
-candidates); the BM25 row matches production retrieval while as-is TF-IDF
-remains a historical comparator; fusion diagnostics and refusal checks are recorded;
-the run is deterministic across two evaluations and leaves
-``retrieval.build_index``/``retrieval.MIN_SCORE`` module state untouched; and
-the artifact is written and parses.
+Obligations, grouped:
+
+* **Labeled set**: the query set loads with expected size/categories and its
+  expected chunk ids resolve to real production chunks.
+* **Ranking/fusion**: benchmark metrics are sane and consistently ranked; the
+  fusion row fuses the union of its components' candidates; the production
+  row matches production retrieval while as-is TF-IDF stays a comparator.
+* **Fusion gate**: the held-out diagnostic runs standalone with an unset gate
+  and is recorded in the results; irrelevant questions are refused end to end.
+* **State/determinism**: a bench run leaves ``retrieval.build_index`` and
+  ``retrieval.MIN_SCORE`` module state untouched and is deterministic across
+  two evaluations.
+* **Artifacts**: benchmark and CLI runs write real artifacts (JSON + Markdown)
+  to redirected temporary paths, never into the repository.
 """
 
 from __future__ import annotations
@@ -88,9 +94,10 @@ def test_bench_metrics_are_sane(results):
             assert 0.0 <= cat_metrics["mrr"] <= 1.0
 
 
-def test_bench_at_least_one_method_retrieves_something(results):
-    # Not every query can be hopeless for every method — catches a broken
-    # index build (e.g. empty corpus or inverted ranking).
+def test_best_method_mrr_above_0_5(results):
+    # Not every query can be hopeless for every method — the best method's
+    # MRR must exceed 0.5, catching a broken index build (e.g. empty corpus
+    # or inverted ranking).
     best = max(results["methods"], key=lambda m: m["mrr"])
     assert best["mrr"] > 0.5, best["name"]
 
@@ -113,14 +120,14 @@ def test_production_method_matches_production_retrieval(kb):
     # Production switched to BM25: the production row is ``bm25_word_syn``
     # (the ``tfidf_word_asis_syn`` row is the previous TF-IDF scorer, kept
     # for comparison — it no longer matches production).
-    as_is = methods[retrieval_bench.PROD_NAME]
+    production_method = methods[retrieval_bench.PROD_NAME]
     for query in (
         "How much sodium can I have per day?",
         "how much soduim per day",
         "sodium content of chicken rice",
         "What is the weather forecast for tomorrow?",
     ):
-        assert as_is.retrieve(query, k=5) == prod_index.retrieve(query, k=5)
+        assert production_method.retrieve(query, k=5) == prod_index.retrieve(query, k=5)
 
 
 def test_end_to_end_spot_check_shape(results):
@@ -197,6 +204,26 @@ def test_fusion_calibration_recorded(results):
     assert cal["irrelevant_best_score"] >= cal["weakest_relevant"]["best_score"]
 
 
+def test_fusion_diagnostic_standalone_with_unset_gate(kb):
+    """Regression (unset threshold): ``min_score`` exists but is None before
+    ``calibrate_methods`` runs, so a standalone diagnostic must not raise
+    (TypeError on float < None) and must fall back to the documented default
+    without ever selecting a gate from the held-out data."""
+    fusion = retrieval_bench.build_methods(kb)["bm25_rrf_char"]
+    assert fusion.min_score is None
+    report = retrieval_bench.diagnose_fusion_gate(kb, fusion)
+    assert report["threshold"] == retrieval_bench.FUSION_MIN_SCORE
+    assert isinstance(report["gap_ok"], bool)
+    # The diagnostic never mutates the method's gate.
+    assert fusion.min_score is None
+
+
+def test_fusion_diagnostic_retains_historical_aliases():
+    # Callable alias and serialized key keep older callers/artifact readers
+    # working; the diagnostic itself gained the accurate name.
+    assert retrieval_bench.calibrate_fusion is retrieval_bench.diagnose_fusion_gate
+
+
 def test_irrelevant_questions_refused_end_to_end(results):
     for name in (retrieval_bench.PROD_NAME, "bm25_rrf_char"):
         stats = results["irrelevant_refusal"][name]
@@ -206,9 +233,8 @@ def test_irrelevant_questions_refused_end_to_end(results):
 
 
 def test_bench_e2e_restores_retrieval_module_state(kb):
-    # answers.answer reads retrieval.MIN_SCORE at call time; the bench patches
-    # it for the fusion row's e2e calls and must restore it (and build_index)
-    # — no module state may leak after a bench run.
+    # Each calibrated method temporarily replaces the index and refusal gate.
+    # Both must be restored before the deployed pipeline handles another call.
     original_build_index = retrieval.build_index
     original_min_score = retrieval.MIN_SCORE
     try:
@@ -239,10 +265,14 @@ def test_bench_is_deterministic_across_runs(kb, results):
     assert json.dumps(results, sort_keys=True) == json.dumps(again, sort_keys=True)
 
 
-def test_artifact_written_and_parses(kb, tmp_path):
+def test_artifact_written_and_parses(kb, tmp_path, monkeypatch):
+    # Redirect both artifact destinations (JSON + Markdown) before invocation:
+    # the benchmark still performs its real generation, but tests must never
+    # write outputs into the repository.
+    monkeypatch.setattr(retrieval_bench, "RESULTS_PATH", tmp_path / "results.json")
     results, path = retrieval_bench.run_bench(kb)
-    path = retrieval_bench.write_results(results, path=tmp_path / "results.json")
-    assert path.exists()
+    assert path == tmp_path / "results.json"
+    assert (tmp_path / "RETRIEVAL_BENCH.md").exists()
     parsed = json.loads(path.read_text(encoding="utf-8"))
     assert parsed["queries"]["total"] >= 40
     assert parsed["winner"] in {m["name"] for m in parsed["methods"]}
@@ -250,8 +280,12 @@ def test_artifact_written_and_parses(kb, tmp_path):
         assert {"hit@1", "hit@3", "hit@5", "mrr"} <= set(m)
 
 
-def test_main_cli_exits_zero(kb, capsys):
+def test_main_cli_exits_zero(kb, capsys, tmp_path, monkeypatch):
+    # The CLI writes the same two artifacts: redirect before running it.
+    monkeypatch.setattr(retrieval_bench, "RESULTS_PATH", tmp_path / "results.json")
     exit_code = retrieval_bench.main([])
     assert exit_code == 0
     out = capsys.readouterr().out
     assert "hit@1" in out and "MRR" in out and "Winner" in out
+    assert (tmp_path / "results.json").exists()
+    assert (tmp_path / "RETRIEVAL_BENCH.md").exists()

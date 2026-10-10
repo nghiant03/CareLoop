@@ -4,7 +4,9 @@ Detect configured patterns for requests that should be escalated rather than
 answered as nutrition guidance:
 
 * **emergency** symptoms (chest pain, breathing trouble, stroke signs, ...) —
-  advise urgent care immediately;
+  advise urgent care immediately; extreme glucose readings (the configured
+  350 mg/dL category floor, upper tail unbounded, with standard mmol/L
+  conversion) belong here too;
 * **diagnosis** requests ("do I have ...", "what's wrong with me");
 * **medication / dosing changes** (start/stop/adjust prescriptions);
 * **out-of-scope topics** (pregnancy, dialysis, paediatrics, cancer treatment
@@ -52,9 +54,6 @@ _CATEGORIES: dict[str, list[str]] = {
         r"\bketones?\b",
         r"(dizzy|dizziness|light.?headed)\W{0,20}(and|with)\W{0,10}"
         r"(vomit\w*|nausea|confusion|ketone\w*|high sugars?)",
-        r"blood sugar (is |of |at |was |around )?(3[5-9]\d|4\d\d)\b",
-        r"sugars? (are |is |was |at |around )?(3[5-9]\d|4\d\d)\b",
-        r"sugars? (are |is |was )?(above|over) (300|3\d\d|4\d\d)\b",
     ],
     "medication_change": [
         rf"(stop|start|skip|quit)\s+(?:taking\s+|my\s+|the\s+|to\s+)*{_DRUGS}",
@@ -89,6 +88,32 @@ _COMPILED: dict[str, list[re.Pattern[str]]] = {
     category: [re.compile(pattern, re.IGNORECASE) for pattern in patterns]
     for category, patterns in _CATEGORIES.items()
 }
+
+# Preserve the configured direct-reading and "above/over" floors. Unitless
+# legacy readings mean mg/dL; explicit mmol/L readings use the same policy.
+_GLUCOSE_READING = re.compile(
+    r"\b(?:blood\s+sugars?|blood\s+glucose|glucose|sugars?)\b"
+    r"(?:\s+(?:is|are|was|were|of|at|around|about|reading))*\s*"
+    r"(?:(above|over)\s+)?(\d+(?:\.\d+)?)\b\s*"
+    r"(mmol\s*[/ ]\s*l|mg\s*[/ ]\s*dl)?",
+    re.IGNORECASE,
+)
+_GLUCOSE_EMERGENCY_MGDL = 350.0
+_GLUCOSE_ABOVE_EMERGENCY_MGDL = 300.0
+_MMOL_TO_MGDL = 18.0
+
+
+def _extreme_glucose_reading(text: str) -> bool:
+    """Match the configured emergency glucose category without an upper cap."""
+    for comparator, value, unit in _GLUCOSE_READING.findall(text):
+        reading = float(value)
+        if "mmol" in unit.lower():
+            reading *= _MMOL_TO_MGDL
+        floor = (_GLUCOSE_ABOVE_EMERGENCY_MGDL if comparator
+                 else _GLUCOSE_EMERGENCY_MGDL)
+        if reading >= floor:
+            return True
+    return False
 
 _REASONS = {
     "emergency": (
@@ -128,4 +153,10 @@ def check(question: str) -> dict[str, object]:
                     "reason": _REASONS[category],
                     "category": category,
                 }
+        if category == "emergency" and _extreme_glucose_reading(text):
+            return {
+                "escalate": True,
+                "reason": _REASONS[category],
+                "category": category,
+            }
     return {"escalate": False, "reason": None, "category": None}

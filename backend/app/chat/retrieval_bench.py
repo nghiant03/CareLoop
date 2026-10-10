@@ -1,16 +1,10 @@
 """Retrieval method benchmark for the grounded chat pipeline.
 
-Compares retrieval configurations over the same chunking used by
-``backend/app/chat/retrieval.py`` (one chunk per current rule + one per dish,
-built by the production ``KBIndex`` so the chunk contract is identical):
+All methods use production ``KBIndex`` chunks: one per current rule and dish.
 
-* ``bm25_word_syn``         — **the production index** (Okapi BM25 via
-  ``rank_bm25`` over the production stopword-filtered word tokens + synonym
-  expansion), wrapped as ``ProductionMethod``;
+* ``bm25_word_syn`` — production BM25 with stopword filtering and query expansion;
 * ``bm25_word_nosyn``       — same scorer, raw query (no expansion);
-* ``tfidf_word_asis_{syn,nosyn}`` — the *previous* production scorer (word
-  TF-IDF; ``_syn`` was production until the BM25 switch) kept as a
-  comparison row;
+* ``tfidf_word_asis_{syn,nosyn}`` — word TF-IDF, the historical comparator;
 * ``tfidf_word_sublinear_{syn,nosyn}`` — ``sublinear_tf=True``;
 * ``tfidf_char_wb_3_5_{syn,nosyn}`` — char_wb 3-5 gram TF-IDF;
 * ``bm25_rrf_char`` — Reciprocal Rank Fusion (Cormack/Clarke/Büttcher,
@@ -19,23 +13,16 @@ built by the production ``KBIndex`` so the chunk contract is identical):
   over the union of candidate ids, top-50 candidates per component,
   deterministic tie-break on ``chunk_id``.
 
-Each method is scored on a labeled set of 58 queries (guideline/nutrient
-questions mirroring ``evaluation/q_groundedness.py``, conflict questions,
-dish/nutrient-content questions, and phrasing variants incl. typos) with
-expected relevant chunk ids. Metrics: hit@1, hit@3, hit@5, MRR.
+Ranking metrics are hit@1, hit@3, hit@5, and MRR over 58 labeled questions,
+including guideline, conflict, dish, and typo queries. Experimental refusal
+gates are selected on disjoint development questions before held-out scoring.
+The deployed BM25 gate stays fixed; its historical calibration was not
+independent of the ranking set. Held-out fusion overlap is diagnostic only.
 
-An end-to-end spot-check re-runs ~10 grounded questions through the real
-``answers.answer`` composition with each retrieval method injected at runtime
-(the ``retrieval.build_index`` module attribute is patched for the duration of
-the call and restored afterwards — no source file is modified) and counts
-citation accuracy (an cited ``rule_id`` matches the question's acceptable set).
-``answers.answer`` also reads ``retrieval.MIN_SCORE`` at call time; methods
-whose score scale differs from BM25 (the fusion row) carry a calibrated
-``min_score`` attribute that is patched into ``retrieval.MIN_SCORE`` for the
-duration of their e2e calls and restored afterwards, so the BM25-scale gate
-never judges RRF scores (RRF scores are ~0.001-0.05). The artifact also
-records an irrelevant-question refusal check for the fusion row at its
-calibrated threshold.
+Ten end-to-end questions exercise ``answers.answer`` with each method's gate.
+Citation accuracy requires an acceptable rule ID and support for every exposed
+claim. Production and fusion also undergo irrelevant-question refusal checks.
+``_answer_with_method`` documents the temporary module-state changes.
 
 Run: ``.venv/bin/python -m backend.app.chat.retrieval_bench``
 Deterministic: fixed query order, deterministic vectorizers/tokenizers,
@@ -78,7 +65,7 @@ RRF_COMPONENT_DEPTH = 50
 
 # Default gate for an uncalibrated fusion method, on the RRF score scale rather
 # than BM25's scale. ``evaluate`` replaces experimental gates using disjoint
-# development examples before held-out scoring. ``calibrate_fusion`` reports
+# development examples before held-out scoring. ``diagnose_fusion_gate`` reports
 # held-out overlap diagnostically and must never retune a gate from those scores.
 # See RETRIEVAL_BENCH.md for the evaluation protocol.
 FUSION_MIN_SCORE = 0.04
@@ -230,12 +217,7 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def _tokenize(text: str) -> list[str]:
-    """Production tokenizer (delegates to ``retrieval._tokenize``).
-
-    Kept as a module symbol so the BM25 bench methods and production always
-    tokenize identically — single source of truth lives in
-    ``backend/app/chat/retrieval.py``.
-    """
+    """Reuse the production tokenizer so benchmark and deployed BM25 tokens agree."""
     from backend.app.chat import retrieval as production_retrieval
 
     return production_retrieval._tokenize(text)
@@ -251,19 +233,13 @@ class BenchMethod:
 
 
 class ProductionMethod(BenchMethod):
-    """The production ``retrieval.KBIndex`` exactly as configured today.
-
-    Since the BM25 switch this is the ``bm25_word_syn`` configuration; the
-    name is asserted to match ``PROD_NAME`` so the report can never silently
-    drift from what production runs.
-    """
+    """Wrap the deployed ``retrieval.KBIndex`` without changing its ranking."""
 
     def __init__(self, index: Any, name: str) -> None:
         self.name = name
         self._index = index
 
     def retrieve(self, query: str, k: int = 5) -> list[dict[str, Any]]:
-        # KBIndex hits are already full chunk dicts + score — pass through.
         return list(self._index.retrieve(query, k=k))
 
 
@@ -339,17 +315,13 @@ class BM25Method(BenchMethod):
 class RRFMethod(BenchMethod):
     """Reciprocal Rank Fusion of independent ranked lists (k=60).
 
-    Fuses the union of the components' candidate ids: a chunk found by only
-    one component still contributes, so a relevant item BM25 missed can be
-    recovered by the char n-gram component (reranking BM25 hits alone could
-    not). Scores are order-free ranks, so the incompatible BM25 / cosine
-    scales never meet. Deterministic tie-break on ``chunk_id``.
+    Fuse the union of component candidates, not just BM25 hits, so character
+    n-grams can recover missed chunks. Reciprocal ranks avoid mixing BM25 and
+    cosine score scales. Ties break on ``chunk_id``.
 
-    ``min_score`` is set from the fusion calibration (see
-    ``calibrate_fusion``); ``_answer_with_method`` patches it into
-    ``retrieval.MIN_SCORE`` for the duration of this method's end-to-end
-    calls because the BM25-scale production gate is meaningless on RRF
-    scores (~0.001-0.05).
+    ``calibrate_methods`` selects ``min_score`` on development examples.
+    ``_answer_with_method`` temporarily applies that gate to end-to-end calls;
+    ``diagnose_fusion_gate`` only reports held-out overlap.
     """
 
     def __init__(
@@ -383,12 +355,9 @@ class RRFMethod(BenchMethod):
 def build_methods(kb: KBGraph) -> dict[str, BenchMethod]:
     """Build every benchmark method over the production chunking.
 
-    The production ``KBIndex`` (BM25 + synonym expansion) is wrapped as
-    ``ProductionMethod`` under ``PROD_NAME``. The previous production scorer
-    (word TF-IDF + expansion) is kept as the ``tfidf_word_asis_syn`` row for
-    comparison; ``tfidf_word_asis_syn`` is no longer production.
+    ``PROD_NAME`` wraps the deployed index. TF-IDF rows are comparators, not
+    production configurations. Refusal gates are assigned by ``calibrate_methods``.
     """
-    # Load the process KB only when constructing methods, not at module import.
     from backend.app.chat import retrieval as production_retrieval
 
     prod_index = production_retrieval.build_index(kb)
@@ -422,9 +391,7 @@ def build_methods(kb: KBGraph) -> dict[str, BenchMethod]:
         PROD_NAME: ProductionMethod(prod_index, PROD_NAME),
         "bm25_word_nosyn": BM25Method("bm25_word_nosyn", chunks, None),
     }
-    # RRF fusion of the production BM25 ranking (reused verbatim — same
-    # KBIndex instance, so identical rankings) and the char_wb(3,5) TF-IDF
-    # ranking with synonym expansion.
+    # Fuse deployed BM25 with synonym-expanded character-ngram TF-IDF.
     methods["bm25_rrf_char"] = RRFMethod(
         "bm25_rrf_char",
         [methods[PROD_NAME], methods["tfidf_char_wb_3_5_syn"]],
@@ -475,13 +442,10 @@ def _rank_retrieval_methods(results: list[dict[str, Any]]) -> list[str]:
 def _answer_with_method(method: BenchMethod, kb: KBGraph, question: str) -> dict[str, Any]:
     """Run the real ``answers.answer`` with ``method`` injected for retrieval.
 
-    Patches the ``backend.app.chat.retrieval.build_index`` module attribute for
-    the duration of one call and restores it afterwards — no source file is
-    modified. ``answers.answer`` also reads ``retrieval.MIN_SCORE`` at call
-    time; if the method carries a calibrated ``min_score`` (the fusion row,
-    whose RRF scores live on a different scale than BM25), that value is
-    patched into ``retrieval.MIN_SCORE`` for the call and restored in the
-    ``finally`` block, so module state never leaks between methods.
+    Replace ``retrieval.build_index`` and, when supplied, ``MIN_SCORE`` for one
+    call. Restore both in ``finally`` without modifying source files. All
+    calibrated methods use their own score-scale gate. These process-wide
+    patches are not safe for concurrent answer calls.
     """
     from backend.app.chat import retrieval as retrieval_module
     from backend.app.chat.answers import answer
@@ -549,14 +513,11 @@ def _end_to_end_spot_check(
 
 
 # ---------------------------------------------------------------------------
-# Fusion threshold calibration (RRF score scale) + irrelevant refusal
+# Fusion gate diagnostic (RRF score scale) + irrelevant refusal
 # ---------------------------------------------------------------------------
 
-# Typo-corrupted nonsense probes added to
-# ``evaluation.q_groundedness._IRRELEVANT`` for the fusion threshold
-# calibration. The char n-gram component can match garbled text through
-# shared 3-5 grams, so clean irrelevant probes alone understate the refusal
-# risk for a char_wb-based fusion.
+# Add held-out typo probes: shared character n-grams can match garbled text,
+# so clean irrelevant questions alone understate fusion's refusal risk.
 _TYPO_NONSENSE_PROBES = [
     "wat is teh wether forcast tomorow",
     "tel me a jok plese",
@@ -573,15 +534,16 @@ def _irrelevant_probes() -> list[str]:
     return list(_IRRELEVANT) + _TYPO_NONSENSE_PROBES
 
 
-def calibrate_fusion(
+def diagnose_fusion_gate(
     kb: Optional[KBGraph] = None, method: Optional[RRFMethod] = None
 ) -> dict[str, Any]:
     """Report held-out RRF score overlap without selecting or changing a gate.
 
     Compares the best irrelevant score with the weakest labeled-relevant score
-    and checks the method's existing threshold against that interval. Despite
-    the historical name, this is diagnostic only: ``calibrate_methods`` selects
-    experimental thresholds on development examples before evaluation.
+    and checks the method's existing threshold against that interval. Gate
+    selection happens elsewhere: ``calibrate_methods`` chooses experimental
+    thresholds on development examples before evaluation; this diagnostic only
+    reports how the frozen gate separates held-out data.
     """
     if kb is None:
         kb = load_kb(RULES_PATH, DISHES_PATH)
@@ -610,7 +572,12 @@ def calibrate_fusion(
         (r for r in relevant_rows if r["category"] != "variant_typo"),
         key=lambda r: (r["best_score"], r["id"]),
     )
-    threshold = getattr(method, "min_score", FUSION_MIN_SCORE)
+    # The gate attribute exists but is unset before ``calibrate_methods`` runs,
+    # so an explicit None check is required: ``getattr`` with a default cannot
+    # supply FUSION_MIN_SCORE, and the held-out scores must never select it.
+    threshold = (
+        method.min_score if method.min_score is not None else FUSION_MIN_SCORE
+    )
     return {
         "threshold": threshold,
         "irrelevant_probes": irrelevant_scores,
@@ -620,6 +587,11 @@ def calibrate_fusion(
         "gap_ok": irrelevant_best < threshold < weakest["best_score"],
         "usage": "held-out diagnostic only; never used to select the threshold",
     }
+
+
+# Historical callable alias: the serialized results key also stays
+# ``fusion_calibration`` for compatibility with existing artifacts/readers.
+calibrate_fusion = diagnose_fusion_gate
 
 
 def _irrelevant_refusal_check(
@@ -755,7 +727,7 @@ def evaluate(kb: Optional[KBGraph] = None) -> dict[str, Any]:
         "threshold_calibration": thresholds,
         "ranking": ranked_names,
         "winner": ranked_names[0],
-        "fusion_calibration": calibrate_fusion(kb, fusion_method),
+        "fusion_calibration": diagnose_fusion_gate(kb, fusion_method),
         "irrelevant_refusal": _irrelevant_refusal_check(methods, kb),
         "end_to_end": {"summary": e2e_summary, "detail": e2e},
     }
@@ -771,7 +743,7 @@ def write_results(results: dict[str, Any], path: Optional[Path] = None) -> Path:
 
 
 def run_bench(kb: Optional[KBGraph] = None) -> tuple[dict[str, Any], Path]:
-    """Evaluate + write the artifact; returns (results, artifact_path)."""
+    """Write the Markdown report and JSON results; return results and the JSON path."""
     results = evaluate(kb)
     RESULTS_PATH.with_name("RETRIEVAL_BENCH.md").write_text(render_report(results), encoding="utf-8")
     return results, write_results(results)
@@ -780,7 +752,8 @@ def run_bench(kb: Optional[KBGraph] = None) -> tuple[dict[str, Any], Path]:
 def render_report(results):
     lines = ["# Retrieval benchmark", "", "Generated by `python -m backend.app.chat.retrieval_bench`.", "",
              "## Protocol", "",
-             "The same 275 chunks (61 rules, 214 dishes), synonym expansion and deterministic tie-breaks are used across methods. "
+             "The same 275 chunks (61 rules, 214 dishes) and deterministic tie-breaks are shared across all methods. "
+             "Synonym expansion is the syn/nosyn variable within each scorer family: *_nosyn rows retrieve with raw queries. "
              "Experimental refusal gates are selected on 12 disjoint development questions, then frozen before scoring 58 held-out queries. "
              "The deployed BM25 baseline retains its existing threshold. Its historical calibration was not independent of this query set.", "",
              "RRF combines the union of BM25 and character-ngram candidates (top 50 each, k=60). "
@@ -841,7 +814,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if calibration:
         weakest = calibration["weakest_relevant"]
         print(
-            f"Fusion calibration (bm25_rrf_char, threshold {calibration['threshold']}): "
+            f"Fusion gate diagnostic (bm25_rrf_char, threshold {calibration['threshold']}): "
             f"irrelevant_best={calibration['irrelevant_best_score']:.4f} "
             f"weakest_relevant={weakest['best_score']:.4f} ({weakest['id']}) "
             f"gap_ok={calibration['gap_ok']}"

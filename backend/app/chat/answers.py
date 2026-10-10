@@ -3,8 +3,11 @@
 Escalation runs before retrieval. Patient-role requests with a REJECTED envelope
 are refused; PROPOSED/EDITED envelope values are not quoted as personal targets.
 APPROVED values prefer exact constraint provenance, with legacy trace matching
-as a fallback. Guideline anchors and supporting rules are checked for patient
-applicability when context is available. Dish facts supplement rule citations.
+as a fallback — an approved value with no traceable citation is withheld rather
+than borrowing an independent anchor's citation. Guideline anchors and supporting
+rules are checked for patient applicability when context is available. Intake
+guidance needs a relevant constraint anchor or envelope context, independent
+of phrasing. Food-content questions may use dish facts alongside rule citations.
 
 An answered response requires a citation. The default path is deterministic;
 an injected LLM adapter receives the assembled text but its output is not
@@ -20,9 +23,22 @@ from backend.app.chat import escalation, retrieval
 from backend.app.kb.graph_store import KBGraph
 from backend.app.chat.llm import LLMAdapter
 
-__all__ = ["answer", "detect_nutrients", "format_value", "MAX_ANSWER_CHUNKS"]
+__all__ = [
+    "answer", "detect_nutrients", "format_value",
+    "MAX_ANSWER_PROSE_PARTS", "MAX_ANSWER_CHUNKS",
+]
 
-MAX_ANSWER_CHUNKS = 3
+# Supporting prose stops once the answer has one primary part plus this budget.
+# A primary rule can itself contribute several sentences.
+MAX_ANSWER_PROSE_PARTS = 3
+# Retained exported alias for the historical (misleading) name.
+MAX_ANSWER_CHUNKS = MAX_ANSWER_PROSE_PARTS
+
+# Raw (unscaled) per-kg trace row: ``set <nutrient> <kind> = <coef> <unit>/kg/d``
+# with no ``-> <scaled>`` clause (weight was unknown at generation time).
+_UNSCALED_COEFFICIENT_ROW = re.compile(
+    r"set (?P<nutrient>\w+) (?P<kind>\w+) = (?P<value>-?[\d.]+) (?P<unit>\w+)/kg/d"
+)
 
 # Rulebook nutrients whose constraint values are per-kg coefficients (see
 # rules/engine.py ``_PER_KG_NUTRIENTS``). They must never be rendered as
@@ -110,18 +126,21 @@ def detect_nutrients(question: str) -> list[str]:
 
 
 def format_value(value: Any, unit: str) -> str:
-    """Human formatting: 2000 mg -> '2 g'; integral floats lose the '.0'."""
+    """Human formatting without rounding constraint values in a safety direction."""
     try:
         num = float(value)
     except (TypeError, ValueError):
         return str(value)
     if unit == "mg" and num >= 1000:
-        grams = num / 1000.0
-        text = f"{grams:g}"
-        return f"{text} g"
+        if num % 10 == 0:
+            # Hundredths of a gram are exact at this boundary; otherwise retain
+            # milligrams so a MAX is never rounded down or a MIN rounded up.
+            grams = num / 1000.0
+            text = f"{grams:.2f}".rstrip("0").rstrip(".")
+            return f"{text} g"
     if num == int(num):
         return f"{int(num)} {unit}".strip()
-    return f"{num:g} {unit}".strip()
+    return f"{value} {unit}".strip()
 
 
 def _kind_phrase(kind: str) -> str:
@@ -249,16 +268,63 @@ def _target_is_unscaled_per_kg(envelope: dict[str, Any], target: dict[str, Any])
     ``set <nutrient> <kind> = <coef> <unit>/kg/d -> <scaled> <unit>/d``.
     A row with the ``/kg/d`` marker but no ``-> <scaled>`` clause means the
     weight was unknown and the stored value is still the coefficient.
+
+    Legacy traces are interpreted against the *current* target: a clinician
+    replacement is an absolute daily value, and a coefficient row counts only
+    when it actually produced the stored value.
     """
     nutrient = target.get("nutrient", "")
     if nutrient not in _PER_KG_NUTRIENTS:
         return False
+    # Resolve the author before interpreting units; legacy edits may lack
+    # explicit provenance even when their absolute value equals a coefficient.
+    citation = _target_citation(target, envelope.get("fired_rules") or [])
+    if not citation or citation.get("rule_id") == _CLINICIAN_EDIT_RULE_ID:
+        return False
     kind = target.get("kind", "")
+    try:
+        stored = float(target.get("value"))
+    except (TypeError, ValueError):
+        return False
     for fired in envelope.get("fired_rules") or []:
         summary = str(fired.get("action_summary", "")).lower()
-        if f"set {nutrient} {kind}" in summary and "/kg/d" in summary:
-            return "->" not in summary
+        if fired.get("rule_id") != citation.get("rule_id") or "superseded" in summary:
+            continue
+        if f"set {nutrient} {kind}" not in summary or "/kg/d" not in summary:
+            continue
+        if "->" in summary:
+            continue
+        # A raw row must match the selected source, value, and base unit.
+        for match in _UNSCALED_COEFFICIENT_ROW.finditer(summary):
+            if (match.group("nutrient") != nutrient or match.group("kind") != kind
+                    or match.group("unit") != target.get("unit")):
+                continue
+            try:
+                coefficient = float(match.group("value"))
+            except ValueError:
+                continue
+            if abs(coefficient - stored) <= 0.005:
+                return True
     return False
+
+
+def _target_citation(target: dict[str, Any], fired_rules: list[dict[str, Any]]):
+    """Resolve explicit exact-target provenance, or legacy trace if absent.
+
+    Explicit but stale provenance is a failed attribution, not permission to
+    borrow a convenient matching legacy source.
+    """
+    from shared.provenance import citation_for
+
+    provenance = target.get("provenance")
+    if provenance:
+        if any(
+            provenance.get(key) != target.get(key)
+            for key in ("nutrient", "kind", "value", "unit")
+        ):
+            return None
+        return provenance.get("citation")
+    return citation_for(target, fired_rules)
 
 
 def _envelope_context(
@@ -320,13 +386,9 @@ def _envelope_context(
 
     # Match exact constraint provenance before legacy trace inference; citations[0]
     # could attribute an edited number to an unrelated guideline.
-    from shared.provenance import citation_for
-
-    provenance = target.get("provenance") or {}
-    matches = all(provenance.get(k) == target.get(k) for k in ("nutrient", "kind", "value", "unit"))
-    citation = (provenance.get("citation") if matches else None) or citation_for(
-        target, envelope.get("fired_rules") or []
-    )
+    citation = _target_citation(target, envelope.get("fired_rules") or [])
+    if citation and not all(citation.get(key) for key in ("rule_id", "guideline", "section")):
+        citation = None
     return {
         "envelope_id": envelope.get("envelope_id"),
         "status": status,
@@ -444,10 +506,12 @@ def answer(
 ) -> dict[str, Any]:
     """Compose an answered, refused, or escalated response without changing clinical state.
 
-    Returns a dict with keys: ``status`` (``answered`` | ``refused`` |
-    ``escalated``), ``answer``, ``citations``, ``envelope``, ``retrieval`` and
-    ``role``. ``role="clinician"`` keeps rule ids inline in the text; the
-    patient view hides them from the prose but retains citation IDs.
+    Every result carries ``status`` (``answered`` | ``refused`` | ``escalated``),
+    ``question``, ``answer``, ``citations``, ``escalation``, ``envelope``,
+    ``retrieval``, and ``role``. Answered results also carry structured ``claims``;
+    refused/escalated results omit that key. ``role="clinician"`` keeps rule IDs
+    inline in the text. The patient view hides them from prose but retains
+    citation IDs.
     ``patient`` supplies applicability context and weight for per-kg rendering.
     The template path is deterministic. An optional ``llm`` may transform the
     final text; this function does not verify that transformation's grounding.
@@ -486,6 +550,10 @@ def answer(
     # Do not use personal target numbers to answer an unrelated question.
     relevant = bool(nutrients) or best_score > retrieval.MIN_SCORE
     env_ctx = _envelope_context(envelope, nutrients, weight_kg) if relevant else None
+    # An approved personal value with no traceable citation is withheld; the
+    # independent guideline anchor below never lends its citation to the number.
+    if env_ctx is not None and env_ctx["approved"] and not env_ctx["citation"]:
+        env_ctx = None
 
     parts: list[str] = []
     citations: list[dict[str, Any]] = []
@@ -510,7 +578,13 @@ def answer(
         if nutrients
         else None
     )
-    if nutrients and anchor is None and env_ctx is None and re.search(r"\b(how much|limit|target|daily)\b", question, re.I):
+    food_content_question = bool(re.search(
+        r"\b(content|contains?|per serving)\b|\b(?:sugar|sodium|salt|protein|fat|carbs?|calories)\s+(?:is\s+)?in\b",
+        question, re.I,
+    ))
+    if nutrients and anchor is None and env_ctx is None and not food_content_question:
+        # Food composition is distinct from intake guidance. A personal intake
+        # answer needs a relevant constraint, not an unrelated retrieval citation.
         hits, best_score = [], 0.0
     if anchor is not None:
         sentences = [_rule_sentence(anchor, role), *_constraint_sentences(anchor, role, weight_kg)[:2]]
@@ -523,7 +597,7 @@ def answer(
     if anchor is not None or env_ctx is not None or best_score > retrieval.MIN_SCORE:
         used_anchor = anchor["rule_id"] if anchor else None
         for hit in hits:
-            if len(parts) >= 1 + MAX_ANSWER_CHUNKS:
+            if len(parts) >= 1 + MAX_ANSWER_PROSE_PARTS:
                 break
             if hit["score"] <= retrieval.MIN_SCORE:
                 break
@@ -573,13 +647,14 @@ def answer(
 
     envelope_summary = None
     if envelope:
+        # Lifecycle state is independent of which targets the question matched.
+        approved = _status_of(envelope) == "APPROVED"
         envelope_summary = {
             "envelope_id": envelope.get("envelope_id"),
             "status": envelope.get("status"),
-            "approved": bool(env_ctx["approved"]) if env_ctx else envelope.get("status") == "APPROVED",
+            "approved": approved,
             "notice": (
-                None
-                if (env_ctx and env_ctx["approved"])
+                None if approved
                 else "This plan has not been approved by a clinician yet."
             ),
         }

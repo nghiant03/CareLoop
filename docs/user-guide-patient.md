@@ -90,7 +90,9 @@ is my sodium limit 2000?"*.
 
 - Answers are built **only** from CareLoop's medical guideline database and
   your approved plan — the chat cannot make things up, and every answer shows
-  the guideline it came from (name and link).
+  its source: the guideline it came from (name and link) or, when your
+  clinician edited a value, a clinician-edit note (edited values are never
+  presented as guideline recommendations).
 - It answers nutrition questions only. If you ask something a chatbot should
   not answer, you will see a banner instead:
   - emergency symptoms (including metabolic emergencies like possible

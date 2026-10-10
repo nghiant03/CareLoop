@@ -107,6 +107,17 @@ def test_retrieve_unknown_terms_returns_nothing(kb) -> None:
         ("I feel dizzy and I have ketones, what should I eat?", "emergency"),
         ("His breath smells fruity — could it be ketoacidosis?", "emergency"),
         ("My speech is slurred since this morning", "emergency"),
+        # Upper tail of the emergency glucose category (floor 350 mg/dL):
+        # any direct reading at or above the floor escalates, unbounded.
+        ("My blood sugar is 500; how much carbohydrate should I eat?", "emergency"),
+        ("my blood sugar is 499", "emergency"),
+        ("my blood sugar was 1000", "emergency"),
+        ("my blood sugar reading was 1000 mg/dL", "emergency"),
+        ("my sugars are 1050 tonight", "emergency"),
+        # Unit-aware readings convert mmol/L (x18) to the same mg/dL floor.
+        ("my blood sugar is 27.8 mmol/L", "emergency"),
+        ("glucose 500 mg/dL on my meter", "emergency"),
+        ("my glucose reading is 19.5 mmol/l", "emergency"),
     ],
 )
 def test_escalation_out_of_scope(question: str, category: str) -> None:
@@ -125,6 +136,11 @@ def test_escalation_out_of_scope(question: str, category: str) -> None:
         # Guard against over-escalation from the new drug/metabolic patterns.
         "How much sugar is in a can of cola?",
         "What are the guidelines about carbohydrates per day?",
+        # Boundary guards for the emergency glucose category: readings below
+        # the configured floor stay in scope (no invented lower thresholds).
+        "My blood sugar is 349 this morning",
+        "my blood sugar is 19.4 mmol/L",
+        "my sugars are above 250",
     ],
 )
 def test_escalation_in_scope(question: str) -> None:
@@ -150,7 +166,9 @@ def test_grounded_question_cites_kdigo(kb) -> None:
         assert citation["section"]
 
 
-def test_grounded_question_reflects_envelope_number(kb) -> None:
+def test_grounded_sodium_answer_cites_kb_ceiling(kb) -> None:
+    """No envelope is supplied: the 2000 mg ceiling is KB-derived from the
+    KDIGO rule chain (envelope-number behaviour is covered separately)."""
     result = answers.answer("how much salt can I have?", kb)
     assert result["status"] == "answered"
     # KB answer cites the 2000 mg ceiling from the KDIGO rule chain.
@@ -180,6 +198,24 @@ def test_irrelevant_question_refused(kb) -> None:
     assert result["status"] == "refused"
     assert result["citations"] == []
     assert "clinician" in result["answer"].lower()
+
+
+def test_unsupported_intake_question_refused_independent_of_phrasing(kb) -> None:
+    """Regression (unsupported-intake policy): 'What should my sugar intake
+    be?' contains none of the legacy trigger phrases (how much/limit/target/
+    daily) and no rule produces a sugar_g constraint — it must refuse rather
+    than answer from off-topic retrieval support, with or without patient
+    context."""
+    result = answers.answer("What should my sugar intake be?", kb)
+    assert result["status"] == "refused"
+    assert result["citations"] == []
+
+    with_patient = answers.answer(
+        "What should my sugar intake be?", kb,
+        patient={"patient_id": "P0001", "diagnoses": ["T2D"], "weight_kg": 61.6},
+    )
+    assert with_patient["status"] == "refused"
+    assert with_patient["citations"] == []
 
 
 def test_escalation_wins_over_answer(kb) -> None:
@@ -310,6 +346,90 @@ def test_per_kg_envelope_without_weight_says_per_kg(kb) -> None:
     assert "35 kcal per day" not in result["answer"]
 
 
+def _clinician_energy_envelope(with_provenance: bool) -> dict:
+    """APPROVED envelope whose energy target is an absolute clinician
+    replacement (2100 kcal) while a legacy raw coefficient trace row from the
+    original proposal survives in ``fired_rules``."""
+    target: dict = {"nutrient": "energy_kcal", "kind": "target", "value": 2100, "unit": "kcal"}
+    if with_provenance:
+        target["provenance"] = {
+            "nutrient": "energy_kcal",
+            "kind": "target",
+            "value": 2100,
+            "unit": "kcal",
+            "citation": {
+                "rule_id": "CLINICIAN-EDIT",
+                "guideline": "clinician override",
+                "section": "clinician edit",
+                "url": None,
+                "verbatim_quote": None,
+            },
+        }
+    return {
+        "envelope_id": "ENV-TEST-EDIT",
+        "patient_id": "SYN-0007",
+        "status": "APPROVED",
+        "targets": [target],
+        "fired_rules": [
+            {
+                "rule_id": "CKD-2024-ENERGY-2535",
+                "action_summary": "set energy_kcal target = 30 kcal/kg/d (weight unknown; not scaled)",
+                "priority": 80,
+                "citation": {
+                    "rule_id": "CKD-2024-ENERGY-2535",
+                    "guideline": "KDIGO 2024 CKD Guideline",
+                    "section": "Sec. 3.11 / Energy",
+                    "url": None,
+                    "verbatim_quote": None,
+                },
+            },
+            {
+                "rule_id": "CLINICIAN-EDIT",
+                "action_summary": "clinician override: targets replaced (set energy_kcal target = 2100 kcal)",
+                "priority": 0,
+                "citation": {
+                    "rule_id": "CLINICIAN-EDIT",
+                    "guideline": "clinician override",
+                    "section": "clinician edit",
+                    "url": None,
+                    "verbatim_quote": None,
+                },
+            },
+        ],
+        "citations": [],
+    }
+
+
+def test_clinician_replacement_not_rescaled_by_legacy_trace(kb) -> None:
+    """Regression (legacy trace): an absolute clinician replacement must not
+    be multiplied by body weight when an older raw per-kg coefficient trace
+    row remains — clinician provenance wins."""
+    envelope = _clinician_energy_envelope(with_provenance=True)
+    result = answers.answer(
+        "how many calories can I have?", kb,
+        envelope=envelope, patient={"patient_id": "SYN-0007", "weight_kg": 70.0},
+    )
+    assert result["status"] == "answered"
+    assert "2100 kcal" in result["answer"]
+    assert "147000" not in result["answer"]  # 2100 x 70 kg must never appear
+    rule_ids = [c.get("rule_id") for c in result["citations"]]
+    assert "CLINICIAN-EDIT" in rule_ids
+
+
+def test_absolute_target_with_mismatched_legacy_trace_not_rescaled(kb) -> None:
+    """Legacy trace compatibility without provenance: a coefficient row only
+    counts when it produced the stored value, so a 2100 kcal target next to a
+    30 kcal/kg/d row stays absolute (no weight multiplication)."""
+    envelope = _clinician_energy_envelope(with_provenance=False)
+    result = answers.answer(
+        "how many calories can I have?", kb,
+        envelope=envelope, patient={"patient_id": "SYN-0007", "weight_kg": 70.0},
+    )
+    assert result["status"] == "answered"
+    assert "2100 kcal" in result["answer"]
+    assert "147000" not in result["answer"]
+
+
 def test_guideline_per_kg_constraints_rendered_per_kg(kb) -> None:
     """KB rulebook constraints for energy/protein are per-kg coefficients:
     the answer must say 'per kg of body weight' (or scale by the patient's
@@ -350,6 +470,37 @@ def test_no_citation_fallback_to_unrelated_rule(kb) -> None:
     assert result["status"] == "answered"
     rule_ids = [c.get("rule_id") for c in result["citations"]]
     assert "CKD-2024-SODIUM-2000" not in rule_ids
+
+
+def test_untraceable_personal_value_withheld_not_anchor_cited(kb) -> None:
+    """Regression (untraceable personal values): an approved 1800 mg target
+    whose provenance and trace do not resolve (the trace still says 2000)
+    must be withheld — the independent guideline anchor's citation never
+    backs the personal number."""
+    envelope = _envelope("APPROVED")
+    envelope["targets"] = [
+        {"nutrient": "sodium_mg", "kind": "max", "value": 1800, "unit": "mg"}
+    ]
+    # fired_rules still produce 2000 mg (value does not match the target).
+    result = answers.answer("why is my sodium limit 2000?", kb, envelope=envelope)
+    assert result["status"] == "answered"
+    assert "1.8 g" not in result["answer"]
+    assert "1800" not in result["answer"]
+    sources = [claim.get("source") for claim in result.get("claims", [])]
+    assert "envelope" not in sources
+    # The guideline anchor still grounds the answer itself.
+    assert result["citations"]
+
+
+def test_approved_notice_follows_lifecycle_not_question_match(kb) -> None:
+    """Regression (summary consistency): an APPROVED envelope must never
+    carry the pending-approval notice, even when the question targets a
+    nutrient the envelope does not cover (no envelope context is built)."""
+    envelope = _envelope("APPROVED")  # sodium + protein targets
+    result = answers.answer("how much potassium can I have?", kb, envelope=envelope)
+    assert result["status"] == "answered"
+    assert result["envelope"]["approved"] is True
+    assert result["envelope"]["notice"] is None
 
 
 # ---------------------------------------------------------------------------
