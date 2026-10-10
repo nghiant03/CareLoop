@@ -27,7 +27,7 @@ dependencies = [
 dev = [
   "pytest>=8.0",
   "jsonschema>=4.18",
-  "numba>=0.59", # AGE-MOEA benchmark/test dependency; not needed for production NSGA-II
+  "numba>=0.59",
 ]
 
 [build-system]
@@ -38,7 +38,6 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [tool.pytest.ini_options]
-# Repo root on sys.path so `shared.envelope_schema` and `backend.app.*` import.
 pythonpath = ["."]
 testpaths = ["app/tests"]
 addopts = "-q"

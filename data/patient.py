@@ -1,4 +1,4 @@
-"""CareLoop synthetic patient model (Lane C — Data & Mining).
+"""Synthetic patient records with clinical archetypes and longitudinal labs.
 
 Defines the *full* patient record used by the synthetic generator. It extends the
 canonical :class:`shared.envelope_schema.PatientSummary` (the audit-friendly subset

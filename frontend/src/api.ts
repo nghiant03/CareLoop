@@ -64,7 +64,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
       const raw = body.detail || body.error || body;
       detail = body.message || (typeof raw === 'string' ? raw : (raw.message || raw.error || JSON.stringify(raw)));
     } catch {
-      // ignore
+      // Non-JSON error bodies retain the HTTP status text as the message.
     }
     const err: any = new Error(detail);
     err.status = res.status;

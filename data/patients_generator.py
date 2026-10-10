@@ -1,4 +1,4 @@
-"""Deterministic synthetic patient generator (Lane C — Data & Mining).
+"""Seeded synthetic patient generator for fixtures and demonstrations.
 
 Produces ``N`` synthetic Singapore-relevant patients from a small set of clinical
 archetypes (T2D, HTN, T2D+HTN, CKD 3, CKD 4, CKD 4+hyperkalemia, CKD 5
