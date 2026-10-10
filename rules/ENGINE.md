@@ -45,8 +45,12 @@ From the repo root:
      absolute `g` reference values for sat-fat (22 g / 13 g at a 2000 kcal reference) are
      kept as-is, matching the hand-worked example; the `%kcal` figures stay available as
      asserted flags (`sat_fat_pct_kcal_max`, `fat_pct_kcal_range`, …) for the optimiser.
-   - **Conflict resolution** per `(nutrient, kind)`: higher priority wins; ties broken by
-     the stricter value (max → lower, min/target → lower), then lowest `rule_id`.
+    - **Conflict resolution** per `(nutrient, kind)`: higher priority wins, then
+      a value tie-break and lowest `rule_id`. The documented stricter-ceiling
+      policy requires lower MAX values. **Known discrepancy:** the current
+      implementation selects larger MAX values on equal priority. It selects
+      smaller MIN/TARGET values; describing all three as "stricter" is misleading.
+      The MAX ordering needs a behavior fix and an equal-priority regression test.
      Candidates with the *same value* as the winner are merges, not conflicts. Every loser
      gets an explicit marker woven into its own trace row:
      `... | SUPERSEDED: superseded by CKD-2024-SODIUM-2000 on sodium_mg max (final value 2000 mg)`
@@ -87,11 +91,12 @@ engine accepts pregnancy encoded either as `pregnant: true` or as a `pregnancy` 
 
 ## Constraint ↔ citation linkage
 
-`NutrientConstraint` in the frozen schema carries no citation fields (`extra="forbid"`), so
-per-constraint provenance is carried by (a) the constraint-producing rule's
-`CitationSource` in `envelope.citations` (all fired rules are cited), and (b) the trace row
-whose `action_summary` names the constraint with `[guideline / section]`. This is a
-deliberate consequence of the frozen contract, not an omission.
+`NutrientConstraint.provenance` can record the exact kind, value, unit, envelope
+identity/version, author, and citation. `shared/provenance.py` fills missing
+provenance from matching trace actions; clinician target replacements receive
+clinician-authored provenance. All fired rules retain their trace and citations,
+but firing does not establish authorship of the final constraint. Legacy matching
+depends on the engine's `action_summary` format; arbitrary prose is not equivalent.
 
 ## Medication–nutrient interaction rules (stretch feature #1)
 
@@ -135,10 +140,10 @@ Notes:
 
 ## Fallback
 
-No pure-Python interpreter is shipped: clipspy 1.0.6 is a hard runtime dependency of
-`rules.engine` (`import clips`). `rules.clipspy_facts` remains import-safe without it, and
-its `patient_fact` / template layer documents the fact-shape contract the engine mirrors
-(its patient template plus an `hba1c_pct` slot).
+No pure-Python interpreter is shipped: running `rules.engine` requires clipspy.
+Its guarded import allows the module to load without CLIPS, but a rule run then
+raises `RuntimeError`. `rules.clipspy_facts` supplies import-safe reference helpers;
+the active engine uses separate templates, including an `hba1c_pct` patient slot.
 
 ## Known deviations from the hand-worked example
 

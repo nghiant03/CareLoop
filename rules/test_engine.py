@@ -359,7 +359,7 @@ def test_result_contract_shape():
 
 
 # ---------------------------------------------------------------------------
-# Medication-nutrient interaction rules (stretch feature #1)
+# Medication-nutrient interaction rules
 # ---------------------------------------------------------------------------
 
 MED_RULES = {
@@ -476,7 +476,8 @@ def test_real_dataset_patient_triggers_at_least_two_new_med_rules():
 
 
 def test_example_trace_regression_includes_new_med_rules():
-    """The hand-worked SYN-0007 patient (ACEi + loop_diuretic) now also fires
-    the two cited med rules; the pinned id list in example_trace.json was
-    regenerated accordingly (30 -> 32 fired rules)."""
+    """The SYN-0007 fixture with ACEi and loop_diuretic fires both cited med rules.
+
+    Its expected firing list must include the medication cautions.
+    """
     assert len(json.load(open(REPO / "rules" / "example_trace.json"))["all_fired_rule_ids"]) == 32

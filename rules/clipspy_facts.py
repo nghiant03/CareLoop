@@ -1,27 +1,18 @@
-"""clipspy fact templates for CareLoop.
+"""Reference CLIPS templates and pure fact-rendering helpers.
 
-Week 1 deliverable (Lane A): the CLIPS ``deftemplate`` layer that mirrors the
-canonical pydantic contracts in ``shared/envelope_schema.py``.
+Import attempts to load clipspy but remains usable if that import fails.
+Callers create environments and load templates explicitly. These are reference
+shapes, not the engine's active templates: ``rules.engine`` defines its own
+constraint facts and additional patient fields. Citation nesting and constraint
+provenance are assembled in Python, not represented one-to-one by these slots.
 
-Design notes
-------------
-* This module is deliberately **import-safe**: ``clipspy`` is an optional
-  dependency and is *not installed yet* (see rules/README.md). Importing this
-  file never requires CLIPS. The engine is created lazily by the caller.
-* We only declare templates and pure mapping helpers here. We do **not**
-  instantiate ``clips.Environment`` and do **not** assert any facts at import
-  time. Week 2 wires these into the real RETE network.
-* Template slots map 1:1 onto ``PatientSummary`` and the reference models used
-  by ``NutrientConstraint`` / ``ExclusionFlag`` / ``RuleFire`` so that the
-  forward-chaining output can be serialised straight back into a
-  ``NutrientEnvelope``.
+Usage with clipspy installed::
 
-Usage (Week 2, once clipspy is installed)::
-
-    from rules.clipspy_facts import CLIPS_AVAILABLE, load_templates, patient_fact
+    import clips
+    from rules.clipspy_facts import load_templates, patient_fact
     env = clips.Environment()
     load_templates(env)
-    env.assert_string(patient_fact(patient_summary))   # or env.assert_string(...)
+    env.assert_string(patient_fact(patient_summary))
     env.run()
 """
 
@@ -30,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# Optional dependency — never imported eagerly at module scope by callers.
+# Guard native-library loading so pure mapping helpers remain importable without CLIPS.
 # ---------------------------------------------------------------------------
 try:  # pragma: no cover - exercised only when clipspy is installed
     import clips  # type: ignore
@@ -44,9 +35,8 @@ except Exception:  # ImportError, or any native-library load error
 # ---------------------------------------------------------------------------
 # CLIPS deftemplates
 # ---------------------------------------------------------------------------
-# CLIPS symbols cannot contain many punctuation characters, so every enum-like
-# slot uses a symbol (e.g. ``ckd_stage_4``) rather than a free string. The
-# canonical nutrient/kind/unit values match shared/envelope_schema.py exactly.
+# Enum-like slots use symbols; free-text fields use strings. Nutrient/kind/unit
+# tokens follow the shared schema, while unknown numeric labs use -1.0.
 FACTS_DEFTEMPLATE = r"""
 ;; ------------------------------------------------------------------
 ;; CareLoop patient fact — mirrors shared.envelope_schema.PatientSummary
@@ -129,7 +119,7 @@ FACTS_DEFTEMPLATE = r"""
 # Pure mapping helpers (no CLIPS required to call these)
 # ---------------------------------------------------------------------------
 def _sym(value: Any) -> str:
-    """Render a Python value as a CLIPS-safe symbol/string token."""
+    """Replace spaces with underscores; this is not general CLIPS input escaping."""
     text = str(value).strip().replace(" ", "_")
     return text
 
@@ -198,8 +188,7 @@ def exclusion_fact(kind: str, value: str, reason: str, rule_id: str, priority: i
 def load_templates(env: Any) -> None:
     """Compile the CareLoop deftemplates into a live ``clips.Environment``.
 
-    Lazy by design: the caller must have created the environment (and therefore
-    installed clipspy) before calling this.
+    The caller owns the environment. Missing clipspy raises RuntimeError.
     """
     if not CLIPS_AVAILABLE:
         raise RuntimeError(

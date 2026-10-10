@@ -1,37 +1,14 @@
-"""CareLoop clinical rule engine (CLIPS forward-chaining + Python assembly).
+"""Clinical rules compiled to CLIPS, then assembled into envelope and trace dicts.
 
-Public API
-----------
-``run_rules(patient: dict) -> {"envelope": <NutrientEnvelope-dict>, "trace": [<RuleFire-dict>]}``
+Rules choose constraints by salience; Python scales per-kg values, resolves
+conflicts, and suppresses targets for scope-rejected proposals. The fixed clock
+and sorted output make sequential runs deterministic for unchanged inputs.
+Returned shapes follow ``shared/envelope_schema.py``. See ``rules/ENGINE.md``
+for rule policy and the current tie-breaking discrepancy.
 
-The returned ``envelope`` dict validates against
-``shared.envelope_schema.NutrientEnvelope``; every ``trace`` entry validates
-against ``shared.envelope_schema.RuleFire``.
-
-Design summary (full details in rules/ENGINE.md)
-------------------------------------------------
-1. **Compile once** — every rule in ``rules.json`` becomes a CLIPS defrule with
-   ``(declare (salience <priority>))``.  Conditions compile to patient-pattern
-   tests: ``member$`` membership for the ``diagnoses``/``meds`` multislots,
-   numeric comparisons guarded against the ``-1.0`` "unknown lab" sentinel.
-2. **Forward-chain** — one ``(patient ...)`` fact is asserted per patient and
-   the RETE network runs to fixpoint.
-3. **Assemble in Python** — harvested ``constraint``/``exclusion``/``clinical-flag``
-   facts are turned into the envelope:
-   - per-kg coefficients (energy 25-35 kcal/kg/d, protein g/kg/d) are scaled by
-     patient weight,
-   - conflicts on the same ``(nutrient, kind)`` are resolved by priority
-     (ties: stricter value, then rule_id); losing rules get an explicit
-     ``SUPERSEDED`` marker woven into their trace row,
-   - scope gates (``careloop_eligible=false``, ``auto_envelope_suppressed``)
-     yield a REJECTED envelope with no nutrient targets.
-4. **Determinism** — a fixed engine clock feeds ``fired_at``/``proposed_at``
-   and every collection is sorted, so the same patient yields byte-identical
-   output on every run.
-
-A pure-Python salience interpreter is NOT used: clipspy is a hard runtime
-dependency of this module (``rules.clipspy_facts`` stays import-safe without
-it; this engine does not).
+``run_rules`` reuses one mutable CLIPS environment without a lock; callers must
+serialize runs. Import tolerates missing clipspy, but invoking the engine does
+not; ``rules.clipspy_facts`` supplies import-safe reference helpers.
 """
 
 from __future__ import annotations
@@ -42,7 +19,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-try:  # clipspy is a hard dependency of the engine (unlike clipspy_facts.py)
+# CLIPS is required when running rules; keep module import available without it.
+try:
     import clips  # type: ignore
 
     CLIPS_AVAILABLE = True
@@ -54,8 +32,7 @@ __all__ = ["run_rules", "CLIPS_AVAILABLE"]
 
 _RULES_PATH = Path(__file__).with_name("rules.json")
 
-# Fixed clock: keeps run_rules byte-deterministic (no wall-clock leakage into
-# fired_at / proposed_at).  Downstream systems may re-stamp on approval.
+# Fixed trace/proposal clock for deterministic engine output; storage stamps live proposals.
 _CLOCK = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 
 _MULTISLOT_FIELDS = {"diagnoses", "meds"}
@@ -252,7 +229,11 @@ _RULESET: list[dict] | None = None
 
 
 def _get_env() -> Any:
-    """Build (once) and return the CLIPS environment with all defrules loaded."""
+    """Return the shared mutable environment, compiling rules on first use.
+
+    Initialization and rule runs are not synchronized. Raise RuntimeError when
+    clipspy is unavailable or a rule fails to compile.
+    """
     global _ENV
     if _ENV is None:
         if not CLIPS_AVAILABLE:
@@ -376,10 +357,11 @@ def _scale(nutrient: str, value: float, weight_kg: float) -> float:
 def _resolve_conflicts(constraints: list[dict]) -> tuple[dict, dict[str, list[str]]]:
     """Pick one winner per (nutrient, kind); record losing rules for the trace.
 
-    Winner = highest priority; ties broken by stricter value (max -> lower,
-    min/target -> higher... target uses lower as "stricter ceiling-like" for
-    determinism), then lowest rule_id.  Candidates identical in value to the
-    winner are merges, not conflicts, and are not marked superseded.
+    Highest priority wins. Current equal-priority sorting selects larger MAX
+    values and smaller MIN/TARGET values, then the lowest rule ID. MAX ordering
+    contradicts the documented stricter-ceiling policy; this is a known behavior
+    defect, not a clinical policy change. Groups are sorted in place. Identical
+    values are merges and are not marked superseded.
     """
     groups: dict[tuple[str, str], list[dict]] = {}
     for c in constraints:
@@ -458,10 +440,7 @@ def _action_summary(rule: dict, prep: dict) -> str:
                         f"{round(value * weight, 2):g} {_UNITS[nutrient]}/d (weight {weight:g} kg)"
                     )
                 else:
-                    # Weight unknown: the coefficient is NOT scaled. The trace
-                    # must keep the explicit per-kg marker so downstream
-                    # consumers never read the coefficient as an absolute
-                    # daily dose.
+                    # Keep the per-kg marker so unscaled coefficients cannot read as daily doses.
                     pieces.append(
                         f"set {nutrient} {k} = {value:g} {per} "
                         f"(weight unknown; not scaled)"
@@ -476,10 +455,13 @@ def _action_summary(rule: dict, prep: dict) -> str:
 
 
 def run_rules(patient: dict) -> dict:
-    """Turn a patient dict into a proposed nutrient envelope + rule-firing trace.
+    """Return a PROPOSED or scope-rejected envelope and its complete firing trace.
 
     Returns ``{"envelope": <NutrientEnvelope-compatible dict>,
                "trace": [<RuleFire-compatible dicts>]}``.
+    The placeholder envelope ID/time are replaced when stored as a live proposal.
+    Runs mutate the shared CLIPS environment; concurrent calls require external
+    serialization. This function does not persist or approve clinical state.
     """
     ruleset = _ruleset()
     by_id = {r["rule_id"]: r for r in ruleset}
@@ -492,13 +474,7 @@ def run_rules(patient: dict) -> dict:
     constraints, exclusions, flags, fired_ids = _harvest(env)
     env.reset()
 
-    # Fail-safe for scope-class rules on unknown labs: a SCOPE-* rule whose
-    # numeric (unknown-guarded) condition cannot be evaluated because the lab
-    # is missing must not silently vanish from the decision record. Surface a
-    # caution flag so the notes show the gate was not evaluable. The rule
-    # itself still does NOT fire on an unknown lab (the -1.0 sentinel guard in
-    # _condition_to_clips stands) — a missing value never fabricates an
-    # exclusion, but it is never silent either.
+    # Record missing scope labs as cautions, without fabricating a fired exclusion.
     for rule in ruleset:
         rid = rule["rule_id"]
         if not rid.startswith("SCOPE-") or rid in fired_ids:
