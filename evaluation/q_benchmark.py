@@ -51,7 +51,10 @@ def _summary_table(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
             "runs": len(runs),
             "mean_hv": round(statistics.fmean(hvs), 4),
             "hv_std": round(statistics.pstdev(hvs), 4) if len(hvs) > 1 else 0.0,
-            "violation_rate": round(sum(1 for v in violations if v > 0) / len(violations), 3),
+            # exact fraction: PASS decisions must not see a rounded-to-zero
+            # rate (1 violation in 2001 runs would round to 0.0). Rendering
+            # rounds for presentation only.
+            "violation_rate": sum(1 for v in violations if v > 0) / len(violations),
             "mean_runtime_ms": round(statistics.fmean(runtimes), 1),
             "mean_search_evaluations": statistics.fmean(float(r["evaluations"]) for r in runs) if all(r.get("evaluations") for r in runs) else None,
         })
@@ -105,7 +108,8 @@ def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
     The hypervolume winner is computed from the data (highest mean HV across
     every method row in the benchmark artefact) — it is never hardcoded to a
     particular algorithm.  PASS requires the HV winner to also report a 0%
-    hard-constraint violation rate; otherwise the front-quality leader cannot
+    hard-constraint violation rate (the exact, unrounded rate: any run with a
+    violation makes it nonzero); otherwise the front-quality leader cannot
     be recommended as-is and the verdict is FAIL.
     """
     if not headline:
@@ -128,7 +132,12 @@ def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
             note += f", level with {runner_up['method']}"
         else:
             note += f", ahead of {runner_up['method']} at {runner_up['mean_hv']:.4f}"
-    note += f") with a {winner['violation_rate']:.0%} hard-constraint violation rate."
+    # presentation only: exact zero prints as 0%, a tiny nonzero rate keeps
+    # enough precision to be visibly nonzero (decision logic above uses the
+    # unrounded value)
+    rate = winner["violation_rate"]
+    rate_text = "0%" if rate == 0 else f"{rate:.3%}"
+    note += f") with a {rate_text} hard-constraint violation rate."
     if clean:
         note += (
             " The winner claim is computed from the committed artefact rows "

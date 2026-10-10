@@ -8,6 +8,7 @@ parsed, never re-run.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -17,7 +18,7 @@ if str(ROOT) not in sys.path:
 
 import pytest
 
-from evaluation.common import load_patients
+from evaluation.common import load_patients, target_supported
 from evaluation.q_benchmark import evaluate_q4
 from evaluation.q_conflicts import evaluate_q2
 from evaluation.q_groundedness import evaluate_q5
@@ -39,14 +40,43 @@ def _subset():
 def test_q1_traceability_full_is_complete():
     results = evaluate_q1()  # cheap: rule engine only, all 20 patients
     assert results["total_patients"] == 20
-    assert results["eligible_patients"] == 18
-    assert results["rejected_patient_ids"] == ["P0008", "P0017"]
+    # P0007/P0016 (stage-5 pre-dialysis vocabulary) are scope-rejected by
+    # the rules engine; P0008/P0017 were already out of scope.
+    assert results["eligible_patients"] == 16
+    assert results["rejected_patient_ids"] == ["P0007", "P0008", "P0016", "P0017"]
     assert results["rejected_have_no_targets"] is True
     assert results["overall"]["rate"] == 1.0
     assert results["untraceable_items"] == []
     assert results["verdict"] == "PASS"
     # determinism: same patient -> same rates on a second run
     assert evaluate_q1()["overall"] == results["overall"]
+
+
+def test_q1_definition_describes_the_matching_policy_honestly():
+    """The Q1 metric matches (nutrient, kind, final value); it is not provenance.
+
+    Regression (finding 43): the definition claimed "superseded losers never
+    get credited" while ``target_supported`` deliberately matches any
+    same-value cited action, superseded or not.
+    """
+    results = evaluate_q1()
+    assert "superseded losers never get credited" not in results["definition"]
+    assert "weaker than provenance" in results["definition"]
+    # pin the actual policy: a SUPERSEDED row with a matching final value
+    # and complete citation still credits the target
+    target = {"nutrient": "sodium_mg", "kind": "max", "value": 2000.0}
+    trace = [
+        {"rule_id": "R-A",
+         "action_summary": "set sodium_mg max = 2000 mg/d [SUPERSEDED by R-B]",
+         "citation": {"rule_id": "R-A", "guideline": "G", "section": "S"}},
+        {"rule_id": "R-B",
+         "action_summary": "set sodium_mg max = 1800 mg/d",
+         "citation": {"rule_id": "R-B", "guideline": "G", "section": "S"}},
+    ]
+    assert target_supported(target, trace) is True
+    assert target_supported(
+        {"nutrient": "sodium_mg", "kind": "max", "value": 1500.0}, trace
+    ) is False
 
 
 # --------------------------------------------------------------------- Q2
@@ -86,9 +116,17 @@ def test_q3_subset_end_to_end():
         assert row["per_day_hard_failures"] == []
         assert row["days_checked"] == 7
         # MIN floors / TARGETs are soft: reported informationally, never as
-        # violations.
-        for aim in row["soft_aims"].values():
+        # violations. Keys carry nutrient AND kind identity so a nutrient
+        # with both a MIN floor and a TARGET keeps both entries.
+        for aim_key, aim in row["soft_aims_by_constraint"].items():
             assert aim["kind"] in ("min", "target")
+            assert aim_key.endswith(":" + aim["kind"]), aim_key
+
+    # P0001's envelope has BOTH fiber MIN 25 and TARGET 30: both summaries
+    # must survive instead of one overwriting the other
+    p0001 = next(r for r in attempted if r["patient_id"] == "P0001")
+    assert "fiber_g:min" in p0001["soft_aims_by_constraint"]
+    assert "fiber_g:target" in p0001["soft_aims_by_constraint"]
 
     # Production composition evaluates original aims without relaxing floors.
     assert all(r["meal_complete"] for r in attempted)
@@ -100,7 +138,124 @@ def test_q3_subset_end_to_end():
     assert results["verdict"] == "PASS"
 
 
-# --------------------------------------------------------------------- Q4
+# ---------------------------------------------------- per-day check semantics
+
+def _pd_dishes():
+    from backend.optim.toy_data import Dish
+
+    return [
+        Dish(dish_id="lo", name="lo", category="hawker",
+             nutrients={"energy_kcal": 500.0, "fiber_g": 9.0, "sodium_mg": 100.0},
+             tags=(), price_sgd=1.0),
+        Dish(dish_id="hi", name="hi", category="hawker",
+             nutrients={"energy_kcal": 700.0, "fiber_g": 12.0, "sodium_mg": 200.0},
+             tags=(), price_sgd=1.0),
+    ]
+
+
+def _pd_envelope(targets):
+    from shared.envelope_schema import (
+        ConstraintKind, EnvelopeStatus, NutrientConstraint, NutrientEnvelope,
+        NutrientKind, PatientSummary,
+    )
+
+    return NutrientEnvelope(
+        envelope_id="env-per-day-test", patient_id="p-per-day",
+        status=EnvelopeStatus.APPROVED, version=1,
+        patient_snapshot=PatientSummary(
+            patient_id="p-per-day", age=50, sex="F", weight_kg=60, diagnoses=[]
+        ),
+        targets=targets, exclusions=[], priority_basis="test",
+    )
+
+
+def _pd_targets(min_floor, fiber_target=30.0, energy_target=1800.0, sodium_max=700.0):
+    from shared.envelope_schema import ConstraintKind, NutrientConstraint, NutrientKind
+
+    return [
+        NutrientConstraint(nutrient=NutrientKind.SODIUM_MG,
+                           kind=ConstraintKind.MAX, value=sodium_max, unit="mg"),
+        NutrientConstraint(nutrient=NutrientKind.FIBER_G,
+                           kind=ConstraintKind.MIN, value=min_floor, unit="g"),
+        NutrientConstraint(nutrient=NutrientKind.FIBER_G,
+                           kind=ConstraintKind.TARGET, value=fiber_target, unit="g"),
+        NutrientConstraint(nutrient=NutrientKind.ENERGY_KCAL,
+                           kind=ConstraintKind.TARGET, value=energy_target, unit="kcal"),
+    ]
+
+
+def test_per_day_check_preserves_aim_identity_and_daily_gap_aggregation():
+    """Soft summaries keep nutrient/kind identity and daily gaps (finding 42).
+
+    Keying only by nutrient let a TARGET overwrite a MIN summary for the
+    same nutrient; averaging day totals before taking the TARGET distance
+    cancelled opposite deviations (1500/2100 vs 1800 reported 0).
+    """
+    from evaluation.q_satisfaction import _per_day_check
+
+    dishes = _pd_dishes()
+    plan = ([["lo"]] * 3 + [["hi"]] * 3) * 3 + [["lo"]] * 3  # lo,hi,lo,hi,lo,hi,lo
+    solved = _pd_envelope(_pd_targets(min_floor=25.0))
+    check = _per_day_check(plan, solved, dishes)
+
+    # identity: fiber MIN 25 and TARGET 30 both survive
+    assert set(check["soft_aims_by_constraint"]) == {
+        "fiber_g:min", "fiber_g:target", "energy_kcal:target",
+    }
+    # daily gaps are aggregated before averaging: |1500-1800| and
+    # |2100-1800| both equal 300 -> mean distance 300, never 0
+    energy = check["soft_aims_by_constraint"]["energy_kcal:target"]
+    assert energy["mean_distance"] == 300.0
+    # fiber TARGET 30: distances 3 (lo days, 27 g) and 6 (hi days, 36 g)
+    assert check["soft_aims_by_constraint"]["fiber_g:target"]["mean_distance"] == round(
+        (3.0 * 4 + 6.0 * 3) / 7, 3
+    )
+    # MIN summary stays worst-day: min day total 27 g >= floor 25 -> no shortfall
+    assert check["soft_aims_by_constraint"]["fiber_g:min"]["worst_day_shortfall"] == 0.0
+    assert check["soft_aims"]["fiber_g"] == check["soft_aims_by_constraint"]["fiber_g:target"]
+    # hard MAX verification against the solved envelope
+    assert check["hard_compliant"] is True and check["hard_failures"] == []
+
+
+def test_per_day_check_retains_original_aims_when_floors_are_relaxed():
+    """Relaxed fallback floors must not rewrite the reported aim (finding 42)."""
+    from evaluation.q_satisfaction import _per_day_check
+
+    dishes = _pd_dishes()
+    plan = [["lo"]] * 21  # every day: 27 g fiber, 1500 kcal, 300 mg sodium
+    solved = _pd_envelope(_pd_targets(min_floor=20.0))  # relaxed fallback floor
+    original = _pd_envelope(_pd_targets(min_floor=25.0))  # approved aim
+
+    default = _per_day_check(plan, solved, dishes)
+    assert default["soft_aims_by_constraint"]["fiber_g:min"]["floor"] == 20.0  # solved aims
+
+    with_original = _per_day_check(plan, solved, dishes, aims_envelope=original)
+    fiber = with_original["soft_aims_by_constraint"]["fiber_g:min"]
+    # adequacy is assessed against the ORIGINAL approved floor: 27 g against
+    # 25 g is a 0 g shortfall, but against the relaxed 20 g floor it would
+    # also be 0 — use a plan below the original floor to expose the aim:
+    assert fiber["floor"] == 25.0
+
+
+def test_per_day_check_original_aims_expose_real_shortfall():
+    """A plan meeting only the relaxed floor still shows the original gap."""
+    from evaluation.q_satisfaction import _per_day_check
+
+    dishes = _pd_dishes()
+    # Delivery is 27 g/day: the relaxed 20 g floor is met, but the original
+    # 30 g floor retains a 3 g shortfall.
+    plan = [["lo"]] * 21
+    solved = _pd_envelope(_pd_targets(min_floor=20.0))
+    original = _pd_envelope(_pd_targets(min_floor=30.0, fiber_target=40.0))
+    with_original = _per_day_check(plan, solved, dishes, aims_envelope=original)
+    fiber = with_original["soft_aims_by_constraint"]["fiber_g:min"]
+    assert fiber["floor"] == 30.0
+    assert fiber["worst_day_total"] == 27.0
+    assert fiber["worst_day_shortfall"] == 3.0
+    relaxed_view = _per_day_check(plan, solved, dishes)
+    assert relaxed_view["soft_aims_by_constraint"]["fiber_g:min"]["floor"] == 20.0
+    assert relaxed_view["soft_aims_by_constraint"]["fiber_g:min"]["worst_day_shortfall"] == 0.0
+
 
 def test_q4_consumes_benchmark_artefacts_without_rerunning():
     results = evaluate_q4(rerun_benchmark=False)

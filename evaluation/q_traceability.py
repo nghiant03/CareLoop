@@ -81,7 +81,11 @@ def evaluate_q1(patients: list[dict[str, Any]] | None = None) -> dict[str, Any]:
             "Every envelope target and exclusion must be traceable to >=1 fired "
             "trace row carrying a citation (guideline + section + rule_id). "
             "Targets are matched by (nutrient, kind, final value) against the "
-            "trace action summaries; superseded losers never get credited."
+            "trace action summaries. This matching is weaker than provenance: "
+            "a superseded action whose final value coincides with the target "
+            "still matches, so PASS means a cited, value-matching action "
+            "exists — not that the matched row is the exact author of the "
+            "target."
         ),
         "total_patients": len(per_patient),
         "eligible_patients": len(eligible),

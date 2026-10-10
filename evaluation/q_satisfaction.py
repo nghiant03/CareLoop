@@ -11,7 +11,10 @@ For every eligible patient (rule status PROPOSED):
    totals from the returned plan and check the HARD constraints (MAX ceilings,
    in the canonical evaluator) against the SOLVED envelope. MIN floors and TARGETs
    are soft: their remaining shortfall/distance is reported informationally
-   in ``soft_aims`` (mean per day), never as a violation.
+   in ``soft_aims_by_constraint`` — MIN floors as the worst-day shortfall, TARGETs as the
+   mean daily absolute distance, both assessed against the ORIGINAL approved
+   aims (relaxed fallback floors never rewrite the reported aim) — never as
+   a violation.
 
 Unsuccessful searches (explicit solver diagnosis, empty plan, nothing served)
 and MIN-relaxation disclosures are reported distinctly. ``infeasibility_status``
@@ -44,40 +47,60 @@ def _approve(envelope_model: Any) -> Any:
     })
 
 
-def _per_day_check(plan: list[list[str]], solved_envelope: Any, dishes: list[Any]) -> dict[str, Any]:
+def _per_day_check(plan: list[list[str]], solved_envelope: Any, dishes: list[Any],
+                   aims_envelope: Any = None) -> dict[str, Any]:
     """Recompute per-day totals; verify HARD (MAX) constraints per day.
 
     MIN floors / TARGET values are soft: their residual
     shortfall/distance is summarised informationally, never as a violation.
+
+    ``soft_aims_by_constraint`` is keyed by ``"<nutrient>:<kind>"`` so a nutrient with
+    both a MIN floor and a TARGET keeps both entries. MIN entries report the
+    worst-day shortfall; TARGET entries report the mean over days of the
+    per-day absolute distance, so deviations on different days cannot cancel.
+    Summaries are computed against ``aims_envelope`` when given — the ORIGINAL
+    approved envelope — so relaxed fallback floors in the solved envelope
+    never rewrite the reported aim; hard MAX verification always uses
+    ``solved_envelope``. ``soft_aims`` retains the legacy nutrient-keyed,
+    last-aim-wins projection for old readers; use the new map for all aims.
     """
     from backend.optim.problem import daily_totals
 
     totals = daily_totals(plan, dishes)
     hard_failures = []
-    soft = {}
+    soft: dict[str, Any] = {}
     for target in solved_envelope.targets:
-        kind = target.kind.value
+        if target.kind.value != "max":
+            continue
         key = target.nutrient.value
-        values = [day_totals[key] for day_totals in totals]
+        values = [day[key] for day in totals]
+        over = [(d, round(v, 3)) for d, v in enumerate(values, start=1)
+                if v > target.value + _EPS]
+        for day, value in over:
+            hard_failures.append({"nutrient": key, "kind": "max",
+                                  "day": day, "total": value,
+                                  "limit": target.value})
+    soft_envelope = solved_envelope if aims_envelope is None else aims_envelope
+    for target in soft_envelope.targets:
+        kind = target.kind.value
         if kind == "max":
-            over = [(d, round(v, 3)) for d, v in enumerate(values, start=1)
-                    if v > target.value + _EPS]
-            for day, value in over:
-                hard_failures.append({"nutrient": key, "kind": kind,
-                                      "day": day, "total": value,
-                                      "limit": target.value})
-        elif kind == "min":
+            continue  # ceilings are verified as hard constraints above
+        key = target.nutrient.value
+        values = [day[key] for day in totals]
+        if kind == "min":
             shortfall = max(0.0, target.value - min(values))  # worst day
-            soft[key] = {"kind": kind, "floor": target.value,
-                         "worst_day_total": round(min(values), 3),
-                         "worst_day_shortfall": round(shortfall, 3)}
+            soft[f"{key}:{kind}"] = {"kind": kind, "floor": target.value,
+                                     "worst_day_total": round(min(values), 3),
+                                     "worst_day_shortfall": round(shortfall, 3)}
         else:  # target
-            mean = sum(values) / len(values)
-            soft[key] = {"kind": kind, "aim": target.value,
-                         "mean_day_total": round(mean, 3),
-                         "mean_distance": round(abs(mean - target.value), 3)}
+            distances = [abs(v - target.value) for v in values]
+            soft[f"{key}:{kind}"] = {"kind": kind, "aim": target.value,
+                                     "mean_day_total": round(sum(values) / len(values), 3),
+                                     "mean_distance": round(sum(distances) / len(distances), 3)}
     return {"days_checked": len(totals), "hard_failures": hard_failures,
-            "hard_compliant": not hard_failures, "soft_aims": soft}
+            "hard_compliant": not hard_failures,
+            "soft_aims_by_constraint": soft,
+            "soft_aims": {key.rsplit(":", 1)[0]: aim for key, aim in soft.items()}}
 
 
 def _blocking_constraints(solved_envelope: Any, dishes: list[Any]) -> list[str]:
@@ -164,10 +187,12 @@ def evaluate_q3(
             "meal_complete": result.get("meal_complete", False),
         }
         if feasible:
-            per_day = _per_day_check(result["plan"], solved, dishes)
+            per_day = _per_day_check(result["plan"], solved, dishes,
+                                     aims_envelope=approved)
             row["per_day_hard_compliant"] = per_day["hard_compliant"]
             row["per_day_hard_failures"] = per_day["hard_failures"]
             row["soft_aims"] = per_day["soft_aims"]
+            row["soft_aims_by_constraint"] = per_day["soft_aims_by_constraint"]
             row["days_checked"] = per_day["days_checked"]
         else:
             row["per_day_hard_compliant"] = None

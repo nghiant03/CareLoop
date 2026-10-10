@@ -43,6 +43,10 @@ def _table(headers: list[str], rows: list[list[Any]]) -> str:
 
 
 def _q6_ablation_rows(pooled: dict[str, Any]) -> list[list[Any]]:
+    # Historical artifacts (pre-2026-10) pooled the unit-mixed raw
+    # ``mean_daily_shortfall`` (kcal/g/mg averaged together); it is
+    # deliberately NOT rendered. They lack ``mean_daily_rel_shortfall_pct``,
+    # which renders as n/a rather than raising.
     rows = []
     for name in ("scalar", "normalised", "adequacy_first"):
         p = pooled.get(name) or {}
@@ -51,7 +55,7 @@ def _q6_ablation_rows(pooled: dict[str, Any]) -> list[list[Any]]:
             p.get("rows"),
             _pct(p.get("feasibility_rate")),
             _fmt(p.get("mean_worst_day_rel_shortfall_pct")),
-            _fmt(p.get("mean_daily_shortfall")),
+            _fmt(p.get("mean_daily_rel_shortfall_pct")),
             _fmt(p.get("mean_met_days_fraction")),
             _fmt(p.get("mean_cost")),
             _fmt(p.get("mean_variety")),
@@ -75,14 +79,17 @@ def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
     add("")
     add(table(
         ["Strategy", "Rows", "Feasibility", "Worst-day shortfall %",
-         "Mean daily shortfall", "Met-days fraction", "Cost (SGD)",
+         "Mean daily rel. shortfall %", "Met-days fraction", "Cost (SGD)",
          "Variety (objective)", "Deviation", "Mean front size"],
         _q6_ablation_rows(sel["pooled"]),
     ))
     add("")
-    add(f"Scoring: {config['scored_against']}. Worst-day shortfall % is the pooled "
-        f"mean over rows of the worst per-aim relative shortfall on each plan's "
-        f"worst day (plan_service adequacy semantics).")
+    add(f"Scoring: {config['scored_against']}. Both shortfall columns are "
+        f"dimensionless (gap/aim): the worst-day column pools the worst "
+        f"per-aim relative shortfall on each plan's worst day; the mean-daily "
+        f"column pools the per-aim mean daily gap/aim. Unit-bearing per-aim "
+        f"gaps (kcal/g/mg) are kept per aim in results.json and are never "
+        f"averaged across aims (plan_service adequacy semantics).")
     add("")
     add("### Paired per-patient deltas vs scalar selection "
         "(worst-day relative shortfall pct-points, mean over seeds)")
@@ -126,12 +133,12 @@ def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
             rows.append([label, name, p.get("rows"),
                          _pct(p.get("feasibility_rate")),
                          _fmt(p.get("mean_worst_day_rel_shortfall_pct")),
-                         _fmt(p.get("mean_daily_shortfall")),
+                         _fmt(p.get("mean_daily_rel_shortfall_pct")),
                          _fmt(p.get("mean_met_days_fraction")),
                          _fmt(p.get("mean_cost")),
                          _fmt(p.get("mean_variety"))])
     add(table(["Encoding", "Strategy", "Rows", "Feasibility", "Worst-day shortfall %",
-               "Mean daily shortfall", "Met-days fraction", "Cost (SGD)",
+               "Mean daily rel. shortfall %", "Met-days fraction", "Cost (SGD)",
                "Variety (objective)"], rows))
     add("")
     pools = comp["pools"]
@@ -302,7 +309,7 @@ def render_report(results: dict[str, Any]) -> str:
           r.get("status") or "—",
           r.get("violation_count", "—"),
           r.get("engine") or "—",
-          _fmt(r.get("per_day_totals_compliant")) if r.get("attempted") else "—",
+          _fmt(r.get("per_day_hard_compliant")) if r.get("attempted") else "—",
           ", ".join(sorted({x["nutrient"] for x in r.get("relaxed_constraints", [])})) or "—",
           ", ".join(r.get("blocking_constraints_leave_one_out") or []) or "—"]
          for r in q3["per_patient"]],

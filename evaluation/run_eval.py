@@ -30,6 +30,34 @@ from evaluation.report import render_report  # noqa: E402
 __all__ = ["run_suite", "main"]
 
 
+def _run_vcs(command: list[str]) -> str | None:
+    """Run a VCS command in ROOT; ``None`` on failure or missing executable."""
+    import subprocess
+
+    try:
+        proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+    except OSError:
+        return None  # executable missing or not executable
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip() or None
+
+
+def _source_revision() -> str:
+    """Best-effort source revision: jj first, then git, else an explicit marker.
+
+    The revision is report metadata, so an unavailable VCS must never abort
+    the suite — that would discard every already-computed question result.
+    """
+    revision = _run_vcs(
+        ["jj", "--ignore-working-copy", "log", "-r", "@",
+         "--no-graph", "-T", "commit_id"]
+    )
+    if revision is None:
+        revision = _run_vcs(["git", "rev-parse", "HEAD"])
+    return revision or "unavailable (no accessible VCS revision)"
+
+
 def run_suite(rerun_benchmark: bool = False,
               optimiser_kwargs: dict[str, Any] | None = None) -> dict[str, Any]:
     """Run all six question modules and return the combined results dict."""
@@ -53,12 +81,8 @@ def run_suite(rerun_benchmark: bool = False,
 
     import hashlib
     import platform
-    import subprocess
 
-    revision = subprocess.run(
-        ["jj", "--ignore-working-copy", "log", "-r", "@", "--no-graph", "-T", "commit_id"],
-        cwd=ROOT, capture_output=True, text=True,
-    ).stdout.strip()
+    revision = _source_revision()
     source_paths = sorted(p for directory in ("backend", "shared", "rules", "evaluation")
                           for p in (ROOT / directory).rglob("*.py"))
     code_hash = hashlib.sha256()

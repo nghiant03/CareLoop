@@ -80,6 +80,33 @@ def test_verdict_fails_when_hv_winner_violates_constraints():
     assert "sms-raw leads the benchmark on mean hypervolume" in note
 
 
+def test_summary_table_violation_rate_is_exact_not_rounded():
+    """PASS decisions must use the exact violation fraction (finding 44).
+
+    One violation among 2001 runs is 0.0004997... — a rate rounded to three
+    decimals reads 0.0 and would flip the verdict to PASS. The stored rate
+    must stay unrounded; rounding belongs to presentation only.
+    """
+    rows = [_row("tiny", 0.5, violations=0) for _ in range(2000)]
+    rows.append(_row("tiny", 0.5, violations=1))
+    table = _summary_table(rows)
+    tiny = table[0]
+    assert tiny["runs"] == 2001
+    assert tiny["violation_rate"] != 0.0
+    assert tiny["violation_rate"] == 1 / 2001
+
+    # decision path: a nonzero exact rate must FAIL even though a rounded
+    # presentation would print 0%; the note keeps visible precision
+    verdict, note = verdict_from_headline(table)
+    assert verdict == "FAIL"
+    assert "0.050% hard-constraint violation rate" in note
+
+    # zero violations stays an exact 0.0 and PASSes
+    clean_rows = [_row("clean", 0.9, violations=0) for _ in range(5)]
+    verdict, _note = verdict_from_headline(_summary_table(clean_rows))
+    assert verdict == "PASS"
+
+
 def test_verdict_handles_empty_headline():
     verdict, note = verdict_from_headline([])
     assert verdict == "FAIL"

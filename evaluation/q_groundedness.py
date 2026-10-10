@@ -8,7 +8,8 @@ Scoring:
 * **grounded** questions must be ``answered`` with >=1 citation whose
   ``rule_id`` is in the question's acceptable set (rules that actually produce
   a constraint for the asked nutrient) and every citation must carry a complete
-  provenance triple;
+  provenance triple. Structured claims must cover the answer text and pass
+  ``_claim_sources_consistent``'s metadata checks, not semantic entailment;
 * **escalation** cases must be ``escalated`` with the expected category;
 * **irrelevant** questions must be ``refused`` (never answered from plan
   numbers or invented content).
@@ -162,8 +163,14 @@ def _envelope_for_variant(variant: str) -> dict[str, Any] | None:
     return None
 
 
-def _claims_supported(response, kb, envelope=None, patient=None):
-    """Check every exposed claim, including exact patient values and applicability."""
+def _claim_sources_consistent(response, kb, envelope=None, patient=None):
+    """Check structured answer coverage and source metadata, not semantic entailment.
+
+    Envelope numbers require an approved target, matching citation, and formatted
+    value in the text. Rule claims require an applicable rule and matching citation
+    fields. Dish claims check only the ``dish:`` chunk-ID prefix, not food facts.
+    These checks do not prove that a source supports arbitrary rewritten prose.
+    """
     from backend.app.chat.answers import _rule_applies_to_patient, format_value
     from shared.provenance import citation_for
 
@@ -198,6 +205,10 @@ def _claims_supported(response, kb, envelope=None, patient=None):
     return True
 
 
+# Compatibility for retrieval benchmarks and existing direct callers.
+_claims_supported = _claim_sources_consistent
+
+
 def _run_grounded(kb: Any) -> tuple[list[dict[str, Any]], int, int]:
     from backend.app.chat.answers import answer
 
@@ -220,12 +231,13 @@ def _run_grounded(kb: Any) -> tuple[list[dict[str, Any]], int, int]:
             c.get("rule_id") and c.get("guideline") and c.get("section")
             for c in response.get("citations", [])
         )
+        sources_consistent = _claim_sources_consistent(response, kb, envelope, patient)
         ok = (
             response["status"] == "answered"
             and bool(cited)
             and any(rid in spec["acceptable"] for rid in cited)
             and complete
-            and _claims_supported(response, kb, envelope, patient)
+            and sources_consistent
         )
         if spec.get("envelope") and response.get("envelope"):
             expected_approved = spec["envelope"] == "approved"
@@ -240,7 +252,9 @@ def _run_grounded(kb: Any) -> tuple[list[dict[str, Any]], int, int]:
             "acceptable_rule_ids": sorted(spec["acceptable"]),
             "passed": ok,
             "patient_id": spec.get("patient_id"),
-            "all_claims_supported": _claims_supported(response, kb, envelope, patient),
+            "claim_sources_consistent": sources_consistent,
+            # Legacy serialized alias; neither key measures prose entailment.
+            "all_claims_supported": sources_consistent,
         })
     return rows, passed, len(rows)
 
@@ -297,7 +311,7 @@ def _run_known_gaps(kb: Any) -> list[dict[str, Any]]:
         elif expected.startswith("refused"):
             row["passed"] = response["status"] == "refused"
         else:
-            row["passed"] = response["status"] == "answered" and _claims_supported(response, kb)
+            row["passed"] = response["status"] == "answered" and _claim_sources_consistent(response, kb)
         row["gap"] = "Regression passed" if row["passed"] else row["gap"]
         rows.append(row)
     return rows

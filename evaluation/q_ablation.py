@@ -1,83 +1,28 @@
-"""Q6 — Objective/selection ablation, meal-composition ablation, exact reference.
+"""Q6 — Paired selection ablation, experimental composition, and exact reference.
 
-Paired selection comparison, bounded experimental composition search, and an
-exact reference limited to the single-dish encoding.
+Selection reuses each eligible patient/seed NSGA-II front across the scalar,
+normalised, and adequacy-first strategies in ``backend.optim.selection``.
+Local APPROVED copies satisfy the evaluator's gate without writing application
+state. All metrics use original aims, never relaxed MIN floors. ``adequacy_rows``
+defines the gap and met-day calculations.
 
-Phase 1 — selection ablation (paired design)
---------------------------------------------
-For every eligible patient (rule status != REJECTED) and 3 paired seeds
-(:data:`SEEDS` = (42, 43, 44), fixed constants) the SAME NSGA-II front
-(``solve(..., method="nsga2", pop_size=40, n_gen=80)``; the solver requires an
-APPROVED envelope, so a content-unchanged APPROVED copy is built here — no app
-store is touched) is scored by the three selection strategies from
-``backend.optim.selection``:
+Composition compares single-dish meals with an experimental GA over exactly
+one main and one side per slot, with no repeated dish within a day. This is not
+production's optional-side search. ``CompositionEvaluator`` defines role pools
+and constraints. ``composition_ga`` defines the search and returned archive.
+The phase defaults to eight eligible patients and one seed. Results are
+informational because meal roles are heuristic and catalogue values unverified.
+Serving twice as many dishes also limits direct cost and nutrient comparisons.
 
-* ``scalar_selection``     — single-dish baseline (raw-unit ``SCALAR_WEIGHTS``);
-* ``normalised_selection`` — per-nutrient relative deviation vs the aims;
-* ``adequacy_first_selection`` — lexicographic worst-day shortfall first.
+The exact reference compares each patient's first-seed scalar plan with
+single-dish one-day additive optima. ``backend.optim.exact_reference`` documents
+the bounds: they exclude horizon-wide variety and do not establish a
+four-objective optimum or composition infeasibility.
 
-Every strategy is scored against the ORIGINAL approved envelope (never a
-MIN-relaxed copy — floors are soft in the canonical evaluator, so the
-plain approved envelope is solved directly).  Per selected plan we report, as
-pure functions over ``daily_totals`` (adequacy semantics mirror
-``backend/app/core/plan_service.py``: one entry per MIN/TARGET aim, MAX
-ceilings excluded; MIN gap = nonnegative shortfall, TARGET gap = absolute
-distance; worst day = largest gap, met day = gap <= numerical tolerance):
-
-* per-nutrient mean daily shortfall, worst-day relative shortfall %,
-  met-days fraction;
-* hard feasibility (``problem.evaluate`` violations == 0), cost, variety,
-  preference fit, deviation, scalar score, front size, solver runtime.
-
-Phase 2 — meal-composition ablation (bounded, informational)
-------------------------------------------------------------
-This controlled comparison uses a single-dish baseline and a compact GA that
-searches a 2-dish encoding; it does not run production's optional-side adequacy
-search. Each of the 21 experimental slots holds exactly 2 dishes, a
-MAIN (allowed pool minus categories ``drink``/``dessert``/``kopitiam``) and a
-SIDE (allowed pool with category in ``soup``/``healthy``/``cai_png`` or the
-``vegetable`` tag), with no dish id twice within the same day. Tournament
-selection uses k=3 and scalar scores. Uniform crossover swaps whole main/side
-pairs per slot with probability 0.5. Mutation resamples the main or side of
-1-3 slots; elitism retains two individuals. Infeasible offspring are replaced
-by feasible parents. CompositionEvaluator mirrors the canonical objectives,
-EPS tolerance, and daily/horizon MAX ordering; evaluation/test_ablation.py
-cross-checks them against problem.evaluate. The final front is
-the deduplicated set of feasible individuals encountered during the run.  The
-same three selections are applied to that front.
-
-Run on a bounded subset (first 8 eligible patients, 1 seed) and reported
-informationally: the 2-dish encoding doubles dishes per day (6 vs 3), and the
-category/eligibility sets are heuristic annotations over an UNVERIFIED
-dataset (214/214 dishes unverified per the data audit), so no pass/fail is
-assigned to this phase.
-
-Phase 3 — exact-reference quality reporting (informational)
------------------------------------------------------------
-For each patient (scalar-selected plan of the first seed):
-``exact_reference.plan_vs_exact`` gives per-additive-objective daily gaps vs
-the exact one-day optimum, the 7-day lower bounds, and whether the delivered
-plan hits the per-day additive optimum (gap <= 1e-6).  Solver
-``infeasibility_status`` outcomes are counted across the suite. Variety is
-excluded because it is not per-day decomposable; the exact baseline is not
-an optimum for all four objectives.
-
-Verdict (derived, never hardcoded)
-----------------------------------
-The selection ablation is PASS iff ALL of:
-
-1. at least one comparable (patient, seed) row exists for BOTH
-   ``scalar_selection`` and ``adequacy_first_selection``;
-2. every adequacy-first-selected plan is hard-feasible
-   (``feasibility_rate == 1.0``);
-3. adequacy-first's pooled mean worst-day relative shortfall is STRICTLY
-   lower than scalar selection's;
-4. adequacy-first's pooled mean cost is at most 10% above scalar selection's
-   (:data:`_COST_CAP`).
-
-Every failed condition is named in verdict_note and fails the verdict.
-Composition and exact-reference results remain informational: the role
-annotations are heuristic, and the bounds are not four-objective optima.
+Only selection receives a verdict. PASS requires comparable scalar and
+adequacy-first rows, all adequacy-first plans hard-feasible, strictly lower
+pooled worst-day relative gaps, and no more than 10% higher pooled cost.
+``derive_selection_verdict`` names every failed condition.
 """
 
 from __future__ import annotations
@@ -139,9 +84,7 @@ _STRATEGIES = {
     "adequacy_first": adequacy_first_selection,
 }
 
-# Composition encoding eligibility sets (heuristic annotations; verified
-# non-empty against data/dishes.json: categories drink 20, dessert 7,
-# kopitiam 28, soup 19, healthy 18, cai_png 28, tag "vegetable" 3).
+# Catalogue role heuristics, not verified recipe annotations.
 MAIN_EXCLUDED_CATEGORIES = frozenset({"drink", "dessert", "kopitiam"})
 SIDE_CATEGORIES = frozenset({"soup", "healthy", "cai_png"})
 SIDE_TAG = "vegetable"
@@ -200,6 +143,11 @@ def adequacy_rows(daily: list[dict[str, float]], envelope: Any) -> list[dict[str
     the relative worst-gap percentage is 0 when ``aim <= _EPS``. A day meets
     the aim when its gap is at most ``_EPS``. The serialized ``shortfall``
     names also cover two-sided TARGET deviation for compatibility.
+
+    ``mean_daily_shortfall`` is unit-bearing (kcal/g/mg per nutrient) and
+    must not be pooled across aims into one raw average. Cross-aim
+    aggregation uses the dimensionless ``mean_daily_rel_shortfall_pct``
+    (mean over days of gap/aim, percent).
     """
     rows: list[dict[str, Any]] = []
     for constraint in envelope.targets:
@@ -218,6 +166,10 @@ def adequacy_rows(daily: list[dict[str, float]], envelope: Any) -> list[dict[str
             "kind": kind,
             "aim": aim,
             "mean_daily_shortfall": sum(gaps) / len(series),
+            "mean_daily_rel_shortfall_pct": (
+                sum(g / aim for g in gaps) / len(series) * 100.0
+                if aim > _EPS else 0.0
+            ),
             "worst_day_rel_shortfall_pct": (
                 shortfall / aim * 100.0 if aim > _EPS else 0.0
             ),
@@ -244,7 +196,9 @@ def plan_metrics(plan: list[list[str]], envelope: Any, dishes: list[Dish]) -> di
         "worst_day_rel_shortfall_pct": max(
             (r["worst_day_rel_shortfall_pct"] for r in rows), default=0.0
         ),
-        "mean_daily_shortfall": _mean([r["mean_daily_shortfall"] for r in rows]) or 0.0,
+        "mean_daily_rel_shortfall_pct": _mean(
+            [r["mean_daily_rel_shortfall_pct"] for r in rows]
+        ) or 0.0,
         "mean_met_days_fraction": _mean([r["met_days_fraction"] for r in rows]),
         "scalar_score": scalar_score(objectives),
         "nutrient_target_deviation": objectives["nutrient_target_deviation"],
@@ -257,7 +211,7 @@ def plan_metrics(plan: list[list[str]], envelope: Any, dishes: list[Dish]) -> di
 
 _METRIC_FIELDS = (
     "worst_day_rel_shortfall_pct",
-    "mean_daily_shortfall",
+    "mean_daily_rel_shortfall_pct",
     "mean_met_days_fraction",
     "scalar_score",
     "nutrient_target_deviation",
@@ -305,12 +259,14 @@ def evaluate_selection_ablation(
 ) -> tuple[dict[str, Any], dict[tuple[str, int], dict[str, Any]]]:
     """Run the paired selection ablation.
 
-    Returns ``(summary, internals)``.  ``internals`` maps
-    ``(patient_id, seed)`` to ``{"front": entries, "scalar_plan": plan,
-    "infeasibility_status": str}`` for downstream phases (composition pairing
-    and exact reference); it is intentionally NOT part of the serialised
-    result.  ``summary`` carries pooled per-strategy metrics, per-patient
-    rows (with per-nutrient adequacy) and paired deltas.
+    Returns ``(summary, internals)``.  ``summary`` is the serialised half:
+    pooled per-strategy metrics, per-patient rows (with per-nutrient
+    adequacy) and paired deltas.
+
+    ``internals`` maps ``(patient_id, seed)`` to ``{"front": entries,
+    "scalar_plan": plan, "infeasibility_status": str}`` for the downstream
+    phases (composition pairing and exact reference).  It stays in-process
+    only and is intentionally NOT part of the serialised result.
     """
     from shared.envelope_schema import NutrientEnvelope
 
@@ -527,15 +483,17 @@ def derive_selection_verdict(
 class CompositionEvaluator:
     """Vectorised numpy evaluator for the 2-dish (main + side) encoding.
 
-    Mirrors ``problem.evaluate`` semantics for multi-dish slots: identical
+    Objective and hard-constraint semantics are canonical: identical
     objective definitions (deviation / preference_fit / variety / cost, all
-    minimised, in :data:`OBJECTIVE_NAMES` order), identical EPS tolerance and
-    the same canonical daily + horizon MAX constraint ordering — verified
-    against ``problem.evaluate`` in ``evaluation/test_ablation.py``.  On top
-    of the canonical hard constraints it enforces the composition
-    encoding's own repetition limit (no dish id twice within the same day),
-    reported separately in :meth:`eval_batch` (it is NOT part of
-    ``problem.evaluate``).
+    minimised, in :data:`OBJECTIVE_NAMES` order), identical EPS tolerance
+    and the same daily + horizon MAX constraint ordering as
+    ``problem.evaluate`` — verified against it in
+    ``evaluation/test_ablation.py``.
+
+    On top of those canonical constraints, the composition encoding adds
+    its own repetition limit: no dish id twice within the same day.  It is
+    reported separately in :meth:`eval_batch` and is NOT part of
+    ``problem.evaluate``.
 
     Individuals are ``np.ndarray`` of shape ``(n_days * 3, 2)``: column 0
     indexes the MAIN pool, column 1 the SIDE pool.
@@ -579,10 +537,10 @@ class CompositionEvaluator:
 
         self.nut_m = np.array(
             [[d.nutrient(k) for k in NUTRIENT_KEYS] for d in mains], dtype=float
-        ).reshape(max(self.size_m, 1), len(NUTRIENT_KEYS))
+        ).reshape(self.size_m, len(NUTRIENT_KEYS))
         self.nut_s = np.array(
             [[d.nutrient(k) for k in NUTRIENT_KEYS] for d in sides], dtype=float
-        ).reshape(max(self.size_s, 1), len(NUTRIENT_KEYS))
+        ).reshape(self.size_s, len(NUTRIENT_KEYS))
 
         self.pref_m = np.array(
             [sum(TAG_PREFERENCE.get(t, 0.0) for t in d.tags) for d in mains],
@@ -799,11 +757,14 @@ def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
                        max_iters: int = 200) -> Optional[np.ndarray]:
     """Local-search repair: replace one dish at a time on the worst day.
 
-    For the most-violated day the search tries every single-dish replacement
-    (main slots draw from the MAIN pool, side slots from the SIDE pool, never
-    duplicating a global dish id within the day) and takes the replacement
-    minimising the day's total MAX violation magnitude.  Returns ``None``
-    after ``max_iters`` iterations without reaching feasibility.
+    Repetition is repaired first, on a day that actually contains a
+    duplicate: one offending dish is swapped for the lowest-contribution
+    unused candidate from the same pool.  For the most-violated day the
+    search then tries every single-dish replacement (main slots draw from
+    the MAIN pool, side slots from the SIDE pool, never duplicating a global
+    dish id within the day) and takes the replacement minimising the day's
+    total MAX violation magnitude.  Returns ``None`` after ``max_iters``
+    iterations without reaching feasibility.
     """
     ind = np.asarray(individual, dtype=int).copy()
     K = len(NUTRIENT_KEYS)
@@ -817,21 +778,28 @@ def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
         for col, limit in ev.max_daily:
             over = np.maximum(over, daily[:, col] - limit)
         day = int(np.argmax(over))
+        # Slot-major dish positions alternate MAIN, SIDE within each day.
+        day_gids = np.stack(
+            [ev.gid_m[ind[:, 0]], ev.gid_s[ind[:, 1]]], axis=1
+        ).reshape(ev.n_days, 2 * MEALS_PER_DAY)
         if rep:
-            # fix a duplicate first: swap one offending dish for the
-            # lowest-contribution unused candidate in the same pool
-            gids = np.concatenate(
-                [ev.gid_m[ind[:, 0]], ev.gid_s[ind[:, 1]]], axis=1
-            ).reshape(ev.n_days, MEALS_PER_DAY, 2)
-            flat = gids[day].reshape(-1)
-            dup_id = int(flat[np.flatnonzero(
+            # The most MAX-violated day may be repetition-free.
+            sorted_day = np.sort(day_gids, axis=1)
+            dup_day = (sorted_day[:, 1:] == sorted_day[:, :-1]).any(axis=1)
+            if not dup_day[day]:
+                dup_days = np.flatnonzero(dup_day)
+                day = int(dup_days[int(np.argmax(over[dup_days]))])
+            flat = day_gids[day]
+            # Bincount positions are global dish IDs, not positions in flat.
+            dup_id = int(np.flatnonzero(
                 np.bincount(flat, minlength=ev.full_size) > 1
-            )[0]])
+            )[0])
             pos = int(np.flatnonzero(flat == dup_id)[-1])
             is_main = pos % 2 == 0
             nut = ev.nut_m if is_main else ev.nut_s
             gid = ev.gid_m if is_main else ev.gid_s
-            allowed_ids = set(flat.tolist()) - {dup_id}
+            # Exclude even the duplicated ID: reselecting it cannot repair repetition.
+            allowed_ids = set(flat.tolist())
             contribution = nut[:, [col for col, _ in ev.max_daily]].sum(axis=1)
             for cand in np.argsort(contribution, kind="stable"):
                 if int(gid[cand]) not in allowed_ids:
@@ -839,20 +807,19 @@ def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
                     break
             continue
         # single-dish replacement search on the most-violated day
-        day_slice = slice(day * MEALS_PER_DAY, (day + 1) * MEALS_PER_DAY)
-        day_nut = slot_nut[day_slice]
+        day_start = day * MEALS_PER_DAY
+        day_total = slot_nut[day_start:day_start + MEALS_PER_DAY].sum(axis=0)
         limits = np.array([limit for _, limit in ev.max_daily])
         cols = [col for col, _ in ev.max_daily]
         best: Optional[tuple] = None
         for pos in range(2 * MEALS_PER_DAY):
-            is_main = pos % 2 == 0
-            nut = ev.nut_m if is_main else ev.nut_s
-            gid = ev.gid_m if is_main else ev.gid_s
-            used_ids = set(
-                np.concatenate([ev.gid_m[ind[day_slice, 0]],
-                                ev.gid_s[ind[day_slice, 1]]]).tolist()
-            )
-            totals = (day_nut.sum(axis=0) - day_nut[pos] + nut)[:, cols]
+            slot, role = divmod(pos, 2)  # role 0 = main, role 1 = side
+            nut = ev.nut_m if role == 0 else ev.nut_s
+            gid = ev.gid_m if role == 0 else ev.gid_s
+            used_ids = set(day_gids[day].tolist())
+            # subtract only the dish being replaced, not its whole meal
+            current = nut[int(ind[day_start + slot, role])]
+            totals = (day_total - current + nut)[:, cols]
             mag = np.maximum(0.0, totals - limits).sum(axis=1)
             for cand in np.argsort(mag, kind="stable"):
                 if int(gid[cand]) in used_ids:
@@ -864,7 +831,8 @@ def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
         if best is None:
             return None
         _mag, cand, pos = best
-        ind[day * MEALS_PER_DAY + pos // 2, 0 if pos % 2 == 0 else 1] = cand
+        slot, role = divmod(pos, 2)
+        ind[day_start + slot, role] = cand
     return None
 
 
@@ -876,13 +844,16 @@ def composition_ga(
     tournament_k: int = 3,
     repair_iters: int = 200,
 ) -> dict[str, Any]:
-    """Compact GA over the 2-dish encoding (operators in the module docstring).
+    """Search the two-dish encoding with scalar-ranked tournaments.
 
-    The population is kept feasible at all times: infeasible offspring are
-    rejected and replaced by feasible parents; the returned ``front`` is the
-    deduplicated set of feasible individuals encountered during the run
-    (entries with ``plan`` / ``objectives`` / ``feasible``, directly consumable
-    by ``backend.optim.selection``).
+    Swap whole main/side pairs with probability 0.5 per slot. Mutation may
+    resample either dish in 1–3 slots. Carry the two best feasible elites.
+
+    Initialization may include infeasible random candidates. Find or repair at
+    least one feasible seed, or return an empty front. Generations replace
+    infeasible offspring with feasible parents. The returned ``front`` contains
+    deduplicated feasible individuals, not a Pareto-filtered subset. Its entries
+    supply ``plan``, ``objectives``, and ``feasible`` for front-selection helpers.
     """
     rng = random.Random(seed)
     if ev.size_m == 0 or ev.size_s == 0:
@@ -922,7 +893,7 @@ def composition_ga(
         pop = [random_individual()]
 
     F, G, rep, feasible, scalars = assess(pop)
-    # Try repairing the least-violating seed; failure still permits an empty result.
+    # Try repairs in scalar-objective order; an empty front remains a valid failure result.
     if not feasible.any():
         for idx in np.argsort(scalars):
             fixed = _repair_individual(ev, pop[int(idx)], max_iters=repair_iters)

@@ -36,6 +36,7 @@ from evaluation.q_ablation import (
     derive_selection_verdict,
     evaluate_q6,
     plan_metrics,
+    _repair_individual,
 )
 
 
@@ -117,6 +118,13 @@ def test_adequacy_rows_mirrors_plan_service_semantics():
     assert energy["worst_day_rel_shortfall_pct"] == pytest.approx(400.0 / 18.0, rel=1e-6)
     assert energy["met_days_fraction"] == pytest.approx(0.5)
 
+    # dimensionless per-aim gap: mean over days of gap/aim (percent), so
+    # cross-aim pooling never mixes kcal/g/mg units
+    assert protein["mean_daily_rel_shortfall_pct"] == pytest.approx(20.0)  # mean(0, 40)
+    assert energy["mean_daily_rel_shortfall_pct"] == pytest.approx(
+        (0.0 + 400.0 / 18.0) / 2, rel=1e-6
+    )
+
     # zero-aim guard: relative shortfall is 0 when aim <= 0
     zero_env = _envelope().model_copy(update={"targets": [
         NutrientConstraint(nutrient=NutrientKind.PROTEIN_G,
@@ -124,6 +132,7 @@ def test_adequacy_rows_mirrors_plan_service_semantics():
     ]})
     rows0 = adequacy_rows(daily, zero_env)
     assert rows0[0]["worst_day_rel_shortfall_pct"] == 0.0
+    assert rows0[0]["mean_daily_rel_shortfall_pct"] == 0.0
 
 
 def test_plan_metrics_matches_problem_evaluate():
@@ -163,6 +172,149 @@ def test_plan_metrics_matches_problem_evaluate():
     assert protein["mean_daily_shortfall"] == pytest.approx(5.0)
     assert protein["worst_day_rel_shortfall_pct"] == pytest.approx(10.0)
     assert protein["met_days_fraction"] == 0.0
+
+
+def test_plan_metrics_pools_dimensionless_gaps_only():
+    """The pooled plan-level gap must be dimensionless, never a raw unit mix.
+
+    Regression for the pooled ``mean_daily_shortfall`` average that mixed
+    kcal/g/mg across aims: plan_metrics now pools only the per-aim relative
+    gap, while unit-bearing per-aim gaps stay inside ``adequacy`` rows.
+    """
+    env = _envelope()
+    plan = [["m_protein", "s_veg"]] * 21
+    metrics = plan_metrics(plan, env, ABLATION_POOL)
+    assert "mean_daily_shortfall" not in metrics  # raw pooled mix removed
+    # protein MIN 50: met every day (96 g/day) -> 0%; energy TARGET 1800:
+    # 2700 every day -> 50% every day. Pooled mean over the two aims:
+    assert metrics["mean_daily_rel_shortfall_pct"] == pytest.approx(25.0)
+    # unit-bearing per-aim gaps are retained per aim, not pooled:
+    energy = next(r for r in metrics["adequacy"] if r["nutrient"] == "energy_kcal")
+    assert energy["mean_daily_shortfall"] == pytest.approx(900.0)
+
+
+# ---------------------------------------------------------------- repair
+def _no_day_duplicates(ev: CompositionEvaluator, ind: np.ndarray) -> bool:
+    plan = ev.to_plan(ind)
+    for day in range(7):
+        ids = [d for slot in plan[day * 3:(day + 1) * 3] for d in slot]
+        if len(ids) != len(set(ids)):
+            return False
+    return True
+
+
+def test_repair_individual_fixes_day_duplicates():
+    """Repetition repair must stack per slot/role and make real progress.
+
+    Regression (finding 38): the duplicate branch concatenated 1-D gid arrays
+    on axis 1 (AxisError on every repetition-bearing individual) and could
+    re-select the duplicated dish itself, livelocking until max_iters.
+    """
+    env = _envelope()
+    ev = CompositionEvaluator(env, ABLATION_POOL)
+    main_pos = {d.dish_id: i for i, d in enumerate(ev.main_pool)}
+    side_pos = {d.dish_id: i for i, d in enumerate(ev.side_pool)}
+
+    # every day repeats (m_protein, s_veg) x3 but satisfies both MAX
+    # ceilings, so only the repetition limit is violated. The old code
+    # raised AxisError before any repair; it must now converge.
+    ind = np.zeros((ev.slots, 2), dtype=int)
+    ind[:, 0] = main_pos["m_protein"]
+    ind[:, 1] = side_pos["s_veg"]
+    _F, G, rep = ev.eval_single(ind)
+    assert rep and (G <= 0).all()
+    fixed = _repair_individual(ev, ind, max_iters=100)
+    assert fixed is not None, "repetition repair livelocked or failed"
+    assert ev.is_feasible_individual(fixed)
+    assert _no_day_duplicates(ev, fixed)
+
+    # livelock variant: the duplicated main is the lowest-MAX-contribution
+    # candidate in its own pool (m_healthy: sodium 100 + potassium 100), so
+    # a replacement allowed to equal the duplicate never makes progress.
+    ind2 = np.zeros((ev.slots, 2), dtype=int)
+    ind2[:, 0] = main_pos["m_healthy"]
+    ind2[:, 1] = side_pos["s_veg"]
+    _F2, G2, rep2 = ev.eval_single(ind2)
+    assert rep2 and (G2 <= 0).all()
+    fixed2 = _repair_individual(ev, ind2, max_iters=100)
+    assert fixed2 is not None, "duplicate was re-selected instead of replaced"
+    assert ev.is_feasible_individual(fixed2)
+    assert _no_day_duplicates(ev, fixed2)
+
+
+def test_repair_individual_selects_a_duplicate_bearing_day():
+    """The most-violated day may be repetition-free; duplicates elsewhere.
+
+    Regression (finding 38): with day 0 the most MAX-violated day but
+    repetition-free, a naive fix of the AxisError would look for duplicates
+    on day 0 and crash on the empty bincount result instead of selecting a
+    duplicate-bearing day.
+    """
+    env = _envelope()
+    ev = CompositionEvaluator(env, ABLATION_POOL)
+    main_pos = {d.dish_id: i for i, d in enumerate(ev.main_pool)}
+    side_pos = {d.dish_id: i for i, d in enumerate(ev.side_pool)}
+
+    # day 0: six distinct dishes, sodium 400+900+200+100+50+700 = 2350 >
+    # 2000 (the only MAX violation, on the most-violated day, no duplicate);
+    # days 1-6: MAX-compliant but repeat (m_protein, s_veg) x3.
+    ind = np.zeros((ev.slots, 2), dtype=int)
+    day0_mains = ["m_protein", "m_rice", "m_veg"]
+    day0_sides = ["s_soup", "s_veg", "s_salty"]
+    for slot in range(3):
+        ind[0 * 3 + slot, 0] = main_pos[day0_mains[slot]]
+        ind[0 * 3 + slot, 1] = side_pos[day0_sides[slot]]
+    for day in range(1, 7):
+        for slot in range(3):
+            ind[day * 3 + slot, 0] = main_pos["m_protein"]
+            ind[day * 3 + slot, 1] = side_pos["s_veg"]
+    _F, G, rep = ev.eval_single(ind)
+    assert rep and (G > 0).any()
+    fixed = _repair_individual(ev, ind, max_iters=200)
+    assert fixed is not None, "repair failed on mixed repetition/MAX violation"
+    assert ev.is_feasible_individual(fixed)
+    assert _no_day_duplicates(ev, fixed)
+
+
+def test_repair_individual_fixes_max_violation_by_dish_replacement():
+    """MAX repair addresses six dish positions, subtracting ONE dish.
+
+    Regression (finding 39): the replacement search indexed three meal rows
+    with six dish positions (IndexError for any position >= 3) and earlier
+    positions subtracted the combined main+side meal instead of the single
+    dish being replaced. Tested directly, independent of greedy success.
+    """
+    env = _envelope()
+    ev = CompositionEvaluator(env, ABLATION_POOL)
+    main_pos = {d.dish_id: i for i, d in enumerate(ev.main_pool)}
+    side_pos = {d.dish_id: i for i, d in enumerate(ev.side_pool)}
+
+    # day 0: six distinct dishes (no repetition anywhere), sodium 2350 > the
+    # 2000 mg ceiling; days 1-6: repetition-free and compliant
+    # (mains m_healthy/m_veg/m_protein, sides s_veg/s_soup/s_salty ->
+    # sodium 1550, potassium 2050).
+    ind = np.zeros((ev.slots, 2), dtype=int)
+    day0_mains = ["m_protein", "m_rice", "m_veg"]
+    day0_sides = ["s_soup", "s_veg", "s_salty"]
+    ok_mains = ["m_healthy", "m_veg", "m_protein"]
+    ok_sides = ["s_veg", "s_soup", "s_salty"]
+    for slot in range(3):
+        ind[0 * 3 + slot, 0] = main_pos[day0_mains[slot]]
+        ind[0 * 3 + slot, 1] = side_pos[day0_sides[slot]]
+    for day in range(1, 7):
+        for slot in range(3):
+            ind[day * 3 + slot, 0] = main_pos[ok_mains[slot]]
+            ind[day * 3 + slot, 1] = side_pos[ok_sides[slot]]
+    _F, G, rep = ev.eval_single(ind)
+    assert not rep and (G > 0).any()  # pure MAX violation to repair
+
+    fixed = _repair_individual(ev, ind, max_iters=200)
+    assert fixed is not None, "MAX repair did not converge"
+    assert ev.is_feasible_individual(fixed)
+    # only dishes on day 0 changed; every other day is untouched
+    for day in range(1, 7):
+        assert np.array_equal(ind[day * 3:(day + 1) * 3],
+                              fixed[day * 3:(day + 1) * 3])
 
 
 # ------------------------------------------------------------------ verdict

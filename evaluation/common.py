@@ -79,11 +79,11 @@ def has_target(envelope: dict[str, Any], nutrient: str, kind: str) -> bool:
 def target_supported(target: dict[str, Any], trace: list[dict[str, Any]]) -> bool:
     """Is this envelope target traceable to a fired rule with a full citation?
 
-    A trace row supports a target when its ``action_summary`` sets the same
-    ``(nutrient, kind)`` to the same *final* value (per-kg coefficients appear
-    pre-scaled in the summary's ``-> final`` clause) and the row's citation
-    carries guideline + section + rule_id.  Matching on the final value means
-    superseded losers (different value) never get credited.
+    Match nutrient and kind, then compare the final value within 0.005 to
+    tolerate trace rounding. Per-kg actions use the scaled ``-> final`` value.
+    The citation must carry guideline, section, and rule ID. This checks for a
+    matching cited action, not exact provenance or units. A SUPERSEDED marker
+    does not exclude an otherwise matching row.
     """
     nutrient, kind = target["nutrient"], target["kind"]
     expected = float(target["value"])
