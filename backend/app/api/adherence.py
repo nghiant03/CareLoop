@@ -1,50 +1,16 @@
-"""Adherence endpoints — the "loop" in CareLoop.
+"""Meal logging and adherence views attributed to historical approval coverage.
 
-Patients log what they actually ate (``POST /adherence/log``); the logged
-meals are measured against the patient's nutrient envelopes and fed back
-as per-day totals, hard-violation / soft-gap classifications, aggregate stats
-(``GET .../summary``) and a deviation time-series with trend flags
-(``GET .../deviation``).
-
-The latest envelope supplies top-level status metadata and an informational
-notice when it is unapproved. It does not supply historical comparison targets.
-See ``docs/ARCHITECTURE.md`` for the approval-coverage contract.
-
-Envelope-version attribution (Milestone 3)
-------------------------------------------
-History is evaluated against the envelope that was **effective on each
-consumption date**, not blindly against the latest one. Each logged date is
-resolved through ``persistence.envelope_effective_at`` (the durable envelope
-journal). Dates without approval coverage remain unattributed; there is no
-fallback to current targets. Covered days are grouped by the resolving envelope
-(identity *and* version) and analysed per group:
-
-* **Single-group responses** keep the exact legacy shape (plain series keys,
-  plain flags) — only additive fields are new, so existing consumers are
-  unaffected.
-* **Multi-group responses** merge the per-group results: day rows keep their
-  per-group classification, deviation series keys are prefixed
-  ``"<envelope_id>::<series_key>"`` (disambiguated to
-  ``"<envelope_id>::v<version>::<series_key>"`` uniformly for all groups when
-  one window spans multiple *versions of the same envelope id*), and flags are
-  merged with an ``envelope_id`` (and ``envelope_version``) stamp.
-
-Every analysed day row carries ``envelope_id`` + ``envelope_version`` — also in
-the single-envelope case. The top-level ``envelope_id``/``envelope_status``
-fields and the informational notice remain keyed on the **latest** envelope
-for backward compatibility; the per-day rows and
-``envelope_versions_used`` are authoritative for history. Dates without approval
-coverage are excluded from comparisons and listed under ``unattributed_days``.
+The latest-envelope notice describes current review status, not the envelope
+used for each logged day. Uncovered dates are reported without target scoring.
 """
 
 from __future__ import annotations
 
-from datetime import date as date_type, timedelta
+from collections.abc import Iterable
+from datetime import date as date_type
+from datetime import timedelta
 from functools import lru_cache
-from typing import Any, Iterable, Literal, Optional
-
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing import Any, Literal
 
 from backend.app.adherence import analysis, store
 from backend.app.api.patients import get_patient
@@ -52,6 +18,8 @@ from backend.app.core import persistence
 from backend.app.core.approval_gate import find_latest_envelope_for_patient
 from backend.app.models.envelope import NutrientEnvelope
 from backend.optim.real_data import load_dishes
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 router = APIRouter(prefix="/adherence", tags=["adherence"])
 
@@ -68,8 +36,8 @@ class MealLogRequest(BaseModel):
     patient_id: str
     date: str
     meal: Literal["breakfast", "lunch", "dinner"]
-    dish_id: Optional[str] = None
-    items: Optional[list[Serving]] = Field(default=None, min_length=1, max_length=20)
+    dish_id: str | None = None
+    items: list[Serving] | None = Field(default=None, min_length=1, max_length=20)
 
     @model_validator(mode="after")
     def one_representation(self):
@@ -80,7 +48,6 @@ class MealLogRequest(BaseModel):
 
 @lru_cache(maxsize=1)
 def _dish_index() -> dict[str, Any]:
-    """dish_id -> Dish, from the real dataset (cached per process)."""
     return {dish.dish_id: dish for dish in load_dishes()}
 
 
@@ -127,7 +94,7 @@ def _envelope_notice(envelope: Any) -> tuple[bool, Optional[str]]:
 
 
 # ---------------------------------------------------------------------------
-# Envelope-version attribution (Milestone 3)
+# Historical approval attribution
 # ---------------------------------------------------------------------------
 def _resolve_day_envelopes(
     patient_id: str, dates: Iterable[str]
@@ -160,10 +127,9 @@ def attributed_analysis(
     where each group is ``{"envelope", "label", "dates", "logs", "result"}``.
     ``result`` is ``analyse_range`` output (``with_series=False``) or
     ``analyse_patient`` output (``with_series=True``). Groups are ordered
-    chronologically by first covered date. ``label`` is the series-key prefix
-    for multi-group responses: ``"<envelope_id>"``, or
-    ``"<envelope_id>::v<version>"`` when one window spans multiple versions of
-    the same envelope id (uniform for all groups in that response).
+    chronologically by first covered date. ``label`` is the series-key prefix.
+    Labels use envelope IDs unless any identity spans multiple versions; then
+    every group's label includes ``::v<version>`` for consistent disambiguation.
     """
     assignment, unattributed = _resolve_day_envelopes(
         patient_id, (log["date"] for log in logs)
@@ -188,8 +154,7 @@ def attributed_analysis(
         groups.values(),
         key=lambda g: (g["dates"][0], g["envelope"].envelope_id, int(g["envelope"].version)),
     )
-    # Series-key prefix: plain envelope id, disambiguated with the version when
-    # one window spans multiple versions of the same envelope id.
+    # Use versioned labels throughout a window when any envelope ID is ambiguous.
     id_count: dict[str, int] = {}
     for group in ordered:
         eid = group["envelope"].envelope_id
@@ -231,7 +196,7 @@ def _versions_used(attributed: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _merged_aggregate(days: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregate stats recomputed across per-group day rows (multi-group only).
+    """Aggregate classified days across envelope groups using range-analysis policy.
 
     Mirrors ``analysis.analyse_range``'s aggregate exactly, but over day rows
     that were classified against different envelope versions.
@@ -314,7 +279,7 @@ def adherence_summary(
     groups = attributed["groups"]
 
     if len(groups) <= 1:
-        # Legacy single-envelope shape (also covers the no-logs window).
+        # Preserve the single-envelope response shape, including empty windows.
         if groups:
             result = groups[0]["result"]
         else:
@@ -334,9 +299,7 @@ def adherence_summary(
             "unattributed_days": attributed["unattributed_days"],
         }
 
-    # Multi-envelope window: day rows keep their per-group classification
-    # (each already stamped with envelope_id/envelope_version by analyse_day);
-    # the aggregate is recomputed across the merged rows.
+    # Merge already-classified days without applying today's targets to history.
     merged_days = sorted(
         (day for group in groups for day in group["result"]["days"]),
         key=lambda day: day["date"],
@@ -402,9 +365,7 @@ def adherence_deviation(
             "unattributed_days": attributed["unattributed_days"],
         }
 
-    # Multi-envelope window: series keys are prefixed with the group's
-    # envelope identity ("..." see attributed_analysis), flags merge across
-    # groups with an envelope_id/envelope_version stamp each.
+    # Prefix series keys with group labels; each flag keeps its envelope identity.
     series: dict[str, dict[str, Any]] = {}
     merged_flags: list[dict[str, Any]] = []
     for group in groups:

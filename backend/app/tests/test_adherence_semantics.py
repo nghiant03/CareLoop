@@ -387,7 +387,7 @@ def test_exclusion_violations_count_in_aggregate_days() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5. Logging completeness (Milestone 3)
+# 5. Logging completeness
 # ---------------------------------------------------------------------------
 
 
@@ -449,7 +449,7 @@ def test_range_aggregate_reports_complete_days() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 6. Deviation-contributor explanations (Milestone 3)
+# 6. Deviation-contributor explanations
 # ---------------------------------------------------------------------------
 
 
