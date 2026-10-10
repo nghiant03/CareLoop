@@ -45,8 +45,5 @@ dist/
 # OS
 Thumbs.db
 
-# Project-specific
-# Keep *.json in data/, only ignore generated caches
-
-# Local planning docs (not tracked)
-PLAN.md
+# Agents
+.agents/
