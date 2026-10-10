@@ -72,7 +72,7 @@ _NUMPY_NOTICE_SHOWN = False
 
 
 def get_rng(seed: Optional[int]):
-    """Return a numpy Generator when available, else the stdlib shim."""
+    """Return (RNG, backend label), using NumPy or the deterministic stdlib shim."""
     global _NUMPY_NOTICE_SHOWN
     try:  # pragma: no cover - depends on environment
         import numpy as np  # type: ignore
@@ -207,7 +207,7 @@ ARCHETYPES: dict[str, dict[str, Any]] = {
         "hba1c": 6.4,
         "sbp": (148.0, 12.0),
         "dbp": (86.0, 8.0),
-        "exclude": False,
+        "exclude": True,
     },
     "pregnancy_T2D": {
         "diagnoses": ["pregnancy", "T2D"],

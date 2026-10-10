@@ -38,20 +38,33 @@ Each record:
 
 ### Tags
 
-Tags are auto-derived where they encode a hard, checkable property, so they can be
-trusted as rule inputs:
+Nutrient tags encode per-serving thresholds from the approximate catalogue values:
 
 - `high_sodium` — sodium > 1000 mg/serving.
-- `deep_fried` — fat > 20 g/serving.
-- `lean_protein` — saturated fat < 3 g/serving.
 - `high_potassium` — potassium ≥ 700 mg/serving (CKD caution).
 - `high_phosphorus` — phosphorus ≥ 300 mg/serving (CKD caution).
 - plus `category` and `cuisine` tags.
 
+Cooking/protein-role tags are curated from dish preparation and ingredients,
+not derived from fat or saturated-fat values:
+
+- `deep_fried` — a deep-fried dish or a dish containing a recorded deep-fried
+  component, such as fried fish, tofu puffs or you tiao. Stir-fried noodles/rice,
+  grilled satay, braised pork and baked fish do not qualify merely for high fat.
+- `lean_protein` — a non-deep-fried dish with fish/seafood, lean meat/poultry or
+  tofu as a substantive protein component. Plain rice, vegetable sides, drinks
+  and sweet desserts do not qualify merely for low saturated fat.
+
+These roles describe the curated recipe, not a clinically verified nutrition
+claim or a guarantee about every vendor's preparation. Review recipe variants
+before reusing the tags. Optimizer preferences and literal exclusions consume
+these stable tag names; numeric nutrient limits remain separate.
+
 ### Provenance and verification — IMPORTANT
 
-> **All dish values are currently approximate, manually-curated estimates
-> (`provenance: "manual_curation"`, `verified: false`).** They are plausible
+> **All dish values are currently approximate curated estimates
+> (`provenance: "manual_curation"` or `"curated_renal_replenishment"`,
+> `verified: false`).** They are plausible
 > figures assembled from publicly-known Singapore hawker/kopitiam nutrition
 > ranges and are **not yet clinically validated**. Do not present them as
 > authoritative.
@@ -91,7 +104,8 @@ Food Nutritional Information", NutriKaki (468 HPB-sourced dishes).
 
 Add a row to the table in the (temporary) builder or edit `dishes.json` directly.
 Keep `dish_id` unique, keep the schema keys exactly as above, and only set
-`verified: true` with a cited source. Re-derive tags with the rules above.
+`verified: true` with a cited source. Re-derive nutrient tags from the thresholds
+above and review cooking/protein roles from the recipe, not numeric proxies.
 
 ## Synthetic patients (`patients.json`, `patients_generator.py`)
 
@@ -137,7 +151,8 @@ specified. When NumPy is absent it transparently falls back to a deterministic
 given seed and RNG backend; values differ between backends (a note is printed
 to stderr).
 
-`pregnancy_T2D` records set `exclude_from_careloop: true` and must never reach the
+`pregnancy_T2D` and `CKD5_pre_dialysis_hyperPO4` records set
+`exclude_from_careloop: true` and must never reach the
 optimiser (out of CareLoop scope).
 
 ## USDA gap filler (`usda_fill_gaps.py`)
@@ -157,9 +172,14 @@ python -m data.usda_fill_gaps --dishes data/dishes.json --out data/dishes_filled
 - Uses stdlib `urllib` only (no `requests` dependency).
 - **Rate limit:** `DEMO_KEY` is shared and limited to ~30 req/hour (and ~50/day).
   Set `USDA_API_KEY` (free data.gov key) for 1,000 req/hour. A local
-  `RequestBudget` caps each process at 30 requests and HTTP 429 is handled
-  gracefully.
-- **Never crashes:** every network/HTTP/JSON error is caught; missing values stay
-  `None`. Ingredients are queried individually and summed using an equal-weight
+  `RequestBudget` caps a file import at 30 attempted requests. Standalone callers
+  must share a budget to bound a whole run. HTTP 429 or local exhaustion stops
+  file imports, preserving completed dishes and leaving the interrupted dish
+  unchanged. CLI diagnostics report the actual shared budget. Resume with a new
+  explicitly budgeted run; waiting or changing keys does not reset a local counter.
+- Network/HTTP/JSON search failures other than rate limits return unknown values.
+  Invalid inputs or malformed response shapes may raise. Changed estimates clear
+  verification and refresh K/P threshold tags; cooking/protein roles are preserved.
+  Ingredients are queried individually and summed using an equal-weight
   portion split — a deliberately crude first pass. Real precision needs recipe
   decomposition + ingredient weights (future work).

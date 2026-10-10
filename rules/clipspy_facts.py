@@ -18,6 +18,7 @@ Usage with clipspy installed::
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -56,7 +57,7 @@ FACTS_DEFTEMPLATE = r"""
 )
 
 ;; ------------------------------------------------------------------
-;; Derived / asserted flags — produced by antecedent rules, consumed by others.
+;; Derived / asserted flags — retained for explanation views.
 ;; Open world: any key/value pair can be asserted here.
 ;; ------------------------------------------------------------------
 (deftemplate clinical-flag
@@ -127,8 +128,10 @@ def _sym(value: Any) -> str:
 def patient_fact(patient: Any) -> str:
     """Build a CLIPS ``(patient ...)`` fact string from a PatientSummary-like object.
 
-    Accepts either a pydantic ``PatientSummary`` or any object/dict exposing the
-    same field names. ``-1.0`` marks an unknown numeric lab.
+    Read CLIPS field names, including ``serum_K_meq_L`` and ``serum_PO4_mg_dL``,
+    from a dict or object. Pass canonical models as ``model_dump(by_alias=True)``
+    because their Python lab attributes use different names. Missing numeric fields
+    become ``-1.0``. Values must be trusted: quoted fields are not escaped.
     """
     if isinstance(patient, dict):
         get = patient.get
@@ -160,7 +163,7 @@ def patient_fact(patient: Any) -> str:
 
 def nutrient_constraint_fact(nutrient: str, kind: str, value: float, unit: str,
                              rule_id: str, priority: int) -> str:
-    """Build a CLIPS ``(nutrient-constraint ...)`` fact string."""
+    """Build a reference constraint fact from trusted tokens and an unescaped rule ID."""
     return (
         "(nutrient-constraint "
         f"(nutrient {_sym(nutrient)}) "
@@ -173,7 +176,11 @@ def nutrient_constraint_fact(nutrient: str, kind: str, value: float, unit: str,
 
 
 def exclusion_fact(kind: str, value: str, reason: str, rule_id: str, priority: int) -> str:
-    """Build a CLIPS ``(exclusion-flag ...)`` fact string."""
+    """Build a reference exclusion fact from trusted values.
+
+    Replace double quotes in the reason with apostrophes. Other quoted fields
+    and backslashes are not escaped. This is not a general input serializer.
+    """
     safe_reason = str(reason).replace('"', "'")
     return (
         "(exclusion-flag "
@@ -195,7 +202,10 @@ def load_templates(env: Any) -> None:
             "clipspy is not installed. Install it (pip install clipspy) before "
             "loading CLIPS templates; the rest of the rule spec is usable without it."
         )
-    env.build(FACTS_DEFTEMPLATE)
+    # Each reference template ends with a standalone closing parenthesis.
+    # Environment.build accepts one construct, not the complete template block.
+    for construct in re.findall(r"^\(deftemplate .*?^\)", FACTS_DEFTEMPLATE, re.M | re.S):
+        env.build(construct)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -315,7 +315,7 @@
       "statin"
     ],
     "archetype": "CKD5_pre_dialysis_hyperPO4",
-    "exclude_from_careloop": false,
+    "exclude_from_careloop": true,
     "height_cm": 158.7,
     "bmi": 27.1,
     "hba1c_pct": 6.5,
@@ -754,7 +754,7 @@
       "statin"
     ],
     "archetype": "CKD5_pre_dialysis_hyperPO4",
-    "exclude_from_careloop": false,
+    "exclude_from_careloop": true,
     "height_cm": 165.6,
     "bmi": 21.9,
     "hba1c_pct": 6.4,

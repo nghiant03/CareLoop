@@ -54,8 +54,9 @@ Each entry in `rules.json["rules"]`:
 | Scope gates (pregnancy, paediatric) | **95** |
 
 Conflict policy: **CKD > hyperkalaemia > HTN/DASH > T2D > generic** on shared nutrients.
-`CONFLICT-*` rules (priority 90) re-assert the winner and record an `assert` describing the
-resolution, so the trace explains *why* a value was chosen.
+`CONFLICT-*` rules record an `assert` explaining the resolution. The sodium rule
+also reinforces its ceiling; potassium bookkeeping sets no competing ceiling,
+so it cannot override the severe-potassium safety rule.
 
 ---
 
@@ -67,11 +68,12 @@ resolution, so the trace explains *why* a value was chosen.
 { "field": "<patient field>", "op": "<operator>", "value": <any> }
 ```
 
-* **Operators:** `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in`, `not_in`, `between`.
-* **Fields:** patient-summary fields — `age`, `sex`, `weight_kg`, `diagnoses`, `egfr`,
-  `serum_K_meq_L`, `serum_PO4_mg_dL`, `meds` — plus derived fields `bmi` and `pregnant`.
+* **Numeric operators:** `eq`, `lt`, `le`, `gt`, `ge`, `between`.
+* **Numeric fields:** `age`, `weight_kg`, `egfr`, `serum_K_meq_L`,
+  `serum_PO4_mg_dL`, `bmi`, `hba1c_pct`. `pregnant` supports `eq`.
 * **List fields (`diagnoses`, `meds`):** `in` = *intersection non-empty* ("has any of");
-  `not_in` = *intersection empty* ("has none of"). For scalar fields `in` is set membership.
+  `not_in` = *intersection empty* ("has none of"). Scalar `in`, `ne`, and `sex`
+  conditions are not supported by the compiler.
 * **`between`** is inclusive `[low, high]`.
 * **Empty `conditions: []`** = applies to every patient (universal default rule).
 * All conditions are ANDed.
@@ -92,7 +94,8 @@ resolution, so the trace explains *why* a value was chosen.
   `patient.weight_kg` and emits absolute values in the `NutrientEnvelope`. All other
   nutrients are absolute daily totals. Example: CKD protein `min 0.55` × 70 kg = **38.5 g/d**.
 * `exclude` produces an `ExclusionFlag` (hard exclusion). `assert` records a non-nutrient
-  fact (flags, cautions, resolution notes) consumed by later rules or the explanation views.
+  fact (flags, cautions, resolution notes) harvested for explanation views. Rules
+  match only patient inputs, not asserted flags.
 
 ---
 
@@ -119,17 +122,16 @@ result = run_rules(patient_dict)   # data/patients.json shape
 envelope, trace = result["envelope"], result["trace"]
 ```
 
-Reference evaluator (used to verify this spec; no clipspy needed):
+Reference evaluator for the current rulebook conditions (no clipspy needed):
 
 ```python
-OPS = {"eq","ne","lt","le","gt","ge","in","not_in","between"}
+OPS = {"eq","lt","le","gt","ge","in","not_in","between"}
 
 def matches(rule, p):
     def ev(c):
         f, op, v, pv = c["field"], c["op"], c["value"], p.get(c["field"])
         return {
             "eq": lambda: pv == v,
-            "ne": lambda: pv != v,
             "lt": lambda: pv is not None and pv < v,
             "le": lambda: pv is not None and pv <= v,
             "gt": lambda: pv is not None and pv > v,
@@ -142,8 +144,10 @@ def matches(rule, p):
 ```
 
 Resolve conflicts by taking, per `(nutrient, kind)`, the action from the **highest-priority**
-fired rule; for `max` prefer the *lowest* value and for `min` the *highest* value (stricter
-wins) at equal priority.
+fired rule. At equal priority, `max` chooses the lowest ceiling, `min` the highest
+soft floor, and `target` the lowest soft aim. TARGET ordering is a deterministic
+tie policy, not a hard safety bound. Remaining ties choose the lowest rule ID;
+equal-value candidates merge. See [ENGINE.md](ENGINE.md) for trace semantics.
 
 ---
 
@@ -221,11 +225,5 @@ python rules/clipspy_facts.py                                                   
 
 ---
 
-## 7. Rule engine
-
-`rules/engine.py` implements `run_rules(patient: dict) -> {"envelope", "trace"}`: the
-rulebook is compiled into CLIPS defrules (salience = priority), a patient fact is asserted
-and forward-chained, and Python assembles the `NutrientEnvelope` (per-kg scaling,
-priority-based conflict resolution with visible `SUPERSEDED` markers, scope gates) plus a
-full `RuleFire` trace. Usage, design, determinism and deviations: **see
-[`rules/ENGINE.md`](ENGINE.md)**. Tests: `.venv/bin/python -m pytest rules/ -q`.
+Only approved envelopes authorize live planning; running rules never grants approval.
+Tests: `.venv/bin/python -m pytest rules/ -q`.

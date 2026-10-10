@@ -80,10 +80,34 @@ class ConstraintProvenance(BaseModel):
     citation: CitationSource
 
 
+_CANONICAL_UNITS = {
+    NutrientKind.ENERGY_KCAL: "kcal",
+    NutrientKind.PROTEIN_G: "g",
+    NutrientKind.SODIUM_MG: "mg",
+    NutrientKind.POTASSIUM_MG: "mg",
+    NutrientKind.PHOSPHORUS_MG: "mg",
+    NutrientKind.CARBS_G: "g",
+    NutrientKind.FAT_G: "g",
+    NutrientKind.SAT_FAT_G: "g",
+    NutrientKind.FIBER_G: "g",
+    NutrientKind.SUGAR_G: "g",
+}
+
+
+def _add_unit_schema(schema: dict) -> None:
+    """Mirror the Python unit validator without duplicating its nutrient map."""
+    schema["allOf"] = [
+        {"if": {"properties": {"nutrient": {"const": nutrient.value}},
+                "required": ["nutrient"]},
+         "then": {"properties": {"unit": {"const": unit}}}}
+        for nutrient, unit in _CANONICAL_UNITS.items()
+    ]
+
+
 class NutrientConstraint(BaseModel):
     """Daily nutrient aim or ceiling, validated in its nutrient's canonical unit."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", json_schema_extra=_add_unit_schema)
 
     nutrient: NutrientKind
     kind: ConstraintKind
@@ -94,21 +118,9 @@ class NutrientConstraint(BaseModel):
     @field_validator("unit")
     @classmethod
     def _unit_matches_nutrient(cls, v: str, info) -> str:
-        canonical = {
-            NutrientKind.ENERGY_KCAL: "kcal",
-            NutrientKind.PROTEIN_G: "g",
-            NutrientKind.SODIUM_MG: "mg",
-            NutrientKind.POTASSIUM_MG: "mg",
-            NutrientKind.PHOSPHORUS_MG: "mg",
-            NutrientKind.CARBS_G: "g",
-            NutrientKind.FAT_G: "g",
-            NutrientKind.SAT_FAT_G: "g",
-            NutrientKind.FIBER_G: "g",
-            NutrientKind.SUGAR_G: "g",
-        }
         n = info.data.get("nutrient")
-        if n is not None and canonical.get(n) != v:
-            raise ValueError(f"unit {v!r} does not match canonical {canonical.get(n)!r} for {n}")
+        if n is not None and _CANONICAL_UNITS.get(n) != v:
+            raise ValueError(f"unit {v!r} does not match canonical {_CANONICAL_UNITS.get(n)!r} for {n}")
         return v
 
 
@@ -137,7 +149,12 @@ class RuleFire(BaseModel):
 
 
 class PatientSummary(BaseModel):
-    """Patient descriptors frozen with an envelope for later audit, not a live profile."""
+    """Frozen rule inputs, not a live profile.
+
+    Version 1 snapshots may omit BMI/pregnancy/HbA1c; None means unrecorded, not
+    evidence of absence. New engine snapshots emit version 2 with these inputs.
+    Reading old snapshots does not upgrade them or reconstruct missing values.
+    """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -153,6 +170,10 @@ class PatientSummary(BaseModel):
     serum_k_meq_l: float | None = Field(default=None, alias="serum_K_meq_L")
     serum_po4_mg_dl: float | None = Field(default=None, alias="serum_PO4_mg_dL")
     meds: list[str] = Field(default_factory=list)
+    snapshot_version: int = Field(default=1, ge=1)
+    bmi: float | None = Field(default=None, ge=0)
+    pregnant: bool | None = None
+    hba1c_pct: float | None = Field(default=None, ge=0)
 
 
 class NutrientEnvelope(BaseModel):

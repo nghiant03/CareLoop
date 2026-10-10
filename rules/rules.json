@@ -98,7 +98,7 @@
           "value": 10
         }
       ],
-      "notes": "Saturated fat <10% of kcal; 22 g/d is the 2000-kcal reference. The absolute ceiling is recomputed by the engine from the energy target.",
+      "notes": "Saturated fat <10% of kcal; the engine retains 22 g/d as a fixed 2000-kcal reference ceiling. The percentage is recorded as a flag, not recomputed from the energy target.",
       "url": "https://diabetesjournals.org/care",
       "verbatim_quote": "limit saturated fat to less than 10% of total calories"
     },
@@ -1207,7 +1207,7 @@
           "value": true
         }
       ],
-      "notes": "Cited medication-nutrient rule: RASi raises hyperkalaemia risk; KDIGO 2024 says hyperkalaemia on RASi can often be managed by measures to reduce serum potassium rather than decreasing the RASi dose, so dietary potassium is assessed (not blanket-restricted). Dataset vocabulary token is 'ACEi' (no ARB or generic drug names in the current cohort); generic spellings are accepted for forward compatibility. Coexists with MED-ACEI-ARB-K-CAUTION (unflagged caution) \u2014 this rule adds the cited monitoring instruction.",
+      "notes": "RASi raises hyperkalaemia risk. The cited KDIGO recommendation supports measures to reduce serum potassium rather than automatically reducing the RASi dose. Assess dietary potassium; do not impose a blanket restriction. This rule adds monitoring instructions alongside MED-ACEI-ARB-K-CAUTION.",
       "url": "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf",
       "verbatim_quote": "Hyperkalemia associated with use of RASi can often be managed by measures to reduce the serum potassium levels rather than decreasing the dose"
     },
@@ -1251,7 +1251,7 @@
           "value": "ACEi/ARB + spironolactone"
         }
       ],
-      "notes": "Conjunction rule (two meds conditions are ANDed): RASi AND K-sparing diuretic co-prescription is a MHRA-flagged fatal-hyperkalaemia risk. No spironolactone in the current dataset cohort; the rule is inert for today's patients but guards future profiles.",
+      "notes": "Both RASi and spironolactone must be present. Their co-prescription carries the cited potentially fatal hyperkalaemia risk; the flag calls for potassium and renal-function monitoring.",
       "url": "https://www.gov.uk/drug-safety-update/spironolactone-and-renin-angiotensin-system-drugs-in-heart-failure-risk-of-potentially-fatal-hyperkalaemia",
       "verbatim_quote": "Recognised side effects of treatment with an ACEi or ARB include renal dysfunction and an increase in serum potassium"
     },
@@ -1279,7 +1279,7 @@
           "value": "review diuretic dose if hypovolaemia risk before or at SGLT2i initiation; hold SGLT2i during acute illness or fasting (sick-day rule)"
         }
       ],
-      "notes": "Volume-depletion caution on SGLT2i initiation. No SGLT2i in the current dataset cohort; the token 'SGLT2i' matches the existing MED-SGLT2I-CONTEXT rule. Complements MED-SGLT2I-CONTEXT (hydration/euglycaemic-DKA context).",
+      "notes": "SGLT2i initiation calls for assessment of volume-depletion risk and diuretic dosing. The flag also records the acute-illness and fasting sick-day caution.",
       "url": "https://kdigo.org/wp-content/uploads/2022/10/KDIGO-2022-Diabetes-Guideline.pdf",
       "verbatim_quote": "If a patient is at risk for hypovolemia, consider decreasing thiazide or loop diuretic dosages before commencement of SGLT2i treatment"
     },
@@ -1307,7 +1307,7 @@
           "value": "monitor serum sodium and potassium on thiazide diuretics; individualised dietary potassium helps counter thiazide-induced hypokalaemia"
         }
       ],
-      "notes": "Thiazide electrolyte monitoring. No thiazide in the current dataset cohort; the token 'thiazide' matches the existing MED-DIURETIC-K-LOSS rule. Dietary potassium stays individualised \u2014 this flag does NOT set a potassium target (that remains DASH/CKD/hyperkalaemia governed).",
+      "notes": "Monitor sodium and potassium during thiazide use. Dietary potassium stays individualised; this flag sets no potassium target. DASH, CKD and hyperkalaemia rules retain target ownership.",
       "url": "https://www.ahajournals.org/doi/10.1161/HYP.0000000000000249",
       "verbatim_quote": "Monitor for hyponatremia and hypokalemia, increased glucose, uric acid, and calcium levels."
     },
@@ -1335,7 +1335,7 @@
           "value": "monitor serum potassium and magnesium on loop diuretics (loop agents cause kaliuresis and magnesiuria)"
         }
       ],
-      "notes": "Loop-diuretic K+/Mg monitoring. Token 'loop_diuretic' matches the example_trace patient and MED-DIURETIC-K-LOSS. Citation note: the verbatim_quote is verified from the 2025 AHA/ACC Hypertension Guideline (secondary source covering both thiazide-type and loop diuretics); no verbatim text is taken from the FDA Lasix label itself, which is cited as the primary interaction source.",
+      "notes": "Monitor potassium and magnesium during loop-diuretic use. The quote is attributed to the 2025 AHA/ACC guideline, not the FDA Lasix label. Primary-source verification remains subject to the rulebook citation caveat.",
       "url": "https://www.ahajournals.org/doi/10.1161/HYP.0000000000000249",
       "verbatim_quote": "hypokalemia may be caused by kaliuresis from thiazide-type and loop diuretics"
     },
@@ -1362,7 +1362,7 @@
           "value": "take phosphate binders with each meal; doses taken without food do not bind dietary phosphate and are ineffective"
         }
       ],
-      "notes": "Dataset vocabulary token is 'phosphate_binder' (P0005-P0007, P0014-P0016). Complements CKD-2024-PHOSPHATE-ADDITIVE (prefer_binders_with_meals assert): this rule adds the cited patient-facing timing instruction.",
+      "notes": "Take phosphate binders with meals so they can bind dietary phosphate. This flag supplies the patient-facing timing instruction without changing nutrient constraints.",
       "url": "https://www1.racgp.org.au/ajgp/2023/january-february/chronic-kidney-disease-mineral-and-bone-disorder",
       "verbatim_quote": "binders should be given with meals as they limit gastrointestinal phosphate absorption"
     },
@@ -1388,7 +1388,7 @@
           "value": "keep vitamin K intake CONSISTENT week to week; do NOT avoid leafy greens; avoid drastic dietary changes while on warfarin"
         }
       ],
-      "notes": "Consistency, not avoidance: the correct warfarin dietary instruction is a steady vitamin K intake. No warfarin in the current dataset cohort; the rule is inert for today's patients but guards future profiles and prevents an over-restrictive 'avoid vitamin K foods' interpretation.",
+      "notes": "Maintain steady vitamin K intake during warfarin use. The flag calls for consistency rather than avoidance of leafy greens or other vitamin K foods.",
       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2017/009218s017lbl.pdf",
       "verbatim_quote": "Eat a normal, balanced diet to maintain a consistent intake of vitamin K."
     },
@@ -1413,7 +1413,7 @@
           "value": "periodic vitamin B12 assessment with long-term metformin therapy, especially with anaemia or peripheral neuropathy"
         }
       ],
-      "notes": "Dataset vocabulary token 'metformin' (P0001, P0003, P0004, P0010, P0012, P0013, P0019). Complements MED-METFORMIN-CONTEXT (check B12 context assert): this rule adds the cited ADA recommendation.",
+      "notes": "Assess vitamin B12 periodically during long-term metformin therapy, especially with anaemia or peripheral neuropathy. This flag records the cited monitoring recommendation.",
       "url": "https://diabetesjournals.org/care/article/49/Supplement_1/S50/163924/",
       "verbatim_quote": "Consider periodic assessment of vitamin B12 levels in individuals receiving long-term metformin therapy, especially in those with anemia or peripheral neuropathy."
     },
@@ -1607,7 +1607,8 @@
           "value": [
             "ESRD",
             "dialysis",
-            "CKD_stage_5"
+            "CKD_stage_5",
+            "CKD_stage_5_pre_dialysis"
           ]
         }
       ],
@@ -1720,18 +1721,12 @@
       ],
       "actions": [
         {
-          "type": "set_constraint",
-          "nutrient": "potassium_mg",
-          "kind": "max",
-          "value": 2400
-        },
-        {
           "type": "assert",
           "key": "conflict_resolved",
           "value": "potassium: CKD/hyperkalaemia restriction overrides DASH 4700 target"
         }
       ],
-      "notes": "DASH potassium target (~4700 mg/d) is voided by CKD with hyperkalaemia. Restriction wins."
+      "notes": "Explains why the DASH potassium target does not apply in CKD with hyperkalaemia. Lab-driven rules own the ceiling, including the severe-tier 2000 mg/d safety ceiling. This bookkeeping rule sets no nutrient constraint."
     },
     {
       "rule_id": "CONFLICT-K-DASH-NORMAL",

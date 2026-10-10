@@ -163,6 +163,198 @@
     },
     "NutrientConstraint": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "nutrient": {
+                "const": "energy_kcal"
+              }
+            },
+            "required": [
+              "nutrient"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "kcal"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "nutrient": {
+                "const": "protein_g"
+              }
+            },
+            "required": [
+              "nutrient"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "g"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "nutrient": {
+                "const": "sodium_mg"
+              }
+            },
+            "required": [
+              "nutrient"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "mg"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "nutrient": {
+                "const": "potassium_mg"
+              }
+            },
+            "required": [
+              "nutrient"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "mg"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "nutrient": {
+                "const": "phosphorus_mg"
+              }
+            },
+            "required": [
+              "nutrient"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "mg"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "nutrient": {
+                "const": "carbs_g"
+              }
+            },
+            "required": [
+              "nutrient"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "g"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "nutrient": {
+                "const": "fat_g"
+              }
+            },
+            "required": [
+              "nutrient"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "g"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "nutrient": {
+                "const": "sat_fat_g"
+              }
+            },
+            "required": [
+              "nutrient"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "g"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "nutrient": {
+                "const": "fiber_g"
+              }
+            },
+            "required": [
+              "nutrient"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "g"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "nutrient": {
+                "const": "sugar_g"
+              }
+            },
+            "required": [
+              "nutrient"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unit": {
+                "const": "g"
+              }
+            }
+          }
+        }
+      ],
       "description": "Daily nutrient aim or ceiling, validated in its nutrient's canonical unit.",
       "properties": {
         "nutrient": {
@@ -220,7 +412,7 @@
     },
     "PatientSummary": {
       "additionalProperties": false,
-      "description": "Patient descriptors frozen with an envelope for later audit, not a live profile.",
+      "description": "Frozen rule inputs, not a live profile.\n\nVersion 1 snapshots may omit BMI/pregnancy/HbA1c; None means unrecorded, not\nevidence of absence. New engine snapshots emit version 2 with these inputs.\nReading old snapshots does not upgrade them or reconstruct missing values.",
       "properties": {
         "patient_id": {
           "title": "Patient Id",
@@ -297,6 +489,50 @@
           },
           "title": "Meds",
           "type": "array"
+        },
+        "snapshot_version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Snapshot Version",
+          "type": "integer"
+        },
+        "bmi": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bmi"
+        },
+        "pregnant": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pregnant"
+        },
+        "hba1c_pct": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hba1C Pct"
         }
       },
       "required": [

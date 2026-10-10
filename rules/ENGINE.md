@@ -37,6 +37,12 @@ From the repo root:
      plus a `fired(rule_id)` marker per defrule.
 2. **Per patient**: `env.reset()`, assert one `(patient ...)` fact, `env.run()` to fixpoint.
    The rulebook is acyclic (rules only match the `patient` fact), so the run terminates.
+   The engine owns a lock around lazy environment initialization and the complete
+   reset/assert/run/harvest/cleanup sequence. All callers share this protection.
+   Weight must be finite and positive before execution. Both lab spellings are
+   accepted; explicit wire aliases take precedence, including null values.
+   New snapshots use `snapshot_version=2` and retain BMI, pregnancy and HbA1c.
+   Version 1 remains readable; absent inputs are unknown, not reconstructed.
 3. **Python assembly** from harvested facts:
    - **Per-kg scaling**: all `energy_kcal` and `protein_g` constraint values in the rulebook
      are per-kg coefficients (kcal/kg/d, g/kg/d — including GEN-ENERGY-2535's 25–35 and
@@ -45,12 +51,10 @@ From the repo root:
      absolute `g` reference values for sat-fat (22 g / 13 g at a 2000 kcal reference) are
      kept as-is, matching the hand-worked example; the `%kcal` figures stay available as
      asserted flags (`sat_fat_pct_kcal_max`, `fat_pct_kcal_range`, …) for the optimiser.
-    - **Conflict resolution** per `(nutrient, kind)`: higher priority wins, then
-      a value tie-break and lowest `rule_id`. The documented stricter-ceiling
-      policy requires lower MAX values. **Known discrepancy:** the current
-      implementation selects larger MAX values on equal priority. It selects
-      smaller MIN/TARGET values; describing all three as "stricter" is misleading.
-      The MAX ordering needs a behavior fix and an equal-priority regression test.
+   - **Conflict resolution** per `(nutrient, kind)`: higher priority wins. Equal
+     priority chooses the lower MAX ceiling, higher MIN soft floor, or lower TARGET
+     soft aim, then lowest `rule_id`. TARGET ordering is deterministic, not a
+     stricter hard bound. MIN and TARGET remain soft objectives.
      Candidates with the *same value* as the winner are merges, not conflicts. Every loser
      gets an explicit marker woven into its own trace row:
      `... | SUPERSEDED: superseded by CKD-2024-SODIUM-2000 on sodium_mg max (final value 2000 mg)`
@@ -100,8 +104,10 @@ depends on the engine's `action_summary` format; arbitrary prose is not equivale
 
 ## Medication–nutrient interaction rules (stretch feature #1)
 
-Eight cited medication–nutrient rules were added to `rules/rules.json` (guidelines, sections,
-URLs and verbatim quotes verified against the primary sources). They use only the existing
+Eight medication–nutrient rules in `rules/rules.json` carry guideline/section/URL
+references and quote text. Primary-source verification is not established by this
+repository; the [citation caveat](README.md#citation-caveat) applies to these rows
+as well. Re-verify quotations before publication or clinical use. They use only the existing
 action kinds (`assert` clinical flags — no new constraint kinds) and are ANDed like every
 other condition set, including a two-`meds`-condition conjunction for the combination alert.
 
@@ -134,9 +140,8 @@ Notes:
   the med flags only add monitoring/diet-counselling instructions.
 * **Determinism** is untouched: the flags are harvested and sorted by
   `(key, value, rule_id)` like all other clinical flags.
-* `rules/example_trace.json` was regenerated for the SYN-0007 patient (ACEi +
-  `loop_diuretic`), which now fires 32 rules (was 30): `MED-RASI-K-CAUTION` and
-  `MED-LOOP-K-MG` joined the pinned `all_fired_rule_ids`.
+* `rules/example_trace.json` pins the SYN-0007 fired-rule IDs, including
+  `MED-RASI-K-CAUTION` and `MED-LOOP-K-MG`. Tests check this fixture's coverage.
 
 ## Fallback
 

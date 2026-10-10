@@ -8,8 +8,8 @@ API / rate limits
 * Endpoint: ``https://api.nal.usda.gov/fdc/v1/foods/search?api_key=...``
 * ``DEMO_KEY`` is shared and rate-limited. Set ``USDA_API_KEY`` for authenticated
   imports; server quotas are independent of the local request budget.
-* Search handles network/HTTP/JSON failures; rate limits propagate to ingredient
-  estimation, which logs them and returns unknown values. Input or response-shape
+* Search handles network/HTTP/JSON failures; rate limits propagate to the CLI or
+  file importer, which stops the run. Input or response-shape
   errors can still raise. Estimates require human review before verification.
 
 USDA values are per 100 g. Recipe quantities are unavailable, so the serving
@@ -68,7 +68,8 @@ class RequestBudget:
         if self.used >= self.max_requests:
             raise RateLimitError(
                 f"local request budget exhausted ({self.used}/{self.max_requests}); "
-                "wait for the hourly window or use a data.gov API key"
+                "start a new explicitly budgeted run to resume; waiting or changing keys "
+                "does not reset this local counter"
             )
         if min_interval_s > 0:
             elapsed = time.monotonic() - self._last_call_ts
@@ -152,8 +153,8 @@ def estimate_kp_for_ingredient(
 
     Uses the first FDC hit's per-100 g values scaled by ``portion_g / 100``.
     Returns a dict with ``potassium_mg``/``phosphorus_mg`` (None when unknown),
-    the matched description and the fdcId. Rate limits are logged and return
-    unknown values, as do missing hits; invalid input/response shapes may raise.
+    the matched description and the fdcId. Missing hits return unknown values;
+    rate limits propagate so the run owner can stop. Invalid shapes may raise.
     """
     result: dict[str, Any] = {
         "ingredient": ingredient,
@@ -163,11 +164,7 @@ def estimate_kp_for_ingredient(
         "usda_match": None,
         "fdc_id": None,
     }
-    try:
-        foods = search_food(ingredient, api_key=api_key, budget=budget)
-    except RateLimitError as exc:
-        print(f"[usda] rate limited: {exc}", file=sys.stderr)
-        return result
+    foods = search_food(ingredient, api_key=api_key, budget=budget)
     if not foods:
         return result
 
@@ -197,8 +194,9 @@ def estimate_dish_gaps(
     ``provenance='usda_estimate'`` until human review.
 
     Existing nonzero K/P values are preserved; None and zero count as gaps.
-    Returns a shallow copy without mutating ``dish``. Rate-limited ingredients
-    remain unknown; invalid inputs or malformed response shapes may raise.
+    Returns a shallow copy without mutating ``dish``. Changed estimates clear
+    verification. Rate limits propagate and discard this dish's partial estimates;
+    invalid inputs or malformed response shapes may raise.
     """
     portion = float(dish.get("portion_g") or 100.0)
     ingredients = dish.get("ingredients") or []
@@ -210,13 +208,9 @@ def estimate_dish_gaps(
     matches: list[str] = []
     got_k = got_p = False
     for ing in ingredients:
-        try:
-            est = estimate_kp_for_ingredient(
-                ing, per_ingredient_g, api_key=api_key, budget=budget
-            )
-        except RateLimitError as exc:
-            print(f"[usda] stopping dish {dish.get('dish_id')}: {exc}", file=sys.stderr)
-            break
+        est = estimate_kp_for_ingredient(
+            ing, per_ingredient_g, api_key=api_key, budget=budget
+        )
         if est["potassium_mg"] is not None:
             total_k += est["potassium_mg"]
             got_k = True
@@ -235,6 +229,15 @@ def estimate_dish_gaps(
         out["usda_match"] = "; ".join(matches[:5])
     if out.get("potassium_mg") != dish.get("potassium_mg") or out.get("phosphorus_mg") != dish.get("phosphorus_mg"):
         out["provenance"] = "usda_estimate"
+        out["verified"] = False
+        # K/P estimates affect nutrient tags, not curated cooking/protein roles.
+        tags = list(out.get("tags") or [])
+        for tag, nutrient, threshold in (("high_potassium", "potassium_mg", 700),
+                                         ("high_phosphorus", "phosphorus_mg", 300)):
+            tags = [existing for existing in tags if existing != tag]
+            if (out.get(nutrient) or 0) >= threshold:
+                tags.append(tag)
+        out["tags"] = tags
     return out
 
 
@@ -243,15 +246,17 @@ def fill_gaps_in_file(
     api_key: str = DEFAULT_API_KEY,
     limit: Optional[int] = None,
     min_interval_s: float = 0.0,
+    budget: Optional[RequestBudget] = None,
 ) -> tuple[list[dict[str, Any]], int]:
     """Load a dishes JSON, estimate K/P for records missing them.
 
     Returns ``(dishes, n_updated)``. Only dishes with a missing K or P and a
     non-empty ingredient list are candidates. Request budget is shared across the
-    whole run.
+    whole run. Pass a budget to inspect request usage. On a rate limit, retain
+    completed dishes but leave the interrupted and subsequent dishes unchanged.
     """
     dishes = json.loads(path.read_text(encoding="utf-8"))
-    budget = RequestBudget(max_requests=MAX_REQUESTS_PER_RUN)
+    budget = budget or RequestBudget(max_requests=MAX_REQUESTS_PER_RUN)
     candidates = [
         d
         for d in dishes
@@ -299,15 +304,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     budget = RequestBudget()
 
     if args.ingredient:
-        est = estimate_kp_for_ingredient(
-            args.ingredient, args.portion_g, api_key=args.api_key, budget=budget
-        )
+        try:
+            est = estimate_kp_for_ingredient(
+                args.ingredient, args.portion_g, api_key=args.api_key, budget=budget
+            )
+        except RateLimitError as exc:
+            print(f"[usda] stopping: {exc}", file=sys.stderr)
+            return 1
         print(json.dumps(est, indent=2))
         return 0
 
     if args.dishes:
         dishes, updated = fill_gaps_in_file(
-            args.dishes, api_key=args.api_key, limit=args.limit
+            args.dishes, api_key=args.api_key, limit=args.limit, budget=budget
         )
         out = args.out or args.dishes
         out.write_text(json.dumps(dishes, indent=2) + "\n", encoding="utf-8")

@@ -31,15 +31,8 @@ from shared.envelope_schema import PatientSummary
 class Patient(PatientSummary):
     """A full synthetic patient record.
 
-    Extends :class:`PatientSummary` (patient_id, age, sex, weight_kg, diagnoses,
-    egfr, serum_K_meq_L, serum_PO4_mg_dL, meds) with:
-
-    - ``archetype``: the clinical archetype that produced the record.
-    - ``exclude_from_careloop``: e.g. pregnancy is out of scope for the tool.
-    - vitals / glycaemia: ``hba1c_pct``, ``systolic_bp``, ``diastolic_bp``.
-    - body composition: ``height_cm``, ``bmi``.
-    - longitudinal labs (6 most-recent monthly values, index 0 = current):
-      ``labs_K_monthly``, ``labs_PO4_monthly`` and ``months_offset_ago``.
+    Adds archetype, vitals and longitudinal labs to the frozen rule-input model.
+    Monthly lab arrays store the current value at index 0, then older values.
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -86,6 +79,10 @@ class Patient(PatientSummary):
             serum_K_meq_L=self.serum_k_meq_l,
             serum_PO4_mg_dL=self.serum_po4_mg_dl,
             meds=list(self.meds),
+            snapshot_version=2,
+            bmi=self.bmi,
+            pregnant=self.pregnant if self.pregnant is not None else "pregnancy" in self.diagnoses,
+            hba1c_pct=self.hba1c_pct,
         )
 
 

@@ -4,19 +4,21 @@ Rules choose constraints by salience; Python scales per-kg values, resolves
 conflicts, and suppresses targets for scope-rejected proposals. The fixed clock
 and sorted output make sequential runs deterministic for unchanged inputs.
 Returned shapes follow ``shared/envelope_schema.py``. See ``rules/ENGINE.md``
-for rule policy and the current tie-breaking discrepancy.
+for rule policy and tie-breaking.
 
-``run_rules`` reuses one mutable CLIPS environment without a lock; callers must
-serialize runs. Import tolerates missing clipspy, but invoking the engine does
-not; ``rules.clipspy_facts`` supplies import-safe reference helpers.
+``run_rules`` serializes access to its shared CLIPS environment. Import tolerates
+missing clipspy, but invoking the engine does not; ``rules.clipspy_facts`` supplies
+import-safe reference helpers.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 # CLIPS is required when running rules; keep module import available without it.
@@ -60,8 +62,9 @@ _UNITS = {
 _PRIORITY_BASIS = (
     "CKD stage 3-4 (90) > internal safety (88) > hyperkalaemia/hyperphosphataemia/"
     "medication-K (85) > CKD general (80) > DASH/HTN (70) > ADA (60) > generic (50). "
-    "Conflicts resolved per (nutrient, kind): higher priority wins; ties -> stricter "
-    "value, then lowest rule_id. Losing constraints are marked SUPERSEDED in the trace."
+    "Conflicts resolved per (nutrient, kind): higher priority wins; ties -> lower MAX, "
+    "higher MIN, lower TARGET, then lowest rule_id. MIN/TARGET are soft aims. "
+    "Losing constraints are marked SUPERSEDED in the trace."
 )
 
 _PATIENT_PATTERN = (
@@ -257,15 +260,36 @@ def _get_env() -> Any:
 # Patient preparation
 # ---------------------------------------------------------------------------
 
+def normalize_patient_labs(patient: dict) -> dict:
+    """Copy lab aliases to wire names; an explicit wire name takes precedence.
+
+    Preserve both input spellings. This matches the shared model's alias priority,
+    including an explicit null wire value overriding a populated Python spelling.
+    """
+    normalized = dict(patient)
+    for wire, python_name in (("serum_K_meq_L", "serum_k_meq_l"),
+                              ("serum_PO4_mg_dL", "serum_po4_mg_dl")):
+        if wire not in normalized and python_name in normalized:
+            normalized[wire] = normalized[python_name]
+    return normalized
+
+
 def _prepare(patient: dict) -> dict:
-    """Normalise a patient dict (data/patients.json shape or richer) for CLIPS."""
+    """Normalize for CLIPS; reject missing, nonfinite or nonpositive weight."""
+    patient = normalize_patient_labs(patient)
+    try:
+        weight = float(patient.get("weight_kg"))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("weight_kg must be finite and positive") from exc
+    if not math.isfinite(weight) or weight <= 0:
+        raise ValueError("weight_kg must be finite and positive")
     diagnoses = [str(d) for d in (patient.get("diagnoses") or [])]
     age = patient.get("age")
     return {
         "patient_id": str(patient.get("patient_id") or "UNKNOWN"),
         "age": int(age) if age is not None else 0,
         "sex": patient.get("sex") if patient.get("sex") in ("F", "M", "X") else "X",
-        "weight_kg": max(_num(patient.get("weight_kg")), 0.0),
+        "weight_kg": weight,
         "diagnoses": diagnoses,
         "egfr": _num(patient.get("egfr")),
         "serum_K_meq_L": _num(patient.get("serum_K_meq_L")),
@@ -357,11 +381,10 @@ def _scale(nutrient: str, value: float, weight_kg: float) -> float:
 def _resolve_conflicts(constraints: list[dict]) -> tuple[dict, dict[str, list[str]]]:
     """Pick one winner per (nutrient, kind); record losing rules for the trace.
 
-    Highest priority wins. Current equal-priority sorting selects larger MAX
-    values and smaller MIN/TARGET values, then the lowest rule ID. MAX ordering
-    contradicts the documented stricter-ceiling policy; this is a known behavior
-    defect, not a clinical policy change. Groups are sorted in place. Identical
-    values are merges and are not marked superseded.
+    Highest priority wins. Equal-priority MAX uses the lower ceiling, MIN the
+    higher soft floor, and TARGET the lower soft aim. Lowest rule ID breaks any
+    remaining tie. TARGET ordering is deterministic, not a stricter hard bound.
+    Identical values are merges and are not marked superseded.
     """
     groups: dict[tuple[str, str], list[dict]] = {}
     for c in constraints:
@@ -373,7 +396,7 @@ def _resolve_conflicts(constraints: list[dict]) -> tuple[dict, dict[str, list[st
         nutrient, kind = key
 
         def sort_key(c: dict) -> tuple:
-            strict = -c["value"] if kind == "max" else c["value"]
+            strict = -c["value"] if kind == "min" else c["value"]
             return (-c["priority"], strict, c["rule_id"])
 
         cands.sort(key=sort_key)
@@ -429,29 +452,32 @@ def _action_summary(rule: dict, prep: dict) -> str:
     weight = prep["weight_kg"]
     pieces: list[str] = []
     for act in rule.get("actions", []):
-        kind = act["type"]
-        if kind == "set_constraint":
-            nutrient, k, value = act["nutrient"], act["kind"], float(act["value"])
+        action_type = act["type"]
+        if action_type == "set_constraint":
+            nutrient, constraint_kind, value = act["nutrient"], act["kind"], float(act["value"])
             if nutrient in _PER_KG_NUTRIENTS:
                 per = "kcal/kg/d" if nutrient == "energy_kcal" else "g/kg/d"
                 if weight > 0:
                     pieces.append(
-                        f"set {nutrient} {k} = {value:g} {per} -> "
+                        f"set {nutrient} {constraint_kind} = {value:g} {per} -> "
                         f"{round(value * weight, 2):g} {_UNITS[nutrient]}/d (weight {weight:g} kg)"
                     )
                 else:
                     # Keep the per-kg marker so unscaled coefficients cannot read as daily doses.
                     pieces.append(
-                        f"set {nutrient} {k} = {value:g} {per} "
+                        f"set {nutrient} {constraint_kind} = {value:g} {per} "
                         f"(weight unknown; not scaled)"
                     )
             else:
-                pieces.append(f"set {nutrient} {k} = {value:g} {_UNITS[nutrient]}/d")
-        elif kind == "exclude":
+                pieces.append(f"set {nutrient} {constraint_kind} = {value:g} {_UNITS[nutrient]}/d")
+        elif action_type == "exclude":
             pieces.append(f"exclude {act['kind']} '{act['value']}'")
         else:  # assert / flag
             pieces.append(f"assert {act['key']}={_stringify(act['value'])}")
     return "; ".join(pieces)
+
+
+_ENV_LOCK = RLock()
 
 
 def run_rules(patient: dict) -> dict:
@@ -460,19 +486,23 @@ def run_rules(patient: dict) -> dict:
     Returns ``{"envelope": <NutrientEnvelope-compatible dict>,
                "trace": [<RuleFire-compatible dicts>]}``.
     The placeholder envelope ID/time are replaced when stored as a live proposal.
-    Runs mutate the shared CLIPS environment; concurrent calls require external
-    serialization. This function does not persist or approve clinical state.
+    Access to the shared CLIPS environment is serialized here, including lazy
+    initialization and cleanup after failures. Weight must be finite and positive
+    or ValueError is raised before execution. No state is persisted or approved.
     """
     ruleset = _ruleset()
     by_id = {r["rule_id"]: r for r in ruleset}
     prep = _prepare(patient)
 
-    env = _get_env()
-    env.reset()
-    env.assert_string(_patient_fact(prep))
-    env.run()
-    constraints, exclusions, flags, fired_ids = _harvest(env)
-    env.reset()
+    with _ENV_LOCK:
+        env = _get_env()
+        env.reset()
+        try:
+            env.assert_string(_patient_fact(prep))
+            env.run()
+            constraints, exclusions, flags, fired_ids = _harvest(env)
+        finally:
+            env.reset()
 
     # Record missing scope labs as cautions, without fabricating a fired exclusion.
     for rule in ruleset:
@@ -585,6 +615,7 @@ def run_rules(patient: dict) -> dict:
     notes_parts.append("PROPOSED only; downstream optimiser must not consume until a clinician approves.")
 
     snapshot = {
+        "snapshot_version": 2,
         "patient_id": prep["patient_id"],
         "age": prep["age"],
         "sex": prep["sex"],
@@ -594,6 +625,9 @@ def run_rules(patient: dict) -> dict:
         "serum_K_meq_L": prep["serum_K_meq_L"] if prep["serum_K_meq_L"] >= 0 else None,
         "serum_PO4_mg_dL": prep["serum_PO4_mg_dL"] if prep["serum_PO4_mg_dL"] >= 0 else None,
         "meds": list(prep["meds"]),
+        "bmi": prep["bmi"] if prep["bmi"] >= 0 else None,
+        "pregnant": prep["pregnant"],
+        "hba1c_pct": prep["hba1c_pct"] if prep["hba1c_pct"] >= 0 else None,
     }
 
     envelope = {
