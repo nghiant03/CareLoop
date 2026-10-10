@@ -55,14 +55,14 @@ def test_clinician_view_conflicts_resolved(sample) -> None:
     assert "CONFLICT-SODIUM-CKD-WINS" in recorded
     assert "CONFLICT-K-DASH-VS-CKD" in recorded
 
-    # The DASH sodium ceiling was overridden by the higher-priority CKD rule.
-    overrides = [c for c in view["conflicts_resolved"] if c.get("overridden")]
+    # Priority overlaps are display metadata, not recorded conflict decisions.
+    overrides = view["priority_overlaps"]
     sodium_override = next(
         c for c in overrides
-        if any(o["rule_id"] == "DASH-2025-SODIUM-2300" for o in c["overridden"])
+        if any(o["rule_id"] == "DASH-2025-SODIUM-2300" for o in c["lower_priority_mentions"])
     )
-    assert sodium_override["winner_rule_id"] == "CKD-2024-SODIUM-2000"
-    assert sodium_override["winner_priority"] > 70
+    assert sodium_override["highest_priority_rule_id"] == "CKD-2024-SODIUM-2000"
+    assert sodium_override["highest_priority"] > 70
 
 
 def test_clinician_view_constraints_cited(sample) -> None:
@@ -106,7 +106,7 @@ def test_patient_view_plain_language_targets(sample) -> None:
     text = " ".join(t["text"] for t in view["daily_targets"])
 
     # 2000 mg sodium becomes "under 2 g a day" style phrasing.
-    assert "Keep salt (sodium) under 2 g a day." in text
+    assert "Keep sodium under 2 g a day." in text
     # Energy min+max merged into a range.
     assert "1750 kcal to 2450 kcal" in text
     # Protein as a range (0.55-0.8 g/kg -> 38.5-56 g in this sample).
@@ -155,7 +155,7 @@ def test_patient_view_with_plan(sample) -> None:
     view = patient_explanation(envelope, plan=plan)
     assert view["plan_summary"]
     joined = " ".join(view["plan_summary"])
-    assert "1.8 g of salt (sodium)" in joined
+    assert "1.8 g of sodium" in joined
     assert "50 g of protein" in joined
 
     assert patient_explanation(envelope)["plan_summary"] is None

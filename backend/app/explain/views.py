@@ -11,9 +11,9 @@ from typing import Any, Optional
 
 __all__ = ["clinician_explanation", "patient_explanation"]
 
-# Nutrient -> plain label + display order (patient-friendly ordering).
+# Patient-facing nutrient labels; _NUTRIENT_ORDER controls display order.
 _PLAIN_LABELS = {
-    "sodium_mg": "salt (sodium)",
+    "sodium_mg": "sodium",
     "potassium_mg": "potassium",
     "phosphorus_mg": "phosphorus",
     "protein_g": "protein",
@@ -30,7 +30,7 @@ _NUTRIENT_ORDER = [
     "carbs_g", "fiber_g", "sat_fat_g", "fat_g", "sugar_g",
 ]
 
-# Nutrient detection in fired-rule action summaries (for conflict derivation
+# Nutrient detection in fired-rule action summaries (for priority overlaps
 # and constraint→rule citation matching). Handles both the hand-worked trace
 # style ("Na ceiling = 2000 mg/d") and the engine style ("set sodium_mg max =
 # 2000 mg/d") — patterns match into suffixed tokens like ``sodium_mg``.
@@ -103,10 +103,11 @@ def _citations_of(fired: dict[str, Any]) -> dict[str, Any]:
 def _rule_citation_for_nutrient(
     fired_rules: list[dict[str, Any]], nutrient: str
 ) -> Optional[dict[str, Any]]:
-    """Citation for ``nutrient``: prefer the highest-priority fired rule that
-    states a nutrient bound (set/ceiling/floor summaries) over exclusion or
-    assert-only rules that merely mention the nutrient. Deterministic tie-break
-    on rule_id."""
+    """Choose a citation from nutrient mentions, not exact constraint provenance.
+
+    Prefer summaries not starting with exclude/assert, then higher priority and
+    lower rule ID. Ignore CONFLICT rules; return None without a matching mention.
+    """
     candidates = []
     for fired in fired_rules:
         if str(fired.get("rule_id", "")).startswith(_CONFLICT_PREFIX):
@@ -137,8 +138,9 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
     (same shapes as ``rules/example_trace.json``). Returns:
 
     * ``fired_rules`` — id, priority, guideline link, patient/action summary;
-    * ``conflicts_resolved`` — recorded CONFLICT-rule resolutions plus
-      priority-derived override pairs (who overrode whom);
+    * ``conflicts_resolved`` — resolutions explicitly recorded by CONFLICT rules;
+    * ``priority_overlaps`` — inferred nutrient mentions ordered by priority,
+      not evidence of a constraint being overridden;
     * ``constraints`` — resulting targets with per-constraint citations;
     * ``exclusions`` — hard exclusions with citations.
     """
@@ -174,9 +176,9 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
                 }
             )
 
-    # 2) Priority-derived overrides: when several (non-CONFLICT) fired rules
-    #    touch the same nutrient, the highest priority wins and the rest were
-    #    overridden. Deterministic tie-break on rule_id.
+    # Nutrient mentions can overlap without conflicting (e.g. independent MIN/MAX).
+    # Keep this display heuristic separate from recorded engine resolutions.
+    priority_overlaps: list[dict[str, Any]] = []
     by_nutrient: dict[str, list[dict[str, Any]]] = {}
     for fired in fired_rules:
         if str(fired.get("rule_id", "")).startswith(_CONFLICT_PREFIX):
@@ -196,15 +198,15 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
             if int(f.get("priority", 0)) < int(winner.get("priority", 0))
         ]
         if overridden:
-            conflicts.append(
+            priority_overlaps.append(
                 {
                     "nutrient": nutrient,
-                    "winner_rule_id": winner.get("rule_id"),
-                    "winner_priority": winner.get("priority", 0),
-                    "overridden": overridden,
-                    "resolution": (
+                    "highest_priority_rule_id": winner.get("rule_id"),
+                    "highest_priority": winner.get("priority", 0),
+                    "lower_priority_mentions": overridden,
+                    "summary": (
                         f"{winner.get('rule_id')} (priority "
-                        f"{winner.get('priority', 0)}) overrides "
+                        f"{winner.get('priority', 0)}) has higher priority than "
                         f"{', '.join(o['rule_id'] for o in overridden)} on "
                         f"{nutrient}"
                     ),
@@ -245,6 +247,7 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
         "priority_basis": envelope.get("priority_basis"),
         "fired_rules": fired_view,
         "conflicts_resolved": conflicts,
+        "priority_overlaps": priority_overlaps,
         "constraints": constraints,
         "exclusions": exclusions,
     }
@@ -296,7 +299,7 @@ def _target_phrases(targets: list[dict[str, Any]]) -> list[dict[str, str]]:
 def patient_explanation(envelope: dict, plan: Optional[dict] = None) -> dict:
     """Plain-language patient view of an envelope.
 
-    Daily targets in "keep salt under 2 g a day" style, short why-bullets
+    Daily targets in "keep sodium under 2 g a day" style, short why-bullets
     drawn from the trace citations carried on the envelope, and simple
     avoid-choices. Rule ids and jargon stay out of the prose.
     """
