@@ -5,8 +5,9 @@ Nutrient keys mirror :class:`shared.envelope_schema.NutrientKind` values exactly
 so objective/constraint code can index them by ``constraint.nutrient.value``.
 
 Production catalogue loading uses ``real_data.load_dishes``. This module's
-``load_dishes`` accepts nested nutrient JSON and falls back to the toy pool
-when the path is absent; it is not the flat-key production loader.
+``load_dishes`` returns the toy pool by default (or when the given file is
+missing) and only reads the nested nutrient JSON schema; flat catalogue rows
+are rejected with ``ValueError`` rather than read as zero nutrients.
 """
 
 from __future__ import annotations
@@ -163,24 +164,30 @@ TOY_DISHES: list[Dish] = [
 
 
 def load_dishes(path: str | None = None) -> list[Dish]:
-    """Read nested nutrient JSON; fall back to toy records only for a missing file.
+    """Return the toy pool by default, or read nested nutrient JSON.
 
-    The JSON shape is a list of objects with keys: ``dish_id``, ``name``,
-    ``category``, ``nutrients`` (dict), optional ``ingredients``, ``tags``,
-    ``price_sgd``. The default path is data/dishes.json, but its flat nutrient
-    fields are not read here and become zero. Use real_data.load_dishes for that
-    catalogue. Invalid existing files raise rather than selecting the toy pool.
+    Missing files also return a shallow copy of the toy pool. Existing files
+    require a list of rows with ``dish_id``, ``name``, ``category``, and a
+    ``nutrients`` mapping. Ingredients, tags, and price_sgd are optional.
+    Missing nutrient keys default to zero. Rows without a nutrient mapping
+    raise ValueError; use ``real_data.load_dishes`` for the flat catalogue.
     """
     if path is None:
-        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        path = os.path.join(root, "data", "dishes.json")
+        return list(TOY_DISHES)
     if not os.path.exists(path):
         return list(TOY_DISHES)
     with open(path, encoding="utf-8") as fh:
         raw = json.load(fh)
     dishes: list[Dish] = []
     for row in raw:
-        nutrients = {k: float(row.get("nutrients", {}).get(k, 0.0)) for k in NUTRIENT_KEYS}
+        nested = row.get("nutrients")
+        if not isinstance(nested, dict):
+            raise ValueError(
+                f"{path}: dish {row.get('dish_id')!r} has no 'nutrients' "
+                "mapping — this loader reads the nested schema only; use "
+                "backend.optim.real_data.load_dishes for the flat catalogue"
+            )
+        nutrients = {k: float(nested.get(k, 0.0)) for k in NUTRIENT_KEYS}
         dishes.append(
             Dish(
                 dish_id=row["dish_id"],

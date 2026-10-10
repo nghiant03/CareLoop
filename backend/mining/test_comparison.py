@@ -1,22 +1,16 @@
 """Tests for backend.mining.comparison — the method-comparison study.
 
-A module-scoped fixture exercises main()'s artifact writing and shares a study
-result across assertions. Runtime depends on the numerical environment.
+A module-scoped fixture shares one study result across semantic assertions.
+Artifact tests reuse it and write only to temporary paths.
 """
 
 import math
-from pathlib import Path
-
 import pytest
 
 from backend.mining import comparison
 
-COMPARISON_MD = Path(comparison.__file__).resolve().parent / "COMPARISON.md"
-
-
 @pytest.fixture(scope="module")
 def results():
-    assert comparison.main() == 0
     return comparison.run_comparison()
 
 
@@ -138,9 +132,11 @@ class TestSubstitutions:
 
 
 class TestArtifact:
-    def test_markdown_written_with_tables_and_verdicts(self, results):
-        assert COMPARISON_MD.exists()
-        text = COMPARISON_MD.read_text(encoding="utf-8")
+    def test_markdown_written_with_tables_and_verdicts(self, results, tmp_path, monkeypatch):
+        output = tmp_path / "COMPARISON.md"
+        monkeypatch.setattr(comparison, "run_comparison", lambda: results)
+        assert comparison.main(output_path=output) == 0
+        text = output.read_text(encoding="utf-8")
         for heading in (
             "# Mining method-comparison study",
             "## 1. Clustering",
@@ -152,3 +148,7 @@ class TestArtifact:
         assert text.count("**Verdict") == 3
         # markdown tables present
         assert text.count("|---") >= 6
+        assert "historical unweighted composite" in text
+        assert "Current production" in text
+        assert "clinically better" not in text
+        assert "similar but safer" not in text

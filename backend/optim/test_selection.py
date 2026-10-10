@@ -3,8 +3,8 @@
 Builds three feasible front entries over a tiny pool where the strategies
 PROVABLY disagree:
 
-* entry ``adequate``  — meets every aim exactly (protein MIN, energy TARGET),
-  but expensive;
+* entry ``adequate`` — exceeds the protein MIN and meets the energy TARGET
+  exactly, but is expensive;
 * entry ``cheap``     — well under cost, but misses the protein MIN on every
   day (shortfall 32/60 g);
 * entry ``middle``    — meets protein but deviates from the energy TARGET.
@@ -17,10 +17,9 @@ Expected winners (hand-checkable):
 
 Also asserts determinism (repeated calls and reversed entry order agree).
 
-Run either way::
+Run with pytest so fixture-dependent tests receive their arguments::
 
-    python backend/optim/test_selection.py
-    pytest backend/optim/test_selection.py
+    .venv/bin/python -m pytest backend/optim/test_selection.py
 """
 
 from __future__ import annotations
@@ -204,10 +203,12 @@ def ev_idx_to_plan_local(idx, dishes) -> list[list[str]]:
 
 
 def test_adequacy_key_ranks_shortfall_then_count_then_scalar():
+    from dataclasses import replace
+
     env = _envelope()
     entries = _entries()
     by_name = {e["name"]: e for e in entries}
-    # hand-checked lexicographic keys: adequate (0,0,...) < middle (0.111,1,..)
+    # hand-checked lexicographic keys: adequate (0,0,...) < middle (0.111,7,..)
     # < cheap (0.533,7,...) — worst-day shortfall dominates unmet count.
     picked = adequacy_first_selection(
         [by_name["cheap"], by_name["middle"], by_name["adequate"]], env, SELECTION_POOL
@@ -216,10 +217,21 @@ def test_adequacy_key_ranks_shortfall_then_count_then_scalar():
     picked = adequacy_first_selection([by_name["cheap"], by_name["middle"]], env, SELECTION_POOL)
     assert _by_name(picked) == "middle"
 
+    # Same worst deviation, but only one day misses energy instead of seven.
+    fewer_unmet = {"plan": by_name["middle"]["plan"][:3] + by_name["adequate"]["plan"][3:]}
+    fewer_unmet["objectives"], violations = evaluate(fewer_unmet["plan"], env, SELECTION_POOL)
+    assert not violations
+    assert adequacy_first_selection([by_name["middle"], fewer_unmet], env, SELECTION_POOL) is fewer_unmet
+
+    # Equal worst deviation and unmet count: cheaper equivalent dishes win.
+    discounted = replace(SELECTION_POOL[0], dish_id="discount_protein", price_sgd=0)
+    pool = SELECTION_POOL + [discounted]
+    cheaper = {"plan": [["discount_protein" if did == "protein_plate" else did for did in meal]
+                        for meal in by_name["middle"]["plan"]]}
+    cheaper["objectives"], violations = evaluate(cheaper["plan"], env, pool)
+    assert not violations
+    assert adequacy_first_selection([by_name["middle"], cheaper], env, pool) is cheaper
+
 
 if __name__ == "__main__":  # pragma: no cover
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            fn()
-            print(f"ok  {name}")
-    print("all test_selection checks passed")
+    raise SystemExit("Run .venv/bin/python -m pytest backend/optim/test_selection.py")

@@ -190,16 +190,78 @@ def test_infeasible_envelope_returns_diagnosis():
 
 
 def test_exclusions_shrink_pool_as_expected():
-    # 'deep_fried' is a tag on 51 dishes; 'coconut milk' an ingredient on 13
-    # (58 distinct dishes excluded of the 214-dish pool; none of the 24
-    # curated renal-replenishment dishes is deep-fried or coconut-milk based).
+    from shared.envelope_schema import ExclusionKind
+
+    # data/README.md Tags defines deep_fried by recipe/components, not fat.
+    # Pin catalogue membership independently of allowed_dishes' matcher.
+    expected_deep_fried = {
+        "SG0003", "SG0004", "SG0009", "SG0010", "SG0012", "SG0060",
+        "SG0061", "SG0062", "SG0070", "SG0072", "SG0078", "SG0083",
+        "SG0084", "SG0085", "SG0102", "SG0103", "SG0104", "SG0107",
+        "SG0113", "SG0114", "SG0120", "SG0145", "SG0154", "SG0155", "SG0162",
+    }
+    expected_coconut_milk = {
+        "SG0009", "SG0010", "SG0030", "SG0041", "SG0081", "SG0082",
+        "SG0106", "SG0144", "SG0157", "SG0185", "SG0188", "SG0189", "SG0190",
+    }
+    expected_high_potassium = {"SG0041", "SG0081", "SG0137", "SG0138", "SG0139", "SG0140"}
+    by_id = {dish.dish_id: dish for dish in _DISHES}
+    all_ids = set(by_id)
+    assert len(all_ids) == len(_DISHES) == DISH_COUNT
+    assert {d.dish_id for d in _DISHES if d.category == "deep_fried" or "deep_fried" in d.tags} == expected_deep_fried
+    assert {d.dish_id for d in _DISHES if "coconut milk" in d.ingredients} == expected_coconut_milk
+    # Nutrient tags have a different documented meaning: K >= 700 mg/serving.
+    assert {d.dish_id for d in _DISHES if "high_potassium" in d.tags} == expected_high_potassium
+    assert {d.dish_id for d in _DISHES if d.nutrient("potassium_mg") >= 700} == expected_high_potassium
+
     env = _ENVELOPES["ckd_strict"]
-    assert len(allowed_dishes(env, _DISHES)) == 156
+    assert {(flag.kind, flag.value) for flag in env.exclusions} == {
+        (ExclusionKind.DISH_CATEGORY, "deep_fried"),
+        (ExclusionKind.INGREDIENT, "coconut milk"),
+    }
+    expected_excluded = expected_deep_fried | expected_coconut_milk
+    strict_pool = allowed_dishes(env, _DISHES)
+    strict_ids = {d.dish_id for d in strict_pool}
+    assert strict_ids == all_ids - expected_excluded
+    assert strict_ids.isdisjoint(expected_excluded)
+    # 25 cooking-role + 13 ingredient matches overlap on Laksa/Curry Noodles.
+    assert expected_deep_fried & expected_coconut_milk == {"SG0009", "SG0010"}
+    assert len(strict_pool) == len(strict_ids) == DISH_COUNT - 36 == 178
+
     env_hk = _ENVELOPES["ckd_hyperkalemia"]
-    # additionally excludes the 'high_potassium' tag (6 original dishes; the
-    # curated K-rich fruit dishes sit below the 700 mg tag threshold and are
-    # caught by the rulebook semantic threshold instead)
-    assert len(allowed_dishes(env_hk, _DISHES)) == 152
+    assert {(flag.kind, flag.value) for flag in env_hk.exclusions} == {
+        (ExclusionKind.DISH_CATEGORY, "deep_fried"),
+        (ExclusionKind.INGREDIENT, "coconut milk"),
+        (ExclusionKind.DIET_PATTERN, "high_potassium"),
+    }
+    hyperk_pool = allowed_dishes(env_hk, _DISHES)
+    hyperk_ids = {d.dish_id for d in hyperk_pool}
+    assert hyperk_ids == all_ids - (expected_excluded | expected_high_potassium)
+    assert hyperk_ids.isdisjoint(expected_excluded | expected_high_potassium)
+    assert strict_ids - hyperk_ids == {"SG0137", "SG0138", "SG0139", "SG0140"}
+    assert hyperk_ids < strict_ids < all_ids
+    assert len(hyperk_pool) == len(hyperk_ids) == DISH_COUNT - 40 == 174
+
+    # Fried components count; grilled satay, braised pork and baked fish do not.
+    assert {"SG0060", "SG0113", "SG0120"} <= expected_deep_fried
+    assert {"SG0011", "SG0153", "SG0214"} <= hyperk_ids
+    for dish_id in ("SG0060", "SG0030"):
+        _, violations = evaluate([[dish_id], [], []], env, _DISHES)
+        assert any(v["type"] == "exclusion" and v["dish_id"] == dish_id for v in violations)
+    _, violations = evaluate([["SG0137"], [], []], env_hk, _DISHES)
+    assert any(v["type"] == "exclusion" and v["dish_id"] == "SG0137" for v in violations)
+
+    # This benchmark uses literal high_potassium, not the rulebook >500 mg
+    # category. The 540 mg banana stays here but must leave that semantic pool.
+    assert by_id["SG0202"].nutrient("potassium_mg") == 540
+    assert "high_potassium" not in by_id["SG0202"].tags
+    assert "SG0202" in hyperk_ids
+    semantic_env = env.model_copy(update={"exclusions": [
+        env.exclusions[0].model_copy(update={"value": "high_potassium_foods"}),
+    ]})
+    semantic_ids = {d.dish_id for d in allowed_dishes(semantic_env, _DISHES)}
+    assert semantic_ids == {d.dish_id for d in _DISHES if d.nutrient("potassium_mg") <= 500}
+    assert "SG0202" not in semantic_ids
 
 
 def test_semantic_exclusion_mapping_filters_real_pool():

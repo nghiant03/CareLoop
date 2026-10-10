@@ -13,10 +13,9 @@ Covers:
   explicit ``excluded_objectives: ["variety"]`` disclosure;
 * performance smoke: a 200+ dish real pool completes in well under 2 s.
 
-Run either way::
+Run with pytest so fixture-dependent tests receive their arguments::
 
-    python backend/optim/test_exact.py
-    pytest backend/optim/test_exact.py
+    .venv/bin/python -m pytest backend/optim/test_exact.py
 """
 
 from __future__ import annotations
@@ -413,8 +412,4 @@ def test_solver_reports_search_exhausted_when_heuristics_fail(monkeypatch):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            fn()
-            print(f"ok  {name}")
-    print("all test_exact checks passed")
+    raise SystemExit("Run .venv/bin/python -m pytest backend/optim/test_exact.py")

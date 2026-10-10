@@ -477,23 +477,28 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
                 "that they report honest hard-constraint violation rates and "
                 "skip the repair step that guarantees the delivered plan."
             )
-        # Recommendation text: keep the production NSGA-II path unless a
-        # challenger wins on HV at a comparable runtime AND stays guaranteed.
-        if best_guar["method"] != "nsga2" and best_guar["hv"] > (nsga2_stat["hv"] if nsga2_stat else 0.0):
+        # Report the measured HV ranking. A deployment switch would need an
+        # agreed comparable-runtime criterion, which this benchmark does not
+        # establish (the runtime ratio is measured, not gated), so the
+        # production recommendation stays NSGA-II.
+        if nsga2_stat and best_guar["method"] != "nsga2" and best_guar["hv"] > nsga2_stat["hv"]:
             ratio = best_guar["ms"] / max(nsga2_stat["ms"], 1e-9) if nsga2_stat else float("inf")
             lines.append(
-                f"* **Algorithm recommendation: {best_guar['method']}** — highest mean HV "
-                f"among guarantee-carrying methods ({best_guar['hv']:.4f} vs NSGA-II "
-                f"{nsga2_stat['hv']:.4f}) at {ratio:.1f}x the NSGA-II runtime; it would be "
-                "a drop-in ``method=`` argument to ``solve()`` (the guarantee "
-                "path is method-agnostic)."
+                f"* **Highest guaranteed-method HV: {best_guar['method']}** — "
+                f"HV {best_guar['hv']:.4f} vs NSGA-II {nsga2_stat['hv']:.4f} at "
+                f"{ratio:.1f}x the NSGA-II runtime. This is the measured HV "
+                "ranking, not a deployment recommendation: no comparable-"
+                "runtime criterion has been agreed, and NSGA-II keeps the "
+                "battle-tested fallback-GA engine for pymoo-less environments. "
+                "Switching later is a drop-in ``method=`` argument to "
+                "``solve()`` (the guarantee path is method-agnostic)."
             )
-        else:
+        elif nsga2_stat:
             lines.append(
                 "* **Algorithm recommendation: keep NSGA-II as the production "
-                "method.** No guarantee-carrying challenger beats its HV at a "
-                "better runtime, and NSGA-II is the only path with the "
-                "battle-tested fallback-GA engine for pymoo-less environments."
+                "method.** No guarantee-carrying challenger beats its mean HV, "
+                "and NSGA-II is the only path with the battle-tested "
+                "fallback-GA engine for pymoo-less environments."
             )
         if fastest_guar and fastest_guar["method"] != best_guar["method"]:
             lines.append(

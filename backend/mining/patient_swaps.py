@@ -1,19 +1,9 @@
 """Validate ranked dish swaps against an envelope and saved-plan context.
 
-``backend.mining.substitutions`` ranks substitutes by generic renal-weighted
-nutrient distance; it knows nothing about *this* patient's approved envelope
-or the meals they actually eat.  This module adds the patient context:
-
-* the patient's latest saved plan is reconstructed into the canonical solver
-  ``Plan`` representation (day-major, ``MEALS_PER_DAY`` meals per day);
-* ranked candidates are filtered against the envelope (excluded dishes are
-  not recommended);
-* every surviving candidate is validated with the canonical evaluator
-  (:func:`backend.optim.problem.evaluate`) on each affected day: the source
-  dish is replaced by the candidate in that day and the modified day must be
-  free of HARD violations (MAX ceilings, exclusions, membership);
-* per-nutrient day deltas (after - before) and a cost delta are reported so
-  the clinician sees what the swap changes in the saved plan, not logged intake.
+Generic rankings from ``backend.mining.substitutions`` do not enforce patient
+constraints. Suggestions replace every source occurrence in the supplied saved
+plan and validate the whole result with ``problem.evaluate``. Main/optional-side
+plans must also retain meal roles. Deltas describe saved-plan changes, not intake.
 
 Envelopes: suggestion helpers may evaluate any lifecycle status; the API labels
 unapproved suggestions ``informational_only``. Applying a swap requires a ready
@@ -63,13 +53,11 @@ class DishNotInPlanError(Exception):
 def plan_from_document(document: dict[str, Any]) -> Plan:
     """Reconstruct the day-major solver ``Plan`` from a stored plan document.
 
-    The stored document is the MAPPED UI contract: ``days[]`` (sorted by
-    ``day``) each carrying ``slots[]`` with a ``meal`` label and ``dish_id``.
-    Slots are regrouped into meals in canonical meal order
-    (breakfast/lunch/dinner) and flattened day-major — exactly the
-    ``plan[day * MEALS_PER_DAY + meal_index]`` layout ``problem.evaluate``
-    expects.  Slots whose dish is unknown to the mapper are absent from the
-    document and therefore from the reconstruction.
+    Sort ``days[]`` by day number and group their slots as breakfast, lunch,
+    dinner. Missing meals remain empty; unknown meal labels go into dinner.
+    Skip slots without a dish ID, but do not validate catalogue membership.
+    The response mapper already omits unknown dishes from generated documents.
+    Leave the document unchanged.
     """
     days = document.get("days") or []
     plan: Plan = []
@@ -185,18 +173,15 @@ def patient_substitutions(
 ) -> dict[str, Any]:
     """Rank and validate substitute dishes against the supplied saved plan.
 
-    Candidates come from the existing v2 ranking (:func:`suggest_substitutions`,
-    pulled ``k * 3`` wide); each is then validated:
+    For positive ``k``, inspect up to ``k * 3`` v2-ranked candidates and return
+    at most ``k`` survivors. Replace every source occurrence and reject any
+    whole-plan hard violation or main/optional-side role mismatch, including
+    violations on unchanged days. Return affected-day nutrient deltas as
+    after minus before, and the price difference times replaced occurrences.
 
-    * exclusion filter — an excluded candidate is dropped, never recommended;
-    * whole-day hard check — for every plan day containing ``dish_id``, the
-      candidate replaces it there and :func:`problem.evaluate` must report
-      ZERO hard violations (MAX ceilings, exclusions, membership);
-    * per-nutrient day deltas (after - before) and a cost delta
-      (``price_sgd`` difference times the replaced occurrences) are attached.
-
-    ``k`` is honoured AFTER filtering: up to ``k`` validated candidates are
-    returned, possibly fewer.
+    Raise ``KeyError`` for an unknown source or ``DishNotInPlanError`` when it
+    is absent from the plan. Local approval copies follow the module contract;
+    suggestions do not persist state or authorize applying a swap.
     """
     lookup = {d.dish_id: d for d in dishes}
     source = lookup.get(dish_id)
@@ -289,13 +274,13 @@ def apply_patient_swap(
     envelope: NutrientEnvelope,
     dishes: list[Any],
 ) -> SwapOutcome:
-    """Replace EVERY occurrence of ``dish_id`` and re-check the whole plan.
+    """Replace every occurrence of ``dish_id`` and re-check the whole plan.
 
     Raises :class:`KeyError` when either dish is unknown to the dish pool and
     :class:`DishNotInPlanError` when the source dish occurs nowhere in the
-    plan.  Hard-violating swaps (MAX ceilings, exclusions, membership — an
-    excluded replacement included) come back as ``violations`` for the caller
-    to reject; nothing is persisted by this module.
+    plan. Return hard-constraint and main/optional-side role failures in
+    ``violations`` for the caller to reject. Non-APPROVED inputs fail the
+    evaluator's gate. Neither the source document nor persistent state is changed.
     """
     lookup = {d.dish_id: d for d in dishes}
     if dish_id not in lookup:

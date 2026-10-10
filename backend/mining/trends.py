@@ -1,42 +1,25 @@
 """Longitudinal lab trend detection (K+ and PO4).
 
-Observation precedence and fixture orientation
-------------------
-Dated observations take precedence when present for an analyte; their elapsed
-dates determine the slope. Otherwise fixture ``labs_*_monthly`` arrays are used.
-Fixture arrays are stored newest-first: ``labs_K_monthly[0]`` equals the
-current ``serum_K_meq_L``. ``months_offset_ago == [0, 1, 2, 3, 4, 5]``
-identifies index 0 as this month.
-
-``_oldest_first`` restores chronological (oldest->newest) order using, in
-order of preference:
-
-1. ``months_offset_ago`` — ascending-from-0 means newest-first (reverse);
-   descending-to-0 means already oldest-first (keep).
-2. Fall back to matching ``serum_K_meq_L`` / ``serum_PO4_mg_dL`` against the
-   first or last element.
-3. With no signal at all, assume newest-first (the dataset convention).
-
-Slopes use Theil-Sen, the median of pairwise slopes, to limit outlier influence.
+Dated observations take precedence per analyte and use elapsed months of
+30.4375 days. Fixture arrays otherwise use one-month spacing. Infer their
+orientation from offsets, then serum-value matching; default to newest-first.
+Returned series are oldest-first. Theil-Sen uses median pairwise slopes.
 
 Flagging rules
 --------------
 * Potassium (mmol/L/month): slope > 0.05 OR 3-month projection crossing 5.5.
 * Phosphate (mg/dL/month): slope > 0.05 OR 3-month projection crossing 5.0.
 * Dated observations also flag an urgent latest value, even in a sparse series.
-* severity: "urgent" if the latest value is already above the clinical alert
+* Flag reasons name the actual trigger — slope, projected crossing, or the
+  alert-level value — instead of assuming a rise.
+* initial severity: "urgent" if the latest value reaches the clinical alert
   level (K+ >= 5.0, PO4 >= 4.6) or the 3-month projection crosses the flag
   threshold; otherwise "review".
 
-Hybrid de-escalation
----------------------------------------
-The Theil-Sen slope is fit over the full window, so a series that rose and
-then plateaued can keep flagging. Each flag also computes the EWMA-weighted
-least-squares slope (half-life 2 months, exposed as ``ewma_slope_per_month``).
-If the *recent* regime no longer satisfies the same flag rule under the EWMA
-slope — i.e. EWMA would not flag this series — severity is de-escalated to
-"review" and the reason says so, except that an urgent latest dated observation
-remains urgent. Patients flagged by both estimators keep their severity.
+EWMA-weighted least squares gives recent readings more weight with a two-month
+half-life. Downgrade an urgent trend to review when EWMA no longer satisfies
+the flag rule, since the full-window rise may have plateaued. An urgent latest
+dated observation remains urgent regardless of slope support.
 """
 
 from __future__ import annotations
@@ -46,7 +29,7 @@ from datetime import date
 
 _MIN_SERIES_LEN = 3
 
-# (flag-threshold for projected crossing, alert-now threshold, units)
+# Concentration thresholds and corresponding fixture/observation fields.
 _THRESHOLDS = {
     "K": {"flag": 5.5, "urgent_now": 5.0, "unit": "mmol/L", "field": "labs_K_monthly", "serum": "serum_K_meq_L"},
     "PO4": {"flag": 5.0, "urgent_now": 4.6, "unit": "mg/dL", "field": "labs_PO4_monthly", "serum": "serum_PO4_mg_dL"},
@@ -56,7 +39,11 @@ _SLOPE_TRIGGER = 0.05
 
 
 def _theil_sen_slope(y: list[float], times=None) -> float:
-    """Median of all pairwise slopes (classic Theil-Sen estimator)."""
+    """Median pairwise concentration slope per month; skip nonpositive intervals.
+
+    ``times`` uses elapsed months. Without it, readings are one month apart.
+    Return 0.0 when no positive interval exists.
+    """
     y = np.asarray(y, dtype=float)
     n = len(y)
     times = list(range(n)) if times is None else times
@@ -70,9 +57,9 @@ def _theil_sen_slope(y: list[float], times=None) -> float:
 def _ewma_slope(y: list[float], halflife: float = 2.0, times=None) -> float:
     """Exponentially weighted least-squares slope with more weight on recent months.
 
-    Weights decay with a half-life of ``halflife`` months, so the estimate
-    tracks the *current* regime rather than the whole history — the property
-    the full-window Theil-Sen estimator lacks.
+    ``times`` uses elapsed months; omitted times assume monthly readings.
+    Weights decay with a half-life of ``halflife`` months. Return 0.0 when
+    the weighted time variance is zero. Input must contain at least one reading.
     """
     y = np.asarray(y, dtype=float)
     x = np.arange(len(y), dtype=float) if times is None else np.asarray(times, dtype=float)
@@ -163,11 +150,29 @@ def detect_trends(patients: list[dict]) -> list[dict]:
             if de_escalated:
                 urgent = False
 
-            reason = (
-                f"{analyte} rising {slope:+.3f} {cfg['unit']}/month "
-                f"(latest {latest:.2f}, 3-mo projection {projected:.2f}, "
-                f"threshold {cfg['flag']})"
-            )
+            if slope > _SLOPE_TRIGGER:
+                reason = (
+                    f"{analyte} rising {slope:+.3f} {cfg['unit']}/month "
+                    f"(latest {latest:.2f}, 3-mo projection {projected:.2f}, "
+                    f"threshold {cfg['flag']})"
+                )
+            elif _would_flag(slope, latest, cfg):
+                # Slope below the trigger but the 3-month projection crosses
+                # the flag threshold while the latest value has not.
+                reason = (
+                    f"{analyte} projected {projected:.2f} crosses the "
+                    f"{cfg['flag']} {cfg['unit']} threshold within 3 months "
+                    f"(slope {slope:+.3f} {cfg['unit']}/month, latest {latest:.2f})"
+                )
+            else:
+                # Flagged by the urgent latest value, not by a measured rise:
+                # never explain a threshold trigger as a zero "rise".
+                reason = (
+                    f"{analyte} {latest:.2f} {cfg['unit']} is at or above the "
+                    f"clinical alert level {cfg['urgent_now']} "
+                    f"(slope {slope:+.3f} {cfg['unit']}/month; no rising "
+                    f"trend measured)"
+                )
             if de_escalated:
                 reason += (
                     f"; EWMA slope {ewma:+.3f} {cfg['unit']}/month — recent "

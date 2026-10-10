@@ -70,9 +70,10 @@ def improve_meals(result, envelope, dishes, seed=42):
         relative = np.where(target, np.abs(delta), np.maximum(-delta, 0.)) / denom
         relative[:, hard] = 0.
         worst = relative.max(axis=1) if constraints else np.zeros(len(totals))
-        mean = relative.sum(axis=1)
+        # Sum relative day-aim deviations after the worst deviation criterion.
+        total_relative_deviation = relative.sum(axis=1)
         repetitions = np.array([len([x for x in row if x != empty]) - len(set(row) - {empty}) for row in members])
-        return np.column_stack((excess, worst, mean, repetitions, prices[members].sum(axis=1)))
+        return np.column_stack((excess, worst, total_relative_deviation, repetitions, prices[members].sum(axis=1)))
 
     rng = np.random.default_rng(seed)
     choices = [np.array(main), np.array(side + [empty])] * 3

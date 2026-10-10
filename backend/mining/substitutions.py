@@ -5,8 +5,7 @@ v1 — pure nutrient distance between two dishes over the 6 core nutrients
 v2 — ranked substitution suggestions: renal-weighted nutrient distance
      (sodium/potassium/phosphorus weighted ×2), category/cuisine
      similarity bonuses, a lower combined normalised mineral-load prior for
-     near-distance candidates, and
-     hpb_id/verified as final tiebreaks.
+      near-distance candidates, and hpb_id/verified score bonuses.
 
 Category compatibility keeps suggestions sensible: a drink never gets a soup.
 ``hpb_id``/``verified`` bonuses affect ranking only when those fields are set.
@@ -125,7 +124,9 @@ def _candidates(dish: dict, dishes: list[dict]) -> list[dict]:
     return [d for d in dishes if d["dish_id"] != dish["dish_id"] and d["category"] in compatible]
 
 
-def _tiebreak(dish: dict) -> float:
+def _verification_bonus(dish: dict) -> float:
+    """Continuous hpb/verified ranking bonus, applied to every scored
+    candidate — not only to resolve exact ties."""
     return (_HPB_BONUS if dish.get("hpb_id") else 0.0) + (
         _VERIFIED_BONUS if dish.get("verified") else 0.0
     )
@@ -152,11 +153,11 @@ def suggest_substitutions(
     """Suggest up to ``k`` substitute dishes for ``dish_id``.
 
     version=1: rank purely by nutrient distance.
-    version=2: renal-weighted nutrient distance (Na/K/P ×2) + category/cuisine
-    bonus + lower-mineral-load prior (lower combined normalised load among
-    near-distance candidates), hpb_id/verified tiebreaks. The returned
-    ``nutrient_distance`` field holds the distance used by the chosen
-    version (renal-weighted for v2, plain euclidean for v1).
+    version=2: use renal-weighted distance with Na/K/P weighted twice. Adjust
+    the score for category/cuisine matches and hpb_id/verified bonuses. Apply
+    the mineral-load prior only near the best raw distance. These adjustments
+    affect ranking, not just exact ties. ``nutrient_distance`` remains the raw
+    metric: renal-weighted for v2, plain Euclidean for v1.
 
     Candidates are restricted to compatible categories (never e.g. a soup for
     a drink) and the query dish itself is always excluded. Results are sorted
@@ -198,7 +199,7 @@ def suggest_substitutions(
                 adj -= _CUISINE_BONUS
             if distance <= best + _NEAR_TOLERANCE:
                 adj += _MINERAL_LOAD_WEIGHT * _mineral_load(cand)
-            adj -= _tiebreak(cand)
+            adj -= _verification_bonus(cand)
             adjusted.append((cand, nd, adj, category_match))
         scored = adjusted
 

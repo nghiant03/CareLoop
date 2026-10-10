@@ -1,11 +1,10 @@
 """Deterministic selection of a headline plan from feasible front entries.
 
-A selection strategy picks ONE headline plan from the solver's feasible front
-entries (dicts with ``"plan"``, ``"objectives"``, ``"feasible"``).  The
-strategies here are scored against the ORIGINAL approved envelope passed in —
-never a pool-relaxed or aim-adjusted ("solved") copy. Callers are responsible for
-supplying that original envelope and feasible entries; these functions do not
-filter or validate feasibility.
+Supply a nonempty list of feasible entries with ``plan`` and ``objectives``,
+plus the original approved envelope, not a solver-relaxed copy. These functions
+do not validate approval or feasibility. Empty entry lists raise ValueError.
+The selected entry is returned by identity; mutating it also changes the
+supplied front.
 
 Strategies
 ----------
@@ -23,10 +22,9 @@ Strategies
   2. minimise the count of unmet day-aim pairs (relative shortfall > 1e-9);
   3. minimise ``scalar_score``.
 
-All three are pure and deterministic: the same entries always yield the same
-pick, and ties on a strategy's key are broken on the plan's flattened dish-id
-tuple (``scalar_selection`` adds this tie-break to the historical
-``min(key=scalar_score)``, which only differs on exact score ties).
+All strategies break score ties on the plan's flattened dish-ID tuple. Relative
+deviations fall back to absolute gaps when an aim is nonpositive. Inputs are
+unchanged; entries with identical keys retain input order.
 """
 
 from __future__ import annotations
@@ -77,10 +75,10 @@ def scalar_selection(entries: list[dict], envelope, dishes: list[Dish]) -> dict:
 
 
 def normalised_selection(entries: list[dict], envelope, dishes: list[Dish]) -> dict:
-    """Minimise the mean per-day per-nutrient RELATIVE deviation.
+    """Minimise mean relative deviation over days and envelope constraints.
 
-    Scores against the ORIGINAL approved envelope aims, normalised per
-    constraint so kcal/mg/g scales no longer dominate raw-unit scalar scores.
+    Use TARGET distance, MIN shortfall, and MAX excess. Nonpositive aims use
+    absolute gaps. See the module contract for input requirements and tie-breaks.
     """
     def key(entry: dict) -> tuple:
         daily = daily_totals(entry["plan"], dishes)
@@ -96,8 +94,9 @@ def normalised_selection(entries: list[dict], envelope, dishes: list[Dish]) -> d
 def adequacy_first_selection(entries: list[dict], envelope, dishes: list[Dish]) -> dict:
     """Lexicographic adequacy-first selection (see module docstring).
 
-    Key: ``(worst-day worst-constraint relative shortfall across MIN/TARGET
-    aims, count of unmet day-aim pairs, scalar_score, dish-id tuple)``.
+    Key: ``(worst relative aim deviation, unmet day-aim count,
+    scalar_score, flattened dish IDs)``. MIN uses shortfall. TARGET uses
+    two-sided distance. See ``_relative`` for nonpositive aims.
     """
     def key(entry: dict) -> tuple:
         daily = daily_totals(entry["plan"], dishes)

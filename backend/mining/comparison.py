@@ -19,8 +19,9 @@ The study compares, per module:
    false-positive rate on flat series; then behaviour on the real 20 patients
    (orientation handling reused from ``trends``).
 3. **Substitution metrics** — v1 euclidean (nutrient-only, current v1 mode)
-   vs a renal-weighted nutrient distance (Na/K/P weighted heavier) vs the v2
-   composite (nutrient + category + cuisine + lower-mineral-load prior). Rank
+    vs a renal-weighted nutrient distance (Na/K/P weighted heavier) vs the
+    historical unweighted composite (nutrient + category + cuisine +
+    lower-mineral-load prior). Rank
    agreement via Kendall tau, plus a qualitative top-3 table for three
    example dishes.
 
@@ -369,7 +370,11 @@ ESTIMATORS: dict[str, callable] = {
 
 
 def _would_flag(series: list[float], slope: float, cfg: dict) -> bool:
-    """Replicates trends.detect_trends' flagging rule for one series."""
+    """Apply the slope/projection rule to a monthly series with at least three points.
+
+    Unlike ``trends.detect_trends``, this study helper does not handle dated
+    urgent observations or assign EWMA-adjusted severity.
+    """
     if len(series) < trends._MIN_SERIES_LEN:
         return False
     latest = series[-1]
@@ -384,7 +389,6 @@ def _would_flag(series: list[float], slope: float, cfg: dict) -> bool:
 # of the window; `plateau` specifically tests whether an estimator keeps
 # crying wolf after a rise has stopped (adaptivity).
 _SCENARIOS: dict[str, dict] = {
-    # truth=False scenarios double as false-positive probes
     "flat": {"truth": False, "path": lambda i: 0.0},
     "rising_slow": {"truth": False, "path": lambda i: 0.03 * i},
     "falling": {"truth": False, "path": lambda i: -0.08 * i},
@@ -597,12 +601,14 @@ def _weighted_distance(dish_a: dict, dish_b: dict) -> float:
     )
 
 
-def _v2_scores(query: dict, candidates: list[dict]) -> dict[str, float]:
-    """Score the study's composite alternative using plain Euclidean distance.
+def _historical_v2_scores(query: dict, candidates: list[dict]) -> dict[str, float]:
+    """Score the study's historical unweighted composite (plain Euclidean term).
 
-    Production v2 uses renal-weighted distance. Keep this alternative unweighted
-    so the study compares distinct nutrient-only, renal-weighted, and composite
-    scorers rather than duplicating production under two labels.
+    Production v2 ranks by renal-weighted distance. This historical study
+    alternative keeps the plain Euclidean nutrient term so the study compares
+    distinct nutrient-only, renal-weighted, and composite scorers rather than
+    duplicating production under two labels. The persisted ``v2_composite``
+    study key and column keep their original spelling for reproducibility.
     """
     nds = [(c, substitutions.nutrient_distance(query, c)) for c in candidates]
     best = min(nd for _, nd in nds)
@@ -615,7 +621,7 @@ def _v2_scores(query: dict, candidates: list[dict]) -> dict[str, float]:
             adj -= substitutions._CUISINE_BONUS
         if nd <= best + substitutions._NEAR_TOLERANCE:
             adj += substitutions._MINERAL_LOAD_WEIGHT * substitutions._mineral_load(cand)
-        adj -= substitutions._tiebreak(cand)
+        adj -= substitutions._verification_bonus(cand)
         scores[cand["dish_id"]] = adj
     return scores
 
@@ -626,7 +632,7 @@ def _rank_by(query: dict, candidates: list[dict], metric: str) -> list[str]:
     elif metric == "weighted_renal":
         key = lambda c: (_weighted_distance(query, c), c["dish_id"])
     elif metric == "v2_composite":
-        scores = _v2_scores(query, candidates)
+        scores = _historical_v2_scores(query, candidates)
         key = lambda c: (scores[c["dish_id"]], c["dish_id"])
     else:  # pragma: no cover
         raise ValueError(metric)
@@ -709,30 +715,20 @@ def compare_substitutions(dishes: list[dict]) -> dict:
 def _substitutions_verdict(results: dict) -> tuple[str, str]:
     tau = results["kendall_tau"]
     v1_w = tau["v1_euclidean vs weighted_renal"][0]
-    v1_v2 = tau["v1_euclidean vs v2_composite"][0]
-    w_v2 = tau["weighted_renal vs v2_composite"][0]
     divergent_pair = min(tau.items(), key=lambda kv: kv[1][0])
     text = (
-        f"All three metrics agree broadly (mean Kendall τ between "
-        f"{min(v[0] for v in tau.values()):.2f} and "
-        f"{max(v[0] for v in tau.values()):.2f} across pairs) — this dataset's "
-        "six nutrients are correlated, so any sane nutrient distance produces "
-        f"a similar ordering. The renal-weighted distance is the closest to "
-        f"plain v1 euclidean (τ {v1_w:.2f}): weighting Na/K/P ×2 reshuffles "
-        "the middle of the ranking but rarely the top-3 (the Nasi Padang and "
-        "Bandung examples are nearly identical under both). The pair that "
+        f"Measured rank agreement: mean Kendall τ ranges from "
+        f"{min(v[0] for v in tau.values()):.2f} to "
+        f"{max(v[0] for v in tau.values()):.2f} across pairs. "
+        f"Plain v1 and renal-weighted distance have τ {v1_w:.2f}. The pair that "
         f"diverges most is {divergent_pair[0]} (τ {divergent_pair[1][0]:.2f}), "
-        "and the example table shows what the v2 composite buys: for Curry "
-        "Fish Head it swaps two fish-dominated (high-phosphorus) matches for "
-        "lower-mineral zi_char proteins — a clinically better trade for CKD "
-        "patients that a pure nutrient distance cannot see. "
-        "**Recommendation: keep the v2 composite** for patient-facing "
-        "suggestions — 'similar but safer' beats 'most similar', and the "
-        "category guard is what stops nonsense like a soup replacing a "
-        "drink. The one worthwhile upgrade is to swap v2's unweighted "
-        "nutrient term for the renal-weighted distance: with "
-        f"τ {v1_w:.2f} against v1 it is a low-risk change that makes the "
-        "underlying distance itself clinically meaningful."
+        "as illustrated by the top-three examples. "
+        "Historical recommendation: retain the composite's category/cuisine "
+        "bonuses and lower normalized mineral-load prior, but use a "
+        "renal-weighted nutrient term. Rank agreement does not establish "
+        "patient safety or clinical benefit. Current production v2 already "
+        "uses that renal-weighted term; the serialized v2_composite study "
+        "key still denotes the historical unweighted composite."
     )
     return text, "v2_composite"
 
@@ -964,13 +960,17 @@ def build_markdown(r: dict) -> str:
 
     # ---- substitutions ------------------------------------------------------
     s = r["substitutions"]
-    out.append("## 3. Substitution metrics: v1 euclidean vs renal-weighted vs v2 composite")
+    out.append("## 3. Substitution metrics: v1 euclidean vs renal-weighted vs historical composite")
     out.append("")
     out.append(
         f"Ranked candidate sets per query dish ({s['n_queries']} queries with "
         "≥2 compatible candidates). Renal weights (Na/K/P ×2): "
         + ", ".join(f"{k}={v:g}" for k, v in s["renal_weights"].items())
         + "."
+    )
+    out.append(
+        "The `v2_composite` study key denotes the historical unweighted composite, "
+        "not the current renal-weighted production v2."
     )
     out.append("")
     tau_rows = [
@@ -992,7 +992,7 @@ def build_markdown(r: dict) -> str:
     ]
     out.append(
         _table(
-            ["example dish", "v1 euclidean top-3", "renal-weighted top-3", "v2 composite top-3"],
+            ["example dish", "v1 euclidean top-3", "renal-weighted top-3", "historical unweighted composite top-3"],
             ex_rows,
         )
     )
@@ -1000,30 +1000,29 @@ def build_markdown(r: dict) -> str:
     out.append(f"**Verdict — {s['recommendation_metric']}.** {s['recommendation']}")
     out.append("")
 
-    out.append("## Adopted changes")
+    out.append("## Current production")
     out.append("")
     out.append(
-        "Both recommendations above have been adopted in production code "
-        "(`backend/mining/`); regression tests live in "
+        "Production methods differ from the historical study alternatives. "
+        "Regression tests live in "
         "`backend/mining/test_mining.py`:"
     )
     out.append("")
     out.append(
         "* **Trend detection — hybrid Theil-Sen flag / EWMA de-escalation** "
-        "(`trends.py`). Flags are still raised by the Theil-Sen rule, so the "
-        "flag set (and the parity check above) is unchanged; severity is "
-        "de-escalated to `review` when the EWMA-weighted slope (half-life 2 "
-        "months, now `trends._ewma_slope` and exposed per flag as "
-        "`ewma_slope_per_month`) no longer satisfies the same flag rule — "
-        "the plateau behaviour behind EWMA's 6% vs 14% plateau FP edge. "
+        "(`trends.py`). Theil-Sen raises trend flags; dated observations also "
+        "flag an urgent latest value. EWMA uses a two-month half-life and can "
+        "downgrade severity to `review` when it no longer satisfies the trend "
+        "rule. An urgent latest dated observation remains urgent. "
         "Test: `TestTrends::test_plateau_downgraded_by_ewma`."
     )
     out.append(
         "* **Substitutions — renal-weighted nutrient term in the v2 "
-        "composite** (`substitutions.py`). The v2 composite now ranks by "
+        "composite** (`substitutions.py`). Production v2 ranks by "
         "`renal_nutrient_distance` (Na/K/P ×2) instead of the plain "
-        "euclidean term; category compatibility, cuisine bonus, "
-        "healthier-choice prior and tiebreaks are unchanged. Test: "
+        "Euclidean term. Category compatibility and cuisine bonuses remain, "
+        "with a lower normalized mineral-load prior for near-distance candidates "
+        "and hpb_id/verified score bonuses. Test: "
         "`TestSubstitutions::test_v2_uses_renal_weighted_distance`."
     )
     out.append("")
@@ -1046,13 +1045,15 @@ def build_markdown(r: dict) -> str:
     return "\n".join(out) + "\n"
 
 
-def main() -> int:
+def main(output_path: Path | None = None) -> int:
+    """Run the study and write Markdown to the supplied path or default report."""
     results = run_comparison()
     markdown = build_markdown(results)
-    COMPARISON_MD_PATH.write_text(markdown, encoding="utf-8")
+    destination = COMPARISON_MD_PATH if output_path is None else output_path
+    destination.write_text(markdown, encoding="utf-8")
 
     print("Method-comparison study complete.")
-    print(f"Report written to {COMPARISON_MD_PATH}")
+    print(f"Report written to {destination}")
     print()
     print("Headline verdicts")
     print(f"  clustering    : {results['clustering']['recommendation_method']}")

@@ -11,9 +11,14 @@ Every hard constraint in this single-dish encoding is per-day:
   multiset of ``MEALS_PER_DAY`` dishes served that day.
 
 MIN floors and TARGET values are soft objective terms and never affect
-feasibility.  A 7-day plan is therefore feasible **iff at least one feasible
-day exists** — exhausting all one-day dish multisets PROVES feasibility or
-infeasibility exactly for this encoding (no search heuristics involved).
+feasibility. When NO feasible day exists, no 7-day plan can exist either —
+exhausting all one-day dish multisets therefore PROVES infeasibility exactly
+for this encoding (no search heuristics involved). The converse is exact only
+strictly inside the limits: daily and horizon slots share the
+``problem.EPS`` tolerance, so a day within the daily tolerance (excess <= EPS)
+can, repeated for a week, exceed the horizon tolerance (7 x excess > EPS).
+``feasible_day`` is thus a necessary condition for a feasible week, and
+canonical ``problem.evaluate`` authoritatively fences delivery.
 
 What is computed
 ----------------

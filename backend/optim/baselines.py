@@ -4,7 +4,9 @@ Three baselines support comparisons with pymoo NSGA-II:
 
 * :func:`random_search`     — uniform random plans.
 * :func:`greedy_search`     — myopic per-meal construction + local search.
-* :func:`exhaustive_search` — true small-exhaustive over one day of meals.
+* :func:`exhaustive_search` — one-day enumeration capped by ``max_combos``
+  (``search_complete`` reports whether the cap truncated it; exact one-day
+  verdicts come from :func:`backend.optim.exact_reference.one_day_exact`).
 
 Plus :func:`nsga2_fallback`, a pure-Python NSGA-II style approximation used by
 ``spike_pymoo.py`` when ``pymoo``/``numpy`` are not installed.  It implements
@@ -19,7 +21,8 @@ Every entry point returns a standard result dict::
       "objectives": dict,           # keyed by OBJECTIVE_NAMES (all minimise)
       "violations": list[dict],
       "violation_count": int,
-      "feasible": bool,
+      "feasible": bool,          # delivery success: no hard violations AND
+                                 # a nonempty plan (meals delivered)
       "evaluations": int,
       "runtime_ms": float,
       "front": list[dict],          # Pareto front entries (may be empty)
@@ -62,7 +65,26 @@ def _make_result(
     front: list[dict] | None = None,
     front_size: int = 0,
 ) -> dict:
+    """Assemble the standard result dict, gating ``feasible`` on delivery.
+
+    The canonical evaluator intentionally accepts empty meal geometry (zero
+    dishes violate nothing), so an empty plan must be reported here as an
+    explicit search failure rather than a feasible result: delivery success
+    requires meals in addition to hard-constraint satisfaction.
+    """
     objectives, violations = evaluate(plan, envelope, dishes)
+    if not any(meal for meal in plan):
+        violations.append(
+            {
+                "type": "search_failure",
+                "amount": float("inf"),
+                "detail": (
+                    f"{method} search delivered no meals (empty allowed pool "
+                    "or failed construction); this is a search failure, not "
+                    "a feasible empty plan"
+                ),
+            }
+        )
     return {
         "method": method,
         "plan": plan,
@@ -225,15 +247,23 @@ def greedy_search(
 def exhaustive_search(
     envelope, dishes, max_combos: int = 100_000, seed: int = 0
 ) -> dict:
-    """Enumerate all one-day meal combinations, then repeat the best day 7x.
+    """Enumerate one-day meal combinations, then repeat the best day 7x.
 
-    Truly exhaustive over a day of ``MEALS_PER_DAY`` meals; the 7-day horizon is
-    filled by repetition, which is exactly why it is a *baseline* (no variety).
+    Bounded by ``max_combos``: when the pool is large enough that
+    ``len(pool) ** MEALS_PER_DAY`` exceeds the cap, only the first
+    ``max_combos`` combinations are scored. The result exposes
+    ``search_complete`` (False when the cap truncated the enumeration) so a
+    bounded search is never mistaken for the exact one-day reference in
+    :func:`backend.optim.exact_reference.one_day_exact`, which is exhaustive
+    by construction. The 7-day horizon is filled by repeating the best day,
+    which is exactly why this is a *baseline* (no variety).
     """
     t0 = time.perf_counter()
     pool = [d.dish_id for d in allowed_dishes(envelope, dishes)]
     if not pool:
-        return _make_result("exhaustive", [], envelope, dishes, 0, 0.0)
+        result = _make_result("exhaustive", [], envelope, dishes, 0, 0.0)
+        result["search_complete"] = True
+        return result
     evaluations = 0
     best_key = None
     best_day = None
@@ -250,7 +280,11 @@ def exhaustive_search(
             best_day = day_plan
     full_plan = [meal[:] for _ in range(DAYS) for meal in (best_day or [])]
     runtime = (time.perf_counter() - t0) * 1000.0
-    return _make_result("exhaustive", full_plan, envelope, dishes, evaluations, runtime)
+    result = _make_result("exhaustive", full_plan, envelope, dishes, evaluations, runtime)
+    # Nothing to enumerate is vacuously complete; otherwise the enumeration is
+    # complete only when the cap did not stop it early.
+    result["search_complete"] = evaluations >= len(pool) ** MEALS_PER_DAY
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -16,9 +16,12 @@ The file also provides the performance machinery needed at dish-pool scale:
   repair. Failure returns None, not a proof that no feasible plan exists.
 
 Key structural insight used throughout: every hard constraint in the envelope
-formulation is *per-day* (MAX daily + horizon ``7 x daily`` is implied by the
-daily bound).  A 21-slot plan is therefore feasible **iff every day is
-feasible**, so construction and repair decompose to 3-slot day problems.
+formulation is *per-day* in intent (MAX daily + horizon ``7 x daily`` merely
+repeats the daily bound), so construction and repair decompose to 3-slot day
+problems. The decomposition is exact strictly inside the limits: a day within
+the daily ``problem.EPS`` tolerance, repeated for a week, can exceed the
+horizon tolerance, so ``FastEvaluator.g_vector`` keeps an explicit horizon
+entry and the canonical evaluator remains the authoritative delivery gate.
 """
 
 from __future__ import annotations
@@ -33,9 +36,11 @@ import numpy as np
 
 from .problem import (
     DAYS,
+    EPS,
     MEALS_PER_DAY,
     NUTRIENT_KEYS,
     OBJECTIVE_NAMES,
+    SCALAR_WEIGHTS,
     SLOTS,
     TAG_PREFERENCE,
     ConstraintKind,
@@ -47,11 +52,11 @@ from .toy_data import Dish
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_DISHES_PATH = os.path.join(_ROOT, "data", "dishes.json")
 
-# Must mirror problem.EPS: violation magnitudes <= EPS count as satisfied.
-_EPS = 1e-9
-
+# Canonical front-selection weights (problem.SCALAR_WEIGHTS) in
+# OBJECTIVE_NAMES order; the vector form avoids per-call dict lookups in the
+# population loop. Kept in sync with problem.scalar_score by derivation.
 _SCALAR_WEIGHT_VEC = np.array(
-    [0.001, 0.5, 0.5, 0.02]  # SCALAR_WEIGHTS in OBJECTIVE_NAMES order
+    [SCALAR_WEIGHTS[name] for name in OBJECTIVE_NAMES], dtype=float
 )
 
 
@@ -111,11 +116,11 @@ def load_dishes(path: str | None = None) -> list[Dish]:
 class FastEvaluator:
     """Fast objective/constraint evaluation for plans over the allowed pool.
 
-    Semantics are identical to :func:`backend.optim.problem.evaluate` for plans
-    whose every slot holds exactly one allowed dish (the encoding used by every
-    search method here): same objective definitions, same canonical constraint
-    ordering, same EPS tolerance.  Verified against ``problem.evaluate`` in
-    ``test_real.py``.
+    For one allowed dish per slot, objective definitions, MAX ordering, and EPS
+    tolerance match ``problem.evaluate``. ``test_real.py`` cross-checks them.
+    Constraint vectors shift excesses by -EPS for pymoo's ``G <= 0`` convention.
+    Indices must address this evaluator's allowed pool and match its horizon.
+    Approval and structural validity are caller preconditions, not checked here.
     """
 
     def __init__(self, envelope, dishes: list[Dish], n_days: int = DAYS):
@@ -225,18 +230,17 @@ class FastEvaluator:
     def g_vector(self, daily: np.ndarray) -> np.ndarray:
         """Canonical HARD-constraint vector; ``G <= 0`` == satisfied.
 
-        MAX ceilings only (daily + horizon) — MIN floors and TARGETs are soft
-        objective terms and never appear here. Each
-        magnitude is shifted by ``-_EPS`` so the pymoo view of feasibility
-        matches ``problem.evaluate``'s EPS tolerance exactly.
+        Follow ``problem.constraint_layout``'s daily/horizon MAX ordering.
+        Subtract ``EPS`` from each excess to preserve the canonical tolerance.
+        MIN/TARGET aims and structural violations have no vector entries.
         """
         parts: list[np.ndarray] = []
         for col, limit in self._max_daily:
-            over = np.maximum(0.0, daily[:, col] - limit) - _EPS
+            over = np.maximum(0.0, daily[:, col] - limit) - EPS
             parts.append(over)
             horizon = float(daily[:, col].sum())
             parts.append(
-                np.array([max(0.0, horizon - limit * self.n_days) - _EPS])
+                np.array([max(0.0, horizon - limit * self.n_days) - EPS])
             )
         if not parts:
             return np.zeros(0)
@@ -262,14 +266,16 @@ class FastEvaluator:
     def day_violation(self, totals: np.ndarray) -> tuple[int, float]:
         """(violation_count, violation_magnitude) for one day's nutrient totals.
 
-        HARD constraints only: MAX ceilings.  MIN floors are soft (they steer
-        the greedy heuristic and the deviation objective) and never count here.
+        HARD constraints only: daily MAX ceilings.  MIN floors are soft (they
+        steer the greedy heuristic and the deviation objective) and never
+        count here. Horizon slots are not checked per day; they live in
+        ``g_vector`` and the canonical evaluator.
         """
         count = 0
         mag = 0.0
         for col, limit in self._max_daily:
             over = totals[col] - limit
-            if over > _EPS:
+            if over > EPS:
                 count += 1
                 mag += over
         return count, mag
@@ -297,7 +303,7 @@ def feasibility_precheck(envelope, dishes: list[Dish], n_days: int = DAYS):
         values = nut[:, col[key]]
         if c.kind == ConstraintKind.MAX:
             least = 3.0 * float(values.min())  # best (smallest) possible day
-            if least > float(c.value) + _EPS:
+            if least > float(c.value) + EPS:
                 return False, (
                     f"hard MAX {key} <= {c.value} impossible: the three lowest-{key} "
                     f"dishes still total {least:.1f} per day"
