@@ -61,9 +61,8 @@ def test_max_constraint_violation_returns_false():
 
 
 def test_min_shortfall_is_soft_not_a_violation():
-    # 3x Vegetable Bee Hoon/day => protein 36 g < 60 g MIN: under the PLAN.md
-    # module-4 encoding MIN floors are SOFT — no hard violation, feasible —
-    # but the shortfall must show up in the nutrient_target_deviation objective.
+    # Three servings supply 36 g protein below the 60 g MIN. The soft shortfall
+    # affects nutrient_target_deviation, not hard feasibility.
     plan = [["vegetable_bee_hoon"]] * 21
     objectives, violations = evaluate(plan, _envelope(), TOY_DISHES)
     assert is_feasible(plan, _envelope(), TOY_DISHES) is True

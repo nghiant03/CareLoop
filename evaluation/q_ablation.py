@@ -1,8 +1,7 @@
 """Q6 — Objective/selection ablation, meal-composition ablation, exact reference.
 
-Milestone 2 objective-selection comparison (
-§5 "Run the objective/selection ablation, followed by the meal-composition
-ablation" and "Add a small exact feasibility/quality reference").
+Paired selection comparison, bounded experimental composition search, and an
+exact reference limited to the single-dish encoding.
 
 Phase 1 — selection ablation (paired design)
 --------------------------------------------
@@ -18,7 +17,7 @@ store is touched) is scored by the three selection strategies from
 * ``adequacy_first_selection`` — lexicographic worst-day shortfall first.
 
 Every strategy is scored against the ORIGINAL approved envelope (never a
-MIN-relaxed copy — floors are soft under the PLAN.md module-4 encoding, so the
+MIN-relaxed copy — floors are soft in the canonical evaluator, so the
 plain approved envelope is solved directly).  Per selected plan we report, as
 pure functions over ``daily_totals`` (adequacy semantics mirror
 ``backend/app/core/plan_service.py``: one entry per MIN/TARGET aim, MAX
@@ -37,17 +36,13 @@ searches a 2-dish encoding; it does not run production's optional-side adequacy
 search. Each of the 21 experimental slots holds exactly 2 dishes, a
 MAIN (allowed pool minus categories ``drink``/``dessert``/``kopitiam``) and a
 SIDE (allowed pool with category in ``soup``/``healthy``/``cai_png`` or the
-``vegetable`` tag), with no dish id twice within the same day.  Operators
-(documented for the review's representation-ablation protocol): tournament
-selection (k=3) on the scalar score, uniform slot-swap crossover (per slot the
-whole (main, side) pair swaps with p=0.5), slot-resample mutation (1-3 random
-slots; main and/or side index resampled uniformly), 2-scalar-elitism, and the
-repair pattern of rejecting infeasible offspring (an infeasible offspring is
-replaced by a feasible parent, so the population stays feasible).  The
-evaluator (:class:`CompositionEvaluator`) is a VECTORIZED numpy mirror of
-``problem.evaluate`` for multi-dish slots (same objectives, same EPS
-tolerance, same daily+horizon MAX ordering) — cross-checked against
-``problem.evaluate`` in ``evaluation/test_ablation.py``.  The final front is
+``vegetable`` tag), with no dish id twice within the same day. Tournament
+selection uses k=3 and scalar scores. Uniform crossover swaps whole main/side
+pairs per slot with probability 0.5. Mutation resamples the main or side of
+1-3 slots; elitism retains two individuals. Infeasible offspring are replaced
+by feasible parents. CompositionEvaluator mirrors the canonical objectives,
+EPS tolerance, and daily/horizon MAX ordering; evaluation/test_ablation.py
+cross-checks them against problem.evaluate. The final front is
 the deduplicated set of feasible individuals encountered during the run.  The
 same three selections are applied to that front.
 
@@ -63,10 +58,9 @@ For each patient (scalar-selected plan of the first seed):
 ``exact_reference.plan_vs_exact`` gives per-additive-objective daily gaps vs
 the exact one-day optimum, the 7-day lower bounds, and whether the delivered
 plan hits the per-day additive optimum (gap <= 1e-6).  Solver
-``infeasibility_status`` outcomes are counted across the suite.  Review-
-mandated disclosure: variety is excluded from the exact reference (not
-per-day decomposable); the exact baseline is NOT an optimum for all four
-objectives.
+``infeasibility_status`` outcomes are counted across the suite. Variety is
+excluded because it is not per-day decomposable; the exact baseline is not
+an optimum for all four objectives.
 
 Verdict (derived, never hardcoded)
 ----------------------------------
@@ -81,11 +75,9 @@ The selection ablation is PASS iff ALL of:
 4. adequacy-first's pooled mean cost is at most 10% above scalar selection's
    (:data:`_COST_CAP`).
 
-Any failed condition fails the verdict and is named in ``verdict_note``
-(review protocol point 7 — failed expectations affect the verdict, they do
-not live in an informational section).  The composition ablation and the
-exact-reference section are informational by design (heuristic data
-annotations; bounds that are not 4-objective optima).
+Every failed condition is named in verdict_note and fails the verdict.
+Composition and exact-reference results remain informational: the role
+annotations are heuristic, and the bounds are not four-objective optima.
 """
 
 from __future__ import annotations
@@ -133,8 +125,7 @@ __all__ = [
     "SEEDS",
 ]
 
-# Fixed paired seeds (review protocol: paired patient/seed runs; the same
-# front is reused by all three strategies, so comparisons are paired).
+# Reuse each patient/seed front across all three strategies for paired comparisons.
 SEEDS: tuple[int, ...] = (42, 43, 44)
 
 _EPS = 1e-9            # mirrors plan_service / selection epsilon
@@ -289,9 +280,7 @@ def _pool_strategy_metrics(strategy_rows: list[dict[str, Any]]) -> dict[str, Any
         key = field if field.startswith("mean_") else f"mean_{field}"
         out[key] = _mean([r.get(field) for r in strategy_rows])
     out["mean_front_size"] = _mean([r.get("front_size") for r in strategy_rows])
-    # NOTE: no pooled runtime aggregate — per-row wall-clock `solver_runtime_s`
-    # stays in the per-patient rows (runtimes are non-deterministic and are
-    # excluded from the suite's determinism check).
+    # Keep runtime per row; exclude wall-clock measurements from determinism checks.
     return out
 
 
@@ -501,7 +490,7 @@ def derive_selection_verdict(
     both strategies, adequacy_first feasibility rate == 1.0, adequacy_first's
     pooled mean worst-day relative shortfall is STRICTLY below scalar's, and
     its pooled mean cost is at most ``cost_cap`` (10%) above scalar's.
-    Every failed condition is named in the note (review protocol point 7).
+    Every failed condition is named in the note.
     """
     adq = pooled.get("adequacy_first") or {}
     sc = pooled.get("scalar") or {}
@@ -543,7 +532,7 @@ class CompositionEvaluator:
     minimised, in :data:`OBJECTIVE_NAMES` order), identical EPS tolerance and
     the same canonical daily + horizon MAX constraint ordering — verified
     against ``problem.evaluate`` in ``evaluation/test_ablation.py``.  On top
-    of the PLAN.md module-4 hard constraints it enforces the composition
+    of the canonical hard constraints it enforces the composition
     encoding's own repetition limit (no dish id twice within the same day),
     reported separately in :meth:`eval_batch` (it is NOT part of
     ``problem.evaluate``).
@@ -623,7 +612,7 @@ class CompositionEvaluator:
 
     # -- decoding ----------------------------------------------------------
     def to_plan(self, individual: np.ndarray) -> list[list[str]]:
-        """Decode an index individual into a 21-slot, 2-dish-per-slot plan."""
+        """Decode an individual into n_days * MEALS_PER_DAY two-dish meals."""
         ind = np.asarray(individual, dtype=int)
         return [
             [self.main_pool[ind[s, 0]].dish_id, self.side_pool[ind[s, 1]].dish_id]
@@ -933,7 +922,7 @@ def composition_ga(
         pop = [random_individual()]
 
     F, G, rep, feasible, scalars = assess(pop)
-    # guarantee at least one feasible member (repair the least-violating)
+    # Try repairing the least-violating seed; failure still permits an empty result.
     if not feasible.any():
         for idx in np.argsort(scalars):
             fixed = _repair_individual(ev, pop[int(idx)], max_iters=repair_iters)

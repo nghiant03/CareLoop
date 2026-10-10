@@ -13,16 +13,23 @@ from .problem import NUTRIENT_KEYS, allowed_dishes, evaluate
 
 
 def is_main(dish):
+    """Apply catalogue heuristics for a main; this is not a verified recipe role."""
     return (dish.category not in {"dessert", "drink", "kopitiam"}
             and dish.nutrient("energy_kcal") >= 200 and dish.nutrient("protein_g") >= 5)
 
 
 def is_side(dish):
+    """Apply catalogue heuristics for a side; a dish may qualify for both roles."""
     return (dish.nutrient("energy_kcal") <= 300
             and (dish.category in {"healthy", "soup", "cai_png"} or "vegetable" in dish.tags))
 
 
 def complete_meals(plan, dishes):
+    """Check for a nonempty plan of one main and at most one side per meal.
+
+    This predicate does not fill meals or check nutrient feasibility/day count.
+    Referenced dishes must exist in the supplied pool or lookup raises KeyError.
+    """
     lookup = {d.dish_id: d for d in dishes}
     return bool(plan) and all(
         1 <= len(meal) <= 2 and is_main(lookup[meal[0]])
@@ -33,10 +40,11 @@ def complete_meals(plan, dishes):
 def improve_meals(result, envelope, dishes, seed=42):
     """Search complete meals with normalised, adequacy-first coordinate descent.
 
-    Independent daily multistarts permit main/side replacements while preserving
-    daily ceilings. Seven days are selected from the best daily candidates,
-    with repetition as a tie-break. Search failure is explicitly not a proof
-    of infeasibility for this richer encoding.
+    Search independently of the incoming plan; result supplies fallback data
+    and metadata. Validate daily candidates against hard constraints, then select
+    seven days with repetition as a tie-break. Intermediate search candidates
+    may violate ceilings. Success replaces the plan; failure retains the incoming
+    plan with meal_complete=False and is not proof of composition infeasibility.
     """
     start = perf_counter()
     pool = sorted(allowed_dishes(envelope, dishes), key=lambda d: d.dish_id)
@@ -90,7 +98,7 @@ def improve_meals(result, envelope, dishes, seed=42):
         if not violations:
             candidates[tuple(member)] = (scores(nutrients[member].sum(axis=0)[None, :], member[None, :])[0], day)
     if not candidates:
-        # The old one-dish proof cannot prove anything about this encoding.
+        # Single-dish infeasibility does not rule out main/optional-side plans.
         return {**result, **metadata, "meal_complete": False,
                 "infeasibility_status": None if result.get("feasible") else "search_exhausted",
                 "infeasibility_reason": None if result.get("feasible") else "No complete meal plan found by search."}

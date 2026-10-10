@@ -1,4 +1,4 @@
-"""Formal multi-objective meal-plan optimisation problem (CareLoop, Module 4).
+"""Canonical meal-plan objectives and hard-constraint evaluation.
 
 Decision variables
 ------------------
@@ -15,15 +15,14 @@ Objectives (all minimised)
    ``max(0, total - max)`` for ``MAX`` ceilings (zero for hard-feasible plans,
    kept as a smooth penalty that helps the search).
 2. ``preference_fit``            : negative mean tag-preference score
-   (placeholder weighting; Week 2 replaces with learned/patient prefs).
+   (fixed placeholder weighting, not learned patient preferences).
 3. ``variety``                   : negative (normalised Shannon entropy +
    distinct-dish ratio) across the whole horizon.
 4. ``cost``                      : sum of ``Dish.price_sgd`` across the plan.
 
 Hard constraints
 ----------------
-Per PLAN.md module 4 ("objectives = nutrient-target deviation, preference fit,
-variety, cost; hard constraints = approved ceilings/exclusions"):
+The evaluator checks:
 
 * ``ConstraintKind.MAX`` : daily total <= value for every day, and horizon total
   <= ``value * n_days``.
@@ -39,10 +38,10 @@ MIN floors and ``ConstraintKind.TARGET`` values are **soft**: they steer
 infeasibility, so guideline floors (fibre, potassium, energy) guide the search
 instead of making envelopes unsolvable.
 
-All hard-constraint checks use a small epsilon so float noise never registers as
-a violation.  The canonical invariant: the optimiser NEVER violates a MAX
-constraint; infeasible candidates are rejected by :func:`is_feasible` and
-penalised (constraint-dominance) by the search.
+Nutrient violations at or below EPS are tolerated. ``evaluate`` reports invalid
+candidates rather than rejecting them; search wrappers decide whether to repair
+or discard them. It checks status, not application scope eligibility or target
+presence; application approval gates own those additional readiness checks.
 """
 
 from __future__ import annotations
@@ -82,7 +81,7 @@ OBJECTIVE_NAMES: tuple[str, ...] = (
 )
 
 # Placeholder tag preferences (higher = more preferred). Used by
-# preference_fit and by the greedy baseline. Week 2: derive from patient prefs.
+# preference_fit and by the greedy baseline; these are not patient-specific.
 TAG_PREFERENCE: dict[str, float] = {
     "lean_protein": 1.0,
     "high_protein": 1.0,
@@ -175,7 +174,7 @@ def _matches_exclusion(flag, dish: Dish) -> bool:
         return value in ingredients
     if flag.kind == ExclusionKind.DISH_CATEGORY:
         # Match either the category field or a category-like tag, so toy and
-        # Week-2 data both work; fall back to the documented semantic mapping
+        # catalogue data both work; fall back to the documented semantic mapping
         # for rulebook values that no dataset tag spells out (e.g.
         # ``high_potassium_foods`` -> potassium per serving > 500 mg).
         if value == category or value in tags:
@@ -206,17 +205,17 @@ def allowed_dishes(envelope: NutrientEnvelope, dishes: list[Dish]) -> list[Dish]
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class ConstraintSlot:
-    kind: str  # "max" | "min"
+    kind: str  # "max"; MIN/TARGET aims do not enter the hard-constraint layout
     scope: str  # "daily" | "horizon"
     nutrient: str
-    day: int | None
+    day: int | None  # zero-based day index; None for the horizon slot
     limit: float
 
 
 def constraint_layout(envelope: NutrientEnvelope, n_days: int = DAYS) -> list[ConstraintSlot]:
     """Canonical, fixed-length ordering of the HARD nutrient constraints.
 
-    Only ``MAX`` ceilings are hard (per PLAN.md module 4): one daily slot per
+    Only ``MAX`` ceilings are hard: one daily slot per
     day plus one horizon slot per MAX constraint.  ``MIN`` floors and
     ``TARGET`` values are soft objective terms (see
     :func:`_obj_target_deviation`) and deliberately absent here, so guideline
@@ -244,10 +243,10 @@ def constraint_vector(
 ) -> list[float]:
     """Non-negative violation magnitudes (0 == satisfied) in canonical order.
 
-    Fixed length for a given envelope and horizon, so it can be fed directly to
-    pymoo as ``G`` (``G <= 0`` means satisfied).  HARD constraints only: MAX
-    ceilings (daily + horizon).  MIN floors and TARGETs are soft and never
-    appear in the constraint vector.
+    Fixed length for an envelope and horizon: daily and horizon MAX ceilings in
+    constraint_layout order. MIN/TARGET aims and structural violations are absent.
+    Values are unshifted excesses; evaluate tolerates magnitudes <= EPS. A pymoo
+    adapter must subtract EPS to preserve that tolerance with G <= 0.
     """
     _require_approved(envelope)
     n = _validate_plan(plan) if n_days is None else n_days
@@ -343,8 +342,10 @@ def evaluate(
     ``constraint_violations`` lists HARD violations only — MAX ceilings
     (daily + horizon), exclusions and membership.  MIN shortfalls and TARGET
     deviations are soft objective terms and never appear here.  An empty list
-    means feasible.  Raises :class:`EnvelopeNotApprovedError` for non-APPROVED
-    envelopes.
+    means hard-feasible, not nutritionally adequate. Raise EnvelopeNotApprovedError
+    for non-APPROVED envelopes and ValueError when the slot count is not a
+    multiple of MEALS_PER_DAY. Empty plans pass this geometry check. Nutrient
+    violation days and structural meal indices are zero-based.
     """
     _require_approved(envelope)
     n_days = _validate_plan(plan)
@@ -422,7 +423,7 @@ def is_feasible(plan: Plan, envelope: NutrientEnvelope, dishes: list[Dish]) -> b
     """True iff ``plan`` violates no HARD constraint (MAX ceiling / exclusion).
 
     MIN floors and TARGET values are soft objective terms and never affect
-    feasibility (see the module docstring for the PLAN.md module-4 encoding).
+    feasibility. Membership and exclusions are also checked by ``evaluate``.
     """
     _require_approved(envelope)
     _objectives, violations = evaluate(plan, envelope, dishes)

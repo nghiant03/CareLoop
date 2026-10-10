@@ -1,10 +1,10 @@
-"""pymoo spike (Week 1, Lane B) — multi-objective meal-plan optimisation.
+"""Standalone toy-pool demonstration of multi-objective meal search.
 
 Runs on a hard-coded toy pool (:mod:`backend.optim.toy_data`) and a sample
 APPROVED :class:`~shared.envelope_schema.NutrientEnvelope`.  ``pymoo`` is
 imported lazily; when it (and numpy) are unavailable the spike falls back to a
 pure-Python NSGA-II approximation in :mod:`backend.optim.baselines`, so the
-smoke test runs in any environment.
+smoke test can run without those optional search dependencies.
 
 Outputs:
 * (a) Pareto front size

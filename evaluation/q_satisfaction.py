@@ -9,7 +9,7 @@ For every eligible patient (rule status PROPOSED):
    retained fallback MIN-floor adjustments are disclosed,
 4. verify ``violation_count == 0`` and, for feasible plans, recompute per-day
    totals from the returned plan and check the HARD constraints (MAX ceilings,
-   per PLAN.md module 4) against the SOLVED envelope.  MIN floors and TARGETs
+   in the canonical evaluator) against the SOLVED envelope. MIN floors and TARGETs
    are soft: their remaining shortfall/distance is reported informationally
    in ``soft_aims`` (mean per day), never as a violation.
 
@@ -47,7 +47,7 @@ def _approve(envelope_model: Any) -> Any:
 def _per_day_check(plan: list[list[str]], solved_envelope: Any, dishes: list[Any]) -> dict[str, Any]:
     """Recompute per-day totals; verify HARD (MAX) constraints per day.
 
-    MIN floors / TARGET values are soft (PLAN.md module 4): their residual
+    MIN floors / TARGET values are soft: their residual
     shortfall/distance is summarised informationally, never as a violation.
     """
     from backend.optim.problem import daily_totals
@@ -83,10 +83,11 @@ def _per_day_check(plan: list[list[str]], solved_envelope: Any, dishes: list[Any
 def _blocking_constraints(solved_envelope: Any, dishes: list[Any]) -> list[str]:
     """Leave-one-out greedy diagnostic for infeasible envelopes.
 
-    Only HARD MAX ceilings can block feasibility (PLAN.md module 4), so a
+    Among nutrient targets, only hard MAX ceilings can block feasibility, so a
     target is a "blocker" when dropping that MAX alone lets the greedy
     constructor find a feasible plan.  Empty list => no single removal helps
-    (jointly infeasible w.r.t. the greedy constructor).
+    within the heuristic budget. Neither outcome proves the remaining envelope
+    infeasible or identifies a unique clinical blocker; exclusions also apply.
     """
     from shared.envelope_schema import ConstraintKind
     from backend.optim.real_data import FastEvaluator, greedy_feasible_plan

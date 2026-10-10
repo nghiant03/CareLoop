@@ -1,32 +1,13 @@
-"""Production solve pipeline: NSGA-II + hard feasibility guarantee.
+"""Single-dish search with canonical validation, repair, and exact failure diagnosis.
 
-``solve()`` is the single entry point used by ``api.run``.  Contract:
+Production NSGA-II uses pymoo when available, otherwise a hand-rolled GA.
+Guaranteed pymoo-method runs return a hard-feasible plan or an empty diagnosed
+result. Bounded repair/construction can miss feasible plans; exact one-day
+enumeration distinguishes search exhaustion from proven single-dish infeasibility.
 
-* prefers pymoo NSGA-II (engine ``"pymoo"``); falls back to a hand-rolled GA
-  (``"fallback-ga"``) when pymoo/numpy are unavailable;
-* **never returns an infeasible plan**: if the search front contains no
-  feasible solution, the least-violating candidate is repaired (hill-climbing
-  + greedy rebuild, :func:`real_data.repair_plan`); if that fails, a
-  greedy-constructed feasible plan is used; if even that is impossible the
-  result is an explicit infeasibility diagnosis (``feasible=False``,
-  ``infeasibility_reason`` set, empty plan) — never a silently broken plan.
-  Diagnoses are confirmed against exhaustive one-day enumeration
-  (:mod:`backend.optim.exact_reference`): ``infeasibility_status`` is
-  ``"proven_infeasible"`` when enumeration proves no feasible day exists
-  (exact for this per-day encoding), or ``"search_exhausted"`` when a feasible
-  day exists but the heuristics failed to deliver one.  The cheap
-  ``feasibility_precheck`` is only a sufficient infeasibility condition — when
-  exact enumeration contradicts a failed precheck, solving continues.
-* returned plans always satisfy the envelope's hard constraints (MAX ceilings
-  + exclusions per PLAN.md module 4; MIN floors / TARGETs are soft) with
-  ``violation_count == 0`` (verified with the canonical ``problem.evaluate``).
-
-Benchmark baselines (``ga_search``, ``greedy_search``, ``random_search``) are
-raw and may return infeasible plans — that is intentional so the harness can
-measure hard-constraint violation rates per method.  The pymoo comparison
-methods (``nsga3``, ``moead``, ``age``, ``sms``) run through the SAME
-guarantee path as NSGA-II by default (``solve(..., method=...)``), and can be
-run raw with ``guarantee=False`` for honest violation-rate measurement.
+Raw pymoo mode and benchmark baselines may return violating plans. The exact
+reference does not prove infeasibility for main/side composition. See ``solve``
+for method/selection contracts and ``exact_reference`` for proof assumptions.
 """
 
 from __future__ import annotations
@@ -386,7 +367,7 @@ def _diagnose_with_exact(
 ) -> dict:
     """Diagnosis enriched with the exact one-day enumeration verdict.
 
-    ``infeasibility_status`` semantics (Milestone 2):
+    ``infeasibility_status`` semantics:
 
     * ``"proven_infeasible"`` — exhaustive one-day enumeration
       (:func:`exact_reference.one_day_exact`) found NO feasible dish multiset.
@@ -397,14 +378,8 @@ def _diagnose_with_exact(
       greedy simply failed to deliver one: a heuristic failure, never
       misreported as infeasibility.
 
-    NOTE on ``"search_exhausted"``: ``real_data.greedy_feasible_plan`` is NOT a
-    complete constructor for the 3-dish day problem — it scores every pool
-    dish per slot greedily and repairs via hill-climbing single-slot sweeps,
-    so a pathological envelope can defeat both heuristics even though a
-    feasible day exists.  In practice with the shipped envelopes greedy +
-    repair always delivers a day, so ``"search_exhausted"`` is not expected
-    today; the distinction is kept so heuristic failure is never confused
-    with proven infeasibility.
+    Greedy construction and single-slot repair are incomplete; successful exact
+    enumeration does not imply that either heuristic will find a feasible day.
     """
     exact = one_day_exact(envelope, dishes)
     diag = _diagnosis(envelope, dishes, reason, runtime_ms, allowed_count)
@@ -422,12 +397,13 @@ def _guarantee(
     engine: str,
     selection=None,
 ) -> tuple[dict | None, str, list[dict]]:
-    """Ensure a feasible plan exists; repair / greedy-rebuild when it does not.
+    """Find a feasible entry via bounded repair/construction, or return None.
 
     ``selection``: optional ``(entries, envelope, dishes) -> entry`` callable
     used to pick the headline plan from the feasible entries instead of the
     default ``min(..., key=scalar_score)`` (see ``backend.optim.selection``).
-    ``None`` keeps the current behaviour exactly.
+    ``None`` uses scalar score. A custom selector must return one of the supplied
+    feasible entries without mutating it; the callback result is not revalidated.
 
     Returns ``(best_entry, engine_label, feasible_entries)`` or ``(None, ...)``
     when no feasible plan could be reached.
@@ -484,25 +460,26 @@ def solve(
     selection=None,
     termination=None,
 ) -> dict:
-    """Solve for ``envelope`` over ``dishes`` with the feasibility guarantee.
+    """Search one dish per slot and return plan metrics, front entries, or a diagnosis.
 
     ``method``: ``"nsga2"`` (production), the benchmark comparison set
     ``"nsga3"`` / ``"moead"`` / ``"age"`` / ``"sms"`` (all pymoo, all through
     the same guarantee path), or raw baselines ``"ga"``, ``"greedy"``,
     ``"random"`` used by the benchmark harness.
 
-    ``guarantee``: when True (the default, and the production behaviour) the
-    result carries the hard feasibility guarantee (repair / greedy fallback).
-    When False the raw search front is returned untouched so the benchmark can
-    measure honest hard-constraint violation rates — the headline plan is the
-    least-violating/best-scalar member of the raw front.  This never weakens
-    the production default; ``api.run`` never passes ``guarantee=False``.
+    ``guarantee`` applies only to pymoo-family methods, including the NSGA-II
+    fallback. True enables repair/construction and explicit empty-plan failure.
+    False selects the least-violating/best-scalar raw entry. Baseline methods
+    remain raw regardless of this option. Failed prechecks are confirmed by exact
+    enumeration before either path; passing a precheck does not prove feasibility.
 
     ``selection``: optional ``(entries, envelope, dishes) -> entry`` callable
     used instead of the default ``min(..., key=scalar_score)`` when picking the
     headline plan from the feasible front in ``_guarantee`` (see
     ``backend.optim.selection``).  ``None`` (default) keeps the current
-    behaviour unchanged; the success path gains no other overhead.
+    scalar-score ordering. The callback must return an unchanged supplied entry;
+    its result is not revalidated. ``termination`` is forwarded to pymoo search
+    only, not fallback GA or baseline methods.
     """
     t0 = time.perf_counter()
     allowed = allowed_dishes(envelope, dishes)

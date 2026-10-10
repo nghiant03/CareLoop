@@ -1,4 +1,4 @@
-"""Tests for the exact one-day reference (Milestone 2).
+"""Exact single-dish feasibility and additive-objective reference tests.
 
 Covers:
 * ``one_day_exact`` vs a plain-Python brute force over all dish multisets

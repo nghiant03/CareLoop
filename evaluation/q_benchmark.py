@@ -5,7 +5,7 @@ By default this module does NOT re-run the benchmark; it parses
 ``backend/optim/benchmark_results.md`` (recommendation) and recomputes the
 headline table (all methods recorded in the artefact: hypervolume, violations,
 runtime).  ``--rerun-benchmark`` re-executes ``backend.optim.benchmark``
-(~21s) and re-reads the artefacts.
+and re-reads the artefacts; runtime depends on the environment.
 """
 
 from __future__ import annotations

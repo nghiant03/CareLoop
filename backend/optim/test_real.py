@@ -203,7 +203,7 @@ def test_exclusions_shrink_pool_as_expected():
 
 
 def test_semantic_exclusion_mapping_filters_real_pool():
-    """Rulebook exclusion values must now match real dishes (Q3 remediation)."""
+    """Rulebook semantic exclusions must match their intended catalogue predicates."""
     from shared.envelope_schema import ExclusionFlag, ExclusionKind
 
     from backend.optim.envelopes import ckd_strict

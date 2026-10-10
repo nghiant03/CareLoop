@@ -1,4 +1,4 @@
-"""Tests for the front-selection strategies (Milestone 2).
+"""Deterministic front selection and original-aim scoring tests.
 
 Builds three feasible front entries over a tiny pool where the strategies
 PROVABLY disagree:

@@ -1,9 +1,8 @@
 """Hand-built APPROVED envelopes for the real-data benchmark and tests.
 
-These validate against :mod:`shared.envelope_schema` directly (the rules engine
-is being built in parallel and is deliberately NOT imported here).  Values are
-grounded in the actual ``data/dishes.json`` distributions (e.g. dish sodium
-median ~800 mg/day, so a 2000 mg/day ceiling is strict but satisfiable).
+These validate against :mod:`shared.envelope_schema` without running rules or
+recording clinical approval. Values exercise catalogue-scale daily limits;
+they are benchmark fixtures, not patient-specific clinical recommendations.
 
 Four representative profiles:
 

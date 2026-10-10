@@ -1,12 +1,12 @@
-"""Self-contained toy dish pool for the CareLoop optimiser spike (Week 1).
+"""Dish data contract and self-contained toy pool for optimiser tests and demos.
 
 Eight plausible Singapore hawker/local dishes with per-serving nutrient values.
 Nutrient keys mirror :class:`shared.envelope_schema.NutrientKind` values exactly,
 so objective/constraint code can index them by ``constraint.nutrient.value``.
 
-Week 2 replaces :data:`TOY_DISHES` with ``data/dishes.json`` loaded through
-:func:`load_dishes`; the :class:`Dish` contract is what the rest of the
-optimiser depends on.
+Production catalogue loading uses ``real_data.load_dishes``. This module's
+``load_dishes`` accepts nested nutrient JSON and falls back to the toy pool
+when the path is absent; it is not the flat-key production loader.
 """
 
 from __future__ import annotations
@@ -32,7 +32,11 @@ NUTRIENT_KEYS: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class Dish:
-    """A single dish with per-serving nutrients and matchable metadata."""
+    """Per-serving nutrients and matchable metadata for one dish.
+
+    Attributes are frozen, but the nested nutrients mapping is mutable; callers
+    sharing records must not mutate it. price_sgd is the price of one serving.
+    """
 
     dish_id: str
     name: str
@@ -159,11 +163,13 @@ TOY_DISHES: list[Dish] = [
 
 
 def load_dishes(path: str | None = None) -> list[Dish]:
-    """Load dishes from ``data/dishes.json`` when present, else the toy pool.
+    """Read nested nutrient JSON; fall back to toy records only for a missing file.
 
     The JSON shape is a list of objects with keys: ``dish_id``, ``name``,
     ``category``, ``nutrients`` (dict), optional ``ingredients``, ``tags``,
-    ``price_sgd``.  This is the Week 2 integration point.
+    ``price_sgd``. The default path is data/dishes.json, but its flat nutrient
+    fields are not read here and become zero. Use real_data.load_dishes for that
+    catalogue. Invalid existing files raise rather than selecting the toy pool.
     """
     if path is None:
         root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

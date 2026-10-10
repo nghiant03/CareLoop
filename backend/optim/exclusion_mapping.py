@@ -4,13 +4,13 @@ The clinical rulebook (``rules/rules.json``) emits *semantic* exclusion values
 (``high_potassium_foods``, ``phosphate_additive_processed``,
 ``sugar_sweetened_beverage``, ``high_glycaemic_load``, ...) that do not
 literally match the dish dataset's tag/category vocabulary (``data/dishes.json``
-tags use e.g. ``high_potassium`` and has no ``sugar_sweetened_beverage``
-category).  Before the mapping existed every rulebook exclusion matched zero
-dishes, so exclusion filtering was a silent no-op on the real pool.
+tags use e.g. ``high_potassium`` and have no ``sugar_sweetened_beverage``
+category). Literal matching alone would miss these semantic categories.
 
 This module is the documented bridge: each rulebook value maps to a
-clinically sensible, deterministic predicate over the dish's per-serving
-nutrients / category.  Thresholds are set from the dataset's own distribution
+deterministic predicate over the dish's per-serving nutrients / category.
+These are catalogue heuristics, not verified ingredient or recipe annotations.
+Thresholds are set from the dataset's own distribution
 so that "high-X" dishes (the top of the distribution) are excluded while the
 bulk of the pool stays usable:
 
@@ -32,9 +32,9 @@ load``                           refined-carb portions)
                                  person, not a food property) — no-op
 ===============================  =============================================
 
-Values not listed here keep the literal matching behaviour (tag / category /
-ingredient equality), so hand-built envelopes and future rule edits degrade
-safely.
+Values not listed here have only literal tag/category/ingredient matching.
+An unknown semantic value may therefore match no dishes; adding a rulebook
+exclusion requires checking its catalogue coverage.
 """
 
 from __future__ import annotations

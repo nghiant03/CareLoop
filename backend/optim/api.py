@@ -38,14 +38,11 @@ def run(envelope: NutrientEnvelope, dishes=None, seed: int = 42,
     passed through to ``solver.solve``; ``None`` keeps the default
     scalar-score selection.
 
-    Hard guarantee: the returned plan NEVER violates the envelope's hard
-    constraints (``violation_count == 0``, ``feasible is True``).  If the
-    NSGA-II front has no feasible member the best candidate is repaired;
-    failing that a greedy-constructed feasible plan is returned.  When the
-    allowed pool provably cannot satisfy the envelope the result is an explicit
-    infeasibility diagnosis (``feasible=False`` + ``infeasibility_reason``),
-    now carrying ``infeasibility_status`` (``"proven_infeasible"`` vs
-    ``"search_exhausted"``) from the exact one-day enumeration reference.
+    Successful plans pass the canonical hard-constraint evaluator. Failure
+    returns an empty plan with ``feasible=False`` and a reason. Exact one-day
+    enumeration distinguishes ``proven_infeasible`` from ``search_exhausted``
+    for this single-dish encoding. This helper checks APPROVED status; the
+    application layer additionally enforces scope and nonempty targets.
     """
 
     if envelope.status != EnvelopeStatus.APPROVED:

@@ -1,8 +1,8 @@
-"""Exact one-day reference by exhaustive enumeration (Milestone 2).
+"""Exact feasibility and additive-objective reference for single-dish days.
 
-Why one-day enumeration is EXACT for this encoding
+Why one-day enumeration is exact for this encoding
 --------------------------------------------------
-Every HARD constraint in the PLAN.md module-4 encoding is *per-day*:
+Every hard constraint in this single-dish encoding is per-day:
 
 * ``ConstraintKind.MAX`` ceilings are daily MAX ceilings (the horizon slot
   ``value * n_days`` is implied by holding the daily bound on every day);
@@ -29,12 +29,10 @@ constraint) and reports:
   - ``preference_sum``: the raw sum of ``TAG_PREFERENCE`` over the dishes;
   - ``cost``: the sum of ``price_sgd``.
   All three are reported as MINIMISED raw quantities, i.e. ``best`` is the
-  per-day MINIMUM, so it serves as an exact per-day lower bound.  Disclosure
-  for preference: the production objective ``preference_fit`` NEGATES the mean
-  tag-preference sum, so the preference-*optimal* day is the one that
-  MAXIMISES ``preference_sum``; the minimum reported here bounds the raw
-  additive quantity, not the negated objective.  The negation is disclosed
-  here rather than silently flipped.
+  per-day minimum, so it serves as an exact per-day lower bound. Production
+  ``preference_fit`` negates the mean tag-preference sum, so its optimum
+  maximises ``preference_sum``. The minimum reported here bounds the raw
+  additive quantity, not the negated objective.
 * ``best_scalar`` — the multiset minimising ``problem.SCALAR_WEIGHTS`` over
   the ONE-DAY objective vector (deviation, ``-mean(pref_sum)``, variety of the
   single day, cost).  Simplification: preference and variety are scored in
@@ -50,8 +48,7 @@ deterministic.
 Implementation is vectorised: the per-nutrient matrix (pool x K) and the
 pair-sum matrix (upper triangle, pool x pool x needed-nutrients) are built
 once with numpy; the outer loop runs over the third dish index and the MAX
-filters are applied to ``pair_sums + N[k]`` in bulk.  A 214-dish pool
-completes well under a second.  A generic (slower, chunked) path handles
+filters are applied to ``pair_sums + N[k]`` in bulk. A chunked generic path handles
 ``n_slots != 3`` for small analysis pools.
 """
 
@@ -82,8 +79,8 @@ _ADDITIVE_OBJECTIVES: tuple[str, ...] = (
     "cost",
 )
 
-# Tie window for float objective values: values within this (absolute +
-# relative) tolerance count as tied and are separated lexicographically.
+# Objective ties use this relative tolerance with an absolute floor of the
+# same size; tied candidates are separated lexicographically.
 _TIE_RTOL = 1e-9
 
 _CHUNK = 20_000  # generic-path chunk size (n_slots != 3, small pools only)
@@ -380,7 +377,7 @@ def prove_infeasible(envelope, dishes: list[Dish]) -> bool:
     """True iff exhaustive one-day enumeration finds NO feasible day.
 
     Because every hard constraint is per-day and each slot holds exactly one
-    dish, this is an EXACT infeasibility proof for the PLAN.md module-4
+    dish, this is an EXACT infeasibility proof for the single-dish
     encoding: no 7-day plan can exist when no feasible day exists.
     """
     return not one_day_exact(envelope, dishes)["feasible_day"]

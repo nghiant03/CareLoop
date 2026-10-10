@@ -19,7 +19,7 @@ Design
   - Raw baselines (never guaranteed): hand-rolled GA, greedy construction,
     random search.
 
-  Hard constraints are MAX ceilings + exclusions (PLAN.md module 4); MIN
+  Hard constraints are MAX ceilings + exclusions; MIN
   floors / TARGETs are soft objective terms for all methods alike.
 
 * Algorithm configuration (4 objectives, pop=40, gen=80 unless noted):

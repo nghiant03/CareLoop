@@ -1,7 +1,7 @@
 """Harness self-tests: end-to-end on a reduced patient subset, deterministic.
 
-Runs in well under 120s: the expensive pieces (NSGA-II solves) use a small
-subset and a reduced budget (pop=20, gen=40); the benchmark artefacts are only
+NSGA-II solves use a small patient subset and reduced budget (pop=20, gen=40);
+runtime depends on the environment. The benchmark artefacts are only
 parsed, never re-run.
 """
 

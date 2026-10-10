@@ -1,6 +1,6 @@
 """Baseline search strategies for the CareLoop meal optimiser.
 
-Three baselines are provided so Week 3 can benchmark pymoo NSGA-II against them:
+Three baselines support comparisons with pymoo NSGA-II:
 
 * :func:`random_search`     — uniform random plans.
 * :func:`greedy_search`     — myopic per-meal construction + local search.
@@ -9,7 +9,7 @@ Three baselines are provided so Week 3 can benchmark pymoo NSGA-II against them:
 Plus :func:`nsga2_fallback`, a pure-Python NSGA-II style approximation used by
 ``spike_pymoo.py`` when ``pymoo``/``numpy`` are not installed.  It implements
 constraint-dominance (feasible beats infeasible; fewer violations beats more)
-so hard constraints are never preferred over a feasible plan.
+so a hard-violating plan never dominates a feasible one.
 
 Every entry point returns a standard result dict::
 
@@ -89,9 +89,8 @@ def _repair_plan(envelope, dishes, plan, pool, max_passes: int = 8) -> list[list
     """Local-search repair: single-slot swaps that lexicographically reduce
     ``(violation_count, violation_magnitude, scalar_score)``.
 
-    This is what guarantees the search can *reach* feasibility: a plan one swap
-    away from satisfying the hard constraints is always repaired, never left
-    infeasible when a feasible neighbour exists.
+    Search stops after ``max_passes`` or when no improving swap exists. This
+    heuristic can stop infeasible; it is not a complete feasibility constructor.
     """
     objectives, violations = evaluate(plan, envelope, dishes)
     current = (len(violations), violation_magnitude(violations), scalar_score(objectives))
@@ -266,9 +265,9 @@ def _dominates(a: tuple, b: tuple) -> bool:
 def _cdominates(a: tuple, b: tuple) -> bool:
     """Constraint-dominance on vectors ``(violation_count, magnitude, *objectives)``.
 
-    Feasible always beats infeasible (hard gate); between two infeasible plans
-    the one with fewer/smaller violations wins; between equally-(in)feasible
-    plans, normal Pareto dominance on the objectives applies.
+    Feasible beats infeasible. Rank two infeasible plans by violation count,
+    then magnitude. Apply objective Pareto dominance only when both are feasible
+    or their violation count and magnitude tie.
     """
     a_feasible = a[0] <= 0.0
     b_feasible = b[0] <= 0.0

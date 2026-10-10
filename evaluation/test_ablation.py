@@ -1,6 +1,6 @@
 """Tests for evaluation/q_ablation.py (Q6) — pure-function tests + one smoke run.
 
-Keep total runtime under 60s: the only real-data test is capped at 2 patients
+The real-data test uses a small patient subset
 with heavily reduced optimiser / GA budgets; everything else runs on stub
 dishes and hand-checkable numbers.
 """
@@ -130,7 +130,7 @@ def test_plan_metrics_matches_problem_evaluate():
     env = _envelope()
     # 2-dish-per-slot plan (multi-dish meals are natively supported):
     # per day 3 x (30 + 2) = 96 g protein (MIN 50 met), 3 x (600 + 300) = 2700
-    # kcal (TARGET 1800 met from below), sodium 3 x (400 + 50) = 1350 <= 2000.
+    # kcal (TARGET 1800 overshot by 900), sodium 3 x (400 + 50) = 1350 <= 2000.
     plan = [["m_protein", "s_veg"]] * 21
     metrics = plan_metrics(plan, env, ABLATION_POOL)
     objectives, violations = evaluate(plan, env, ABLATION_POOL)

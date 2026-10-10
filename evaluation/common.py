@@ -1,7 +1,6 @@
 """Shared helpers for the evaluation suite.
 
-Only reads from the rest of the repo; nothing outside ``evaluation/`` is
-modified.
+These helpers load fixtures and inspect traces without writing application state.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ _SET_PIECE = re.compile(
 
 
 def load_patients() -> list[dict[str, Any]]:
-    """The 20 synthetic patients from ``data/patients.json``."""
+    """Load synthetic patient fixtures from data/patients.json in stored order."""
     with open(PATIENTS_PATH, "r", encoding="utf-8") as fh:
         return json.load(fh)
 

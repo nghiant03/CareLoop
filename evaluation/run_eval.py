@@ -2,7 +2,7 @@
 
 Usage::
 
-    .venv/bin/python -m evaluation.run            # full suite (< ~8 min)
+    .venv/bin/python -m evaluation.run            # full suite
     .venv/bin/python -m evaluation.run --rerun-benchmark
 """
 

@@ -62,7 +62,7 @@ _GROUNDED: list[dict[str, Any]] = [
     {"question": "How much fiber should I aim for?", "acceptable": _FIBER},
     {"question": "What about saturated fat - how much is too much?", "acceptable": _SATFAT},
     {"question": "How many carbohydrates can I have per day?", "acceptable": _CARBS},
-    # envelope-attached variants: numbers must come from the (non-)approved plan
+    # Envelope variants: approved numbers may be quoted; pending values may not.
     {"question": "How much sodium can I have per day?", "acceptable": _SODIUM,
      "envelope": "proposed"},
     {"question": "How much fibre do I need daily?", "acceptable": _FIBER,

@@ -1,26 +1,25 @@
-"""Front-selection strategies (Milestone 2).
+"""Deterministic selection of a headline plan from feasible front entries.
 
 A selection strategy picks ONE headline plan from the solver's feasible front
 entries (dicts with ``"plan"``, ``"objectives"``, ``"feasible"``).  The
 strategies here are scored against the ORIGINAL approved envelope passed in —
-never a pool-relaxed or aim-adjusted ("solved") copy — so selection quality is
-always measured against what the clinician actually approved.
+never a pool-relaxed or aim-adjusted ("solved") copy. Callers are responsible for
+supplying that original envelope and feasible entries; these functions do not
+filter or validate feasibility.
 
 Strategies
 ----------
-* :func:`scalar_selection` — the current behaviour: minimise
+* :func:`scalar_selection` — scalar baseline: minimise
   ``problem.scalar_score`` of the entry's objective vector (placeholder
-  weights, raw nutrient units).  Re-exported here as the comparison baseline.
+  weights, raw nutrient units), with a dish-ID tie-break.
 * :func:`normalised_selection` — minimise the mean over days of the
   per-nutrient RELATIVE deviation vs the original envelope aims
   (``|total - aim| / aim`` for TARGET, ``shortfall / aim`` for MIN,
   ``excess / aim`` for MAX), so kcal / mg / g units stop dominating the
-  raw-unit mixing the system review flagged in ``problem.SCALAR_WEIGHTS``.
+  raw-unit mixing in ``problem.SCALAR_WEIGHTS``.
 * :func:`adequacy_first_selection` — lexicographic:
-  1. minimise the WORST-day worst-constraint relative shortfall across the
-     MIN/TARGET aims (the max shortfall fraction over all day x aim pairs;
-     TARGET aims count two-sided ``|total - aim| / aim`` as shortfall of the
-     aim; MAX ceilings are hard constraints, not adequacy aims);
+  1. minimise the largest relative deviation over all day/aim pairs: MIN
+     shortfall or absolute TARGET distance. Exclude hard MAX ceilings;
   2. minimise the count of unmet day-aim pairs (relative shortfall > 1e-9);
   3. minimise ``scalar_score``.
 
@@ -73,7 +72,7 @@ def _relative_day_deviation(totals: dict[str, float], envelope) -> float:
 
 
 def scalar_selection(entries: list[dict], envelope, dishes: list[Dish]) -> dict:
-    """Current behaviour: minimise ``problem.scalar_score`` (baseline)."""
+    """Minimise scalar_score, breaking ties by flattened dish IDs."""
     return min(entries, key=lambda e: (scalar_score(e["objectives"]), _flat_ids(e)))
 
 
@@ -112,7 +111,7 @@ def adequacy_first_selection(entries: list[dict], envelope, dishes: list[Dish]) 
                 value = totals[c.nutrient.value]
                 if c.kind == ConstraintKind.MIN:
                     shortfall = max(0.0, aim - value)
-                else:  # TARGET: two-sided shortfall vs the aim
+                else:  # TARGET: absolute deviation includes overshoot
                     shortfall = abs(value - aim)
                 rel = _relative(shortfall, aim)
                 if rel > worst:

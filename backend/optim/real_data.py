@@ -1,4 +1,4 @@
-"""Real-dish dataset loader + fast vectorised evaluation (CareLoop, Week 2).
+"""Catalogue loading, vector evaluation, and single-dish feasibility heuristics.
 
 ``load_dishes()`` reads ``data/dishes.json`` (flat per-dish nutrient keys) into
 the :class:`backend.optim.toy_data.Dish` contract the whole optimiser already
@@ -9,13 +9,11 @@ The file also provides the performance machinery needed at dish-pool scale:
 * :class:`FastEvaluator` — numpy-backed re-implementation of
   ``problem.evaluate`` for plans drawn from the allowed pool.  Objectives and
   the canonical constraint vector are computed identically (same ordering, same
-  EPS tolerance) but ~50x faster, which keeps pymoo NSGA-II runs and the
-  benchmark harness inside their time budget.
-* :func:`feasibility_precheck` — cheap existence test for the hard constraints
-  (MAX ceilings only; MIN floors and TARGETs are soft per PLAN.md module 4).
-* :func:`greedy_feasible_plan` / :func:`repair_plan` — the feasibility
-  guarantee: a constructive greedy builder plus hill-climbing repair so the
-  production ``run()`` NEVER returns an infeasible plan.
+  EPS tolerance). It avoids repeated Python evaluation during population search.
+* :func:`feasibility_precheck` — cheap necessary-condition test for hard feasibility
+  (MAX ceilings only; MIN floors and TARGETs are soft).
+* :func:`greedy_feasible_plan` / :func:`repair_plan` — bounded construction and
+  repair. Failure returns None, not a proof that no feasible plan exists.
 
 Key structural insight used throughout: every hard constraint in the envelope
 formulation is *per-day* (MAX daily + horizon ``7 x daily`` is implied by the
@@ -63,10 +61,8 @@ _SCALAR_WEIGHT_VEC = np.array(
 def _synthetic_price(row: dict) -> float:
     """Deterministic placeholder price.
 
-    ``data/dishes.json`` carries no ``price_sgd`` field yet, but the ``cost``
-    objective needs a non-degenerate value.  We synthesise a stable, plausible
-    SGD hawker price from energy + protein so cost comparisons are meaningful.
-    Replace with real pricing data when Lane C ships it.
+    Missing catalogue prices use an energy/protein-derived SGD proxy so the cost
+    objective is not constant. It is not a verified market price.
     """
     energy = float(row.get("energy_kcal", 0.0) or 0.0)
     protein = float(row.get("protein_g", 0.0) or 0.0)
@@ -99,9 +95,10 @@ def _load_cached(path: str) -> tuple[Dish, ...]:
 def load_dishes(path: str | None = None) -> list[Dish]:
     """Load the real dish pool from ``data/dishes.json``.
 
-    Returns a fresh list each call (the :class:`Dish` records themselves are
-    frozen).  Raises ``FileNotFoundError`` if the dataset is missing — callers
-    that want the toy fallback should use ``toy_data.load_dishes`` instead.
+    Returns a fresh list of cached Dish records keyed by absolute path. Records
+    are frozen but their nested nutrient mappings must not be mutated. File edits
+    are not detected until cache invalidation or process restart. Missing files
+    raise FileNotFoundError; use ``toy_data.load_dishes`` for a toy fallback.
     """
     if path is None:
         path = DEFAULT_DISHES_PATH
@@ -229,7 +226,7 @@ class FastEvaluator:
         """Canonical HARD-constraint vector; ``G <= 0`` == satisfied.
 
         MAX ceilings only (daily + horizon) — MIN floors and TARGETs are soft
-        objective terms per PLAN.md module 4 and never appear here.  Each
+        objective terms and never appear here. Each
         magnitude is shifted by ``-_EPS`` so the pymoo view of feasibility
         matches ``problem.evaluate``'s EPS tolerance exactly.
         """
@@ -282,12 +279,13 @@ class FastEvaluator:
 # Feasibility precheck
 # ---------------------------------------------------------------------------
 def feasibility_precheck(envelope, dishes: list[Dish], n_days: int = DAYS):
-    """Cheap necessary-condition test: can ANY 3-dish day satisfy the envelope?
+    """Reject obvious single-dish infeasibility without proving existence.
 
     Returns ``(ok, reason)``.  HARD constraints only (MAX ceilings): a failing
     precheck means the allowed pool is provably too narrow — empty pool, or a
     MAX below the least-possible 3-dish day.  MIN floors are soft objective
-    terms (PLAN.md module 4) and never fail the precheck.
+    terms and never fail the precheck. Passing is necessary, not sufficient:
+    independent nutrient minima need not be jointly attainable by one day.
     """
     pool = allowed_dishes(envelope, dishes)
     if not pool:
