@@ -10,6 +10,7 @@ import type {
   Dish,
   AdherenceSummary,
   AdherenceDeviation,
+  CalendarMetadata,
   ReviewQueueResponse,
   ReviewItem,
   ReviewActionRequest,
@@ -23,6 +24,7 @@ import type {
   SimulationListResponse,
   SubstitutionResponse,
   SwapApplyRequest,
+  ApiError,
 } from './types';
 
 const API_PREFIX = '/api';
@@ -56,20 +58,45 @@ function normalizeTrace(row: RuleFire): TraceEntry {
   };
 }
 
+/** HTTP failures preserve the server body/code and the existing display message. */
+export class HttpApiError extends Error implements ApiError {
+  readonly status: number;
+  readonly code: string | undefined;
+  readonly body: unknown;
+  readonly error: string;
+  readonly detail: string;
+  readonly data: string;
+
+  constructor(status: number, code: string | undefined, body: unknown, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.body = body;
+    this.name = 'HttpApiError';
+    this.error = code ?? 'http_error';
+    this.detail = message;
+    this.data = message; // Retain the old message alias for existing callers.
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText;
+    let body: unknown;
+    let code: string | undefined;
     try {
-      const body = await res.json();
-      const raw = body.detail || body.error || body;
-      detail = body.message || (typeof raw === 'string' ? raw : (raw.message || raw.error || JSON.stringify(raw)));
+      body = await res.json();
+      const record = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+      const raw = record.detail || record.error || body;
+      const nested = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+      const serverCode = record.error || nested.error;
+      if (typeof serverCode === 'string') code = serverCode;
+      const message = record.message || (typeof raw === 'string' ? raw : (nested.message || nested.error || JSON.stringify(raw)));
+      if (typeof message === 'string') detail = message;
     } catch {
       // Non-JSON error bodies retain the HTTP status text as the message.
     }
-    const err: any = new Error(detail);
-    err.status = res.status;
-    err.data = detail;
-    throw err;
+    throw new HttpApiError(res.status, code, body, detail);
   }
   return res.json() as Promise<T>;
 }
@@ -109,6 +136,7 @@ export async function getEnvelope(id: string): Promise<Envelope> {
     .then(normalizeEnvelope);
 }
 
+/** Latest envelope in any lifecycle state. This lookup does not authorize planning. */
 export async function getLatestEnvelope(patientId: string): Promise<Envelope> {
   return fetch(`${API_PREFIX}/envelopes/latest?patient_id=${encodeURIComponent(patientId)}`)
     .then((r) => handleResponse<EnvelopeResponse>(r))
@@ -205,6 +233,10 @@ export async function logMeal(payload: {
   }).then((r) => handleResponse<{ patient_id: string; date: string; meal: string; dish_id: string }>(r));
 }
 
+export async function getCalendarMetadata(): Promise<CalendarMetadata> {
+  return fetch(`${API_PREFIX}/calendar`).then((r) => handleResponse<CalendarMetadata>(r));
+}
+
 export async function getAdherenceSummary(
   patientId: string,
   days = 14
@@ -220,7 +252,18 @@ export async function getAdherenceDeviation(
 ): Promise<AdherenceDeviation> {
   return fetch(`${API_PREFIX}/adherence/${patientId}/deviation?days=${days}`).then((r) =>
     handleResponse<AdherenceDeviation>(r)
-  );
+  ).then((data) => ({
+    ...data,
+    // Normalize legacy local flag keys; current keys pass through.
+    flags: data.flags.map((flag) => {
+      const candidates = [
+        `${flag.envelope_id}::v${flag.envelope_version}::${flag.series_key}`,
+        `${flag.envelope_id}::${flag.series_key}`,
+        flag.series_key,
+      ];
+      return { ...flag, series_key: candidates.find((key) => key in data.series) ?? flag.series_key };
+    }),
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -243,6 +286,7 @@ export async function getPlan(planId: string): Promise<MealPlan> {
 // Mining / patient-aware swaps
 // ---------------------------------------------------------------------------
 
+/** Omitted planId uses the latest saved plan. Plan-specific UI must supply its saved ID. */
 export async function getSubstitutions(
   dishId: string,
   patientId: string,
@@ -254,6 +298,9 @@ export async function getSubstitutions(
   ).then((r) => handleResponse<SubstitutionResponse>(r));
 }
 
+/** Replace all occurrences in the saved source; omitted plan_id uses the latest saved plan.
+ * Saving is best-effort. An absent response ID does not establish that no commit occurred.
+ */
 export async function applySwap(payload: SwapApplyRequest): Promise<MealPlan> {
   return fetch(`${API_PREFIX}/mining/swaps/apply`, {
     method: 'POST',
@@ -266,6 +313,7 @@ export async function applySwap(payload: SwapApplyRequest): Promise<MealPlan> {
 // Review queue
 // ---------------------------------------------------------------------------
 
+/** Derive and persist newly seen review conditions, then list by persisted status. */
 export async function getReviewQueue(
   patientId: string | null,
   status: 'open' | 'acknowledged' | 'actioned' | 'all'
@@ -304,7 +352,7 @@ export async function actionReview(reviewId: string, body: ReviewActionRequest):
   }).then((r) => handleResponse<ReviewItem>(r));
 }
 
-export async function proposalReview(reviewId: string): Promise<ReviewProposalResponse> {
+export async function createReviewProposal(reviewId: string): Promise<ReviewProposalResponse> {
   return fetch(`${API_PREFIX}/review/${encodeURIComponent(reviewId)}/proposal`, {
     method: 'POST',
   }).then((r) => handleResponse<ReviewProposalResponse>(r));

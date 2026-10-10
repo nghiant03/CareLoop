@@ -1,10 +1,21 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { approveEnvelope, runRules } from './api';
+import { approveEnvelope, runRules, HttpApiError, getAdherenceDeviation, getCalendarMetadata } from './api';
 import RuleTrace from './components/RuleTrace';
 import type { EnvelopeResponse } from './types';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+test('calendar metadata uses the server-local calendar contract', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    today: '2026-10-12', timezone: 'Pacific/Auckland', utc_offset_minutes: 780,
+  }), { status: 200 }));
+  vi.stubGlobal('fetch', fetchMock);
+  await expect(getCalendarMetadata()).resolves.toEqual({
+    today: '2026-10-12', timezone: 'Pacific/Auckland', utc_offset_minutes: 780,
+  });
+  expect(fetchMock).toHaveBeenCalledWith('/api/calendar');
+});
 
 test('actual wire trace shape retains citations, action text, and superseded markers in the view', async () => {
   const envelope: EnvelopeResponse = {
@@ -26,6 +37,49 @@ test('actual wire trace shape retains citations, action text, and superseded mar
   expect(screen.getByText('KDIGO-SODIUM')).toBeTruthy();
   expect(screen.getByRole('link', { name: /View guideline/ }).getAttribute('href')).toBe('https://example.org/guideline');
   expect(response.trace).toEqual(response.envelope.trace);
+});
+
+test('HTTP errors preserve nested code, full body, status and compatible display aliases', async () => {
+  const body = { detail: { error: 'plan_context_required', message: 'Choose a saved plan.', plan_id: 'old' } };
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 409 })));
+  try {
+    await approveEnvelope('ENV-P1', { clinician_id: 'reviewer' });
+    throw new Error('Expected an HTTP error');
+  } catch (error) {
+    expect(error).toBeInstanceOf(HttpApiError);
+    expect(error).toMatchObject({ status: 409, code: 'plan_context_required', error: 'plan_context_required',
+      message: 'Choose a saved plan.', data: 'Choose a saved plan.', body });
+  }
+});
+
+test('non-JSON HTTP errors retain status text and validation arrays retain their original body', async () => {
+  const fetchMock = vi.fn().mockResolvedValueOnce(new Response('Unavailable', { status: 503, statusText: 'Service unavailable' }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ detail: [{ loc: ['body', 'targets'], msg: 'Required' }] }), { status: 422 }));
+  vi.stubGlobal('fetch', fetchMock);
+  await expect(approveEnvelope('ENV-P1', { clinician_id: 'reviewer' })).rejects.toMatchObject({ status: 503, message: 'Service unavailable' });
+  await expect(approveEnvelope('ENV-P1', { clinician_id: 'reviewer' })).rejects.toMatchObject({ status: 422,
+    body: { detail: [{ loc: ['body', 'targets'], msg: 'Required' }] } });
+});
+
+test('historical flags normalize to exact envelope/version series identities without changing wire keys', async () => {
+  const flags = [
+    { series_key: 'sodium_mg', envelope_id: 'ENV-A', envelope_version: 1 },
+    { series_key: 'sodium_mg', envelope_id: 'ENV-A', envelope_version: 2 },
+    { series_key: 'protein_g', envelope_id: 'ENV-B', envelope_version: 1 },
+  ];
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    series: { 'ENV-A::v1::sodium_mg': {}, 'ENV-A::v2::sodium_mg': {}, 'ENV-B::protein_g': {} }, flags,
+  }), { status: 200 })));
+  expect((await getAdherenceDeviation('P1')).flags.map((flag) => flag.series_key)).toEqual([
+    'ENV-A::v1::sodium_mg', 'ENV-A::v2::sodium_mg', 'ENV-B::protein_g',
+  ]);
+});
+
+test('legacy single-envelope flag keys remain unchanged', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    series: { sodium_mg: {} }, flags: [{ series_key: 'sodium_mg' }],
+  }), { status: 200 })));
+  expect((await getAdherenceDeviation('P1')).flags[0].series_key).toBe('sodium_mg');
 });
 
 test('lifecycle conflicts retain the server reload instruction and status', async () => {

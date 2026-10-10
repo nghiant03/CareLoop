@@ -10,7 +10,7 @@ import SimulationScreen from './screens/SimulationScreen';
 
 function AppContent() {
   const location = useLocation();
-  const role =
+  const activeScreen =
     location.pathname === '/plan'
       ? 'patient'
       : location.pathname === '/chat'
@@ -25,7 +25,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <TopBar role={role} />
+      <TopBar activeScreen={activeScreen} />
       <OfflineBanner />
       <Routes>
         <Route path="/" element={<ClinicianReviewScreen />} />

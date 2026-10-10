@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { listPatients, searchDishes, logMeal, getAdherenceSummary, getAdherenceDeviation } from '../api';
+import { listPatients, searchDishes, logMeal, getCalendarMetadata, getAdherenceSummary, getAdherenceDeviation } from '../api';
 import type { Patient, Dish, AdherenceSummary, AdherenceDeviation, AdherenceAnalysis } from '../types';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
 import { useRequestScope } from '../hooks/useRequestScope';
-
-const TODAY = new Date().toISOString().slice(0, 10);
 
 const NUTRIENT_LABELS: Record<string, string> = {
   energy_kcal: 'Energy',
@@ -169,7 +167,12 @@ export default function AdherenceScreen() {
 }
 
 function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () => void }) {
-  const [date, setDate] = useState(TODAY);
+  const [date, setDate] = useState('');
+  const dateEdited = useRef(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [calendarRetry, setCalendarRetry] = useState(0);
+  const [manualDateConfirmed, setManualDateConfirmed] = useState(false);
+  const searchRequests = useRequestScope();
   const [meal, setMeal] = useState<'breakfast' | 'lunch' | 'dinner'>('breakfast');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Dish[]>([]);
@@ -178,21 +181,34 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [items, setItems] = useState<{ dish: Dish; quantity: number }[]>([]);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
+    let current = true;
+    getCalendarMetadata()
+      .then(({ today }) => {
+        if (current && !dateEdited.current) setDate(today);
+      })
+      .catch((err: Error) => {
+        if (current) setCalendarError(err.message || 'Could not load the server date.');
+      });
+    return () => { current = false; };
+  }, [calendarRetry]);
+
+  useEffect(() => {
+    const isCurrent = searchRequests.start('dish-search');
     if (!query.trim()) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
+    const timer = setTimeout(() => {
       searchDishes(query)
-        .then((data) => setResults(data.dishes || []))
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
+        .then((data) => { if (isCurrent()) setResults(data.dishes || []); })
+        .catch((err: Error) => { if (isCurrent()) setSearchError(err.message || 'Dish search unavailable'); })
+        .finally(() => { if (isCurrent()) setSearching(false); });
     }, 300);
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      clearTimeout(timer);
+      searchRequests.reset();
     };
-  }, [query]);
+  }, [query, searchRequests]);
 
   const handleSelect = (dish: Dish) => {
     setItems((current) => [...current, { dish, quantity: 1 }]);
@@ -245,8 +261,8 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
                 className="px-3 py-2 text-sm text-rose-700 underline">Remove</button>
             </div>
           ))}
-          <button onClick={handleSave}
-            disabled={logging || items.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0 || item.quantity > 10)}
+           <button onClick={handleSave}
+             disabled={logging || !date || (!!calendarError && !manualDateConfirmed) || items.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0 || item.quantity > 10)}
             className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50">
             {logging ? 'Saving meal…' : 'Save meal'}
           </button>
@@ -279,9 +295,18 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
             id="log-date"
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => { dateEdited.current = true; setDate(e.target.value); setManualDateConfirmed(false); }}
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
           />
+          {calendarError ? (
+            <div className="mt-1 text-xs text-rose-800" role="alert">
+              <p>Server date unavailable. Retry, or enter a date and confirm manual entry.</p>
+              <button type="button" className="mt-1 font-medium underline" onClick={() => { setCalendarError(null); setCalendarRetry((n) => n + 1); }}>Retry</button>
+              {date && <button type="button" className="ml-3 mt-1 font-medium underline" onClick={() => setManualDateConfirmed(true)}>Use this date manually</button>}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">{date ? 'Defaults to the server’s calendar date.' : 'Loading server date…'}</p>
+          )}
         </div>
         <div>
           <label htmlFor="log-meal" className="mb-1 block text-sm font-medium text-slate-700">
@@ -310,6 +335,9 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
             value={query}
             onChange={(e) => {
               const value = e.target.value;
+              searchRequests.reset();
+              setSearchError(null);
+              setResults([]);
               setQuery(value);
               if (value.trim()) {
                 setSearching(true);
@@ -329,6 +357,8 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
           <p className="text-sm text-slate-500">Type a dish name to search.</p>
         ) : searching ? (
           <LoadingState text="Searching dishes…" />
+        ) : searchError ? (
+          <p role="alert" className="text-sm text-rose-800">Search unavailable: {searchError}</p>
         ) : results.length === 0 ? (
           <EmptyState title="No dishes found" description="Try a different search term." />
         ) : (
@@ -517,7 +547,7 @@ function NutrientSummaryBar({ analysis }: { analysis: AdherenceAnalysis }) {
           <span className="font-medium text-rose-600">Over limit</span>
         )}
         {analysis.status === 'soft_gap' && (
-          <span className="font-medium text-amber-600">Below aim</span>
+          <span className="font-medium text-amber-600">{analysis.kind === 'target' ? (analysis.direction === 'over' ? 'Above target' : analysis.direction === 'under' ? 'Below target' : 'Target deviation') : 'Below aim'}</span>
         )}
         {analysis.status === 'ok' && (
           <span className="font-medium text-emerald-600">On track</span>
@@ -599,6 +629,8 @@ function SeriesCard({
   flag: import('../types').TrendFlag | undefined;
 }) {
   const latest = series.points[series.points.length - 1];
+  // The backend's default trend assessment requires three complete-day points.
+  const assessmentAvailable = series.points.filter((point) => point.complete !== false).length >= 3;
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex items-center justify-between">
@@ -634,7 +666,7 @@ function SeriesCard({
       )}
       {!flag && (
         <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Stable
+          {assessmentAvailable ? 'No detected trend' : 'Not assessed: fewer than three complete logged days'}
         </div>
       )}
     </div>

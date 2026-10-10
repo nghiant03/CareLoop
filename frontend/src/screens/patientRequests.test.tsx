@@ -46,7 +46,7 @@ afterEach(() => { cleanup(); vi.resetAllMocks(); });
 test('a late proposal cannot appear or be approved for the newly selected patient', async () => {
   const proposal = deferred<api.RulesRunResult>();
   vi.mocked(api.runRules).mockReturnValueOnce(proposal.promise);
-  render(<ClinicianReviewScreen />);
+  render(<MemoryRouter><ClinicianReviewScreen /></MemoryRouter>);
   const user = userEvent.setup();
   await user.click(await screen.findByRole('heading', { name: 'Patient A' }));
   await user.click(screen.getByRole('button', { name: 'Generate proposed envelope' }));
@@ -60,7 +60,7 @@ test('a late proposal cannot appear or be approved for the newly selected patien
 test('approval submits the revision the clinician actually reviewed', async () => {
   vi.mocked(api.runRules).mockResolvedValue({ envelope: envelope('A'), trace: [] });
   vi.mocked(api.approveEnvelope).mockResolvedValue({ ...envelope('A'), status: 'APPROVED' });
-  render(<ClinicianReviewScreen />);
+  render(<MemoryRouter><ClinicianReviewScreen /></MemoryRouter>);
   const user = userEvent.setup();
   await user.click(await screen.findByRole('heading', { name: 'Patient A' }));
   await user.click(screen.getByRole('button', { name: 'Generate proposed envelope' }));
@@ -74,7 +74,7 @@ test('a conflict can reload the latest envelope without approving it automatical
   vi.mocked(api.runRules).mockResolvedValue({ envelope: envelope('A'), trace: [] });
   vi.mocked(api.approveEnvelope).mockRejectedValue(new Error('Envelope changed; reload before retrying.'));
   vi.mocked(api.getEnvelope).mockResolvedValue({ ...envelope('A'), lifecycle_revision: 8, status: 'EDITED' });
-  render(<ClinicianReviewScreen />);
+  render(<MemoryRouter><ClinicianReviewScreen /></MemoryRouter>);
   const user = userEvent.setup();
   await user.click(await screen.findByRole('heading', { name: 'Patient A' }));
   await user.click(screen.getByRole('button', { name: 'Generate proposed envelope' }));

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listPatients, listSimulations, createSimulation, getLatestEnvelope } from '../api';
+import { HttpApiError, listPatients, listSimulations, createSimulation, getLatestEnvelope } from '../api';
 import type {
   Patient,
   NutrientConstraint,
@@ -22,6 +22,9 @@ export default function SimulationScreen() {
   const [result, setResult] = useState<Simulation | null>(null);
   const [past, setPast] = useState<Simulation[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
+  const [pastError, setPastError] = useState<string | null>(null);
+  const [prefillLoading, setPrefillLoading] = useState(false);
+  const [prefillNotice, setPrefillNotice] = useState<string | null>(null);
 
   useEffect(() => {
     listPatients()
@@ -33,11 +36,13 @@ export default function SimulationScreen() {
   const loadPast = async (patientId: string) => {
     const isCurrent = requests.start('past');
     setPastLoading(true);
+    setPastError(null);
     try {
       const res = await listSimulations(patientId);
       if (isCurrent()) setPast(res.simulations);
-    } catch {
-      // past simulations are optional
+    } catch (err: any) {
+      // A history failure must not hide a successful new comparison.
+      if (isCurrent()) setPastError(err.message || 'Simulation history unavailable');
     } finally {
       if (isCurrent()) setPastLoading(false);
     }
@@ -51,14 +56,17 @@ export default function SimulationScreen() {
     setResult(null);
     setPast([]);
     setPastLoading(false);
+    setPastError(null);
+    setPrefillLoading(!!patient);
+    setPrefillNotice(null);
     setRunning(false);
     setError(null);
     if (patient) {
-      // Prefill the target editor from the patient's current envelope so the
-      // clinician edits the actual baseline instead of retyping constraints.
+      // Copy the latest envelope's targets to avoid retyping. This lookup accepts any status.
       try {
         const envelope = await getLatestEnvelope(patient.id);
         if (!isCurrent()) return;
+        if (envelope.status !== 'APPROVED') setPrefillNotice(`Latest envelope is ${envelope.status}; approval is required before simulation.`);
         const constraints = (envelope.constraints || []).map((c) => ({
           nutrient: c.nutrient,
           kind: c.kind,
@@ -66,8 +74,12 @@ export default function SimulationScreen() {
           unit: c.unit,
         }));
         if (constraints.length > 0) setTargets(constraints);
-      } catch {
-        // Prefill is optional; keep the empty editor after any fetch failure.
+      } catch (err: any) {
+        if (isCurrent()) setPrefillNotice(err instanceof HttpApiError && err.code === 'envelope_not_found'
+          ? 'No envelope exists for this patient. Generate a proposal in Clinician review first.'
+          : `Latest envelope unavailable: ${err.message || 'targets were not loaded'}`);
+      } finally {
+        if (isCurrent()) setPrefillLoading(false);
       }
       if (isCurrent()) await loadPast(patient.id);
     }
@@ -165,8 +177,10 @@ export default function SimulationScreen() {
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
               Proposed targets
             </h2>
+            {prefillNotice && <p role="status" className="mb-3 text-sm text-amber-800">{prefillNotice}</p>}
+            {prefillLoading && <LoadingState text="Loading latest envelope…" />}
             {targets.length === 0 ? (
-              <EmptyState title="No targets loaded" description="The patient's approved envelope has no editable targets." />
+              <EmptyState title="No targets loaded" description="No editable targets have been loaded from the latest envelope." />
             ) : (
               <div className="space-y-2">
                 {targets.map((target, idx) => (
@@ -238,6 +252,8 @@ export default function SimulationScreen() {
             <h2 className="mb-4 text-lg font-semibold text-slate-900">Past simulations</h2>
             {pastLoading ? (
               <LoadingState text="Loading past simulations…" />
+            ) : pastError ? (
+              <p role="alert" className="text-sm text-rose-800">History unavailable: {pastError}</p>
             ) : past.length === 0 ? (
               <EmptyState title="No past simulations" description="Run a what-if to see comparisons here." />
             ) : (
@@ -330,7 +346,7 @@ function DeltasCard({ deltas }: { deltas: SimulationDeltas }) {
   const rows = [
     { label: 'Cost', key: 'cost', lowerIsBetter: true },
     { label: 'Nutrient target deviation', key: 'nutrient_target_deviation', lowerIsBetter: true },
-    { label: 'Variety', key: 'variety', lowerIsBetter: false },
+    { label: 'Variety objective', key: 'variety', lowerIsBetter: true },
     { label: 'Worst shortfall %', key: 'worst_shortfall_pct', lowerIsBetter: true },
     { label: 'Meals changed', key: 'meals_changed', lowerIsBetter: null },
   ] as const;
@@ -381,7 +397,7 @@ function SimulationCard({ simulation }: { simulation: Simulation }) {
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
         <DeltaValue label="Cost" value={simulation.deltas.cost} lowerIsBetter />
         <DeltaValue label="Deviation" value={simulation.deltas.nutrient_target_deviation} lowerIsBetter />
-        <DeltaValue label="Variety" value={simulation.deltas.variety} />
+        <DeltaValue label="Variety objective" value={simulation.deltas.variety} lowerIsBetter />
         <DeltaValue label="Meals changed" value={simulation.deltas.meals_changed} />
       </div>
     </div>

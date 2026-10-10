@@ -1,11 +1,10 @@
-import type { NutrientConstraint, Citation } from '../types';
+import type { NutrientConstraint } from '../types';
 
 interface ConstraintTableProps {
   constraints: NutrientConstraint[];
-  citations?: Citation[];
 }
 
-export default function ConstraintTable({ constraints, citations }: ConstraintTableProps) {
+export default function ConstraintTable({ constraints }: ConstraintTableProps) {
   if (!constraints || constraints.length === 0) {
     return <p className="text-sm text-slate-500">No nutrient constraints returned.</p>;
   }
@@ -20,12 +19,12 @@ export default function ConstraintTable({ constraints, citations }: ConstraintTa
             <th className="px-4 py-3 font-semibold">Value</th>
             <th className="px-4 py-3 font-semibold">Unit</th>
             <th className="px-4 py-3 font-semibold">Note</th>
-            <th className="px-4 py-3 font-semibold">Guideline</th>
+            <th className="px-4 py-3 font-semibold">Source</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {constraints.map((c, idx) => {
-            const citation = citations?.find((ct) => ct.rule_id === c.id);
+            const citation = c.provenance?.citation;
             return (
               <tr key={`${c.nutrient}-${idx}`} className="hover:bg-slate-50/60">
                 <td className="px-4 py-3 font-medium text-slate-900">{c.nutrient}</td>
@@ -59,6 +58,7 @@ export default function ConstraintTable({ constraints, citations }: ConstraintTa
                   ) : (
                     <span className="text-slate-500">{citation?.guideline || '—'}</span>
                   )}
+                  {c.provenance && <p className="text-xs text-slate-500">Author: {c.provenance.author}</p>}
                 </td>
               </tr>
             );

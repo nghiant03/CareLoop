@@ -10,8 +10,13 @@ export interface Patient {
   meds?: string[];
 }
 
+export interface CalendarMetadata {
+  today: string;
+  timezone: string;
+  utc_offset_minutes: number;
+}
+
 export interface NutrientConstraint {
-  id?: string;
   nutrient: string;
   kind: 'max' | 'min' | 'target';
   value: number;
@@ -172,9 +177,9 @@ export interface AdequacyItem {
   /** One-based day with the largest deviation; earliest day wins a tie. */
   worst_day: number;
   worst_daily: number;
-  /** Compatibility name: MIN shortfall or absolute TARGET deviation (including overshoot). */
+  /** Compatibility name: MIN shortfall or absolute TARGET deviation, including overshoot. */
   shortfall: number;
-  /** Same deviation as a percentage of the original aim. */
+  /** Same deviation as a percentage of the original aim; zero when aim <= 1e-9. */
   shortfall_pct: number;
   met_days: number;
   total_days: number;
@@ -182,6 +187,7 @@ export interface AdequacyItem {
 }
 
 export interface MealPlan {
+  envelope_version?: number;
   adequate?: boolean;
   meal_complete?: boolean;
   data_quality?: { unverified_dishes: number; dish_count: number; cost_is_estimated: boolean };
@@ -301,6 +307,8 @@ export interface AdherenceSummary {
 }
 
 export interface AdherencePoint {
+  /** Absent on older responses; the backend treats those points as complete. */
+  complete?: boolean;
   date: string;
   total: number;
   pct: number;
@@ -316,6 +324,8 @@ export interface AdherenceSeries {
 }
 
 export interface TrendFlag {
+  envelope_id?: string;
+  envelope_version?: number;
   nutrient: string;
   series_key: string;
   kind: 'max' | 'min' | 'target';

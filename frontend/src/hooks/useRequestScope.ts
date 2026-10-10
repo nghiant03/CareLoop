@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-/** Guards let callers discard stale responses; they do not cancel network requests. */
+/** Guards let callers discard stale responses without cancelling network requests. */
 class RequestScope {
   private generation = 0;
   private requests = new Map<string, symbol>();
@@ -12,7 +12,7 @@ class RequestScope {
   };
 
   /** Return a predicate that stays true until reset or another start for this resource.
-   * Starting a different resource leaves this guard valid; no request is sent here.
+   * Starting a different resource leaves this guard valid. No request is sent here.
    */
   start = (resource: string) => {
     const generation = this.generation;

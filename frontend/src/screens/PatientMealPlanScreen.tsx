@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { listPatients, createPlan, listPlans, getPlan, getSubstitutions, applySwap } from '../api';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { HttpApiError, listPatients, createPlan, listPlans, getPlan, getSubstitutions, applySwap } from '../api';
 import type {
   Patient,
   MealPlan,
@@ -15,12 +15,18 @@ import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
 import { useRequestScope } from '../hooks/useRequestScope';
 
+const SwapApplicationContext = createContext<{ pending: boolean; begin: () => boolean; end: () => void }>({ pending: false, begin: () => false, end: () => {} });
+
 export default function PatientMealPlanScreen() {
   const requests = useRequestScope();
+  // Invalidate swap callbacks as soon as a different plan is requested, before its response.
+  const planRequests = useRequestScope();
   const selectionIsCurrent = requests.capture();
+  const planIsCurrent = planRequests.capture();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [needsApproval, setNeedsApproval] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [plan, setPlan] = useState<MealPlan | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
@@ -50,19 +56,23 @@ export default function PatientMealPlanScreen() {
   const handleGeneratePlan = async () => {
     if (!selectedPatient) return;
     const isCurrent = requests.start('plan');
+    planRequests.reset();
     setPlanLoading(true);
     setError(null);
+    setNeedsApproval(false);
     setPlan(null);
     try {
       const result = await createPlan({ patient_id: selectedPatient.id });
       if (!isCurrent()) return;
+      planRequests.reset();
       setPlan(result);
       await loadSavedPlans(selectedPatient.id);
     } catch (err: any) {
       if (!isCurrent()) return;
       const message = err.message || 'Failed to create plan';
       setError(message);
-      if (message.toLowerCase().includes('envelope_not_approved') || err.status === 409) {
+      if (err instanceof HttpApiError && err.code === 'envelope_not_approved') {
+        setNeedsApproval(true);
         setError('This patient does not have an approved envelope. Approve a proposed envelope in the Clinician review screen first.');
       }
     } finally {
@@ -72,19 +82,22 @@ export default function PatientMealPlanScreen() {
 
   const handleLoadPlan = async (planId: string) => {
     const isCurrent = requests.start('plan');
+    planRequests.reset();
     setPlanLoading(true);
     setError(null);
+    setNeedsApproval(false);
     try {
       const loaded = await getPlan(planId);
-      if (isCurrent()) setPlan(loaded);
+      if (isCurrent()) {
+        planRequests.reset();
+        setPlan(loaded);
+      }
     } catch (err: any) {
       if (isCurrent()) setError(err.message || 'Failed to load plan');
     } finally {
       if (isCurrent()) setPlanLoading(false);
     }
   };
-
-  const needsApproval = error?.toLowerCase().includes('envelope_not_approved') || error?.toLowerCase().includes('approved envelope');
 
   return (
     <main className="min-h-screen bg-slate-50 pb-12">
@@ -127,6 +140,7 @@ export default function PatientMealPlanScreen() {
                   value={selectedPatient?.id || ''}
                   onChange={(e) => {
                     requests.reset();
+                    planRequests.reset();
                     const p = patients.find((pt) => pt.id === e.target.value) || null;
                     setSelectedPatient(p);
                     setPlan(null);
@@ -166,17 +180,19 @@ export default function PatientMealPlanScreen() {
           />
         )}
 
-        {plan && (
+        {plan && !planLoading && (
           <PlanView
+            key={plan.plan_id || 'unsaved'}
             plan={plan}
             onPlanUpdate={(newPlan) => {
-              if (!selectionIsCurrent()) return;
+              if (!selectionIsCurrent() || !planIsCurrent()) return;
+              planRequests.reset();
               setPlan(newPlan);
               if (selectedPatient) {
                 loadSavedPlans(selectedPatient.id);
               }
             }}
-            onError={(message) => { if (selectionIsCurrent()) setError(message); }}
+            onError={(message) => { if (selectionIsCurrent() && planIsCurrent()) setError(message); }}
           />
         )}
       </div>
@@ -259,7 +275,24 @@ function PlanView({
   onPlanUpdate: (plan: MealPlan) => void;
   onError: (msg: string) => void;
 }) {
+  const [swapPending, setSwapPending] = useState(false);
+  // Share one lock across slots; the ref rejects another click before React commits disabled controls.
+  const swapLock = useRef(false);
+  const swapApplications = {
+    pending: swapPending,
+    begin: () => {
+      if (swapLock.current) return false;
+      swapLock.current = true;
+      setSwapPending(true);
+      return true;
+    },
+    end: () => {
+      swapLock.current = false;
+      setSwapPending(false);
+    },
+  };
   return (
+    <SwapApplicationContext.Provider value={swapApplications}>
     <div className="space-y-6">
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">{plan.patient_id} — 7-day plan</h2>
@@ -292,6 +325,7 @@ function PlanView({
         ))
       )}
     </div>
+    </SwapApplicationContext.Provider>
   );
 }
 
@@ -566,7 +600,7 @@ function DayCard({
             </h4>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {slots.map((slot, idx) => (
-                <SlotCard key={idx} slot={slot} plan={plan} onPlanUpdate={onPlanUpdate} onError={onError} />
+                <SlotCard key={`${meal}-${idx}-${slot.dish_id}`} slot={slot} plan={plan} onPlanUpdate={onPlanUpdate} onError={onError} />
               ))}
             </div>
           </div>
@@ -611,13 +645,13 @@ function SlotCard({
 }) {
   const nutrients = slot.nutrients || {};
   const summary = [
-    nutrients.kcal ?? nutrients.energy_kcal,
-    nutrients.protein_g,
-    nutrients.sodium_mg,
-    nutrients.potassium_mg,
-    nutrients.phosphorus_mg,
+    { label: 'Energy', value: nutrients.kcal ?? nutrients.energy_kcal, unit: 'kcal' },
+    { label: 'Protein', value: nutrients.protein_g, unit: 'g' },
+    { label: 'Sodium', value: nutrients.sodium_mg, unit: 'mg' },
+    { label: 'Potassium', value: nutrients.potassium_mg, unit: 'mg' },
+    { label: 'Phosphorus', value: nutrients.phosphorus_mg, unit: 'mg' },
   ]
-    .filter((v) => typeof v === 'number')
+    .filter((entry) => typeof entry.value === 'number')
     .slice(0, 3);
 
   return (
@@ -627,7 +661,7 @@ function SlotCard({
       {slot.category && <p className="text-xs text-slate-500">{slot.category}</p>}
       {summary.length > 0 && (
         <p className="mt-2 text-xs text-slate-600">
-          {summary.map((v) => Number(v).toFixed(1)).join(' / ')} {getNutrientUnitForSummary(Object.keys(nutrients))}
+          {summary.map((entry) => `${entry.label} ${Number(entry.value).toFixed(1)} ${entry.unit}`).join(' · ')}
         </p>
       )}
       <SwapButton slot={slot} plan={plan} onPlanUpdate={onPlanUpdate} onError={onError} />
@@ -646,6 +680,9 @@ function SwapButton({
   onPlanUpdate: (plan: MealPlan) => void;
   onError: (msg: string) => void;
 }) {
+  const requests = useRequestScope();
+  const applications = useContext(SwapApplicationContext);
+  const savedPlanId = plan.plan_id?.trim() ? plan.plan_id : undefined;
   const [open, setOpen] = useState(false);
   const [substitutions, setSubstitutions] = useState<SubstituteDish[]>([]);
   const [loading, setLoading] = useState(false);
@@ -654,35 +691,42 @@ function SwapButton({
   const [informationalOnly, setInformationalOnly] = useState(false);
 
   const handleSuggest = async () => {
+    if (!savedPlanId || applications.pending) return;
+    const isCurrent = requests.start('suggestions');
     setLoading(true);
     try {
-      const result = await getSubstitutions(slot.dish_id, plan.patient_id, 3, plan.plan_id);
+      const result = await getSubstitutions(slot.dish_id, plan.patient_id, 3, savedPlanId);
+      if (!isCurrent()) return;
       setSubstitutions(result.substitutions || []);
       setNotice(result.notice);
       setInformationalOnly(result.informational_only);
       setOpen(true);
     } catch (err: any) {
-      onError(err.message || 'Failed to load substitutions');
+      if (isCurrent()) onError(err.message || 'Failed to load substitutions');
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
   const handleApply = async (sub: SubstituteDish) => {
+    if (!savedPlanId || informationalOnly || !applications.begin()) return;
+    const isCurrent = requests.capture();
     setApplying(sub.dish_id);
     try {
       const newPlan = await applySwap({
         patient_id: plan.patient_id,
         dish_id: slot.dish_id,
         replacement_dish_id: sub.dish_id,
-        plan_id: plan.plan_id,
+        plan_id: savedPlanId,
       });
+      if (!isCurrent()) return;
       onPlanUpdate(newPlan);
       setOpen(false);
     } catch (err: any) {
-      onError(err.message || 'Failed to apply swap');
+      if (isCurrent()) onError(err.message || 'Failed to apply swap');
     } finally {
-      setApplying(null);
+      applications.end();
+      if (isCurrent()) setApplying(null);
     }
   };
 
@@ -690,11 +734,12 @@ function SwapButton({
     <>
       <button
         onClick={handleSuggest}
-        disabled={loading}
+        disabled={loading || applications.pending || !savedPlanId}
         className="mt-2 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-200 hover:bg-sky-50 disabled:text-slate-400 transition-colors"
       >
         {loading ? 'Loading…' : 'Suggest swaps'}
       </button>
+      {!savedPlanId && <p className="mt-2 text-xs text-amber-800">Swaps require a saved plan ID. Reload a saved plan to choose its exact source.</p>}
       {open && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
           <div className="w-full max-w-3xl rounded-xl bg-white p-5 shadow-2xl ring-1 ring-slate-900/10">
@@ -720,7 +765,7 @@ function SwapButton({
                   <SubstitutionCard
                     key={sub.dish_id}
                     sub={sub}
-                    disabled={informationalOnly || applying === sub.dish_id}
+                    disabled={informationalOnly || applications.pending || applying !== null}
                     onApply={() => handleApply(sub)}
                   />
                 ))}
@@ -810,11 +855,6 @@ function SubstitutionCard({
       )}
     </div>
   );
-}
-
-function getNutrientUnitForSummary(keys: string[]) {
-  if (keys.includes('kcal') || keys.includes('energy_kcal')) return 'kcal / g / mg';
-  return '';
 }
 
 function NutrientBar({ nutrient }: { nutrient: PlanTotal }) {

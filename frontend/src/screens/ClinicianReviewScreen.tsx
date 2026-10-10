@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   listPatients,
   runRules,
   getEnvelope,
+  getPatient,
   approveEnvelope,
   rejectEnvelope,
   editEnvelope,
@@ -19,6 +21,8 @@ import EditEnvelopeModal from '../components/EditEnvelopeModal';
 import { useRequestScope } from '../hooks/useRequestScope';
 
 export default function ClinicianReviewScreen() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedEnvelopeId = searchParams.get('envelope');
   const requests = useRequestScope();
   const selectionIsCurrent = requests.capture();
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -42,7 +46,45 @@ export default function ClinicianReviewScreen() {
       .finally(() => setLoadingPatients(false));
   }, []);
 
+  useEffect(() => {
+    if (!linkedEnvelopeId) return;
+    requests.reset();
+    const isCurrent = requests.start('envelope');
+    let active = true;
+    setEnvelope(null);
+    setSelectedPatient(null);
+    setObservations([]);
+    setIsEditOpen(false);
+    setActionLoading(false);
+    setSavingEdit(false);
+    setEnvelopeLoading(true);
+    setError(null);
+    const loadLinkedProposal = async () => {
+      try {
+        const proposal = await getEnvelope(linkedEnvelopeId);
+        const patient = await getPatient(proposal.patient_id);
+        if (!active || !isCurrent()) return;
+        setSelectedPatient(patient);
+        setEnvelope(proposal);
+        setObservationsLoading(true);
+        try {
+          const result = await listObservations(patient.id);
+          if (active && isCurrent()) setObservations(result.observations);
+        } finally {
+          if (active && isCurrent()) setObservationsLoading(false);
+        }
+      } catch (err: any) {
+        if (active && isCurrent()) setError(err.message || 'Failed to load linked proposal');
+      } finally {
+        if (active && isCurrent()) setEnvelopeLoading(false);
+      }
+    };
+    void loadLinkedProposal();
+    return () => { active = false; };
+  }, [linkedEnvelopeId, requests]);
+
   const handleSelect = (patient: Patient) => {
+    setSearchParams({});
     requests.reset();
     setSelectedPatient(patient);
     setEnvelope(null);
@@ -69,9 +111,11 @@ export default function ClinicianReviewScreen() {
   };
 
   const handleGenerate = async () => {
-    if (!selectedPatient) return;
+    if (!selectedPatient || envelopeLoading || actionLoading || savingEdit || isEditOpen) return;
     const isCurrent = requests.start('envelope');
     setEnvelopeLoading(true);
+    setActionLoading(false);
+    setSavingEdit(false);
     setError(null);
     try {
       const result = await runRules(selectedPatient.id);
@@ -84,7 +128,7 @@ export default function ClinicianReviewScreen() {
   };
 
   const handleApprove = async () => {
-    if (!envelope) return;
+    if (!envelope || envelopeLoading || actionLoading || savingEdit) return;
     const isCurrent = requests.start('envelope');
     setActionLoading(true);
     try {
@@ -100,7 +144,7 @@ export default function ClinicianReviewScreen() {
   };
 
   const handleReject = async () => {
-    if (!envelope) return;
+    if (!envelope || envelopeLoading || actionLoading || savingEdit) return;
     const isCurrent = requests.start('envelope');
     setActionLoading(true);
     try {
@@ -121,7 +165,7 @@ export default function ClinicianReviewScreen() {
   };
 
   const handleReloadEnvelope = async () => {
-    if (!envelope) return;
+    if (!envelope || envelopeLoading || actionLoading || savingEdit) return;
     const isCurrent = requests.start('envelope');
     setActionLoading(true);
     setIsEditOpen(false);
@@ -214,7 +258,7 @@ export default function ClinicianReviewScreen() {
               </div>
               <button
                 onClick={handleGenerate}
-                disabled={envelopeLoading}
+                disabled={envelopeLoading || actionLoading || savingEdit || isEditOpen}
                 className="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 disabled:bg-sky-300 transition-colors"
               >
                 {envelopeLoading ? 'Generating…' : 'Generate proposed envelope'}
@@ -236,7 +280,7 @@ export default function ClinicianReviewScreen() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleApprove}
-                  disabled={actionLoading || envelope.status === 'APPROVED' || envelope.status === 'REJECTED' || (envelope.constraints?.length ?? 0) === 0}
+                  disabled={envelopeLoading || savingEdit || actionLoading || envelope.status === 'APPROVED' || envelope.status === 'REJECTED' || !envelope.scope_eligible || (envelope.constraints?.length ?? 0) === 0}
                   title={envelope.status === 'REJECTED' ? 'Out-of-scope proposal — cannot be approved' : undefined}
                   className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed transition-colors"
                 >
@@ -244,19 +288,19 @@ export default function ClinicianReviewScreen() {
                 </button>
                 <button
                   onClick={handleEdit}
-                  disabled={actionLoading || envelope.status === 'REJECTED' || !envelope.scope_eligible}
+                  disabled={envelopeLoading || savingEdit || actionLoading || envelope.status === 'REJECTED' || !envelope.scope_eligible}
                   className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 transition-colors"
                 >
                   Edit
                 </button>
                 <button
                   onClick={handleReject}
-                  disabled={actionLoading || envelope.status === 'REJECTED'}
+                  disabled={envelopeLoading || savingEdit || actionLoading || envelope.status === 'REJECTED'}
                   className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50 transition-colors"
                 >
                   {actionLoading ? 'Working…' : 'Reject'}
                 </button>
-                <button onClick={handleReloadEnvelope} disabled={actionLoading}
+                <button onClick={handleReloadEnvelope} disabled={envelopeLoading || savingEdit || actionLoading}
                   className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-700 underline disabled:opacity-50">
                   Reload envelope
                 </button>
@@ -269,7 +313,6 @@ export default function ClinicianReviewScreen() {
               </h3>
               <ConstraintTable
                 constraints={envelope.constraints || []}
-                citations={envelope.citations || []}
               />
             </div>
 

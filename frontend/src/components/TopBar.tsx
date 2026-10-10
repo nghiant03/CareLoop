@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
 
 interface TopBarProps {
-  role: 'clinician' | 'patient' | 'chat' | 'adherence' | 'review' | 'simulation';
+  activeScreen: 'clinician' | 'patient' | 'chat' | 'adherence' | 'review' | 'simulation';
 }
 
-const roleLabel: Record<TopBarProps['role'], string> = {
+const screenLabel: Record<TopBarProps['activeScreen'], string> = {
   clinician: 'Clinician',
   patient: 'Meal Plan',
   chat: 'Chat',
@@ -13,7 +13,7 @@ const roleLabel: Record<TopBarProps['role'], string> = {
   simulation: 'What-if',
 };
 
-const roleClass: Record<TopBarProps['role'], string> = {
+const screenClass: Record<TopBarProps['activeScreen'], string> = {
   clinician: 'bg-sky-100 text-sky-800',
   patient: 'bg-emerald-100 text-emerald-800',
   chat: 'bg-violet-100 text-violet-800',
@@ -22,7 +22,7 @@ const roleClass: Record<TopBarProps['role'], string> = {
   simulation: 'bg-indigo-100 text-indigo-800',
 };
 
-export default function TopBar({ role }: TopBarProps) {
+export default function TopBar({ activeScreen }: TopBarProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6 lg:px-8">
@@ -34,9 +34,9 @@ export default function TopBar({ role }: TopBarProps) {
             <span className="text-lg font-semibold tracking-tight text-slate-900">CareLoop</span>
           </Link>
           <span
-            className={`hidden sm:inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${roleClass[role]}`}
+            className={`hidden sm:inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${screenClass[activeScreen]}`}
           >
-            {roleLabel[role]}
+            {screenLabel[activeScreen]}
           </span>
         </div>
         <nav aria-label="Main navigation" className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:gap-2">

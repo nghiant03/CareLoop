@@ -146,7 +146,7 @@ export default function ChatScreen() {
                             <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5V2m0 0a2.5 2.5 0 012.5 2.5v.5M21 9.5h-2.5m-4.5 0H9m-4.5 0H2m3 0v7.2a2 2 0 00.8 1.6l1.7 1.3a2 2 0 002.4 0l1.7-1.3a2 2 0 01.8-.2h4.6a2 2 0 01.8.2l1.7 1.3a2 2 0 002.4 0l1.7-1.3a2 2 0 00.8-1.6V9.5" />
                             </svg>
-                            <span className="font-medium">A clinician will review this question.</span>
+                            <span className="font-medium">Contact your clinician about this question.</span>
                           </div>
                         )}
                         {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (

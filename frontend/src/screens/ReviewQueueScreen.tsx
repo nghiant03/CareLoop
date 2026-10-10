@@ -6,7 +6,7 @@ import {
   getReviewItems,
   acknowledgeReview,
   actionReview,
-  proposalReview,
+  createReviewProposal,
 } from '../api';
 import type { Patient, ReviewItem } from '../types';
 import LoadingState from '../components/LoadingState';
@@ -119,7 +119,7 @@ export default function ReviewQueueScreen() {
     const isCurrent = requests.capture();
     setWorking((w) => ({ ...w, [item.review_id]: true }));
     try {
-      const result = await proposalReview(item.review_id);
+      const result = await createReviewProposal(item.review_id);
       if (!isCurrent()) return;
       setLoading(true);
       await loadQueue();
