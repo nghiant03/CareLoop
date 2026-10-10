@@ -57,6 +57,10 @@ def prepare_envelope_for_pool(
     Returns ``(envelope_to_solve, relaxed_constraints)``. The input envelope is
     never mutated; when nothing needs relaxing the original object comes back
     with an empty ``relaxed_constraints`` list.
+
+    Bounds use three servings of each nutrient's highest-valued allowed dish,
+    without proving joint attainability or MAX compliance. Even a relaxed copy
+    shares unchanged target objects with the input; callers must not mutate them.
     """
     pool = allowed_dishes(envelope, dishes)
     reachable_max: dict[str, float] = {}

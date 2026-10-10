@@ -15,12 +15,16 @@ Responsibilities:
 from __future__ import annotations
 
 import logging
+import math
 from contextlib import asynccontextmanager
+from datetime import date, datetime
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from backend.app import __version__
 from backend.app.api import (
@@ -49,8 +53,8 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 async def lifespan(app: FastAPI):
     logger.info("CareLoop backend starting (version=%s)", __version__)
     try:
-        # Warm the in-memory KB and BM25 index. A failed warm-up must not block
-        # startup; endpoints retry lazy loading and may still fail if data is absent.
+        # Warm the KB only; BM25 is built on first retrieval. Log load failures
+        # without blocking startup; lazy endpoint loading can retry them.
         from backend.app.core.kb_loader import get_kb
 
         stats = get_kb().stats()
@@ -101,12 +105,38 @@ async def _envelope_not_approved_handler(
 async def _validation_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
+    """Render validation failures as the documented 422 body, JSON-safe.
+
+    Raw input values can be nonfinite (JSON parsers accept ``Infinity`` and
+    ``NaN`` literals), and response rendering rejects them, which would turn
+    the intended 422 into a 500. Nonfinite inputs are stringified; ``ctx``
+    is dropped because it may carry non-serializable error objects.
+    """
     return JSONResponse(
         status_code=422,
         content={"error": "validation_error", "detail": [
-            {k: v for k, v in error.items() if k != "ctx"} for error in exc.errors()
+            _json_safe_error(error) for error in exc.errors()
         ]},
     )
+
+
+def _json_safe(value: Any):
+    """Recursively replace nonfinite floats with their string spelling."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
+def _json_safe_error(error: dict) -> dict:
+    return {
+        key: _json_safe(value)
+        for key, value in error.items()
+        if key != "ctx"
+    }
 
 
 @app.exception_handler(EnvelopeConflictError)
@@ -154,6 +184,36 @@ app.include_router(kb.router)
 @app.get("/healthz", tags=["meta"], summary="Liveness probe")
 def healthz() -> dict[str, str]:
     return {"status": "ok", "service": "careloop-backend", "version": __version__}
+
+
+class CalendarResponse(BaseModel):
+    """Server-local calendar metadata from one clock sample; no patient state."""
+
+    today: date = Field(description="Server-local calendar date in YYYY-MM-DD format.")
+    timezone: str = Field(description="System timezone name at the sampled instant, not necessarily an IANA ID.")
+    utc_offset_minutes: float = Field(description="Server-local offset east of UTC in minutes at the sampled instant.")
+
+
+def _server_local_now() -> datetime:
+    """Sample the system clock once in the server's local timezone."""
+    return datetime.now().astimezone()
+
+
+@app.get("/calendar", tags=["meta"], response_model=CalendarResponse, summary="Server-local calendar")
+def read_calendar() -> CalendarResponse:
+    """Return today's date under the same server-local policy as adherence.
+
+    The timezone label and UTC offset describe the same instant as the date.
+    This endpoint reads no database and does not configure a timezone policy.
+    """
+    local_now = _server_local_now()
+    utc_offset = local_now.utcoffset()
+    assert utc_offset is not None  # astimezone() always returns an aware datetime.
+    return CalendarResponse(
+        today=local_now.date(),
+        timezone=local_now.tzname() or "",
+        utc_offset_minutes=utc_offset.total_seconds() / 60,
+    )
 
 
 @app.get("/", tags=["meta"], summary="Service banner")

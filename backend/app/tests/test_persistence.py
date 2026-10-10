@@ -132,7 +132,7 @@ def test_plan_save_and_fresh_handle_roundtrip() -> None:
     assert row["kb_version"] == "kb-test-1"
     assert json.loads(row["document_json"]) == document
 
-    # sequential ids are minted, never reused
+    # IDs advance while earlier rows remain stored.
     second = persistence.save_plan(
         patient_id=patient_id,
         envelope_id="ENV-P9999-001",

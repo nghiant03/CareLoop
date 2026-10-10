@@ -24,8 +24,9 @@ def _kb_version() -> str:
 def try_save_plan_document(response: dict[str, Any], envelope: NutrientEnvelope) -> None:
     """Save a mapped response and attach its plan ID/timestamp in place.
 
-    Storage failure is logged and leaves the generated response available to the
-    caller without a saved ID. Both generation and swaps use this behavior.
+    Log failures without blocking generation or swaps. Added hashes and envelope
+    metadata remain on failure. A post-save read can fail after commit, so an
+    absent response ID does not prove that nothing was persisted.
     """
     try:
         root = Path(__file__).resolve().parents[3]

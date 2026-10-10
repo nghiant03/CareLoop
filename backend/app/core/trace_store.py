@@ -1,7 +1,7 @@
 """Trace serialization, with legacy side-store helpers for older callers.
 
 Envelope snapshots carry the authoritative trace, including an explicitly empty
-trace. Only inputs without a ``fired_rules`` field consult the legacy side store.
+trace. Missing or ``None`` ``fired_rules`` values consult the legacy side store.
 """
 
 from __future__ import annotations
@@ -16,13 +16,18 @@ _LOCK = Lock()
 
 
 def put_trace(envelope_id: str, trace: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Store (or replace) the trace for an envelope id."""
+    """Replace the legacy trace and return the stored list by identity.
+
+    Row mappings remain shared with the input. Changes to them or the returned
+    list affect this process cache, not durable snapshots.
+    """
     with _LOCK:
         TRACE_STORE[envelope_id] = list(trace or [])
     return TRACE_STORE[envelope_id]
 
 
 def get_trace(envelope_id: str) -> Optional[list[dict[str, Any]]]:
+    """Return a shallow list copy, or None; row mappings remain shared with the cache."""
     with _LOCK:
         trace = TRACE_STORE.get(envelope_id)
     return list(trace) if trace is not None else None

@@ -1,6 +1,7 @@
 """Patient endpoints.
 
-Fixture patients are read-only seeds. Created profiles and timestamped
+Fixture patients are read-only seeds; creation is create-only (an existing
+fixture or durable id is a 409 conflict). Created profiles and timestamped
 observations live in SQLite; every read overlays current observations.
 """
 
@@ -59,13 +60,23 @@ def _ui_view(record: dict[str, Any]) -> dict[str, Any]:
 
     Keeps every raw field (``serum_K_meq_L`` etc.) and adds the snake_case
     ``id``/``name``/``serum_k``/``serum_po4`` names the React UI consumes.
+    The reserved lab aliases are derived from the canonical current values:
+    observations overlay the canonical keys, and a stale lowercase alias
+    stored alongside them must not mask the newer value. Unrelated extra
+    keys are preserved untouched.
     """
     view = dict(record)
     patient_id = str(record.get("patient_id", ""))
     view.setdefault("id", patient_id)
     view.setdefault("name", record.get("name") or f"Patient {patient_id}")
-    view.setdefault("serum_k", record.get("serum_K_meq_L"))
-    view.setdefault("serum_po4", record.get("serum_PO4_mg_dL"))
+    for alias, canonical in (
+        ("serum_k", "serum_K_meq_L"),
+        ("serum_po4", "serum_PO4_mg_dL"),
+    ):
+        if canonical in record:
+            view[alias] = record[canonical]
+        else:
+            view.setdefault(alias, record.get(canonical))
     view.setdefault("diagnoses", record.get("diagnoses", []))
     return view
 
@@ -111,7 +122,18 @@ def read_patient(patient_id: str) -> dict[str, Any]:
 
 @router.post("", status_code=201, summary="Create a synthetic patient")
 def create_patient(patient: Patient) -> dict[str, Any]:
+    """Create-only: an existing fixture or durable id conflicts with 409.
+
+    A repeated POST must not replace stored clinical profile data, so client
+    retries are safe and shadowing a fixture id is an explicit conflict
+    rather than a silent overwrite.
+    """
     _load_seeds_once()
     record = patient.model_dump(by_alias=True, exclude_none=True)
-    persistence.save_patient(record)
+    patient_id = record["patient_id"]
+    if patient_id in _SEED_PATIENTS or not persistence.insert_patient(record):
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "patient_exists", "patient_id": patient_id},
+        )
     return record

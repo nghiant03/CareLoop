@@ -233,6 +233,12 @@ LLM adapter only rephrases an already-grounded answer:
   Observations never automatically approve a new envelope.
 - Adherence windows and journal effective dates use the server's local date.
   Logged dates have no timezone; UTC window boundaries are not enforced.
+  `GET /calendar` exposes `{today: "YYYY-MM-DD", timezone: string,
+  utc_offset_minutes: number}` from one server-local clock sample so clients
+  can initialize logged dates under the same policy. `timezone` is the system
+  timezone name at that instant, not necessarily an IANA ID; the offset is in
+  minutes east of UTC. The endpoint reads no database and introduces no
+  configurable timezone policy.
 - The KB is rebuilt in memory per process from `rules/rules.json` +
   `data/dishes.json`; dish values are manual-curation estimates
   (`verified: false`, see `data/README.md`).

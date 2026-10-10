@@ -8,6 +8,7 @@ REJECTED. Both block live planning and personal target guidance.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -18,9 +19,11 @@ from backend.app.core import envelope_lifecycle
 from backend.app.core.trace_store import trace_or_none
 from backend.app.explain.views import clinician_explanation
 from backend.app.models.envelope import (
+    CitationSource,
     ExclusionFlag,
     NutrientConstraint,
     NutrientEnvelope,
+    RuleFire,
 )
 
 router = APIRouter(prefix="/envelopes", tags=["envelopes"])
@@ -59,6 +62,8 @@ class EditRequest(BaseModel):
 class RejectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Retained as reviewer attribution: reject persists it inside the
+    # envelope snapshot's embedded trace (CLINICIAN-REJECT entry).
     rejected_by: str = "clinician"
     reason: Optional[str] = None
     expected_revision: Optional[int] = Field(default=None, ge=0)
@@ -128,5 +133,30 @@ def reject_envelope(
     body: RejectRequest | None = None,
     envelope: NutrientEnvelope = Depends(get_envelope_or_404),
 ) -> NutrientEnvelope:
+    """Reject, retaining reviewer attribution in the durable snapshot.
+
+    ``rejected_by`` is recorded as an embedded ``CLINICIAN-REJECT`` trace
+    entry (mirroring how edits record ``CLINICIAN-EDIT``), because the
+    envelope schema carries no dedicated rejection-attribution field; the
+    approval attribution itself is cleared by the rejection.
+    """
     body = body or RejectRequest()
-    return envelope_lifecycle.reject(envelope, reason=body.reason, expected_revision=body.expected_revision)
+    snapshot = envelope.model_copy(deep=True)
+    snapshot.fired_rules.append(RuleFire(
+        rule_id="CLINICIAN-REJECT",
+        fired_at=datetime.now(timezone.utc),
+        patient_summary=f"rejected by {body.rejected_by}",
+        action_summary=(
+            f"clinician rejection: {body.reason}" if body.reason
+            else "clinician rejection"
+        ),
+        priority=0,
+        citation=CitationSource(
+            guideline="clinician decision",
+            section="clinician reject",
+            rule_id="CLINICIAN-REJECT",
+        ),
+    ))
+    return envelope_lifecycle.reject(
+        snapshot, reason=body.reason, expected_revision=body.expected_revision,
+    )

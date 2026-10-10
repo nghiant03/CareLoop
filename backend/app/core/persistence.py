@@ -6,7 +6,9 @@ caches. Each operation owns its connection and transaction.
 
 ``CARELOOP_APP_DB`` is resolved at call time, defaulting to the tracked
 ``data/careloop_app.sqlite3``. Tests must select an isolated path before using
-the store. Schema initialization is cached per path.
+the store. Schema initialization is cached per path; the legacy-column
+migration reserves the database write before rechecking, so concurrent
+processes initializing the same file cannot interleave their checks.
 
 Sequential IDs are minted under a SQLite write reservation, protecting the
 read-max/insert sequence across workers. Normal workflows retain minted rows;
@@ -20,6 +22,8 @@ import json
 import os
 import re
 import sqlite3
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date as date_type, datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -59,10 +63,14 @@ __all__ = [
     "acknowledge_review_item",
     "record_review_action",
     "get_review_item",
+    "begin_review_proposal",
+    "recover_pending_proposal",
+    "finalize_review_proposal",
 ]
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_DB = _REPO_ROOT / "data" / "careloop_app.sqlite3"
+_REVIEW_PROPOSAL: ContextVar[Optional[str]] = ContextVar("review_proposal", default=None)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS patients (
@@ -186,7 +194,16 @@ def _connect() -> sqlite3.Connection:
             if path not in _INITIALIZED:  # double-checked
                 conn = sqlite3.connect(path)
                 try:
+                    # Idempotent schema creation; every statement is IF NOT
+                    # EXISTS, so a concurrent initializer cannot interleave
+                    # harmfully with this part.
                     conn.executescript(_SCHEMA)
+                    # Reserve the database write before rechecking and changing
+                    # the schema: _INIT_LOCK is process-local, and a second
+                    # process initializing the same file could otherwise pass
+                    # the same column check and fail its ALTER with "duplicate
+                    # column name".
+                    conn.execute("BEGIN IMMEDIATE")
                     if "items_json" not in {r[1] for r in conn.execute("PRAGMA table_info(meal_logs)")}:
                         conn.execute("ALTER TABLE meal_logs ADD COLUMN items_json TEXT")
                     conn.commit()
@@ -519,9 +536,32 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
     restore durable scope eligibility, missing provenance is attached, and the
     lifecycle revision advances after commit. No unchanged-copy guarantee is
     made on other write failures; callers needing one must copy before calling.
+
+    Inside ``begin_review_proposal``, a new snapshot and its exact pending
+    review identity commit together. An already-pending attempt is reused.
     """
     with _LOCK, _connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        review_id = _REVIEW_PROPOSAL.get() if new_proposal else None
+        if review_id is not None:
+            review = conn.execute(
+                "SELECT * FROM review_items WHERE review_id = ?", (review_id,)
+            ).fetchone()
+            if review is None or review["patient_id"] != envelope.patient_id:
+                raise ValueError("review proposal patient mismatch or missing review item")
+            action = json.loads(review["action_json"]) if review["action_json"] else {}
+            if action.get("action") == "proposal_pending" and action.get("envelope_id"):
+                # A concurrent attempt already committed this exact proposal.
+                saved = conn.execute(
+                    "SELECT snapshot_json FROM envelope_journal WHERE envelope_id = ? "
+                    "ORDER BY id DESC LIMIT 1", (action["envelope_id"],)
+                ).fetchone()
+                if saved is None:
+                    raise ValueError("pending review proposal snapshot is missing")
+                existing = NutrientEnvelope.model_validate_json(saved[0])
+                for field in NutrientEnvelope.model_fields:
+                    setattr(envelope, field, getattr(existing, field))
+                return
         if new_proposal:
             base = re.sub(r"-\d+$", "", envelope.envelope_id)
             envelope.envelope_id = _mint_id(conn, "envelope_journal", base + "-", "envelope_id")
@@ -549,6 +589,14 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
             (envelope.status.value, envelope.envelope_id, envelope.patient_id,
              envelope.version, envelope.status.value, json.dumps(snapshot), _today()),
         )
+        if review_id is not None:
+            # The exact retry identity and its snapshot commit together, including
+            # scope-rejected proposals. Unrelated rule runs cannot be recovered.
+            conn.execute(
+                "UPDATE review_items SET action_json = ? WHERE review_id = ?",
+                (json.dumps({"action": "proposal_pending", "envelope_id": envelope.envelope_id,
+                             "recorded_at": _utcnow()}), review_id),
+            )
     envelope.lifecycle_revision = revision
 
 
@@ -566,12 +614,36 @@ def current_envelopes() -> list[NutrientEnvelope]:
 
 
 def save_patient(record: dict[str, Any]) -> None:
+    """Replace-or-insert (upsert) a patient profile by ``patient_id``.
+
+    Deliberate replacement path for internal callers. The HTTP create
+    endpoint is create-only (``insert_patient``) so retries cannot silently
+    overwrite stored clinical profile data.
+    """
     with _connect() as conn:
         conn.execute(
             "INSERT INTO patients VALUES (?, ?) ON CONFLICT(patient_id) "
             "DO UPDATE SET document_json = excluded.document_json",
             (record["patient_id"], json.dumps(record)),
         )
+
+
+def insert_patient(record: dict[str, Any]) -> bool:
+    """Insert a new patient profile; ``False`` when the id already exists.
+
+    Create-only counterpart to ``save_patient``. The primary-key insert
+    itself detects the conflict, so concurrent workers cannot both create
+    the same patient id.
+    """
+    try:
+        with _connect() as conn:
+            conn.execute(
+                "INSERT INTO patients VALUES (?, ?)",
+                (record["patient_id"], json.dumps(record)),
+            )
+        return True
+    except sqlite3.IntegrityError:
+        return False
 
 
 def saved_patients() -> dict[str, dict[str, Any]]:
@@ -880,25 +952,96 @@ def get_review_item(review_id: str) -> Optional[dict[str, Any]]:
 
 
 def acknowledge_review_item(review_id: str) -> Optional[dict[str, Any]]:
-    """Set ACKNOWLEDGED unconditionally; return the item or ``None`` if absent.
+    """Advance an OPEN item to ACKNOWLEDGED; return the item or ``None`` if absent.
 
-    This write does not check the previous status. The API's separate OPEN check
-    is not atomic with it, so concurrent actions can be regressed.
+    The transition is conditional inside the write reservation, so an item
+    whose action was recorded concurrently keeps its ACTION_RECORDED status
+    instead of being regressed. Items already acknowledged or actioned are
+    returned unchanged.
     """
     acknowledged_at = _utcnow()
     with _LOCK, _connect() as conn:
-        cur = conn.execute(
+        conn.execute(
             "UPDATE review_items SET status = 'ACKNOWLEDGED', acknowledged_at = ? "
-            "WHERE review_id = ?",
+            "WHERE review_id = ? AND status = 'OPEN'",
             (acknowledged_at, review_id),
         )
         conn.commit()
-        if cur.rowcount == 0:
-            return None
         row = conn.execute(
             "SELECT * FROM review_items WHERE review_id = ?", (review_id,)
         ).fetchone()
-    return _review_row(row)
+    return _review_row(row) if row is not None else None
+
+
+@contextmanager
+def begin_review_proposal(review_id: str):
+    """Bind a synchronous rule-service call to its review retry identity.
+
+    ``store_envelope`` commits the exact envelope ID in a pending action with
+    the snapshot. Engine failures leave the review unchanged. Context-local
+    binding keeps unrelated requests isolated without changing the rule service.
+    """
+    token = _REVIEW_PROPOSAL.set(review_id)
+    try:
+        yield
+    finally:
+        _REVIEW_PROPOSAL.reset(token)
+
+
+def recover_pending_proposal(review_id: str) -> Optional[str]:
+    """Return the exact proposal ID committed by an unfinished review attempt.
+
+    Do not infer ownership from patient or journal ordering. Legacy watermark
+    markers lack an exact identity and cannot be recovered safely.
+    """
+    row = get_review_item(review_id)
+    action = row["action"] if row else None
+    if action and action.get("action") == "proposal_pending":
+        return action.get("envelope_id")
+    return None
+
+
+class ReviewProposalConflictError(Exception):
+    """A newer proposal attempt or clinician action superseded this completion."""
+
+
+def finalize_review_proposal(
+    review_id: str, envelope_id: str
+) -> Optional[dict[str, Any]]:
+    """Finalize only the matching pending identity; return None if absent.
+
+    Read/check/write share a SQLite write reservation across workers. Repeating
+    an already-finalized same-ID completion returns the row without changing
+    its timestamp. A different pending ID or clinician action is preserved and
+    raises ReviewProposalConflictError; use record_review_action for deliberate
+    clinician replacement, not asynchronous proposal completion.
+    """
+    with _LOCK, _connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT * FROM review_items WHERE review_id = ?", (review_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        action = json.loads(row["action_json"]) if row["action_json"] else {}
+        if (action.get("action") == "proposal_created"
+                and action.get("linked_envelope_id") == envelope_id
+                and row["linked_envelope_id"] == envelope_id):
+            return _review_row(row)
+        if (action.get("action") != "proposal_pending"
+                or action.get("envelope_id") != envelope_id):
+            raise ReviewProposalConflictError(review_id)
+        conn.execute(
+            "UPDATE review_items SET status = 'ACTION_RECORDED', action_json = ?, "
+            "linked_envelope_id = ? WHERE review_id = ?",
+            (json.dumps({"action": "proposal_created", "note": None,
+                         "linked_envelope_id": envelope_id, "recorded_at": _utcnow()}),
+             envelope_id, review_id),
+        )
+        updated = conn.execute(
+            "SELECT * FROM review_items WHERE review_id = ?", (review_id,)
+        ).fetchone()
+    return _review_row(updated)
 
 
 def record_review_action(
@@ -911,6 +1054,8 @@ def record_review_action(
 
     The item moves to ``ACTION_RECORDED`` regardless of its previous status.
     A subsequent call replaces the action payload; it does not append history.
+    Proposal completion uses ``finalize_review_proposal`` instead, so an old
+    asynchronous completion cannot overwrite a newer action.
     """
     action_payload = {
         "action": action,

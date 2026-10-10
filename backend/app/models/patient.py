@@ -8,9 +8,10 @@ profile accepted by the patient API. The richer dataset-generator model is
 
 from __future__ import annotations
 
+import math
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from shared.envelope_schema import PatientSummary
 
@@ -39,6 +40,20 @@ class Patient(BaseModel):
     serum_po4_mg_dl: Optional[float] = Field(default=None, ge=0, alias="serum_PO4_mg_dL")
     meds: list[str] = Field(default_factory=list)
     created_at: Optional[str] = None
+
+    @field_validator("weight_kg", "height_cm", "egfr", "serum_k_meq_l", "serum_po4_mg_dl")
+    @classmethod
+    def _require_finite(cls, value: Optional[float]) -> Optional[float]:
+        """Reject nonfinite clinical numerics.
+
+        Non-strict JSON parsers accept bare ``Infinity``/``NaN``; numeric
+        strings can also coerce to infinity. Bounds like ``gt=0`` alone admit
+        positive infinity, which is unsafe to persist or pass to the engine.
+        Readers of already-stored records do not pass through this validator.
+        """
+        if value is not None and not math.isfinite(value):
+            raise ValueError("must be a finite number")
+        return value
 
     def to_summary(self) -> PatientSummary:
         """Project this record onto the canonical envelope patient snapshot."""

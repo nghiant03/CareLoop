@@ -42,10 +42,18 @@ def _require_patient(patient_id: str) -> None:
 
 @router.post("", status_code=201, summary="Record a clinical observation")
 def create_observation(req: ObservationRequest) -> dict[str, Any]:
+    """Record one observation, normalizing unit spelling only.
+
+    ``mL/min`` for eGFR is accepted as shorthand for a value that is already
+    body-surface-area indexed (stored as ``mL/min/1.73m2``). No unit
+    conversion is performed, so an absolute un-indexed measurement must not
+    be submitted under that shorthand.
+    """
     _require_patient(req.patient_id)
     units = {
         "serum_K_meq_L": {"meq/l": "mEq/L", "mmol/l": "mEq/L"},
         "serum_PO4_mg_dL": {"mg/dl": "mg/dL"},
+        # Both eGFR spellings denote the same indexed unit; see docstring.
         "egfr": {"ml/min": "mL/min/1.73m2", "ml/min/1.73m2": "mL/min/1.73m2"},
         "hba1c_pct": {"%": "%"},
     }

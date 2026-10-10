@@ -8,10 +8,17 @@ Adherence uses a 14-day historically attributed window. Lab trends prefer dated
 observations over fixture series; dated alerts include the latest observation
 ID in their key, allowing a new observation to create a distinct review item.
 
-Acknowledgement, actions, and proposal links update stored review state. The
-acknowledgement read/check and write are separate, so monotonic status is not
-guaranteed under concurrent actions. Proposals use the shared rule service and
-still require separate clinician approval before live planning.
+Acknowledgement, actions, and proposal links update stored review state.
+Acknowledgement advances only OPEN items in storage, so a concurrently
+recorded action cannot be regressed. Proposals use the shared rule service
+and still require separate clinician approval before live planning.
+
+Proposal creation and review linkage commit separately. A failed linkage
+write leaves a recoverable partial success: a pending action records the exact
+envelope ID atomically with its snapshot. A retry re-links that proposal,
+including scope-rejected results, rather than minting another.
+Finalization only consumes the matching pending identity. A superseded
+completion returns 409 without replacing a newer proposal or clinician action.
 """
 
 from __future__ import annotations
@@ -98,7 +105,7 @@ def _compose_item(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _upsert_derived(
+def _ensure_derived_review_item(
     patient_id: str,
     source: str,
     key: str,
@@ -163,7 +170,7 @@ def _derive_for_patient(patient_id: str) -> list[dict[str, Any]]:
                 group, flag["nutrient"], flag["kind"]
             )
             items.append(
-                _upsert_derived(
+                _ensure_derived_review_item(
                     patient_id,
                     "adherence_flag",
                     key,
@@ -194,7 +201,7 @@ def _derive_for_patient(patient_id: str) -> list[dict[str, Any]]:
                         f"{violation.get('kind')} ceiling"
                     )
             items.append(
-                _upsert_derived(
+                _ensure_derived_review_item(
                     patient_id,
                     "hard_violation_day",
                     f"day@{day['date']}",
@@ -215,7 +222,7 @@ def _derive_for_patient(patient_id: str) -> list[dict[str, Any]]:
             if trend.get("patient_id") != patient_id:
                 continue
             items.append(
-                _upsert_derived(
+                _ensure_derived_review_item(
                     patient_id,
                     "lab_trend",
                     f"lab@{patient_id}:{trend['analyte']}" + (f":{trend['observation_id']}" if trend.get('observation_id') else ""),
@@ -263,17 +270,18 @@ def review_items(
 
 @router.post("/{review_id}/acknowledge", summary="Acknowledge a review item")
 def acknowledge_review(review_id: str) -> dict[str, Any]:
-    row = persistence.get_review_item(review_id)
-    if row is None:
+    """Advance an OPEN item to ACKNOWLEDGED; later statuses are preserved.
+
+    The transition is conditional in storage, so an action recorded
+    concurrently wins; the response returns the item's current status.
+    """
+    updated = persistence.acknowledge_review_item(review_id)
+    if updated is None:
         raise HTTPException(
             status_code=404,
             detail={"error": "review_item_not_found", "review_id": review_id},
         )
-    if row["status"] == "OPEN":
-        row = persistence.acknowledge_review_item(review_id)
-    # Sequential repeats preserve later status. The OPEN check and write above
-    # are separate, so this does not protect against a concurrent recorded action.
-    return _compose_item(row)
+    return _compose_item(updated)
 
 
 @router.post("/{review_id}/action", summary="Record a clinician action")
@@ -290,6 +298,13 @@ def action_review(review_id: str, body: ActionRequest) -> dict[str, Any]:
 
 @router.post("/{review_id}/proposal", summary="Create a revised envelope proposal")
 def proposal_review(review_id: str) -> dict[str, Any]:
+    """Create and link a fresh proposal, recovering a partial earlier attempt.
+
+    A failure between proposal persistence and the linkage write leaves the
+    proposal unlinked. Its snapshot and exact pending identity commit together,
+    so a retry re-links it without selecting an unrelated same-patient proposal.
+    A superseded completion returns 409; newer review state is left intact.
+    """
     row = persistence.get_review_item(review_id)
     if row is None:
         raise HTTPException(
@@ -305,17 +320,26 @@ def proposal_review(review_id: str) -> dict[str, Any]:
                 "patient_id": row["patient_id"],
             },
         )
-    # Persist a fresh proposal and embedded trace through the shared rule service.
-    result = run_rules_service(dict(patient))
-    envelope = result["envelope"]
-    updated = persistence.record_review_action(
-        review_id,
-        "proposal_created",
-        note=None,
-        linked_envelope_id=envelope.envelope_id,
-    )
-    assert updated is not None
+    action = row["action"] or {}
+    envelope_id = action.get("envelope_id") if action.get("action") == "proposal_pending" else None
+    if envelope_id is None:
+        with persistence.begin_review_proposal(review_id):
+            result = run_rules_service(dict(patient))
+        envelope_id = result["envelope"].envelope_id
+    try:
+        updated = persistence.finalize_review_proposal(review_id, envelope_id)
+    except persistence.ReviewProposalConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "review_proposal_superseded", "review_id": review_id,
+                    "envelope_id": envelope_id},
+        ) from exc
+    if updated is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "review_item_not_found", "review_id": review_id},
+        )
     return {
         "review_item": _compose_item(updated),
-        "envelope_id": envelope.envelope_id,
+        "envelope_id": envelope_id,
     }

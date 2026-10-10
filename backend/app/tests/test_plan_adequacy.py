@@ -213,7 +213,7 @@ def test_adequacy_excludes_max_and_keeps_envelope_order() -> None:
             NutrientConstraint(nutrient=NutrientKind.PROTEIN_G, kind=ConstraintKind.TARGET, value=15.0, unit="g"),
         ],
     )
-    # Day 1: 3 g fibre / 15 g protein; day 2: 6 g fibre / 30 g protein.
+    # Day 1: 3 g fibre / 15 g protein; day 2: 4 g fibre / 20 g protein.
     plan = _plan(
         [
             [["mixed"], ["mixed"], ["mixed"]],
@@ -279,7 +279,8 @@ def test_api_plan_response_includes_adequacy(client) -> None:
         assert entry["kind"] in ("min", "target")  # MAX ceilings excluded
         assert entry["total_days"] == 7
         assert 1 <= entry["worst_day"] <= 7
-    # Composite meals can now meet the original fibre floor without relaxation.
+    # Composite (multi-dish) meals meet the original fibre floor on every
+    # planned day, so adequacy reports no relaxed aim or shortfall.
     fiber = next(a for a in adequacy if a["nutrient"] == "fiber_g")
     assert fiber["relaxed_aim"] is None
     assert fiber["shortfall"] == fiber["shortfall_pct"] == 0

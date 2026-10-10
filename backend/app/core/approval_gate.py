@@ -5,15 +5,8 @@ HTTP dependencies enforce this gate. Informational views and chat may inspect
 other lifecycle states; personal target guidance still requires approval.
 See docs/ARCHITECTURE.md for the lifecycle and chat contracts.
 
-Usage in an endpoint that reads an envelope::
-
-    from backend.app.core.approval_gate import require_approved_envelope_for_patient
-
-    @router.post("/plans")
-    def create_plan(
-        envelope: NutrientEnvelope = Depends(require_approved_envelope_for_patient),
-    ):
-        ...
+Use ``require_approved_envelope`` for path-keyed requests and
+``require_approved_envelope_for_patient`` for a ``PlanRequest`` body.
 
 Failure of any gate condition raises :class:`EnvelopeNotApprovedError`, which
 ``backend.app.main`` renders as HTTP 409 with body::
@@ -104,9 +97,9 @@ def list_envelopes() -> list[NutrientEnvelope]:
 def find_latest_envelope_for_patient(patient_id: str) -> Optional[NutrientEnvelope]:
     """Return the most recently proposed envelope for a patient, if any.
 
-    Ordering is by ``proposed_at`` alone: each persisted rule-engine run mints a
-    fresh sequential envelope id, so comparing ``version`` across different
-    envelope ids is meaningless. Every fresh proposal starts at version 1.
+    Order by ``proposed_at``, not content version or approval time. On equal
+    proposal timestamps, retain the first candidate in latest-journal-row order.
+    A newer unapproved proposal takes precedence over an older approval.
     """
     candidates = [env for env in list_envelopes() if env.patient_id == patient_id]
     if not candidates:
