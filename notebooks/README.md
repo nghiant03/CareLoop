@@ -6,6 +6,6 @@ the runtime; anything reusable gets promoted into `backend/app/`, `rules/` or
 
 ```bash
 .venv/bin/python rules/engine.py                    # rule-engine smoke run
-PYTHONPATH=. .venv/bin/python -m backend.optim.spike_pymoo   # optimiser spike
+.venv/bin/python -m backend.optim.spike_pymoo   # optimiser spike
 .venv/bin/python -m pytest rules/ backend -q        # full test suites
 ```

@@ -8,7 +8,7 @@ Start both processes before presenting.
 
 ```bash
 # terminal 1 — backend (repo root), port 8000
-PYTHONPATH=. .venv/bin/uvicorn backend.app.main:app --reload --port 8000
+.venv/bin/uvicorn backend.app.main:app --reload --port 8000
 #   docs:   http://localhost:8000/docs
 #   health: http://localhost:8000/healthz
 

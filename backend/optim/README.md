@@ -111,7 +111,7 @@ for genuinely tight ceilings). Sweep knee: pop=80, gen=80.
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=. python -m backend.optim.spike_pymoo     # spike (pymoo or fallback)
+python -m backend.optim.spike_pymoo     # spike (pymoo or fallback)
 python backend/optim/test_smoke.py                    # smoke tests
 python backend/optim/test_real.py                     # real-data tests
 python -m backend.optim.benchmark                     # benchmark harness (~20s)

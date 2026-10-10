@@ -1,9 +1,9 @@
 """Ensure the repo root is importable regardless of pytest rootdir config.
 
-``backend/pyproject.toml`` sets ``pythonpath = ["."]`` relative to its own
-directory, which would put ``backend/`` (not the repo root) on sys.path when
-pytest picks it as the config file. This conftest pins the repo root so
-``backend.mining`` imports work when run from anywhere.
+The repository-root ``pyproject.toml`` sets ``pythonpath = ["."]`` and the
+editable ``careloop`` install adds the repo root via a ``.pth`` file, so
+``backend.mining`` normally imports from anywhere. This conftest keeps that
+guarantee if pytest runs without either (e.g., no install, foreign rootdir).
 """
 
 import sys

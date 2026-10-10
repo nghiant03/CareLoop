@@ -83,4 +83,5 @@ slope_per_month, ewma_slope_per_month, values, projected_3mo, severity, reason}`
 ```
 
 `conftest.py` pins the repo root on `sys.path` so the package imports work
-regardless of the `pytest.ini_options` in `backend/pyproject.toml`.
+even without the editable install or the `pytest.ini_options` in the
+repository-root `pyproject.toml`.

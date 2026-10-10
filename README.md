@@ -102,13 +102,13 @@ CareLoop/
 
 Prereqs: Python 3.11+ and Node for the frontend. Set up the backend from the
 repository root with `uv venv .venv`, then
-`uv pip install --python .venv/bin/python -e 'backend[dev]'`.
+`uv pip install --python .venv/bin/python -e '.[dev]'`.
 
 ### 1. Backend (port 8000)
 
 ```bash
 # from the repo root
-PYTHONPATH=. .venv/bin/uvicorn backend.app.main:app --reload --port 8000
+.venv/bin/uvicorn backend.app.main:app --reload --port 8000
 # docs:   http://localhost:8000/docs
 # health: http://localhost:8000/healthz
 ```

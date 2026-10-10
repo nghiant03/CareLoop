@@ -53,13 +53,13 @@ only re-exports them — never redefine the schema in the backend.
 ```bash
 # from the repo root
 uv venv .venv
-uv pip install --python .venv/bin/python -e 'backend[dev]'
+uv pip install --python .venv/bin/python -e '.[dev]'
 ```
 
 ## Run
 
 ```bash
-PYTHONPATH=. .venv/bin/uvicorn backend.app.main:app --reload --port 8000
+.venv/bin/uvicorn backend.app.main:app --reload --port 8000
 # docs:   http://localhost:8000/docs
 # health: http://localhost:8000/healthz
 ```
@@ -151,7 +151,7 @@ NULL`); prior rows are closed with a `valid_to` timestamp so history survives.
 NetworkX materialises the current-state subgraph on demand.
 
 ```bash
-PYTHONPATH=. python -m backend.app.core.graph_versioning   # self-contained demo
+python -m backend.app.core.graph_versioning   # self-contained demo
 ```
 
 DB file: `data/careloop_graph.sqlite3` (override with `CARE_LOOP_GRAPH_DB`).
@@ -174,7 +174,7 @@ pipeline is deterministic template composition over retrieved chunks; the LLM
 adapter is optional polish on top of an already-grounded answer.
 
 ```bash
-PYTHONPATH=. python -m backend.app.core.llm_choice   # prints resolved choices
+python -m backend.app.core.llm_choice   # prints resolved choices
 ```
 
 ## Tests
@@ -182,7 +182,7 @@ PYTHONPATH=. python -m backend.app.core.llm_choice   # prints resolved choices
 ```bash
 .venv/bin/python -m pytest backend -q
 .venv/bin/python -m shared.export_schema --check
-# or: PYTHONPATH=. python -m backend.app.tests.test_smoke
+# or: python -m backend.app.tests.test_smoke
 ```
 
 The suite covers imports, `/healthz`, patient create/fetch, the PROPOSED

@@ -15,7 +15,7 @@ Outputs:
 Also writes ``backend/optim/spike_pymoo.csv`` (objectives of the front).
 
 Run:
-    PYTHONPATH=. python -m backend.optim.spike_pymoo
+    python -m backend.optim.spike_pymoo
 """
 
 from __future__ import annotations

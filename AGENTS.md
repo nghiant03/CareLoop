@@ -70,9 +70,12 @@ Pytest's root `conftest.py` isolates the application database. For standalone
 probes, set `CARELOOP_APP_DB` to a temporary database before importing application
 code; the default `data/careloop_app.sqlite3` is tracked application state.
 
-The backend manifest is `backend/pyproject.toml`; the frontend manifest and lock
-file are under `frontend/`. Install backend development dependencies with
-`uv pip install --python .venv/bin/python -e 'backend[dev]'`. Frontend regression
+The Python manifest is the repository-root `pyproject.toml` (single `careloop`
+distribution covering `backend/`, `shared/`, and `rules/`); the frontend manifest
+and lock file are under `frontend/`. Install development dependencies with
+`uv pip install --python .venv/bin/python -e '.[dev]'`. The editable install puts
+the repository root on the import path, so `backend.*`, `shared.*`, and `rules.*`
+resolve without `PYTHONPATH`. Frontend regression
 tests use Vitest and Testing Library. There is no configured Python lint/type-check
 command or repository CI workflow; report those verification gaps.
 

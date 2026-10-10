@@ -215,7 +215,7 @@ language, not certified verbatim extracts.
 
 ```bash
 python -c "import json; print(len(json.load(open('rules/rules.json'))['rules']))"   # 61 (59 + 2 internal safety rules)
-PYTHONPATH=. python -c "from shared.envelope_schema import NutrientEnvelope; print('ok')"
+python -c "from shared.envelope_schema import NutrientEnvelope; print('ok')"
 python rules/clipspy_facts.py                                                        # prints availability
 ```
 
