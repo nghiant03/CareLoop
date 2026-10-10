@@ -1,23 +1,20 @@
-"""USDA FoodData Central gap-filler (Lane C — Data & Mining) — SKELETON.
+"""Experimental USDA nutrient gap estimates requiring recipe and human review.
 
-Many Singapore dish records (HPB-derived) have energy/protein/sodium but are
-missing **potassium (K)** and **phosphorus (P)** — exactly the two nutrients that
-matter most for CKD stage 3–4. This module estimates K/P per serving by querying
+For dish records missing potassium or phosphorus, estimate K/P per serving using
 the USDA FoodData Central (FDC) search API with a dish's ingredient list.
 
 API / rate limits
 -----------------
 * Endpoint: ``https://api.nal.usda.gov/fdc/v1/foods/search?api_key=...``
-* ``DEMO_KEY`` is shared and **rate-limited to ~30 requests/hour per IP** (and
-  ~50/day). A free data.gov key raises this to 1,000 req/hour — set
-  ``USDA_API_KEY`` in the environment for real runs.
+* ``DEMO_KEY`` is shared and rate-limited. Set ``USDA_API_KEY`` for authenticated
+  imports; server quotas are independent of the local request budget.
 * Search handles network/HTTP/JSON failures; rate limits propagate to ingredient
   estimation, which logs them and returns unknown values. Input or response-shape
   errors can still raise. Estimates require human review before verification.
 
-This is deliberately a skeleton: the per-ingredient -> per-serving math is a
-crude first pass (USDA values are per 100 g and dish ingredient *quantities* are
-not yet captured). Extend it with recipe decomposition + portion weights later.
+USDA values are per 100 g. Recipe quantities are unavailable, so the serving
+weight is split equally across ingredients. These estimates require recipe and
+portion review before clinical use.
 
 Usage
 -----
@@ -48,11 +45,10 @@ FDC_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
 NUTRIENT_ID_POTASSIUM = 1092
 NUTRIENT_ID_PHOSPHORUS = 1091
 
-# DEMO_KEY is shared and rate-limited (~30 req/hour). Use a free data.gov key for
-# real imports.
+# Use a data.gov key for imports rather than relying on the shared demo quota.
 DEFAULT_API_KEY = "DEMO_KEY"
 
-# Hard cap per process so a stray loop cannot burn the shared quota.
+# Default per-budget limit; file imports share one budget across the run.
 MAX_REQUESTS_PER_RUN = 30
 
 
@@ -62,7 +58,7 @@ class RateLimitError(RuntimeError):
 
 @dataclass
 class RequestBudget:
-    """Tracks how many FDC requests this process has made."""
+    """Track requests made through this instance; share it to bound a whole run."""
 
     max_requests: int = MAX_REQUESTS_PER_RUN
     used: int = 0
@@ -200,12 +196,13 @@ def estimate_dish_gaps(
     and missing matches can bias results in either direction; keep
     ``provenance='usda_estimate'`` until human review.
 
+    Existing nonzero K/P values are preserved; None and zero count as gaps.
     Returns a shallow copy without mutating ``dish``. Rate-limited ingredients
     remain unknown; invalid inputs or malformed response shapes may raise.
     """
     portion = float(dish.get("portion_g") or 100.0)
     ingredients = dish.get("ingredients") or []
-    # Equal split of the serving weight across ingredients (crude assumption).
+    # Recipe weights are unavailable; equal shares are an estimation assumption.
     per_ingredient_g = portion / max(len(ingredients), 1)
 
     total_k = 0.0
@@ -230,13 +227,13 @@ def estimate_dish_gaps(
             matches.append(f"{ing}->{est['usda_match']}")
 
     out = dict(dish)
-    if got_k:
+    if got_k and dish.get("potassium_mg") in (None, 0):
         out["potassium_mg"] = round(total_k, 1)
-    if got_p:
+    if got_p and dish.get("phosphorus_mg") in (None, 0):
         out["phosphorus_mg"] = round(total_p, 1)
     if matches:
         out["usda_match"] = "; ".join(matches[:5])
-    if got_k or got_p:
+    if out.get("potassium_mg") != dish.get("potassium_mg") or out.get("phosphorus_mg") != dish.get("phosphorus_mg"):
         out["provenance"] = "usda_estimate"
     return out
 
@@ -324,7 +321,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     _build_parser().print_help()
     print(
         "\nNOTE: DEMO_KEY is rate-limited to ~30 requests/hour; set USDA_API_KEY "
-        "for a higher limit. This skeleton never crashes on API failure.",
+        "for a higher limit. Network/HTTP/JSON failures return unknown estimates; "
+        "invalid inputs or malformed response shapes may raise.",
         file=sys.stderr,
     )
     return 0
