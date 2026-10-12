@@ -21,13 +21,16 @@ from __future__ import annotations
 import pytest
 
 from backend.app.core import persistence
-from backend.app.core.approval_gate import ENVELOPE_STORE, find_latest_envelope_for_patient
-from backend.optim.problem import exclusion_for
-from backend.optim.real_data import load_dishes
+from backend.app.core.approval_gate import (
+    ENVELOPE_STORE,
+    find_latest_envelope_for_patient,
+)
 
 # Attach simulations only when the imported app omits its route; normal
 # application imports already mount it.
 from backend.app.main import app as _app
+from backend.optim.problem import exclusion_for
+from backend.optim.real_data import load_dishes
 
 if not any(getattr(route, "path", None) == "/simulations" for route in _app.routes):
     from backend.app.api import simulations as _simulations
@@ -79,7 +82,9 @@ def test_p0006_regression_excluded_candidate_never_recommended(client, p0006) ->
     The forced SG0009 -> SG0030 ranking precondition is covered separately in
     test_downstream_audit_regressions; this case exercises real endpoint ranking.
     """
-    source, _ = _first_valid_swap(client, p0006["plan"])
+    pair = _first_valid_swap(client, p0006["plan"])
+    assert pair is not None
+    source, _ = pair
     resp = client.get(
         "/mining/substitutions",
         params={"dish_id": source, "k": 3, "patient_id": "P0006", "plan_id": p0006["plan"]["plan_id"]},
@@ -148,7 +153,9 @@ def test_substitutions_patient_without_plan_409(client) -> None:
 
 def _first_valid_swap(client, plan) -> tuple[str, str] | None:
     """First validated pair for the supplied immutable plan, not the latest plan."""
-    patient_id = persistence.get_plan(plan["plan_id"])["patient_id"]
+    saved = persistence.get_plan(plan["plan_id"])
+    assert saved is not None
+    patient_id = saved["patient_id"]
     seen: set[str] = set()
     for day in plan["days"]:
         for slot in day["slots"]:

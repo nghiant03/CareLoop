@@ -1,18 +1,13 @@
-"""Lab trends, generic substitutions, and patient-aware meal swaps.
-
-Patient-aware suggestions require a saved plan and label unapproved envelope
-comparisons informational. Applying a swap requires live planning readiness,
-validates the whole modified plan, and attempts to save a new derived document.
-Persistence is best-effort through ``plan_storage.try_save_plan_document``.
-"""
+"""Expose lab trend flags, dish substitutions, and patient-aware meal swaps."""
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
@@ -53,12 +48,12 @@ def _load_patients() -> list[dict]:
 
 @lru_cache(maxsize=1)
 def _dish_index() -> dict[str, Any]:
-    """dish_id -> Dish, from the real dataset (cached per process)."""
+    """Return catalogue dishes keyed by ID, caching the index within the process."""
     return {dish.dish_id: dish for dish in load_dishes()}
 
 
-def _envelope_notice(envelope: Any) -> tuple[bool, Optional[str]]:
-    """(informational_only, notice) — mirrors the adherence endpoints."""
+def _envelope_notice(envelope: Any) -> tuple[bool, str | None]:
+    """Return whether comparisons are informational-only and any approval warning."""
     status = envelope.status.value
     if status == "APPROVED":
         return False, None
@@ -70,14 +65,18 @@ def _envelope_notice(envelope: Any) -> tuple[bool, Optional[str]]:
 
 
 def _json_safe_violations(violations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """JSON has no Infinity — blank out non-finite magnitudes."""
+    """Return copies with non-finite violation magnitudes replaced by ``None``.
+
+    Only float values in ``amount``, ``actual``, and ``limit`` are sanitized.
+    Leave input rows and other fields unchanged.
+    """
     safe = []
     for violation in violations or []:
         cleaned = dict(violation)
         for key in ("amount", "actual", "limit"):
             value = cleaned.get(key)
             if isinstance(value, float) and (
-                value != value or value in (float("inf"), float("-inf"))
+                math.isnan(value) or math.isinf(value)
             ):
                 cleaned[key] = None
         safe.append(cleaned)
@@ -86,9 +85,12 @@ def _json_safe_violations(violations: list[dict[str, Any]]) -> list[dict[str, An
 
 @router.get("/trends", summary="Rising K+/PO4 trend flags across the cohort")
 def trends() -> dict:
+    """Return cohort potassium/phosphate lab flags in ``flags`` and their ``count``."""
     from backend.app.api.patients import get_patient, list_patient_ids
 
-    flags = detect_trends([get_patient(pid) for pid in list_patient_ids()])
+    flags = detect_trends(
+        [p for p in (get_patient(pid) for pid in list_patient_ids()) if p is not None]
+    )
     return {"count": len(flags), "flags": flags}
 
 
@@ -96,17 +98,28 @@ def trends() -> dict:
 def substitutions(
     dish_id: str = Query(..., description="Dish id from data/dishes.json"),
     k: int = Query(3, ge=1, le=10, description="Max suggestions"),
-    patient_id: Optional[str] = Query(
+    patient_id: str | None = Query(
         default=None,
         description=(
             "When given, rank + validate suggestions against this patient's "
             "latest envelope and saved plan (patient-aware meal swaps)."
         ),
     ),
-    plan_id: Optional[str] = Query(default=None, description="Exact saved plan to preview"),
+    plan_id: str | None = Query(default=None, description="Exact saved plan to preview"),
 ) -> dict:
+    """Return up to ``k`` generic substitutions or patient-specific swap previews.
+
+    Omit ``patient_id`` for generic suggestions. ``plan_id`` is then ignored.
+    Patient previews use the latest envelope and the selected or latest saved plan.
+    They satisfy whole-plan hard constraints and meal roles. Results include
+    affected days, nutrient deltas, and cost deltas. Unapproved previews are informational
+    and do not authorize applying a swap.
+
+    Return HTTP 404 for unknown dishes, missing envelopes, or selected plans that
+    are missing or belong to another patient. Return HTTP 409 when no latest plan
+    exists or the source dish is absent from the plan.
+    """
     if patient_id is None:
-        # Preserve the generic response shape without patient-specific validation.
         try:
             results = suggest_substitutions(dish_id, k=k, version=2)
         except KeyError:
@@ -116,7 +129,6 @@ def substitutions(
             )
         return {"dish_id": dish_id, "k": k, "substitutions": results}
 
-    # Patient-aware previews use an exact saved plan or the patient's latest plan.
     from backend.app.core import persistence
 
     if dish_id not in _dish_index():
@@ -174,25 +186,28 @@ def substitutions(
 
 
 class SwapApplyRequest(BaseModel):
-    """Body for ``POST /mining/swaps/apply``."""
-
     model_config = ConfigDict(extra="forbid")
 
     patient_id: str
     dish_id: str
     replacement_dish_id: str
-    plan_id: Optional[str] = None
+    plan_id: str | None = None
 
 
 @router.post("/swaps/apply", summary="Apply a patient-aware meal swap")
 def apply_swap(req: SwapApplyRequest) -> dict[str, Any]:
-    """Replace every occurrence of ``dish_id`` in the patient's saved plan.
+    """Return a derived plan with every ``dish_id`` occurrence replaced.
 
-    The modified plan is validated with the canonical evaluator against the
-    latest ready envelope; a hard violation returns 422 without saving a plan.
-    A valid response carries ``derived_from`` and is saved as a new plan on a
-    best-effort basis; storage failure returns the response without a saved ID.
-    The source plan is never mutated.
+    Use the selected or latest saved plan without changing the source. The latest
+    envelope must be approved, scope-eligible, and have targets. Whole-plan hard
+    constraint or meal-role violations return HTTP 422 without saving a new plan.
+
+    Return HTTP 404 for unknown dishes, missing envelopes, or selected plans that
+    are missing or belong to another patient. Return HTTP 409 when the envelope
+    is not ready, no latest plan exists, or the source dish is absent from the plan.
+
+    Results include ``derived_from`` and ``applied_swap`` even if saving fails.
+    A missing response ``plan_id`` does not prove the derived plan was not saved.
     """
     from backend.app.core import persistence
     from backend.app.core.plan_storage import try_save_plan_document
@@ -211,7 +226,6 @@ def apply_swap(req: SwapApplyRequest) -> dict[str, Any]:
             detail={"error": "envelope_not_found", "patient_id": req.patient_id},
         )
     if not envelope.is_ready_for_optimisation():
-        # Rendered as the documented 409 {"error": "envelope_not_approved"}.
         raise EnvelopeNotApprovedError(envelope)
 
     if req.plan_id:
@@ -266,7 +280,7 @@ def apply_swap(req: SwapApplyRequest) -> dict[str, Any]:
             },
         )
 
-    # Use the generation mapper so swaps retain the response contract and original-aim scoring.
+    # Reuse generation mapping to preserve the response shape and original-aim adequacy scoring.
     document = map_plan_result(
         {
             "plan": outcome.modified_plan,
@@ -275,8 +289,8 @@ def apply_swap(req: SwapApplyRequest) -> dict[str, Any]:
             "objectives": outcome.objectives,
             "envelope_id": envelope.envelope_id,
             "patient_id": envelope.patient_id,
-            "meal_encoding": plan_document.get("meal_encoding", "single_dish"),
-            "meal_complete": plan_document.get("meal_complete", False),
+            "meal_encoding": (plan_document or {}).get("meal_encoding", "single_dish"),
+            "meal_complete": (plan_document or {}).get("meal_complete", False),
         },
         envelope,
         load_dishes(),

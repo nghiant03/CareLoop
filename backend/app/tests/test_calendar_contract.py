@@ -1,6 +1,6 @@
 """Server-local calendar contract without process-global timezone changes."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import Mock
 
 import pytest
@@ -17,7 +17,7 @@ from backend.app import main
 def test_calendar_uses_server_local_date_and_offset(
     client, monkeypatch, hours, minutes, label, expected_date, expected_offset,
 ):
-    instant = datetime(2026, 10, 10, 23, 30, tzinfo=timezone.utc)
+    instant = datetime(2026, 10, 10, 23, 30, tzinfo=UTC)
     server_zone = timezone(timedelta(hours=hours, minutes=minutes), name=label)
     local_now = instant.astimezone(server_zone)
     clock = Mock(return_value=local_now)
@@ -31,7 +31,9 @@ def test_calendar_uses_server_local_date_and_offset(
         "today": expected_date, "timezone": label, "utc_offset_minutes": expected_offset,
     }
     assert response.json()["today"] == local_now.date().isoformat()
-    assert response.json()["utc_offset_minutes"] == local_now.utcoffset().total_seconds() / 60
+    offset = local_now.utcoffset()
+    assert offset is not None
+    assert response.json()["utc_offset_minutes"] == offset.total_seconds() / 60
     clock.assert_called_once_with()
 
 

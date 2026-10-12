@@ -25,7 +25,7 @@ dates resolve to the pre-edit version.
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -75,7 +75,7 @@ def _isolated_stores():
 
 
 def _today(offset_days: int = 0) -> str:
-    return (date.today() + timedelta(days=offset_days)).isoformat()
+    return (datetime.now(UTC).date() + timedelta(days=offset_days)).isoformat()
 
 
 def _log(client, patient_id: str, day: str, meal: str, dish_id: str):
@@ -127,9 +127,9 @@ def test_history_scores_each_day_against_its_envelope_version(client) -> None:
     day_b = _today()
     # Backdate the v1 approval so the journal covers day A (the rules run and
     # the approval both journal at "today" by default).
-    persistence.journal_envelope(
-        get_envelope(envelope_id), event="APPROVED", effective_at=day_a
-    )
+    envelope = get_envelope(envelope_id)
+    assert envelope is not None
+    persistence.journal_envelope(envelope, event="APPROVED", effective_at=day_a)
 
     assert _log(client, "P0001", day_a, "lunch", "SG0001").status_code == 201
 
@@ -253,7 +253,7 @@ def _queue(client, **params):
 def test_queue_hard_violation_day_item_is_deterministic(client) -> None:
     """A non-compliant day derives a ``hard_violation_day`` item; repeating
     the derivation maps to the same review id (no duplicates)."""
-    envelope = _hand_built_envelope("P0007", sodium_max=1.0)  # any dish violates
+    _hand_built_envelope("P0007", sodium_max=1.0)  # any dish violates
     assert _log(client, "P0007", _today(), "lunch", "SG0001").status_code == 201
 
     first = _queue(client, patient_id="P0007")

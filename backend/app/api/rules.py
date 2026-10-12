@@ -68,7 +68,7 @@ class _RulePatientInput(BaseModel):
     @classmethod
     def _reject_boolean_number(cls, value: Any) -> Any:
         if isinstance(value, bool):
-            raise TypeError("clinical numbers must not be booleans")
+            raise ValueError("clinical numbers must not be booleans")
         return value
 
     @field_validator("weight_kg", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL",

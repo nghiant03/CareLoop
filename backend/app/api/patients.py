@@ -103,7 +103,11 @@ def list_patient_ids() -> list[str]:
 def list_patients() -> dict[str, Any]:
     """Return ``count`` and patient profiles sorted by ID, with current values and UI fields."""
     _load_seeds_once()
-    patients = [_ui_view(get_patient(pid)) for pid in list_patient_ids()]
+    patients = [
+        _ui_view(patient)
+        for pid in list_patient_ids()
+        if (patient := get_patient(pid)) is not None
+    ]
     return {"count": len(patients), "patients": patients}
 
 

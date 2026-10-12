@@ -21,7 +21,7 @@ def test_list_dishes_returns_full_catalogue() -> None:
 def test_list_dishes_category_filter() -> None:
     all_dishes = client.get("/dishes").json()["dishes"]
     categories = {d["category"] for d in all_dishes}
-    some_category = sorted(categories)[0]
+    some_category = min(categories)
     r = client.get("/dishes", params={"category": some_category})
     assert r.status_code == 200
     body = r.json()

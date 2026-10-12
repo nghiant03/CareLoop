@@ -1,16 +1,8 @@
-"""Compare local target changes without updating live envelopes or saved plans.
-
-The base side evaluates the latest saved plan against the current ready
-envelope. The simulated side runs shared planning with a local ``SIM-`` copy;
-its explanation and adequacy describe the simulated aims, not the live aims.
-
-Only the comparison record is persisted. All delta fields are null when the
-simulated solve is infeasible or no comparable base plan exists.
-"""
+"""Expose what-if nutrient target comparisons and their saved history."""
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
@@ -20,27 +12,26 @@ from backend.app.core.approval_gate import (
     find_latest_envelope_for_patient,
 )
 from backend.app.core.plan_service import map_plan_result, plan_meals
-from backend.optim.real_data import load_dishes
 from backend.app.models.envelope import EnvelopeStatus, NutrientConstraint
 from backend.mining.patient_swaps import plan_from_document
 from backend.optim.problem import evaluate
+from backend.optim.real_data import load_dishes
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])
 
 
 class SimulationRequest(BaseModel):
-    """Body for ``POST /simulations``."""
-
     model_config = ConfigDict(extra="forbid")
 
     patient_id: str
     targets: list[NutrientConstraint]
 
 
-def _worst_aim_deviation_pct(adequacy: Optional[list[dict[str, Any]]]) -> float:
-    """Worst MIN shortfall or absolute TARGET deviation (0.0 for an empty panel).
+def _worst_aim_deviation_pct(adequacy: list[dict[str, Any]] | None) -> float:
+    """Return the largest reported aim deviation, rounded to three decimal places.
 
-    The wire field remains ``shortfall_pct`` for compatibility with saved plans.
+    Read ``shortfall_pct``, which covers MIN shortfalls and absolute TARGET
+    deviations for saved-plan compatibility. Return 0.0 when no values are present.
     """
     values = [
         float(entry.get("shortfall_pct") or 0.0)
@@ -50,8 +41,12 @@ def _worst_aim_deviation_pct(adequacy: Optional[list[dict[str, Any]]]) -> float:
     return round(max(values), 3) if values else 0.0
 
 
-def _meals_changed(base_plan, simulated_plan) -> Optional[int]:
-    """Count of day-major slots whose dish sets differ."""
+
+def _meals_changed(base_plan, simulated_plan) -> int | None:
+    """Count changed meal slots, ignoring dish order but preserving repeated dishes.
+
+    Extra slots count as changed. Return ``None`` when either plan is absent.
+    """
     if base_plan is None or simulated_plan is None:
         return None
     total = 0
@@ -66,12 +61,12 @@ def _meals_changed(base_plan, simulated_plan) -> Optional[int]:
 
 def _side_summary(
     envelope_id: str,
-    plan_id: Optional[str],
-    feasible: Optional[bool],
-    violation_count: Optional[int],
-    objectives: Optional[dict[str, float]],
-    adequacy_summary: Optional[list[dict[str, Any]]],
-    extra: Optional[dict[str, Any]] = None,
+    plan_id: str | None,
+    feasible: bool | None,
+    violation_count: int | None,
+    objectives: dict[str, float] | None,
+    adequacy_summary: list[dict[str, Any]] | None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     out = {
         "envelope_id": envelope_id,
@@ -89,6 +84,19 @@ def _side_summary(
 
 @router.post("", summary="What-if: re-plan against proposed nutrient targets")
 def create_simulation(req: SimulationRequest) -> dict[str, Any]:
+    """Save a target comparison without changing live envelopes or saved plans.
+
+    Require the latest envelope to be approved, scope-eligible, and have targets.
+    Compare the latest saved plan under current targets with a plan under the
+    requested targets. Simulated adequacy is measured against the requested aims.
+
+    Objective and aim-deviation deltas are simulated minus base. ``meals_changed``
+    counts changed slots. All deltas are null without both objective summaries or
+    a feasible simulation. Infeasible comparisons still return HTTP 200.
+
+    Return HTTP 404 for a missing envelope, 409 when it is not ready, 503 for
+    catalogue loading failures, and 502 when planning raises an error.
+    """
     from backend.app.core import persistence
 
     envelope = find_latest_envelope_for_patient(req.patient_id)
@@ -105,14 +113,13 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=503, detail={"error": "dish_database_unavailable"}) from exc
 
-    # ---- base side: the saved plan vs the ORIGINAL approved envelope ----
     plan_summary = persistence.latest_plan_for_patient(req.patient_id)
-    base_plan: Optional[list] = None
+    base_plan: list | None = None
     if plan_summary is not None:
         plan_document = persistence.get_plan(plan_summary["plan_id"]) or {}
         if plan_document.get("days"):
             base_plan = plan_from_document(plan_document)
-    if base_plan:
+    if base_plan and plan_summary is not None:
         base_objectives, base_violations = evaluate(base_plan, envelope, dishes)
         base_mapped = map_plan_result(
             {
@@ -134,14 +141,12 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
     else:
         base_plan = None
         base = _side_summary(envelope.envelope_id, None, None, None, None, None)
-        base["plan"] = None  # explicit: no saved plan to compare against
+        base["plan"] = None
 
-    # ---- simulated side: local SIM- envelope ----
     simulated_envelope = envelope.model_copy(deep=True)
     simulated_envelope.targets = list(req.targets)
     simulated_envelope.status = EnvelopeStatus.APPROVED
     simulated_envelope.envelope_id = f"SIM-{envelope.envelope_id}"
-    # Local approval authorizes evaluation only; never persist this envelope or its plan.
 
     try:
         outcome = plan_meals(simulated_envelope, dishes)
@@ -178,7 +183,6 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
         },
     )
 
-    # ---- deltas ----
     base_objectives = base.get("objectives")
     sim_objectives = simulated.get("objectives")
     if base_objectives and sim_objectives and simulated.get("feasible"):
@@ -203,7 +207,6 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
             "meals_changed": _meals_changed(base_plan, simulated_plan),
         }
     else:
-        # A delta needs both a comparable base and a feasible simulated plan.
         deltas = {
             "cost": None,
             "nutrient_target_deviation": None,
@@ -233,6 +236,10 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
 def list_simulations(
     patient_id: str = Query(..., description="Patient id"),
 ) -> dict[str, Any]:
+    """Return a patient's saved simulations and their count, ordered oldest first.
+
+    Return an empty list when none exist, including for unknown patient IDs.
+    """
     from backend.app.core import persistence
 
     simulations = persistence.list_simulations(patient_id)

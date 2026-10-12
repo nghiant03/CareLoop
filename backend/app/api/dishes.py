@@ -1,20 +1,9 @@
-"""Dish catalogue endpoints (deterministic, read-only).
-
-* ``GET /dishes?category=&search=`` — list/filter the dish database
-  (``data/dishes.json``) with the nutrient fields the UI pickers need.
-* ``GET /dishes/{dish_id}`` — one full dish record.
-
-A missing or malformed catalogue answers 503 ``dish_database_unavailable``
-instead of a healthy-looking empty list; only successful loads are cached, so
-restoring the file recovers without a restart. Consumed by the frontend
-meal-logging (adherence) screen.
-"""
+"""Expose read-only dish catalogue lookups for meal selection."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -40,15 +29,23 @@ _LIST_FIELDS = (
 
 
 class DishCatalogueUnavailable(RuntimeError):
-    """The dish catalogue could not be loaded (missing or malformed file)."""
+    """Catalogue loading failed due to a missing file, read/JSON error, or invalid shape."""
 
 
-# Cache successful loads only: caching a failure as an empty catalogue would
-# keep answering empty 200s after the file is restored.
-_DISH_CACHE: Optional[tuple[dict, ...]] = None
+# Leave failed loads uncached so later requests can retry after file repair.
+_DISH_CACHE: tuple[dict, ...] | None = None
 
 
 def _load_dishes() -> tuple[dict, ...]:
+    """Load ``DISHES_FILE`` once successfully, then return the cached records.
+
+    Accept a list or an object containing a ``dishes`` list. Each entry must be
+    an object with a nonblank string ``dish_id``. Other fields are not validated.
+    Raise ``DishCatalogueUnavailable`` for missing files, caught read/JSON errors,
+    or invalid catalogue shape. Successful loads do not refresh on file changes.
+
+    Records are shared with the cache. Callers must not mutate them.
+    """
     global _DISH_CACHE
     if _DISH_CACHE is not None:
         return _DISH_CACHE
@@ -70,6 +67,7 @@ def _load_dishes() -> tuple[dict, ...]:
 
 
 def _dishes_or_503() -> tuple[dict, ...]:
+    """Translate ``DishCatalogueUnavailable`` into HTTP 503 ``dish_database_unavailable``."""
     try:
         return _load_dishes()
     except DishCatalogueUnavailable as exc:
@@ -84,7 +82,16 @@ def list_dishes(
     category: str | None = Query(None, description="Exact category match (e.g. hawker)"),
     search: str | None = Query(None, description="Case-insensitive substring on dish name"),
 ) -> dict:
-    """List the catalogue. Returns ``{"count", "dishes"}`` with picker fields."""
+    """Return ``count`` and ``dishes`` with the fields used by meal pickers.
+
+    Combine an exact category filter with a case-insensitive name substring.
+    Strip surrounding whitespace from search text. Empty filters are ignored.
+    Preserve catalogue order and return an empty list when nothing matches.
+    Missing picker fields have null values.
+
+    Catalogue loading failures reported by the loader produce HTTP 503 with
+    ``dish_database_unavailable`` rather than an empty success response.
+    """
     dishes = _dishes_or_503()
     if category:
         dishes = tuple(d for d in dishes if d.get("category") == category)
@@ -97,6 +104,11 @@ def list_dishes(
 
 @router.get("/{dish_id}", summary="One full dish record")
 def get_dish(dish_id: str) -> dict:
+    """Return the first full catalogue record whose ID exactly matches ``dish_id``.
+
+    Return HTTP 404 ``dish_not_found`` when no record matches. Catalogue loading
+    failures reported by the loader produce HTTP 503 ``dish_database_unavailable``.
+    """
     for dish in _dishes_or_503():
         if dish.get("dish_id") == dish_id:
             return dish

@@ -41,21 +41,6 @@ def _isolated_stores():
     ENVELOPE_STORE.update(snapshot)
 
 
-@pytest.fixture()
-def lenient_client():
-    """TestClient that returns 500 responses instead of raising them.
-
-    Only the fault-injection test needs the unhandled-error response body;
-    every other test keeps the shared strict client.
-    """
-    from fastapi.testclient import TestClient
-
-    from backend.app.main import app
-
-    with TestClient(app, raise_server_exceptions=False) as c:
-        yield c
-
-
 # ---------------------------------------------------------------------------
 # Patient creation cannot replace existing records
 # ---------------------------------------------------------------------------
@@ -141,7 +126,7 @@ def _seed_review_item(review_id: str, patient_id: str = "P0002") -> str:
     persistence.create_review_item(
         patient_id,
         "hard_violation_day",
-        {"key": f"day@2026-10-10", "kind": "ceiling", "severity": "alert",
+        {"key": "day@2026-10-10", "kind": "ceiling", "severity": "alert",
          "reason": "test", "payload": {}},
         review_id=review_id,
     )
@@ -152,6 +137,7 @@ def test_acknowledge_cannot_regress_recorded_action(client) -> None:
     review_id = _seed_review_item("rev-ack-0001")
 
     acted = persistence.record_review_action(review_id, "contacted_dietitian")
+    assert acted is not None
     assert acted["status"] == "ACTION_RECORDED"
 
     # The racy write path: unconditional acknowledgement would regress this.
@@ -218,6 +204,7 @@ def test_review_proposal_retry_relinks_orphan_without_duplicate(lenient_client, 
     orphan_ids = _proposed_envelope_ids("P0002")
     assert len(orphan_ids) == 1
     row = persistence.get_review_item(review_id)
+    assert row is not None
     assert row["linked_envelope_id"] is None
     assert row["action"]["action"] == "proposal_pending"
     assert row["status"] == "OPEN"  # pending marker did not touch lifecycle
@@ -267,13 +254,13 @@ def test_patient_model_rejects_nonfinite_clinical_numerics() -> None:
         "weight_kg": 70.0,
     }
     with pytest.raises(ValidationError):
-        Patient(**{**base, "weight_kg": float("inf")})
+        Patient.model_validate({**base, "weight_kg": float("inf")})
     with pytest.raises(ValidationError):
-        Patient(**{**base, "egfr": float("nan")})
+        Patient.model_validate({**base, "egfr": float("nan")})
     with pytest.raises(ValidationError):
-        Patient(**{**base, "serum_K_meq_L": float("inf")})
+        Patient.model_validate({**base, "serum_K_meq_L": float("inf")})
     # Finite values (and bounds-legal None) are unaffected.
-    assert Patient(**base).egfr is None
+    assert Patient.model_validate(base).egfr is None
 
 
 # ---------------------------------------------------------------------------

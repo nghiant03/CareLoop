@@ -61,7 +61,7 @@ def create_observation(req: ObservationRequest) -> dict[str, Any]:
     if req.observed_at is not None:
         try:
             observed = date.fromisoformat(req.observed_at)
-            if observed > datetime.now(UTC):
+            if observed > datetime.now(UTC).date():
                 raise ValueError("future observation")
             req.observed_at = observed.isoformat()
         except ValueError:

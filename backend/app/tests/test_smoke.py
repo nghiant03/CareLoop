@@ -40,7 +40,7 @@ def _request(method: str, path: str, **kwargs) -> httpx.Response:
 
 def test_imports() -> None:
     from backend.app.core import approval_gate, graph_versioning, llm_choice
-    from backend.app.models import Patient, NutrientEnvelope
+    from backend.app.models import NutrientEnvelope, Patient
 
     assert NutrientEnvelope is not None
     assert Patient is not None

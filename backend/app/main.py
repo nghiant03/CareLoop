@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
 
         stats = get_kb().stats()
         logger.info("knowledge base ready: %s nodes", sum(stats["node_counts"].values()))
-    except Exception as exc:  # pragma: no cover - missing dataset
+    except Exception as exc:  # noqa: BLE001  # pragma: no cover - missing dataset
         logger.warning("knowledge base not loaded at startup: %s", exc)
     yield
     logger.info("CareLoop backend shutting down")
@@ -107,10 +107,10 @@ async def _validation_handler(
 ) -> JSONResponse:
     """Render validation failures as the documented 422 body, JSON-safe.
 
-    Raw input values can be nonfinite (JSON parsers accept ``Infinity`` and
-    ``NaN`` literals), and response rendering rejects them, which would turn
-    the intended 422 into a 500. Nonfinite inputs are stringified; ``ctx``
-    is dropped because it may carry non-serializable error objects.
+    JSON parsers can accept nonfinite ``Infinity`` and ``NaN`` input literals.
+    Response rendering rejects these values, turning the intended 422 into
+    a 500 unless they are stringified. Drop ``ctx`` because it may carry
+    non-serializable error objects.
     """
     return JSONResponse(
         status_code=422,

@@ -15,9 +15,8 @@ from backend.app.api import review
 from backend.app.core import persistence
 from backend.app.models.patient import Patient
 from backend.app.tests.test_core_api_regressions import (
-    _isolated_stores,  # pytest fixture: isolate application state for every test
+    _isolated_stores,  # noqa: F401  # pytest fixture: isolate application state for every test
     _seed_review_item,
-    lenient_client,
 )
 
 
@@ -27,7 +26,9 @@ def test_retry_uses_exact_identity_after_unrelated_proposal(lenient_client, monk
     monkeypatch.setattr(persistence, "finalize_review_proposal", Mock(side_effect=RuntimeError("link failed")))
     first = lenient_client.post(f"/review/{review_id}/proposal")
     assert first.status_code == 500
-    pending_id = persistence.get_review_item(review_id)["action"]["envelope_id"]
+    pending = persistence.get_review_item(review_id)
+    assert pending is not None
+    pending_id = pending["action"]["envelope_id"]
     unrelated = lenient_client.post("/rules/run", json={"patient_id": "P0002"})
     assert unrelated.status_code == 200
     unrelated_id = unrelated.json()["envelope"]["envelope_id"]
@@ -76,6 +77,7 @@ def test_pending_attempt_reuses_the_committed_snapshot():
 
     review_id = _seed_review_item("core-pending-reuse")
     patient = get_patient("P0002")
+    assert patient is not None
     with persistence.begin_review_proposal(review_id):
         first = run_rules_service(patient)["envelope"]
     # A second attempt reaches persistence after the first stored its identity.
@@ -116,6 +118,7 @@ def test_proposal_finalization_overlap_preserves_newer_pending(lenient_client, m
     assert completions[0] == completions[1] == responses["B"].json()["envelope_id"]
     assert completions[2] != completions[0]
     pending = persistence.get_review_item(review_id)
+    assert pending is not None
     assert pending["action"]["action"] == "proposal_pending"
     assert pending["action"]["envelope_id"] == completions[2]
     assert pending["linked_envelope_id"] == completions[0]
@@ -161,11 +164,14 @@ def test_proposal_finalization_preserves_clinician_action(lenient_client, monkey
     assert response.status_code == 409, response.text
     assert response.json()["detail"]["error"] == "review_proposal_superseded"
     assert persistence.get_review_item(review_id) == intervening["row"]
+    intervening_envelope_id = intervening["envelope_id"]
+    assert isinstance(intervening_envelope_id, str)
     with pytest.raises(persistence.ReviewProposalConflictError):
-        original(review_id, intervening["envelope_id"])
+        original(review_id, intervening_envelope_id)
     assert persistence.get_review_item(review_id) == intervening["row"]
     # Generic clinician actions deliberately retain their replacement contract.
     replacement = persistence.record_review_action(review_id, "resolved", note="new decision")
+    assert replacement is not None
     assert replacement["action"]["action"] == "resolved"
     assert replacement["action"]["note"] == "new decision"
 
@@ -189,6 +195,7 @@ def test_pending_snapshot_and_identity_rollback_together(lenient_client):
 def test_acknowledge_after_stale_open_read_preserves_action(client):
     review_id = _seed_review_item("core-stale-ack")
     stale = persistence.get_review_item(review_id)
+    assert stale is not None
     assert stale["status"] == "OPEN"
     persistence.record_review_action(review_id, "contacted", note="new action")
     # This is the interleaving formerly vulnerable to the API's stale OPEN check.
@@ -196,7 +203,9 @@ def test_acknowledge_after_stale_open_read_preserves_action(client):
     assert response.status_code == 200
     assert response.json()["status"] == "ACTION_RECORDED"
     assert response.json()["acknowledged_at"] is None
-    assert persistence.get_review_item(review_id)["action"]["note"] == "new action"
+    current = persistence.get_review_item(review_id)
+    assert current is not None
+    assert current["action"]["note"] == "new action"
 
 
 @pytest.mark.parametrize("field", ["weight_kg", "height_cm", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL"])
@@ -251,6 +260,7 @@ def test_legacy_schema_initializes_across_processes(tmp_path):
                                 text=True) for _ in range(4)]
     try:
         for worker in workers:
+            assert worker.stdin is not None
             worker.stdin.write("start\n")
             worker.stdin.flush()
         for worker in workers:

@@ -1,21 +1,20 @@
-"""Envelope lifecycle endpoints: approve / edit / reject.
+"""Expose envelope snapshots, explanations, and clinician lifecycle transitions.
 
-Only ``POST /envelopes/{envelope_id}/approve`` moves an envelope into the
-APPROVED state. Live planning also requires scope eligibility and nonempty
-targets. ``edit`` clears approval and moves to EDITED; ``reject`` moves to
-REJECTED. Both block live planning and personal target guidance.
+Send the reviewed envelope's ``lifecycle_revision`` as ``expected_revision`` to detect
+changes since review. Revision conflicts return HTTP 409 ``envelope_conflict``
+and require reloading and review before retrying. Omitting the token does not
+disable write-conflict checks, but cannot detect a stale client review.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.core.approval_gate import get_envelope_or_404
 from backend.app.core import envelope_lifecycle
+from backend.app.core.approval_gate import get_envelope_or_404
 from backend.app.core.trace_store import trace_or_none
 from backend.app.explain.views import clinician_explanation
 from backend.app.models.envelope import (
@@ -30,53 +29,55 @@ router = APIRouter(prefix="/envelopes", tags=["envelopes"])
 
 
 class ApproveRequest(BaseModel):
+    """Accept both approval field pairs for client compatibility.
+
+    A nonempty ``clinician_id`` takes precedence over ``approved_by``.
+    A non-null ``note`` takes precedence over ``notes``, including an empty string.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
-    # ``approved_by``/``notes`` are the original fields; ``clinician_id``/``note``
-    # are the frontend-contract aliases (either form is accepted).
     approved_by: str = "clinician"
-    notes: Optional[str] = None
-    clinician_id: Optional[str] = None
-    note: Optional[str] = None
-    expected_revision: Optional[int] = Field(default=None, ge=0)
+    notes: str | None = None
+    clinician_id: str | None = None
+    note: str | None = None
+    expected_revision: int | None = Field(default=None, ge=0)
 
     @property
     def approver(self) -> str:
         return self.clinician_id or self.approved_by
 
     @property
-    def approval_note(self) -> Optional[str]:
+    def approval_note(self) -> str | None:
         return self.note if self.note is not None else self.notes
 
 
 class EditRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    targets: Optional[list[NutrientConstraint]] = None
-    exclusions: Optional[list[ExclusionFlag]] = None
-    notes: Optional[str] = None
+    targets: list[NutrientConstraint] | None = None
+    exclusions: list[ExclusionFlag] | None = None
+    notes: str | None = None
     edited_by: str = "clinician"
-    expected_revision: Optional[int] = Field(default=None, ge=0)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class RejectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # Retained as reviewer attribution: reject persists it inside the
-    # envelope snapshot's embedded trace (CLINICIAN-REJECT entry).
     rejected_by: str = "clinician"
-    reason: Optional[str] = None
-    expected_revision: Optional[int] = Field(default=None, ge=0)
+    reason: str | None = None
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 @router.get("/latest", summary="Latest envelope for a patient")
 def read_latest_envelope_for_patient(
     patient_id: str = Query(..., description="Patient id"),
 ) -> NutrientEnvelope:
-    """The patient's most recent envelope, any status.
+    """Return the patient's latest envelope regardless of lifecycle status.
 
-    Lets the what-if screen prefill its target editor from the current
-    envelope (the proposal baseline) instead of retyping every constraint.
+    Return HTTP 404 ``envelope_not_found`` when none exists. A latest proposal
+    is not necessarily approved and does not by itself authorize live planning.
     """
     from backend.app.core.approval_gate import find_latest_envelope_for_patient
 
@@ -93,6 +94,7 @@ def read_latest_envelope_for_patient(
 def read_envelope(
     envelope: NutrientEnvelope = Depends(get_envelope_or_404),
 ) -> NutrientEnvelope:
+    """Return the requested snapshot in any lifecycle status, or HTTP 404 if absent."""
     return envelope
 
 
@@ -100,7 +102,7 @@ def read_envelope(
 def explain_envelope(
     envelope: NutrientEnvelope = Depends(get_envelope_or_404),
 ) -> dict:
-    """Explain the durable snapshot's fired rules, conflicts, and citations."""
+    """Explain the envelope's fired rules, conflicts, and citations."""
     trace = trace_or_none(envelope) or []
     return clinician_explanation(envelope.model_dump(by_alias=True), trace)
 
@@ -110,6 +112,13 @@ def approve_envelope(
     body: ApproveRequest | None = None,
     envelope: NutrientEnvelope = Depends(get_envelope_or_404),
 ) -> NutrientEnvelope:
+    """Approve the envelope and return it with reviewer and approval time.
+
+    Reject rejected, scope-ineligible, or targetless envelopes with HTTP 422
+    ``out_of_scope_envelope``. Omitted bodies use the default reviewer. Null
+    approval notes preserve existing notes. Content version is unchanged.
+    Stale revisions return HTTP 409 ``envelope_conflict``.
+    """
     body = body or ApproveRequest()
     return envelope_lifecycle.approve(
         envelope, approved_by=body.approver, notes=body.approval_note,
@@ -122,6 +131,16 @@ def edit_envelope(
     body: EditRequest,
     envelope: NutrientEnvelope = Depends(get_envelope_or_404),
 ) -> NutrientEnvelope:
+    """Edit the envelope, clear approval, and increment its content version.
+
+    Null or omitted fields preserve targets, exclusions, and notes. Supplied
+    target/exclusion lists replace the whole list, and empty lists clear it.
+    Every edit invalidates approval, including notes-only edits or empty JSON objects.
+    Live planning and personal target guidance require renewed approval.
+
+    Reject rejected or scope-ineligible envelopes with HTTP 422
+    ``out_of_scope_envelope``. Stale revisions return HTTP 409 ``envelope_conflict``.
+    """
     return envelope_lifecycle.edit(
         envelope, edited_by=body.edited_by, targets=body.targets,
         exclusions=body.exclusions, notes=body.notes, expected_revision=body.expected_revision,
@@ -133,18 +152,19 @@ def reject_envelope(
     body: RejectRequest | None = None,
     envelope: NutrientEnvelope = Depends(get_envelope_or_404),
 ) -> NutrientEnvelope:
-    """Reject, retaining reviewer attribution in the durable snapshot.
+    """Reject the envelope and clear approval without changing its content version.
 
-    ``rejected_by`` is recorded as an embedded ``CLINICIAN-REJECT`` trace
-    entry (mirroring how edits record ``CLINICIAN-EDIT``), because the
-    envelope schema carries no dedicated rejection-attribution field; the
-    approval attribution itself is cleared by the rejection.
+    Accept any current status or scope eligibility. Omitted bodies use the default
+    reviewer. A nonempty reason replaces notes. Rejection blocks live planning
+    and personal target guidance. Reviewer attribution is retained.
+    Stale revisions return HTTP 409 ``envelope_conflict``.
     """
     body = body or RejectRequest()
     snapshot = envelope.model_copy(deep=True)
+    # The schema has no rejection-attribution field, so retain the reviewer in the trace.
     snapshot.fired_rules.append(RuleFire(
         rule_id="CLINICIAN-REJECT",
-        fired_at=datetime.now(timezone.utc),
+        fired_at=datetime.now(UTC),
         patient_summary=f"rejected by {body.rejected_by}",
         action_summary=(
             f"clinician rejection: {body.reason}" if body.reason
