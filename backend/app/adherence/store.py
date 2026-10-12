@@ -1,12 +1,8 @@
-"""Meal-log facade over the durable application store.
-
-Slots are keyed by patient, ISO date, and meal. Writes replace the whole slot;
-input validation belongs to the API. Persistence owns timestamps and ordering.
-"""
+"""Expose meal-log operations backed by durable application storage."""
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from backend.app.core import persistence
 
@@ -21,7 +17,11 @@ def put_log(
     logged_at: str | None = None,
     items: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Replace a slot's complete dish/item list; see ``persistence.put_log``."""
+    """Replace one patient/date/meal slot and return the saved log.
+
+    Callers must validate inputs before storage. ``persistence.put_log`` defines
+    item replacement and receipt timestamp behavior.
+    """
     return persistence.put_log(patient_id, date, meal, dish_id, logged_at, items=items)
 
 
@@ -35,22 +35,29 @@ def list_logs(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> list[dict[str, Any]]:
-    """List logs by date then meal order, with inclusive optional ISO date bounds."""
+    """List a patient's logs within inclusive optional ISO date bounds.
+
+    Order by date, then breakfast, lunch, dinner.
+    """
     return persistence.list_logs(patient_id, date_from=date_from, date_to=date_to)
 
 
 def delete_logs_for_patient(patient_id: str) -> int:
-    """Remove every log for a patient; returns the number deleted."""
+    """Delete a patient's meal logs and return the number of slots deleted."""
     return persistence.delete_logs_for_patient(patient_id)
 
 
-def count_logs(patient_id: Optional[str] = None) -> int:
-    """Count logged meal slots, optionally for one patient, not individual dishes."""
+
+def count_logs(patient_id: str | None = None) -> int:
+    """Count meal slots across all patients, or only ``patient_id``.
+
+    Multiple dishes in one slot count once.
+    """
     return persistence.count_logs(patient_id)
 
 
 def clear() -> None:
-    """Delete all patients' meal logs; intended for isolated tests."""
+    """Delete every patient's meal logs. Use only with an isolated database."""
     persistence.clear_logs()
 
 

@@ -1,16 +1,14 @@
-"""Meal logging and adherence views attributed to historical approval coverage.
-
-The latest-envelope notice describes current review status, not the envelope
-used for each logged day. Uncovered dates are reported without target scoring.
-"""
+"""Expose meal logging and historically attributed adherence views."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import date as date_type
-from datetime import timedelta
+from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
-from typing import Any, Literal, Optional
+from typing import Any, Literal
+
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.adherence import analysis, store
 from backend.app.api.patients import get_patient
@@ -18,8 +16,6 @@ from backend.app.core import persistence
 from backend.app.core.approval_gate import find_latest_envelope_for_patient
 from backend.app.models.envelope import NutrientEnvelope
 from backend.optim.real_data import load_dishes
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 router = APIRouter(prefix="/adherence", tags=["adherence"])
 
@@ -41,7 +37,7 @@ class MealLogRequest(BaseModel):
 
     @model_validator(mode="after")
     def one_representation(self):
-        # Unknown blank IDs must not create zero-nutrient complete days.
+        # Blank dish IDs could falsely count an empty meal toward day completeness.
         if self.dish_id is not None and not self.dish_id.strip():
             raise ValueError("dish_id must not be blank")
         if self.items is not None and any(
@@ -79,17 +75,18 @@ def _latest_envelope_or_404(patient_id: str) -> Any:
 
 
 def _date_window(days: int) -> tuple[str, str]:
-    """Inclusive ISO window ending on the server's local date, not UTC.
-
-    Logged dates are date-only values; this helper performs no timezone conversion.
-    """
-    end = date_type.today()
+    """Return inclusive ISO dates ending in UTC."""
+    end = datetime.now(tz=UTC)
     start = end - timedelta(days=days - 1)
     return start.isoformat(), end.isoformat()
 
 
-def _envelope_notice(envelope: Any) -> tuple[bool, Optional[str]]:
-    """Compatibility flag/notice for latest-envelope status, not day attribution."""
+def _envelope_notice(envelope: Any) -> tuple[bool, str | None]:
+    """Describe the latest envelope's review status, not historical scoring.
+
+    Return ``(False, None)`` for APPROVED status, otherwise ``(True, notice)``.
+    Logged days still use the approval effective on their consumption date.
+    """
     status = envelope.status.value
     if status == "APPROVED":
         return False, None
@@ -100,18 +97,16 @@ def _envelope_notice(envelope: Any) -> tuple[bool, Optional[str]]:
     )
 
 
-# ---------------------------------------------------------------------------
-# Historical approval attribution
-# ---------------------------------------------------------------------------
 def _resolve_day_envelopes(
     patient_id: str, dates: Iterable[str]
-) -> tuple[dict[str, Optional[NutrientEnvelope]], list[str]]:
-    """Map each logged date to the envelope effective on that date.
+) -> tuple[dict[str, NutrientEnvelope | None], list[str]]:
+    """Resolve historical approval coverage for each distinct logged date.
 
-    Only approvals effective on or before consumption qualify. Missing coverage
-    is reported explicitly; current targets cannot be applied retroactively.
+    Only approvals effective on or before consumption qualify. Return the
+    date-to-envelope mapping and sorted uncovered dates. Uncovered dates map
+    to ``None`` rather than retroactively using current targets.
     """
-    assignment: dict[str, Optional[NutrientEnvelope]] = {}
+    assignment: dict[str, NutrientEnvelope | None] = {}
     unattributed: list[str] = []
     for day in sorted(set(dates)):
         envelope = persistence.envelope_effective_at(patient_id, day)
@@ -128,15 +123,20 @@ def attributed_analysis(
     *,
     with_series: bool,
 ) -> dict[str, Any]:
-    """Group logged days by their effective envelope and analyse per group.
+    """Analyse covered logs separately for each effective envelope version.
 
-    Returns ``{"groups": [...], "unattributed_days": [...], "latest": env}``
-    where each group is ``{"envelope", "label", "dates", "logs", "result"}``.
-    ``result`` is ``analyse_range`` output (``with_series=False``) or
-    ``analyse_patient`` output (``with_series=True``). Groups are ordered
-    chronologically by first covered date. ``label`` is the series-key prefix.
-    Labels use envelope IDs unless any identity spans multiple versions; then
-    every group's label includes ``::v<version>`` for consistent disambiguation.
+    Return a dictionary containing:
+
+    * ``groups``: ordered by first covered date. Each group holds its approved
+      ``envelope``, ``dates``, ``logs``, analysis ``result``, and series-prefix
+      ``label``. Results contain days and aggregate statistics. ``with_series``
+      also adds deviation series and trend flags.
+    * ``unattributed_days``: sorted uncovered dates, excluded from target scoring.
+    * ``latest``: the latest proposal, or ``None``. This is review-status metadata,
+      not the envelope used to score historical logs.
+
+    Labels use envelope IDs. If an ID spans multiple versions in the window,
+    every label includes ``::v<version>`` to disambiguate series and flags.
     """
     assignment, unattributed = _resolve_day_envelopes(
         patient_id, (log["date"] for log in logs)
@@ -146,7 +146,7 @@ def attributed_analysis(
         envelope = assignment[day]
         if envelope is None:
             continue
-        key = (envelope.envelope_id, int(envelope.version))
+        key = (envelope.envelope_id, envelope.version)
         group = groups.setdefault(
             key, {"envelope": envelope, "dates": [], "logs": []}
         )
@@ -155,13 +155,12 @@ def attributed_analysis(
         envelope = assignment.get(log["date"])
         if envelope is None:
             continue
-        groups[(envelope.envelope_id, int(envelope.version))]["logs"].append(log)
+        groups[(envelope.envelope_id, envelope.version)]["logs"].append(log)
 
     ordered = sorted(
         groups.values(),
         key=lambda g: (g["dates"][0], g["envelope"].envelope_id, int(g["envelope"].version)),
     )
-    # Use versioned labels throughout a window when any envelope ID is ambiguous.
     id_count: dict[str, int] = {}
     for group in ordered:
         eid = group["envelope"].envelope_id
@@ -190,7 +189,7 @@ def attributed_analysis(
 
 
 def _versions_used(attributed: dict[str, Any]) -> list[dict[str, Any]]:
-    """``envelope_versions_used`` rows for an ``attributed_analysis`` result."""
+    """List the envelope versions and logged dates actually used for scoring."""
     return [
         {
             "envelope_id": group["envelope"].envelope_id,
@@ -207,11 +206,9 @@ def _flag_sort_key(flag: dict[str, Any]) -> tuple[int, float]:
     return (order.get(flag["direction"], 2), -abs(flag["slope_pct_per_day"]))
 
 
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
 @router.post("/log", status_code=201, summary="Log an actual meal")
 def log_meal(req: MealLogRequest) -> dict[str, Any]:
+    """Save or replace a patient's logged meal for one date and meal slot."""
     _require_patient(req.patient_id)
     dish_ids = [item.dish_id for item in req.items] if req.items else [req.dish_id]
     missing = next((did for did in dish_ids if did not in _dish_index()), None)
@@ -221,13 +218,13 @@ def log_meal(req: MealLogRequest) -> dict[str, Any]:
             detail={"error": "dish_not_found", "dish_id": missing},
         )
     try:
-        date_type.fromisoformat(req.date)
+        date.fromisoformat(req.date)
     except ValueError:
         raise HTTPException(
             status_code=422,
             detail={"error": "invalid_date", "date": req.date},
         )
-    return store.put_log(req.patient_id, date_type.fromisoformat(req.date).isoformat(), req.meal, dish_ids[0],
+    return store.put_log(req.patient_id, date.fromisoformat(req.date).isoformat(), req.meal, dish_ids[0],
                          items=[item.model_dump() for item in req.items] if req.items else None)
 
 
@@ -236,6 +233,11 @@ def adherence_summary(
     patient_id: str,
     days: int = Query(default=14, ge=1, le=90),
 ) -> dict[str, Any]:
+    """Summarize meals against approvals effective on each logged date.
+
+    Uncovered dates are listed without target scoring. Top-level envelope
+    identity and review notices describe the latest proposal, not each day.
+    """
     _require_patient(patient_id)
     envelope = _latest_envelope_or_404(patient_id)
     informational_only, notice = _envelope_notice(envelope)
@@ -246,7 +248,7 @@ def adherence_summary(
     groups = attributed["groups"]
 
     if len(groups) <= 1:
-        # Preserve the single-envelope response shape, including empty windows.
+        # Retain legacy response fields for zero or one covered envelope version.
         if groups:
             result = groups[0]["result"]
         else:
@@ -266,7 +268,7 @@ def adherence_summary(
             "unattributed_days": attributed["unattributed_days"],
         }
 
-    # Merge already-classified days without applying today's targets to history.
+    # Aggregate historical classifications without rescoring against current targets.
     merged_days = sorted(
         (day for group in groups for day in group["result"]["days"]),
         key=lambda day: day["date"],
@@ -292,6 +294,12 @@ def adherence_deviation(
     patient_id: str,
     days: int = Query(default=14, ge=1, le=90),
 ) -> dict[str, Any]:
+    """Return historically attributed deviations and complete-day trend flags.
+
+    Top-level envelope identity and review notices describe the latest proposal.
+    Uncovered dates are listed without deviation scoring. Series prefixes
+    distinguish covered envelope versions only when the window spans groups.
+    """
     _require_patient(patient_id)
     envelope = _latest_envelope_or_404(patient_id)
     informational_only, notice = _envelope_notice(envelope)
@@ -302,7 +310,7 @@ def adherence_deviation(
     groups = attributed["groups"]
 
     if len(groups) <= 1:
-        # Legacy single-envelope shape: plain series keys, plain flags.
+        # Keep legacy series keys unprefixed while adding envelope identity to flags.
         if groups:
             result = groups[0]["result"]
             flags = [
@@ -332,8 +340,7 @@ def adherence_deviation(
             "unattributed_days": attributed["unattributed_days"],
         }
 
-    # Series and flags share the same historical identity; local keys stay
-    # unchanged on the single-envelope compatibility path above.
+    # Prefix flags exactly like series so each flag resolves to its historical series.
     series: dict[str, dict[str, Any]] = {}
     merged_flags: list[dict[str, Any]] = []
     for group in groups:
