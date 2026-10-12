@@ -34,18 +34,24 @@ from __future__ import annotations
 import json
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, cast
 
 from rank_bm25 import BM25Okapi
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import linear_kernel
 
 from backend.app.kb.graph_store import KBGraph, load_kb
 
 __all__ = [
-    "RESULTS_PATH", "PROD_NAME", "evaluate", "run_bench", "labeled_queries",
+    "PROD_NAME",
+    "RESULTS_PATH",
     "build_methods",
+    "evaluate",
+    "labeled_queries",
     "main",
+    "run_bench",
 ]
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -249,7 +255,7 @@ class TfidfMethod(BenchMethod):
         name: str,
         chunks: list[dict[str, Any]],
         vectorizer: TfidfVectorizer,
-        expand: Optional[Callable[[str], str]],
+        expand: Callable[[str], str] | None,
     ) -> None:
         self.name = name
         self._chunks = chunks
@@ -264,7 +270,7 @@ class TfidfMethod(BenchMethod):
             return []
         text = self._expand(query) if self._expand else query
         vec = self._vectorizer.transform([text])
-        scores = (vec @ self._matrix.T).toarray()[0]
+        scores = linear_kernel(vec, self._matrix)[0]
         ranked = sorted(
             (
                 (float(score), idx)
@@ -284,7 +290,7 @@ class BM25Method(BenchMethod):
         self,
         name: str,
         chunks: list[dict[str, Any]],
-        expand: Optional[Callable[[str], str]],
+        expand: Callable[[str], str] | None,
     ) -> None:
         self.name = name
         self._chunks = chunks
@@ -333,7 +339,7 @@ class RRFMethod(BenchMethod):
         self.name = name
         self._components = components
         self._chunks_by_id = {c["chunk_id"]: c for c in chunks}
-        self.min_score: Optional[float] = None
+        self.min_score: float | None = None
 
     def retrieve(self, query: str, k: int = 5) -> list[dict[str, Any]]:
         if not query.strip():
@@ -449,10 +455,11 @@ def _answer_with_method(method: BenchMethod, kb: KBGraph, question: str) -> dict
     """
     from backend.app.chat import retrieval as retrieval_module
     from backend.app.chat.answers import answer
+    from backend.app.chat.retrieval import KBIndex
 
     original_build_index = retrieval_module.build_index
     original_min_score = retrieval_module.MIN_SCORE
-    retrieval_module.build_index = lambda kb_: method
+    retrieval_module.build_index = lambda kb: cast(KBIndex, method)
     method_min_score = getattr(method, "min_score", None)
     if method_min_score is not None:
         retrieval_module.MIN_SCORE = method_min_score
@@ -535,7 +542,7 @@ def _irrelevant_probes() -> list[str]:
 
 
 def diagnose_fusion_gate(
-    kb: Optional[KBGraph] = None, method: Optional[RRFMethod] = None
+    kb: KBGraph | None = None, method: RRFMethod | None = None
 ) -> dict[str, Any]:
     """Report held-out RRF score overlap without selecting or changing a gate.
 
@@ -548,8 +555,9 @@ def diagnose_fusion_gate(
     if kb is None:
         kb = load_kb(RULES_PATH, DISHES_PATH)
     if method is None:
-        method = build_methods(kb)["bm25_rrf_char"]
-        assert isinstance(method, RRFMethod)
+        candidate = build_methods(kb)["bm25_rrf_char"]
+        assert isinstance(candidate, RRFMethod)
+        method = candidate
 
     probes = _irrelevant_probes()
     irrelevant_scores: dict[str, float] = {}
@@ -647,14 +655,14 @@ def calibrate_methods(methods):
 
     result = {}
     for name, method in methods.items():
-        examples = []
+        examples: list[dict[str, Any]] = []
         for relevant, questions in ((True, _CALIBRATION_RELEVANT), (False, _CALIBRATION_IRRELEVANT)):
             for question in questions:
                 hits = method.retrieve(question, k=1)
                 examples.append({"question": question, "relevant": relevant,
                                  "score": float(hits[0]["score"]) if hits else 0.})
         candidates = sorted({0., *(row["score"] for row in examples)})
-        def errors(threshold):
+        def errors(threshold, examples=examples):
             return sum((row["score"] > threshold) != row["relevant"] for row in examples)
         threshold = min(candidates, key=lambda t: (errors(t), -t))
         # Keep the deployed baseline fixed; experimental retrievers get their own gates.
@@ -664,7 +672,7 @@ def calibrate_methods(methods):
                         "examples": examples}
     return result
 
-def evaluate(kb: Optional[KBGraph] = None) -> dict[str, Any]:
+def evaluate(kb: KBGraph | None = None) -> dict[str, Any]:
     """Run the full benchmark and return the results dict (deterministic)."""
     if kb is None:
         kb = load_kb(RULES_PATH, DISHES_PATH)
@@ -672,8 +680,11 @@ def evaluate(kb: Optional[KBGraph] = None) -> dict[str, Any]:
     methods = build_methods(kb)
     thresholds = calibrate_methods(methods)
     fusion_method = methods.get("bm25_rrf_char")
+    assert isinstance(fusion_method, RRFMethod)
     queries = labeled_queries(kb)
-    chunks = methods[PROD_NAME]._index.chunks  # production chunking
+    prod_method = methods[PROD_NAME]
+    assert isinstance(prod_method, ProductionMethod)
+    chunks = prod_method._index.chunks  # production chunking
     all_chunk_ids = {c["chunk_id"] for c in chunks}
 
     method_results: list[dict[str, Any]] = []
@@ -733,7 +744,7 @@ def evaluate(kb: Optional[KBGraph] = None) -> dict[str, Any]:
     }
 
 
-def write_results(results: dict[str, Any], path: Optional[Path] = None) -> Path:
+def write_results(results: dict[str, Any], path: Path | None = None) -> Path:
     """Write the results artifact (sorted keys, rounded floats => deterministic)."""
     target = Path(path) if path is not None else RESULTS_PATH
     target.write_text(
@@ -742,7 +753,7 @@ def write_results(results: dict[str, Any], path: Optional[Path] = None) -> Path:
     return target
 
 
-def run_bench(kb: Optional[KBGraph] = None) -> tuple[dict[str, Any], Path]:
+def run_bench(kb: KBGraph | None = None) -> tuple[dict[str, Any], Path]:
     """Write the Markdown report and JSON results; return results and the JSON path."""
     results = evaluate(kb)
     RESULTS_PATH.with_name("RETRIEVAL_BENCH.md").write_text(render_report(results), encoding="utf-8")
@@ -752,12 +763,12 @@ def run_bench(kb: Optional[KBGraph] = None) -> tuple[dict[str, Any], Path]:
 def render_report(results):
     lines = ["# Retrieval benchmark", "", "Generated by `python -m backend.app.chat.retrieval_bench`.", "",
              "## Protocol", "",
-             "The same 275 chunks (61 rules, 214 dishes) and deterministic tie-breaks are shared across all methods. "
+             ("The same 275 chunks (61 rules, 214 dishes) and deterministic tie-breaks are shared across all methods. "
              "Synonym expansion is the syn/nosyn variable within each scorer family: *_nosyn rows retrieve with raw queries. "
              "Experimental refusal gates are selected on 12 disjoint development questions, then frozen before scoring 58 held-out queries. "
-             "The deployed BM25 baseline retains its existing threshold. Its historical calibration was not independent of this query set.", "",
-             "RRF combines the union of BM25 and character-ngram candidates (top 50 each, k=60). "
-             "Held-out score overlap is diagnostic only and never used to retune the gate.", "",
+             "The deployed BM25 baseline retains its existing threshold. Its historical calibration was not independent of this query set."), "",
+             ("RRF combines the union of BM25 and character-ngram candidates (top 50 each, k=60). "
+             "Held-out score overlap is diagnostic only and never used to retune the gate."), "",
              "## Ranking", "", "| Method | Hit@1 | Hit@3 | Hit@5 | MRR |", "|---|---:|---:|---:|---:|"]
     for row in results["methods"]:
         lines.append(f"| {row['name']} | {row['hit@1']:.3f} | {row['hit@3']:.3f} | {row['hit@5']:.3f} | {row['mrr']:.3f} |")
@@ -765,21 +776,21 @@ def render_report(results):
     for name, row in results["threshold_calibration"].items():
         lines.append(f"| {name} | {row['threshold']:.6f} | {row['development_errors']} |")
     lines += ["", "## End-to-end checks", "",
-              "Ten questions use the real answer pipeline. Citation accuracy requires an on-topic citation and support for every exposed claim. "
-              "The total-fat numeric question correctly refuses because no supported numeric target exists; it is intentionally not counted as a citation success.", "",
+              ("Ten questions use the real answer pipeline. Citation accuracy requires an on-topic citation and support for every exposed claim. "
+              "The total-fat numeric question correctly refuses because no supported numeric target exists; it is intentionally not counted as a citation success."), "",
               "| Method | Citation accuracy | Answered / 10 |", "|---|---:|---:|"]
     for name, row in results["end_to_end"]["summary"].items():
         lines.append(f"| {name} | {row['citation_accuracy']:.3f} | {row['answered']} |")
-    lines += ["", "## Decision", "", f"Ranking winner: **{results['winner']}**. Keep BM25 with synonyms in production. "
+    lines += ["", "## Decision", "", (f"Ranking winner: **{results['winner']}**. Keep BM25 with synonyms in production. "
               "Fusion loses overall ranking quality and does not improve typo hit@1. "
-              "The held-out fusion score distributions overlap, so a single threshold does not cleanly separate relevance.", ""]
+              "The held-out fusion score distributions overlap, so a single threshold does not cleanly separate relevance."), ""]
     for name, row in results["irrelevant_refusal"].items():
         lines.append(f"- {name}: {row['refused']}/{row['probes']} irrelevant probes refused.")
     lines += ["", "## Limitations", "",
-              "Small, internally authored development/test sets and semantic relevance labels do not establish clinical validity. "
+              ("Small, internally authored development/test sets and semantic relevance labels do not establish clinical validity. "
               "Some end-to-end questions overlap ranking questions; those are complementary metrics, not independent evidence. "
               "Q5 separately checks patient applicability, clinician overrides and exact approved values. "
-              "Full per-query results, thresholds and development examples are in `retrieval_bench_results.json`.", ""]
+              "Full per-query results, thresholds and development examples are in `retrieval_bench_results.json`."), ""]
     return "\n".join(lines)
 
 
@@ -791,7 +802,7 @@ def _fmt(value: float) -> str:
     return f"{value:.2f}"
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     results, artifact = run_bench()
 
     print(f"KB: {results['kb']['rules']} rules, {results['kb']['dishes']} dishes "

@@ -9,6 +9,7 @@ triggers).
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -25,7 +26,7 @@ T2 = "2026-10-08T00:00:00+00:00"
 
 
 @pytest.fixture(scope="module")
-def kb() -> KBGraph:
+def kb() -> Iterator[KBGraph]:
     graph = load_kb(RULES_PATH, DISHES_PATH, valid_from=T1)
     yield graph
     graph.close()
@@ -139,6 +140,7 @@ def test_version_edit_and_point_in_time() -> None:
     kb = load_kb(RULES_PATH, DISHES_PATH, valid_from=T1)
     try:
         old = kb.get_rule("CKD-2024-SODIUM-2000")
+        assert old is not None
         assert old["version"] == 1
 
         # Tighten the rule: 2000 -> 1800 mg ceiling, issued at T2.
@@ -154,6 +156,7 @@ def test_version_edit_and_point_in_time() -> None:
 
         # Current read sees the new value; explicit version read sees the old.
         current = kb.get_rule("CKD-2024-SODIUM-2000")
+        assert current is not None
         assert current["version"] == 2
         assert current["constraints"][0]["value"] == 1800
         assert current["constraints"][0]["version"] == 2
@@ -212,7 +215,9 @@ def test_append_only_no_content_row_updates() -> None:
             kb._conn.execute("UPDATE edges SET rel_type = 'X'")
 
         # The failed updates did not corrupt anything.
-        assert kb.get_rule("CKD-2024-SODIUM-2000")["priority"] == 90
+        current = kb.get_rule("CKD-2024-SODIUM-2000")
+        assert current is not None
+        assert current["priority"] == 90
     finally:
         kb.close()
 

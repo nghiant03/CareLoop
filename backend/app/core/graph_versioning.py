@@ -13,13 +13,13 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import networkx as nx
 
-__all__ = ["GraphStore", "DEFAULT_DB_PATH"]
+__all__ = ["DEFAULT_DB_PATH", "GraphStore"]
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_DB_PATH = Path(
@@ -30,7 +30,7 @@ NodeRef = tuple[str, str] | str
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _split_ref(ref: NodeRef) -> tuple[str, str]:
@@ -98,8 +98,8 @@ class GraphStore:
         self,
         label: str,
         node_id: str,
-        payload: Optional[dict[str, Any]] = None,
-        version: Optional[int] = None,
+        payload: dict[str, Any] | None = None,
+        version: int | None = None,
     ) -> int:
         """Append a new version of a node; returns the version number."""
         node_key = f"{label}:{node_id}"
@@ -130,8 +130,8 @@ class GraphStore:
         rel_type: str,
         src: NodeRef,
         dst: NodeRef,
-        payload: Optional[dict[str, Any]] = None,
-        version: Optional[int] = None,
+        payload: dict[str, Any] | None = None,
+        version: int | None = None,
     ) -> int:
         """Append a new version of a directed relationship; returns version."""
         src_label, src_id = _split_ref(src)
@@ -172,7 +172,7 @@ class GraphStore:
 
     # -- reads --------------------------------------------------------------
 
-    def get_current(self, label: str, node_id: str) -> Optional[dict[str, Any]]:
+    def get_current(self, label: str, node_id: str) -> dict[str, Any] | None:
         """Return the current version of a node, or ``None``."""
         node_key = f"{label}:{node_id}"
         with self._connect() as conn:

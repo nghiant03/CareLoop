@@ -1,12 +1,14 @@
 """Boundary regressions for chat identity, legacy units, and claim grounding."""
 
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from fastapi import HTTPException
 
 from backend.app.api import chat as chat_api
 from backend.app.chat import answers, escalation
+from backend.app.kb.graph_store import KBGraph
 
 
 @pytest.mark.parametrize("field", ["patient_id", "envelope_id"])
@@ -93,6 +95,7 @@ def test_personal_target_with_incomplete_source_is_withheld():
     context = answers._envelope_context(
         {"status": "APPROVED", "targets": [target]}, ["sodium_mg"],
     )
+    assert context is not None
     assert context["citation"] is None
 
 
@@ -107,7 +110,7 @@ def test_unsupported_intake_never_borrows_protein_citation(question, monkeypatch
     monkeypatch.setattr(answers.retrieval, "build_index", lambda _: SimpleNamespace(
         retrieve=lambda *args, **kwargs: [hit],
     ))
-    kb = SimpleNamespace(rules_for_nutrient=lambda _: [])
+    kb = Mock(spec=KBGraph, rules_for_nutrient=lambda _: [])
     result = answers.answer(question, kb)
     assert result["status"] == "refused"
     assert result["citations"] == []
@@ -126,7 +129,7 @@ def test_lifecycle_notice_is_independent_of_matched_target(status, notice, monke
     monkeypatch.setattr(answers.retrieval, "build_index", lambda _: SimpleNamespace(
         retrieve=lambda *args, **kwargs: [],
     ))
-    kb = SimpleNamespace(rules_for_nutrient=lambda _: [rule])
+    kb = Mock(spec=KBGraph, rules_for_nutrient=lambda _: [rule])
     envelope = {"envelope_id": "test", "status": status, "targets": [
         {"nutrient": "protein_g", "kind": "max", "value": 40, "unit": "g"},
     ]}
@@ -141,7 +144,7 @@ def test_uncited_personal_assertion_is_not_supported_by_independent_anchor(monke
     rule = {**citation, "constraints": [
         {"nutrient": "sodium_mg", "kind": "max", "value": 2000, "unit": "mg"},
     ]}
-    kb = SimpleNamespace(rules_for_nutrient=lambda _: [rule])
+    kb = Mock(spec=KBGraph, rules_for_nutrient=lambda _: [rule])
     monkeypatch.setattr(answers.retrieval, "build_index", lambda _: SimpleNamespace(
         retrieve=lambda *args, **kwargs: [],
     ))
@@ -168,7 +171,7 @@ def test_food_content_is_not_mistaken_for_unsupported_intake(monkeypatch):
         {"chunk_id": "dish:drink", "kind": "dish", "score": 9,
          "meta": {"dish_id": "drink", "name": "Drink", "nutrients": {"sugar_g": 8}}},
     ]
-    kb = SimpleNamespace(rules_for_nutrient=lambda _: [], get_rule=lambda _: rule)
+    kb = Mock(spec=KBGraph, rules_for_nutrient=lambda _: [], get_rule=lambda _: rule)
     monkeypatch.setattr(answers.retrieval, "build_index", lambda _: SimpleNamespace(
         retrieve=lambda *args, **kwargs: hits,
     ))

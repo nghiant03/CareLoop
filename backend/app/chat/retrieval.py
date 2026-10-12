@@ -10,7 +10,7 @@ Method comparisons and gate calibration are in ``RETRIEVAL_BENCH.md``.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional, Union
+from typing import Any, Union
 from weakref import WeakKeyDictionary
 
 from rank_bm25 import BM25Okapi
@@ -18,7 +18,7 @@ from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
 from backend.app.kb.graph_store import KBGraph
 
-__all__ = ["Chunk", "KBIndex", "build_index", "retrieve", "MIN_SCORE"]
+__all__ = ["MIN_SCORE", "Chunk", "KBIndex", "build_index", "retrieve"]
 
 # The answer pipeline accepts supporting hits strictly above this BM25 score.
 # Stopword filtering prevents irrelevant overlap from defeating the refusal gate;
@@ -187,7 +187,7 @@ class KBIndex:
         return hits
 
 
-_CACHE: "WeakKeyDictionary[KBGraph, KBIndex]" = WeakKeyDictionary()
+_CACHE: WeakKeyDictionary[KBGraph, KBIndex] = WeakKeyDictionary()
 
 
 def build_index(kb: KBGraph) -> KBIndex:

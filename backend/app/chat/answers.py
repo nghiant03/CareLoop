@@ -16,16 +16,20 @@ revalidated here. See ``docs/ARCHITECTURE.md`` for grounding and scope policy.
 
 from __future__ import annotations
 
+import math
 import re
-from typing import Any, Optional
+from typing import Any
 
 from backend.app.chat import escalation, retrieval
-from backend.app.kb.graph_store import KBGraph
 from backend.app.chat.llm import LLMAdapter
+from backend.app.kb.graph_store import KBGraph
 
 __all__ = [
-    "answer", "detect_nutrients", "format_value",
-    "MAX_ANSWER_PROSE_PARTS", "MAX_ANSWER_CHUNKS",
+    "MAX_ANSWER_CHUNKS",
+    "MAX_ANSWER_PROSE_PARTS",
+    "answer",
+    "detect_nutrients",
+    "format_value",
 ]
 
 # Supporting prose stops once the answer has one primary part plus this budget.
@@ -131,13 +135,12 @@ def format_value(value: Any, unit: str) -> str:
         num = float(value)
     except (TypeError, ValueError):
         return str(value)
-    if unit == "mg" and num >= 1000:
-        if num % 10 == 0:
-            # Hundredths of a gram are exact at this boundary; otherwise retain
-            # milligrams so a MAX is never rounded down or a MIN rounded up.
-            grams = num / 1000.0
-            text = f"{grams:.2f}".rstrip("0").rstrip(".")
-            return f"{text} g"
+    if unit == "mg" and num >= 1000 and num % 10 == 0:
+        # Hundredths of a gram are exact at this boundary; otherwise retain
+        # milligrams so a MAX is never rounded down or a MIN rounded up.
+        grams = num / 1000.0
+        text = f"{grams:.2f}".rstrip("0").rstrip(".")
+        return f"{text} g"
     if num == int(num):
         return f"{int(num)} {unit}".strip()
     return f"{value} {unit}".strip()
@@ -162,7 +165,7 @@ def _citation_of_rule(rule: dict[str, Any]) -> dict[str, Any]:
 
 
 def _rule_applies_to_patient(
-    rule: dict[str, Any], patient: Optional[dict[str, Any]]
+    rule: dict[str, Any], patient: dict[str, Any] | None
 ) -> bool:
     """Best-effort re-evaluation of a rulebook rule's conditions for a patient.
 
@@ -195,10 +198,10 @@ def _rule_applies_to_patient(
                 return False
         elif field in _NUMERIC_CONDITION_FIELDS:
             try:
-                num = float(patient.get(field))
+                num = float(patient.get(field, 0))
             except (TypeError, ValueError):
                 return False
-            if num != num:  # NaN -> unknown
+            if math.isnan(num):  # NaN -> unknown
                 return False
             if field in _UNKNOWN_GUARDED_FIELDS and num < 0:
                 return False
@@ -220,7 +223,7 @@ def _rule_applies_to_patient(
                     if not num < float(value):
                         return False
                 elif op == "eq":
-                    if not num == float(value):
+                    if num != float(value):
                         return False
                 else:
                     return False
@@ -235,8 +238,8 @@ def _anchor_rule(
     kb: KBGraph,
     nutrients: list[str],
     role: str = "patient",
-    patient: Optional[dict[str, Any]] = None,
-) -> Optional[dict[str, Any]]:
+    patient: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """First applicable rule for the first detected nutrient with an eligible anchor.
 
     Nutrient order takes precedence; rules within each nutrient are sorted by
@@ -283,8 +286,8 @@ def _target_is_unscaled_per_kg(envelope: dict[str, Any], target: dict[str, Any])
         return False
     kind = target.get("kind", "")
     try:
-        stored = float(target.get("value"))
-    except (TypeError, ValueError):
+        stored = float(target["value"])
+    except (KeyError, TypeError, ValueError):
         return False
     for fired in envelope.get("fired_rules") or []:
         summary = str(fired.get("action_summary", "")).lower()
@@ -328,10 +331,10 @@ def _target_citation(target: dict[str, Any], fired_rules: list[dict[str, Any]]):
 
 
 def _envelope_context(
-    envelope: Optional[dict[str, Any]],
+    envelope: dict[str, Any] | None,
     nutrients: list[str],
-    weight_kg: Optional[float] = None,
-) -> Optional[dict[str, Any]]:
+    weight_kg: float | None = None,
+) -> dict[str, Any] | None:
     if not envelope:
         return None
     status = _status_of(envelope)
@@ -416,7 +419,7 @@ def _rule_sentence(rule: dict[str, Any], role: str) -> str:
 
 
 def _constraint_sentences(
-    rule: dict[str, Any], role: str, weight_kg: Optional[float] = None
+    rule: dict[str, Any], role: str, weight_kg: float | None = None
 ) -> list[str]:
     """Render a rule's constraints as patient-safe sentences.
 
@@ -482,8 +485,8 @@ def _dish_sentences(hits: list[dict[str, Any]], role: str) -> list[str]:
 
 
 def _patient_weight(
-    patient: Optional[dict[str, Any]], envelope: Optional[dict[str, Any]]
-) -> Optional[float]:
+    patient: dict[str, Any] | None, envelope: dict[str, Any] | None
+) -> float | None:
     """Best-available body weight (kg) for per-kg rendering."""
     weight: Any = (patient or {}).get("weight_kg")
     if weight is None and envelope:
@@ -499,10 +502,10 @@ def _patient_weight(
 def answer(
     question: str,
     kb: KBGraph,
-    envelope: Optional[dict[str, Any]] = None,
+    envelope: dict[str, Any] | None = None,
     role: str = "patient",
-    llm: Optional[LLMAdapter] = None,
-    patient: Optional[dict[str, Any]] = None,
+    llm: LLMAdapter | None = None,
+    patient: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compose an answered, refused, or escalated response without changing clinical state.
 
@@ -569,8 +572,8 @@ def answer(
             citations.append(env_ctx["citation"])
         claims.append({"text": env_ctx["sentence"], "source": "envelope",
                        "target": env_ctx.get("target") if env_ctx["approved"] else None,
-                       "envelope_id": envelope.get("envelope_id"),
-                       "version": envelope.get("version"), "citation": env_ctx["citation"]})
+                       "envelope_id": (envelope or {}).get("envelope_id"),
+                       "version": (envelope or {}).get("version"), "citation": env_ctx["citation"]})
 
     # 2) Choose an applicable nutrient anchor independently of envelope approval.
     anchor = (
@@ -580,7 +583,7 @@ def answer(
     )
     food_content_question = bool(re.search(
         r"\b(content|contains?|per serving)\b|\b(?:sugar|sodium|salt|protein|fat|carbs?|calories)\s+(?:is\s+)?in\b",
-        question, re.I,
+        question, re.IGNORECASE,
     ))
     if nutrients and anchor is None and env_ctx is None and not food_content_question:
         # Food composition is distinct from intake guidance. A personal intake

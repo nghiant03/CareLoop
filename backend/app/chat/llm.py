@@ -10,18 +10,18 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from backend.app.core.llm_choice import choose_llm
 
-__all__ = ["LLMAdapter", "TemplateLLM", "build_adapter", "active_adapter_info"]
+__all__ = ["LLMAdapter", "TemplateLLM", "active_adapter_info", "build_adapter"]
 
 
 @runtime_checkable
 class LLMAdapter(Protocol):
     """Adapter expected to preserve facts and citations in already-grounded text."""
 
-    def generate(self, prompt: str, context: Optional[dict[str, Any]] = None) -> str:
+    def generate(self, prompt: str, context: dict[str, Any] | None = None) -> str:
         """Produce a completion for ``prompt`` grounded in ``context``."""
         ...  # pragma: no cover
 
@@ -35,7 +35,7 @@ class TemplateLLM:
 
     name = "template-llm"
 
-    def generate(self, prompt: str, context: Optional[dict[str, Any]] = None) -> str:
+    def generate(self, prompt: str, context: dict[str, Any] | None = None) -> str:
         lines = [str(prompt)]
         if context:
             for key, value in context.items():
@@ -44,7 +44,7 @@ class TemplateLLM:
 
 
 def build_adapter(
-    env: Optional[dict[str, str]] = None,
+    env: dict[str, str] | None = None,
 ) -> tuple[LLMAdapter, dict[str, Any]]:
     """Return the active ``(adapter, info)`` pair.
 
@@ -57,7 +57,7 @@ def build_adapter(
     return TemplateLLM(), {"resolved": asdict(choice), "active": TemplateLLM.name}
 
 
-def active_adapter_info(env: Optional[dict[str, str]] = None) -> dict[str, Any]:
+def active_adapter_info(env: dict[str, str] | None = None) -> dict[str, Any]:
     """Metadata only (no adapter construction) for /healthz-style reporting."""
     choice = choose_llm(env if env is not None else os.environ)
     return {"resolved": asdict(choice), "active": TemplateLLM.name}

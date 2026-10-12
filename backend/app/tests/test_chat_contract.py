@@ -3,6 +3,7 @@
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 
 from backend.app.api.chat import ChatResponse, router
 
@@ -38,6 +39,6 @@ def test_chat_openapi_documents_request_response_and_identity_errors():
 
 
 def test_chat_response_model_is_documentation_only():
-    route = next(route for route in router.routes if route.path == "/chat")
+    route = next(route for route in router.routes if isinstance(route, APIRoute) and route.path == "/chat")
     assert route.response_model == dict[str, Any]
     assert route.responses[200]["model"] is ChatResponse

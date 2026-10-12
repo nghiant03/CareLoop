@@ -210,6 +210,7 @@ def test_fusion_diagnostic_standalone_with_unset_gate(kb):
     (TypeError on float < None) and must fall back to the documented default
     without ever selecting a gate from the held-out data."""
     fusion = retrieval_bench.build_methods(kb)["bm25_rrf_char"]
+    assert isinstance(fusion, retrieval_bench.RRFMethod)
     assert fusion.min_score is None
     report = retrieval_bench.diagnose_fusion_gate(kb, fusion)
     assert report["threshold"] == retrieval_bench.FUSION_MIN_SCORE
@@ -270,7 +271,7 @@ def test_artifact_written_and_parses(kb, tmp_path, monkeypatch):
     # the benchmark still performs its real generation, but tests must never
     # write outputs into the repository.
     monkeypatch.setattr(retrieval_bench, "RESULTS_PATH", tmp_path / "results.json")
-    results, path = retrieval_bench.run_bench(kb)
+    _, path = retrieval_bench.run_bench(kb)
     assert path == tmp_path / "results.json"
     assert (tmp_path / "RETRIEVAL_BENCH.md").exists()
     parsed = json.loads(path.read_text(encoding="utf-8"))

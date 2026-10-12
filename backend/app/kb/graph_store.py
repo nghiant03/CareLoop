@@ -30,9 +30,9 @@ import hashlib
 import json
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import networkx as nx
 
@@ -55,7 +55,7 @@ _DISH_DATASET_GUIDELINE = "guideline:careloop_dish_dataset"
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _slug(text: str) -> str:
@@ -114,16 +114,16 @@ def _validate_rule(rule: dict[str, Any]) -> None:
     matching what ``append_rule`` chooses not to model.
     """
     if not isinstance(rule, dict):
-        raise ValueError("rule must be an object")
+        raise TypeError("rule must be an object")
     for field in ("rule_id", "guideline", "section"):
         if not rule.get(field):
             raise ValueError(f"rule missing required field {field!r}")
     conditions = rule.get("conditions", [])
     if not isinstance(conditions, list):
-        raise ValueError("rule conditions must be a list")
+        raise TypeError("rule conditions must be a list")
     for cond in conditions:
         if not isinstance(cond, dict):
-            raise ValueError("each rule condition must be an object")
+            raise TypeError("each rule condition must be an object")
         if (
             cond.get("field") == "diagnoses"
             and cond.get("op") == "in"
@@ -132,10 +132,10 @@ def _validate_rule(rule: dict[str, Any]) -> None:
             raise ValueError("diagnoses-in condition value must be a list")
     actions = rule.get("actions", [])
     if not isinstance(actions, list):
-        raise ValueError("rule actions must be a list")
+        raise TypeError("rule actions must be a list")
     for action in actions:
         if not isinstance(action, dict):
-            raise ValueError("each rule action must be an object")
+            raise TypeError("each rule action must be an object")
         if action.get("type") == "set_constraint":
             for field in ("nutrient", "kind", "value"):
                 if field not in action:
@@ -225,9 +225,9 @@ class KBGraph:
         label: str,
         logical_id: str,
         props: dict[str, Any],
-        source: Optional[str] = None,
-        version: Optional[int] = None,
-        valid_from: Optional[str] = None,
+        source: str | None = None,
+        version: int | None = None,
+        valid_from: str | None = None,
     ) -> int:
         """Append a new version of a node; returns the version number.
 
@@ -251,9 +251,9 @@ class KBGraph:
         label: str,
         logical_id: str,
         props: dict[str, Any],
-        source: Optional[str],
-        version: Optional[int],
-        valid_from: Optional[str],
+        source: str | None,
+        version: int | None,
+        valid_from: str | None,
     ) -> int:
         """Transaction-free node append; the caller owns the transaction."""
         ts = valid_from or _utcnow()
@@ -305,10 +305,10 @@ class KBGraph:
         rel_type: str,
         src_id: str,
         dst_id: str,
-        props: Optional[dict[str, Any]] = None,
-        src_version: Optional[int] = None,
-        dst_version: Optional[int] = None,
-        valid_from: Optional[str] = None,
+        props: dict[str, Any] | None = None,
+        src_version: int | None = None,
+        dst_version: int | None = None,
+        valid_from: str | None = None,
     ) -> int:
         """Append an edge pinned to explicit node versions; returns edge_id.
 
@@ -326,10 +326,10 @@ class KBGraph:
         rel_type: str,
         src_id: str,
         dst_id: str,
-        props: Optional[dict[str, Any]] = None,
-        src_version: Optional[int] = None,
-        dst_version: Optional[int] = None,
-        valid_from: Optional[str] = None,
+        props: dict[str, Any] | None = None,
+        src_version: int | None = None,
+        dst_version: int | None = None,
+        valid_from: str | None = None,
     ) -> int:
         """Transaction-free edge append; the caller owns the transaction."""
         src_version = src_version if src_version is not None else self._current_version_of(src_id)
@@ -355,13 +355,14 @@ class KBGraph:
             """,
             (rel_type, src_id, src_version, dst_id, dst_version, props_json, ts),
         )
-        return int(cur.lastrowid)
+        assert cur.lastrowid is not None  # INSERT into an INTEGER PRIMARY KEY table.
+        return cur.lastrowid
 
     def append_rule(
         self,
         rule: dict[str, Any],
-        source: Optional[str] = None,
-        valid_from: Optional[str] = None,
+        source: str | None = None,
+        valid_from: str | None = None,
     ) -> int:
         """Append one version of a rule plus its graph neighbourhood.
 
@@ -524,8 +525,8 @@ class KBGraph:
 
     def nodes(
         self,
-        label: Optional[str] = None,
-        version: Optional[str] = None,
+        label: str | None = None,
+        version: str | None = None,
     ) -> list[dict[str, Any]]:
         """List active nodes, optionally filtered by label.
 
@@ -549,7 +550,7 @@ class KBGraph:
         rows = self._conn.execute(sql, params).fetchall()
         return [self._node_row(r) for r in rows]
 
-    def edges(self, version: Optional[str] = None) -> list[dict[str, Any]]:
+    def edges(self, version: str | None = None) -> list[dict[str, Any]]:
         """List edges by ID whose pinned endpoint versions are active.
 
         ``version`` is an ISO snapshot timestamp, or None for current state.
@@ -596,14 +597,14 @@ class KBGraph:
             for r in rows
         ]
 
-    def current_version(self) -> Optional[str]:
+    def current_version(self) -> str | None:
         """Tag of the current KB state: the newest ``valid_from`` timestamp."""
         row = self._conn.execute(
             "SELECT MAX(valid_from) AS t FROM nodes"
         ).fetchone()
         return row["t"] if row and row["t"] else None
 
-    def get_rule(self, rule_id: str, version: Optional[int] = None) -> Optional[dict[str, Any]]:
+    def get_rule(self, rule_id: str, version: int | None = None) -> dict[str, Any] | None:
         """Current (or requested) version of a rule, with its constraints."""
         rid = rule_logical_id(rule_id)
         if version is not None:
@@ -711,7 +712,7 @@ class KBGraph:
         dishes.sort(key=lambda d: (d["slack"], d["dish_id"]))
         return dishes[:limit]
 
-    def _profile_of(self, dish_lid: str) -> Optional[dict[str, Any]]:
+    def _profile_of(self, dish_lid: str) -> dict[str, Any] | None:
         row = self._conn.execute(
             """
             SELECT n.* FROM edges e
@@ -745,7 +746,7 @@ class KBGraph:
         ).fetchall()
         return [self._node_row(r) for r in rows]
 
-    def graph(self, version: Optional[str] = None) -> nx.MultiDiGraph:
+    def graph(self, version: str | None = None) -> nx.MultiDiGraph:
         """Materialise a NetworkX snapshot (current state or point-in-time)."""
         g = nx.MultiDiGraph()
         for node in self.nodes(version=version):
@@ -809,7 +810,7 @@ def load_kb(
     rules_path: str | Path,
     dishes_path: str | Path,
     db_path: str | Path = ":memory:",
-    valid_from: Optional[str] = None,
+    valid_from: str | None = None,
 ) -> KBGraph:
     """Load ``rules.json`` + ``dishes.json`` into a versioned KBGraph."""
     ts = valid_from or _utcnow()

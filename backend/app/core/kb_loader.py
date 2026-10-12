@@ -11,20 +11,19 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
-from backend.app.kb.graph_store import KBGraph, load_kb
 from backend.app.chat.retrieval import KBIndex, build_index
+from backend.app.kb.graph_store import KBGraph, load_kb
 
 logger = logging.getLogger("careloop.kb")
 
-__all__ = ["get_kb", "get_index", "reset_kb"]
+__all__ = ["get_index", "get_kb", "reset_kb"]
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 RULES_PATH = _REPO_ROOT / "rules" / "rules.json"
 DISHES_PATH = _REPO_ROOT / "data" / "dishes.json"
 
-_KB: Optional[KBGraph] = None
+_KB: KBGraph | None = None
 
 
 def get_kb() -> KBGraph:

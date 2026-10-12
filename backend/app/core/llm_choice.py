@@ -28,8 +28,8 @@ The active chat adapter is selected separately in ``chat/llm.py``.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, asdict
-from typing import Literal
+from dataclasses import asdict, dataclass
+from typing import Literal, Mapping
 
 __all__ = [
     "EmbeddingChoice",
@@ -40,6 +40,10 @@ __all__ = [
 ]
 
 Provider = Literal["ollama", "openai", "google", "local_st"]
+
+
+def _effective_env(env: Mapping[str, str] | None) -> Mapping[str, str]:
+    return os.environ if env is None else env
 
 
 @dataclass(frozen=True)
@@ -59,14 +63,14 @@ class LLMChoice:
     reason: str
 
 
-def choose_embedding(env: dict[str, str] | None = None) -> EmbeddingChoice:
+def choose_embedding(env: Mapping[str, str] | None = None) -> EmbeddingChoice:
     """Resolve local_st for backend aliases local_st/st/sentence-transformers.
 
     Otherwise resolve Ollama with CARE_LOOP_EMBED_MODEL or nomic-embed-text.
     No client is constructed and provider availability is not checked.
     """
-    env = os.environ if env is None else env
-    backend = env.get("CARE_LOOP_LLM_BACKEND", "").strip().lower()
+    config = _effective_env(env)
+    backend = config.get("CARE_LOOP_LLM_BACKEND", "").strip().lower()
     if backend in {"local_st", "sentence-transformers", "st"}:
         return EmbeddingChoice(
             provider="local_st",
@@ -76,27 +80,27 @@ def choose_embedding(env: dict[str, str] | None = None) -> EmbeddingChoice:
         )
     return EmbeddingChoice(
         provider="ollama",
-        model=env.get("CARE_LOOP_EMBED_MODEL", "nomic-embed-text"),
+        model=config.get("CARE_LOOP_EMBED_MODEL", "nomic-embed-text"),
         requires_api_key=False,
         reason="default local Ollama embedding model",
     )
 
 
-def choose_llm(env: dict[str, str] | None = None) -> LLMChoice:
+def choose_llm(env: Mapping[str, str] | None = None) -> LLMChoice:
     """Resolve the chat LLM per the documented priority."""
-    env = os.environ if env is None else env
-    backend = env.get("CARE_LOOP_LLM_BACKEND", "").strip().lower()
-    override_model = env.get("CARE_LOOP_LLM_MODEL", "").strip()
+    config = _effective_env(env)
+    backend = config.get("CARE_LOOP_LLM_BACKEND", "").strip().lower()
+    override_model = config.get("CARE_LOOP_LLM_MODEL", "").strip()
 
-    if backend == "openai" or (backend == "" and env.get("OPENAI_API_KEY")):
+    if backend == "openai" or (backend == "" and config.get("OPENAI_API_KEY")):
         return LLMChoice(
             provider="openai",
             model=override_model or "gpt-4o-mini",
             requires_api_key=True,
-            base_url=env.get("OPENAI_BASE_URL"),
+            base_url=config.get("OPENAI_BASE_URL"),
             reason="OPENAI_API_KEY set (or explicit override)",
         )
-    if backend == "google" or (backend == "" and env.get("GOOGLE_API_KEY")):
+    if backend == "google" or (backend == "" and config.get("GOOGLE_API_KEY")):
         return LLMChoice(
             provider="google",
             model=override_model or "gemini-2.0-flash",
@@ -109,19 +113,19 @@ def choose_llm(env: dict[str, str] | None = None) -> LLMChoice:
             provider="ollama",
             model=override_model or "llama3.2:3b",
             requires_api_key=False,
-            base_url=env.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+            base_url=config.get("OLLAMA_BASE_URL", "http://localhost:11434"),
             reason="CARE_LOOP_LLM_BACKEND=ollama override",
         )
     return LLMChoice(
         provider="ollama",
         model=override_model or "llama3.2:3b",
         requires_api_key=False,
-        base_url=env.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+        base_url=config.get("OLLAMA_BASE_URL", "http://localhost:11434"),
         reason="default: local Ollama, no API key required",
     )
 
 
-def describe_choices(env: dict[str, str] | None = None) -> dict[str, dict]:
+def describe_choices(env: Mapping[str, str] | None = None) -> dict[str, dict]:
     """Return both resolved choices as plain dicts (useful for /healthz/debug)."""
     return {
         "embedding": asdict(choose_embedding(env)),

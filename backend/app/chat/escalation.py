@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["check", "CATEGORIES"]
+__all__ = ["CATEGORIES", "check"]
 
 # Drug / medication vocabulary for medication-change detection. Specific
 # agents commonly managed in CKD/T2D care plus generic medication words, so
@@ -52,14 +52,18 @@ _CATEGORIES: dict[str, list[str]] = {
         # Metabolic emergencies: ketoacidosis signs and extreme glucose reads.
         r"keto?acidosis",
         r"\bketones?\b",
-        r"(dizzy|dizziness|light.?headed)\W{0,20}(and|with)\W{0,10}"
-        r"(vomit\w*|nausea|confusion|ketone\w*|high sugars?)",
+        (
+            r"(dizzy|dizziness|light.?headed)\W{0,20}(and|with)\W{0,10}"
+            r"(vomit\w*|nausea|confusion|ketone\w*|high sugars?)"
+        ),
     ],
     "medication_change": [
         rf"(stop|start|skip|quit)\s+(?:taking\s+|my\s+|the\s+|to\s+)*{_DRUGS}",
         rf"(double|halve|triple)\s+(my\s+|the\s+)?(?:dose|dosage|{_DRUGS})",
-        rf"(increase|reduce|lower|raise|adjust|change)\s+(my\s+|the\s+)?"
-        rf"(?:dose|dosage|{_DRUGS})",
+        (
+            rf"(increase|reduce|lower|raise|adjust|change)\s+(my\s+|the\s+)?"
+            rf"(?:dose|dosage|{_DRUGS})"
+        ),
         r"how much (metformin|insulin|medicine|medication|\w+ ?\w*) should i take",
         r"\bprescrib\w*",
         rf"dos(e|age) of (my )?(metformin|insulin|{_DRUGS})",
