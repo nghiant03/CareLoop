@@ -548,6 +548,22 @@ export interface SimulationListResponse {
   simulations: Simulation[];
 }
 
+/** Persisted GET rows keep the comparison nested, unlike POST responses. */
+export interface SimulationHistoryRecord {
+  simulation_id: string;
+  patient_id: string;
+  base_envelope_id: string;
+  proposed_targets: NutrientConstraint[];
+  comparison: Pick<Simulation, 'base' | 'simulated' | 'deltas'> | null;
+  status: string;
+  created_at: string;
+}
+
+export interface SimulationHistoryResponse {
+  count: number;
+  simulations: SimulationHistoryRecord[];
+}
+
 export interface SimulationRequest {
   patient_id: string;
   targets: NutrientConstraint[];

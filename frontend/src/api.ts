@@ -22,6 +22,7 @@ import type {
   Simulation,
   SimulationRequest,
   SimulationListResponse,
+  SimulationHistoryResponse,
   SubstitutionResponse,
   SwapApplyRequest,
   ApiError,
@@ -389,7 +390,19 @@ export async function createSimulation(payload: SimulationRequest): Promise<Simu
 }
 
 export async function listSimulations(patientId: string): Promise<SimulationListResponse> {
-  return fetch(`${API_PREFIX}/simulations?patient_id=${encodeURIComponent(patientId)}`).then((r) =>
-    handleResponse<SimulationListResponse>(r)
-  );
+  const history = await fetch(`${API_PREFIX}/simulations?patient_id=${encodeURIComponent(patientId)}`)
+    .then((r) => handleResponse<SimulationHistoryResponse>(r));
+  return {
+    count: history.count,
+    simulations: history.simulations.map((row) => {
+      if (!row.comparison) throw new Error(`Simulation ${row.simulation_id} has no saved comparison.`);
+      return {
+        simulation_id: row.simulation_id,
+        patient_id: row.patient_id,
+        proposed_targets: row.proposed_targets,
+        created_at: row.created_at,
+        ...row.comparison,
+      };
+    }),
+  };
 }
