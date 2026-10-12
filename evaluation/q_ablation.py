@@ -30,15 +30,12 @@ from __future__ import annotations
 import random
 import time
 from collections import Counter
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 
-from evaluation.common import load_patients
-from rules.engine import run_rules
-
-from backend.optim.problem import (  # noqa: E402
+from backend.optim.problem import (
     EPS,
     MEALS_PER_DAY,
     OBJECTIVE_NAMES,
@@ -50,24 +47,26 @@ from backend.optim.problem import (  # noqa: E402
     evaluate,
     scalar_score,
 )
-from backend.optim.selection import (  # noqa: E402
+from backend.optim.selection import (
     adequacy_first_selection,
     normalised_selection,
     scalar_selection,
 )
-from backend.optim.toy_data import NUTRIENT_KEYS, Dish  # noqa: E402
+from backend.optim.toy_data import NUTRIENT_KEYS, Dish
+from evaluation.common import load_patients
+from rules.engine import run_rules
 
 __all__ = [
-    "evaluate_q6",
-    "evaluate_selection_ablation",
+    "SEEDS",
+    "CompositionEvaluator",
+    "adequacy_rows",
+    "composition_ga",
+    "derive_selection_verdict",
     "evaluate_composition_ablation",
     "evaluate_exact_reference",
-    "adequacy_rows",
+    "evaluate_q6",
+    "evaluate_selection_ablation",
     "plan_metrics",
-    "derive_selection_verdict",
-    "CompositionEvaluator",
-    "composition_ga",
-    "SEEDS",
 ]
 
 # Reuse each patient/seed front across all three strategies for paired comparisons.
@@ -89,7 +88,7 @@ MAIN_EXCLUDED_CATEGORIES = frozenset({"drink", "dessert", "kopitiam"})
 SIDE_CATEGORIES = frozenset({"soup", "healthy", "cai_png"})
 SIDE_TAG = "vegetable"
 
-_FIXED_APPROVAL_TIME = datetime(2026, 1, 1, tzinfo=timezone.utc)
+_FIXED_APPROVAL_TIME = datetime(2026, 1, 1, tzinfo=UTC)
 
 _COMPOSITION_NOTE = (
     "Controlled encoding ablation; production now uses optional-side adequacy search. "
@@ -111,7 +110,7 @@ _EXACT_DISCLOSURE = (
 )
 
 
-def _mean(values: list) -> Optional[float]:
+def _mean(values: list) -> float | None:
     values = [v for v in values if v is not None]
     return sum(values) / len(values) if values else None
 
@@ -431,7 +430,7 @@ def per_patient_deltas(delta_rows: list[dict[str, Any]]) -> list[dict[str, Any]]
     for patient_id in sorted(by_patient):
         entry: dict[str, Any] = {"patient_id": patient_id}
         for name in ("normalised", "adequacy_first"):
-            entry[f"delta_{name}_pct"] = _mean(by_patient[patient_id].get(name))
+            entry[f"delta_{name}_pct"] = _mean(by_patient[patient_id].get(name, []))
         out.append(entry)
     return out
 
@@ -439,7 +438,7 @@ def per_patient_deltas(delta_rows: list[dict[str, Any]]) -> list[dict[str, Any]]
 def derive_selection_verdict(
     pooled: dict[str, dict[str, Any]],
     cost_cap: float = _COST_CAP,
-) -> tuple[str, Optional[str]]:
+) -> tuple[str, str | None]:
     """Derive the selection-ablation verdict from the pooled numbers.
 
     PASS requires all four conditions:
@@ -697,7 +696,7 @@ class CompositionEvaluator:
 
 
 def _greedy_individual(ev: CompositionEvaluator, rng: random.Random,
-                       tries: int = 40) -> Optional[np.ndarray]:
+                       tries: int = 40) -> np.ndarray | None:
     """Try to build an ``ev.n_days`` individual one day at a time.
 
     Validate the completed individual against daily and horizon MAX ceilings
@@ -724,8 +723,8 @@ def _greedy_individual(ev: CompositionEvaluator, rng: random.Random,
                 pool_nut = ev.nut_m if is_main else ev.nut_s
                 pool_gid = ev.gid_m if is_main else ev.gid_s
                 pool_size = ev.size_m if is_main else ev.size_s
-                best: Optional[int] = None
-                best_key: Optional[tuple] = None
+                best: int | None = None
+                best_key: tuple | None = None
                 for cand in range(pool_size):
                     if int(pool_gid[cand]) in used:
                         continue
@@ -763,7 +762,7 @@ def _greedy_individual(ev: CompositionEvaluator, rng: random.Random,
 
 
 def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
-                       max_iters: int = 200) -> Optional[np.ndarray]:
+                       max_iters: int = 200) -> np.ndarray | None:
     """Local-search repair: replace one dish at a time on the worst day.
 
     Repetition is repaired first, on a day that actually contains a
@@ -820,7 +819,7 @@ def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
         day_total = slot_nut[day_start:day_start + MEALS_PER_DAY].sum(axis=0)
         limits = np.array([limit for _, limit in ev.max_daily])
         cols = [col for col, _ in ev.max_daily]
-        best: Optional[tuple] = None
+        best: tuple | None = None
         for pos in range(2 * MEALS_PER_DAY):
             slot, role = divmod(pos, 2)  # role 0 = main, role 1 = side
             nut = ev.nut_m if role == 0 else ev.nut_s
@@ -901,14 +900,14 @@ def composition_ga(
     if not pop:
         pop = [random_individual()]
 
-    F, G, rep, feasible, scalars = assess(pop)
+    _, _, _, feasible, scalars = assess(pop)
     # Try repairs in scalar-objective order; an empty front remains a valid failure result.
     if not feasible.any():
         for idx in np.argsort(scalars):
             fixed = _repair_individual(ev, pop[int(idx)], max_iters=repair_iters)
             if fixed is not None:
                 pop[int(idx)] = fixed
-                F, G, rep, feasible, scalars = assess(pop)
+                _, _, _, feasible, scalars = assess(pop)
                 break
     if not feasible.any():
         return {
@@ -964,7 +963,7 @@ def composition_ga(
             else:
                 children[i] = rng.choice(parent_pool).copy()
         pop = children
-        F, G, rep, feasible, scalars = assess(pop)
+        _, _, _, feasible, scalars = assess(pop)
         for ind, f in zip(pop, feasible):
             if f:
                 remember(ind)
@@ -993,7 +992,7 @@ def composition_ga(
 # ---------------------------------------------------------------------------
 # Phase 2 driver — bounded composition ablation
 # ---------------------------------------------------------------------------
-def eligible_patients(patients: list[dict[str, Any]], limit: Optional[int] = None
+def eligible_patients(patients: list[dict[str, Any]], limit: int | None = None
                       ) -> list[dict[str, Any]]:
     """Eligible (non-REJECTED) patients, optionally limited to the first N."""
     out: list[dict[str, Any]] = []
@@ -1222,7 +1221,7 @@ def evaluate_q6(
     composition_patients: int = 8,
     composition_pop: int = 40,
     composition_gen: int = 60,
-    composition_seed: Optional[int] = None,
+    composition_seed: int | None = None,
 ) -> dict[str, Any]:
     """Q6: selection ablation -> composition ablation -> exact reference."""
     from shared.envelope_schema import NutrientEnvelope

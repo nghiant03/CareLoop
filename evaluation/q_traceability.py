@@ -16,7 +16,6 @@ from evaluation.common import (
     load_patients,
     target_supported,
 )
-
 from rules.engine import run_rules
 
 __all__ = ["evaluate_q1"]

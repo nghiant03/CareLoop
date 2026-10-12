@@ -18,16 +18,16 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from evaluation.common import ROOT, load_patients  # noqa: E402
-from evaluation.q_traceability import evaluate_q1  # noqa: E402
-from evaluation.q_conflicts import evaluate_q2  # noqa: E402
-from evaluation.q_satisfaction import evaluate_q3  # noqa: E402
-from evaluation.q_benchmark import evaluate_q4  # noqa: E402
-from evaluation.q_groundedness import evaluate_q5  # noqa: E402
-from evaluation.q_ablation import evaluate_q6  # noqa: E402
-from evaluation.report import render_report  # noqa: E402
+from evaluation.common import ROOT, load_patients
+from evaluation.q_ablation import evaluate_q6
+from evaluation.q_benchmark import evaluate_q4
+from evaluation.q_conflicts import evaluate_q2
+from evaluation.q_groundedness import evaluate_q5
+from evaluation.q_satisfaction import evaluate_q3
+from evaluation.q_traceability import evaluate_q1
+from evaluation.report import render_report
 
-__all__ = ["run_suite", "main"]
+__all__ = ["main", "run_suite"]
 
 
 def _run_vcs(command: list[str]) -> str | None:
@@ -35,7 +35,7 @@ def _run_vcs(command: list[str]) -> str | None:
     import subprocess
 
     try:
-        proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+        proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
     except OSError:
         return None  # executable missing or not executable
     if proc.returncode != 0:

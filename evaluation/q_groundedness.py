@@ -24,7 +24,6 @@ from __future__ import annotations
 from typing import Any
 
 from evaluation.common import load_patients
-
 from rules.engine import run_rules
 
 __all__ = ["evaluate_q5"]
@@ -83,7 +82,7 @@ _ESCALATION: list[dict[str, Any]] = [
     {"question": "Can I continue dialysis diet questions?", "category": "out_of_scope"},
 ]
 
-_IRRELEVANT: list[dict[str, Any]] = [
+_IRRELEVANT: list[str] = [
     "What is the weather forecast for tomorrow?",
     "Tell me a joke.",
     "Who won the football match last night?",
@@ -213,7 +212,7 @@ def _run_grounded(kb: Any) -> tuple[list[dict[str, Any]], int, int]:
     from backend.app.chat.answers import answer
 
     rows, passed = [], 0
-    patient_cases = [
+    patient_cases: list[dict[str, Any]] = [
         {"question": "What is my daily sodium limit?", "patient_id": "P0001", "envelope": "approved", "acceptable": {"ADA-2026-SODIUM-2300"}},
         {"question": "What is my daily sodium limit?", "patient_id": "P0001", "envelope": "approved", "override": 1800., "acceptable": {"CLINICIAN-EDIT"}},
     ]
@@ -221,6 +220,7 @@ def _run_grounded(kb: Any) -> tuple[list[dict[str, Any]], int, int]:
         envelope = _envelope_for_variant(spec["envelope"]) if spec.get("envelope") else None
         patient = next((p for p in load_patients() if p["patient_id"] == spec.get("patient_id")), None)
         if spec.get("override"):
+            assert envelope is not None
             target = next(t for t in envelope["targets"] if t["nutrient"] == "sodium_mg")
             target["value"] = spec["override"]
             envelope["fired_rules"].append({"rule_id": "CLINICIAN-EDIT", "action_summary": "set sodium_mg max = 1800 mg",

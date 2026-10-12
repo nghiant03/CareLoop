@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from evaluation.q_ablation import per_patient_deltas
 
@@ -19,7 +19,7 @@ def _fmt(value: Any) -> str:
     return str(value)
 
 
-def _pct(rate: Optional[float]) -> str:
+def _pct(rate: float | None) -> str:
     return "n/a" if rate is None else f"{rate * 100:.1f}%"
 
 
@@ -222,25 +222,25 @@ def render_report(results: dict[str, Any]) -> str:
     add("")
     headline_rows: list[list[Any]] = [
         ["Q1 Traceability", q1["verdict"],
-         f"{q1['overall']['traceable']}/{q1['overall']['items']} envelope items "
+         (f"{q1['overall']['traceable']}/{q1['overall']['items']} envelope items "
          f"traceable ({_pct(q1['overall']['rate'])}) across {q1['eligible_patients']} "
          f"eligible patients; {q1['rejected_patients']} REJECTED patients counted "
-         f"separately"],
+         f"separately")],
         ["Q2 Conflict resolution", q2["verdict"],
-         f"{q2['cases_passed']}/{q2['cases_total']} cases "
-         f"({_pct(q2['pass_rate'])}), {q2['checks_passed']}/{q2['checks_total']} checks"],
+         (f"{q2['cases_passed']}/{q2['cases_total']} cases "
+         f"({_pct(q2['pass_rate'])}), {q2['checks_passed']}/{q2['checks_total']} checks")],
         ["Q3 Constraint satisfaction", q3["verdict"],
-         f"{q3['zero_violation_plans']}/{q3['plans_attempted']} plans with zero hard "
+         (f"{q3['zero_violation_plans']}/{q3['plans_attempted']} plans with zero hard "
          f"violations ({_pct(q3['zero_violation_rate'])}); "
          f"{q3['infeasible_plans']} infeasible (diagnosed, nothing served); "
-         f"{q3['relaxed_envelopes']} envelopes needed a disclosed MIN relaxation"],
+         f"{q3['relaxed_envelopes']} envelopes needed a disclosed MIN relaxation")],
         ["Q4 Quality/runtime", q4["verdict"], _q4_headline_text(q4)
          + " (consumed from benchmark artefacts)"],
         ["Q5 Groundedness", q5["verdict"],
-         f"grounded {_pct(q5['grounded']['pass_rate'])} "
+         (f"grounded {_pct(q5['grounded']['pass_rate'])} "
          f"(citation accuracy {_pct(q5['grounded']['citation_accuracy'])}), "
          f"escalation {_pct(q5['escalation']['pass_rate'])}, "
-         f"refusals {_pct(q5['irrelevant_refusals']['pass_rate'])}"],
+         f"refusals {_pct(q5['irrelevant_refusals']['pass_rate'])}")],
     ]
     if q6:
         sel = q6["selection_ablation"]["pooled"]
@@ -252,10 +252,10 @@ def render_report(results: dict[str, Any]) -> str:
         delta = (adq - sc) if (adq is not None and sc is not None) else None
         headline_rows.append([
             "Q6 Selection & composition ablation", q6["verdict"],
-            f"adequacy-first worst-day shortfall {_fmt(adq)}% vs scalar "
+            (f"adequacy-first worst-day shortfall {_fmt(adq)}% vs scalar "
             f"{_fmt(sc)}% (Δ {_fmt(delta) if delta is not None else 'n/a'} "
             f"pct-pts), cost {cost_pct:+.1f}% vs scalar; meal-composition "
-            f"ablation informational",
+            f"ablation informational"),
         ])
     add(_table(["Question", "Verdict", "Headline number"], headline_rows))
     add("")
@@ -349,7 +349,7 @@ def render_report(results: dict[str, Any]) -> str:
     add("### Recommendation (verbatim from `backend/optim/benchmark_results.md`)")
     add("")
     for line in q4["recommendation"].splitlines():
-        add(line if line.startswith("*") else line)
+        add(line)
     add("")
     add(f"Verdict: **{q4['verdict']}** — {q4['verdict_note']}")
     add("")

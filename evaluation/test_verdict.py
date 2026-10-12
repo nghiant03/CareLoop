@@ -8,8 +8,11 @@ members are filtered out before the HV calculation).
 
 from __future__ import annotations
 
-from evaluation.q_benchmark import _summary_table, verdict_from_headline
-from evaluation.q_benchmark import _recommendation
+from evaluation.q_benchmark import (
+    _recommendation,
+    _summary_table,
+    verdict_from_headline,
+)
 
 
 def _row(method: str, hv: float, violations: int = 0, guaranteed: str = "1") -> dict:

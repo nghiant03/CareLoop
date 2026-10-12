@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PATIENTS_PATH = ROOT / "data" / "patients.json"
@@ -31,7 +31,7 @@ def load_patients() -> list[dict[str, Any]]:
         return json.load(fh)
 
 
-def citation_complete(citation: Optional[dict[str, Any]]) -> bool:
+def citation_complete(citation: dict[str, Any] | None) -> bool:
     """A citation is usable when rule_id + guideline + section are all present."""
     if not isinstance(citation, dict):
         return False
@@ -52,8 +52,8 @@ def is_superseded(trace: list[dict[str, Any]], rule_id: str) -> bool:
 
 def targets_of(
     envelope: dict[str, Any],
-    nutrient: Optional[str] = None,
-    kind: Optional[str] = None,
+    nutrient: str | None = None,
+    kind: str | None = None,
 ) -> list[dict[str, Any]]:
     out = []
     for t in envelope.get("targets", []):
@@ -67,7 +67,7 @@ def targets_of(
 
 def target_value(
     envelope: dict[str, Any], nutrient: str, kind: str
-) -> Optional[float]:
+) -> float | None:
     found = targets_of(envelope, nutrient, kind)
     return found[0]["value"] if found else None
 

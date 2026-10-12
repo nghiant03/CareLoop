@@ -23,7 +23,7 @@ heuristic find a plan; it is not a proof that those ceilings are sole blockers.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from evaluation.common import load_patients
@@ -32,7 +32,7 @@ from rules.engine import run_rules
 __all__ = ["evaluate_q3"]
 
 _EPS = 1e-6
-_FIXED_APPROVAL_TIME = datetime(2026, 1, 1, tzinfo=timezone.utc)
+_FIXED_APPROVAL_TIME = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def _approve(envelope_model: Any) -> Any:
@@ -109,8 +109,8 @@ def _blocking_constraints(solved_envelope: Any, dishes: list[Any]) -> list[str]:
     within the heuristic budget. Neither outcome proves the remaining envelope
     infeasible or identifies a unique clinical blocker; exclusions also apply.
     """
-    from shared.envelope_schema import ConstraintKind
     from backend.optim.real_data import FastEvaluator, greedy_feasible_plan
+    from shared.envelope_schema import ConstraintKind
 
     blockers = []
     for target in solved_envelope.targets:
@@ -136,8 +136,8 @@ def evaluate_q3(
     diagnose_blockers: bool = True,
 ) -> dict[str, Any]:
     """End-to-end constraint-satisfaction check over all eligible patients."""
-    from shared.envelope_schema import NutrientEnvelope
     from backend.app.core.plan_service import plan_meals
+    from shared.envelope_schema import NutrientEnvelope
 
     patients = patients if patients is not None else load_patients()
     if dishes is None:

@@ -12,11 +12,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
-    sys.path.insert(0, ROOT)
+    sys.path.insert(0, str(ROOT))
 
 import numpy as np
 import pytest
 
+from backend.optim.problem import OBJECTIVE_NAMES, evaluate, is_feasible
+from backend.optim.toy_data import Dish
+from evaluation.q_ablation import (
+    CompositionEvaluator,
+    _repair_individual,
+    adequacy_rows,
+    composition_ga,
+    derive_selection_verdict,
+    evaluate_q6,
+    plan_metrics,
+)
 from shared.envelope_schema import (
     ConstraintKind,
     EnvelopeStatus,
@@ -24,19 +35,6 @@ from shared.envelope_schema import (
     NutrientEnvelope,
     NutrientKind,
     PatientSummary,
-)
-
-from backend.optim.problem import OBJECTIVE_NAMES, evaluate, is_feasible
-from backend.optim.toy_data import Dish
-
-from evaluation.q_ablation import (
-    CompositionEvaluator,
-    adequacy_rows,
-    composition_ga,
-    derive_selection_verdict,
-    evaluate_q6,
-    plan_metrics,
-    _repair_individual,
 )
 
 
@@ -334,19 +332,19 @@ def test_derive_selection_verdict_crafted_numbers():
 
     # not strictly reduced -> FAIL naming the condition
     verdict, note = derive_selection_verdict(pooled(50.0, 50.0, 100.0, 105.0))
-    assert verdict == "FAIL" and "not strictly reduced" in note
+    assert verdict == "FAIL" and note is not None and "not strictly reduced" in note
 
     # cost increase > 10% -> FAIL
     verdict, note = derive_selection_verdict(pooled(50.0, 40.0, 100.0, 115.0))
-    assert verdict == "FAIL" and "cost" in note
+    assert verdict == "FAIL" and note is not None and "cost" in note
 
     # feasibility below 100% -> FAIL
     verdict, note = derive_selection_verdict(pooled(50.0, 40.0, 100.0, 105.0, feas=0.8))
-    assert verdict == "FAIL" and "feasibility" in note
+    assert verdict == "FAIL" and note is not None and "feasibility" in note
 
     # no comparable rows -> FAIL
     verdict, note = derive_selection_verdict({})
-    assert verdict == "FAIL" and "no comparable" in note
+    assert verdict == "FAIL" and note is not None and "no comparable" in note
 
 
 # ------------------------------------------- composition evaluator cross-check
@@ -384,7 +382,7 @@ def test_composition_evaluator_cross_check_against_problem_evaluate():
     # flagged by the composition evaluator; problem.evaluate has no such rule
     shared = main_ids & side_ids
     assert shared, "expected MAIN/SIDE overlap to exercise the repetition check"
-    did = sorted(shared)[0]
+    did = min(shared)
     mi = [d.dish_id for d in ev.main_pool].index(did)
     si = [d.dish_id for d in ev.side_pool].index(did)
     ind = np.zeros((21, 2), dtype=int)
@@ -428,15 +426,15 @@ def test_composition_ga_keeps_a_feasible_front():
     # front entries are directly consumable by the selection strategies
     from evaluation.q_ablation import _STRATEGIES
 
-    for name, selector in _STRATEGIES.items():
+    for selector in _STRATEGIES.values():
         picked = selector(ga["front"], env, ABLATION_POOL)
         assert picked["feasible"] is True
 
 
 # ------------------------------------------------------------- real-data smoke
 def test_q6_smoke_real_data_two_patients():
-    from evaluation.common import load_patients
     from backend.optim.real_data import load_dishes
+    from evaluation.common import load_patients
 
     patients = load_patients()
     dishes = load_dishes()

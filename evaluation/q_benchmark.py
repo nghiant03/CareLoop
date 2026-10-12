@@ -15,7 +15,6 @@ import statistics
 import subprocess
 import sys
 from collections import defaultdict
-from pathlib import Path
 from typing import Any
 
 from evaluation.common import ROOT
@@ -113,8 +112,7 @@ def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
     """
     if not headline:
         return ("FAIL",
-                "No main-phase benchmark rows were found in the artefact, so "
-                "no method comparison could be derived.")
+                "No main-phase benchmark rows were found in the artefact, so no method comparison could be derived.")
     winner = max(headline, key=lambda m: (m["mean_hv"], -m["violation_rate"],
                                           m["guarantee"] == "yes"))
     runner_up = max((m for m in headline if m is not winner),

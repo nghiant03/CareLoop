@@ -9,18 +9,18 @@ merge behaviour.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from evaluation.common import (
+    fired_rule_ids,
     has_target,
     is_superseded,
-    fired_rule_ids,
     target_value,
 )
-
 from rules.engine import run_rules
 
-__all__ = ["evaluate_q2", "conflict_cases"]
+__all__ = ["conflict_cases", "evaluate_q2"]
 
 Check = Callable[[dict[str, Any], list[dict[str, Any]]], bool]
 
@@ -90,8 +90,7 @@ def conflict_cases() -> list[dict[str, Any]]:
             "checks": [
                 ("potassium_mg max == 2400 mg",
                  lambda e, t: target_value(e, "potassium_mg", "max") == 2400.0),
-                ("exclusion dish_category 'high_potassium_foods' present "
-                 "(HYPERK-2024-EXCLUDE-HIGH-K)",
+                ("exclusion dish_category 'high_potassium_foods' present (HYPERK-2024-EXCLUDE-HIGH-K)",
                  lambda e, t: any(x["kind"] == "dish_category"
                                   and x["value"] == "high_potassium_foods"
                                   and x["citation"]["rule_id"] == "HYPERK-2024-EXCLUDE-HIGH-K"
@@ -231,7 +230,7 @@ def evaluate_q2() -> dict[str, Any]:
         for expectation, predicate in case["checks"]:
             try:
                 ok = bool(predicate(envelope, trace))
-            except Exception as exc:  # a broken predicate must not abort the suite
+            except Exception as exc:  # noqa: BLE001  # a broken predicate must not abort the suite
                 ok = False
                 expectation += f" [predicate error: {exc}]"
             checks.append({"expectation": expectation, "passed": ok})
