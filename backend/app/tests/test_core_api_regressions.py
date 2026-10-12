@@ -57,7 +57,7 @@ def lenient_client():
 
 
 # ---------------------------------------------------------------------------
-# Finding 4: patient create is create-only
+# Patient creation cannot replace existing records
 # ---------------------------------------------------------------------------
 
 _NEW_PATIENT = {
@@ -96,7 +96,7 @@ def test_create_patient_repeat_returns_conflict_without_replacing(client) -> Non
 
 
 # ---------------------------------------------------------------------------
-# Finding 3: reserved UI lab aliases follow the canonical current values
+# Reserved UI lab aliases follow the canonical current values
 # ---------------------------------------------------------------------------
 
 
@@ -133,7 +133,7 @@ def test_ui_lab_alias_mirrors_overlaid_canonical_value(client) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Finding 6: acknowledgement cannot regress a recorded action
+# Acknowledgement cannot regress a recorded action
 # ---------------------------------------------------------------------------
 
 
@@ -183,7 +183,7 @@ def test_acknowledge_still_advances_open_items(client) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Finding 5: proposal retry recovers the partial success
+# Proposal retries recover partial success without duplicate envelopes
 # ---------------------------------------------------------------------------
 
 
@@ -277,7 +277,7 @@ def test_patient_model_rejects_nonfinite_clinical_numerics() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Finding 11: rejection retains reviewer attribution
+# Rejection retains reviewer attribution
 # ---------------------------------------------------------------------------
 
 
@@ -307,7 +307,7 @@ def test_reject_retains_reviewer_attribution(client) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Finding 12: eGFR mL/min shorthand is the already-indexed unit
+# eGFR mL/min shorthand denotes the already-indexed unit
 # ---------------------------------------------------------------------------
 
 
@@ -326,7 +326,7 @@ def test_observation_egfr_ml_min_shorthand_stores_indexed_unit(client) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Finding 7 (contract lock): malformed inline rule inputs return 422
+# Malformed inline rule inputs return 422
 # ---------------------------------------------------------------------------
 
 
@@ -352,7 +352,7 @@ def test_rules_run_malformed_inline_input_returns_422(client) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Finding 10: legacy schema migration is reserved and idempotent
+# Legacy schema migration is reserved and idempotent
 # ---------------------------------------------------------------------------
 
 

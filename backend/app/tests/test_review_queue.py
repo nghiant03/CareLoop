@@ -5,13 +5,14 @@ Covers review workflows end to end:
 * **Envelope-version attribution**: history is scored against the envelope
   effective on each consumption date. After approve → log day A → edit +
   re-approve → log day B, day A is scored against the pre-edit limits and
-  day B against the post-edit limits (per-day ``envelope_id``/``version`` and
-  differing sodium limits), while a single-envelope window keeps the exact
-  legacy response shape (plain series keys, additive new fields only).
+  day B against the post-edit limits. Assertions check each day's
+  ``envelope_id``/``version`` and differing sodium limits. A single-envelope
+  window retains plain series keys and legacy fields, with only additive
+  new fields.
 * **Closed loop**: a worsening sodium trend flag surfaces in
-  ``GET /review/queue`` → acknowledge → record an action (the open queue no
-  longer lists it) → ``POST /review/{id}/proposal`` mints a linked PROPOSED
-  envelope → a subsequent observation lands in ``GET /observations``.
+  ``GET /review/queue``. After acknowledgement, recording an action removes the
+  item from the open queue. ``POST /review/{id}/proposal`` then mints a linked
+  PROPOSED envelope. A subsequent observation appears in ``GET /observations``.
 
 Also covers logging completeness, deterministic review ids (idempotent
 derivation), hard-violation-day items and lab-trend items.

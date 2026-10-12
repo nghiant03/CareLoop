@@ -3,15 +3,15 @@
 Covers the durable SQLite app store (``backend.app.core.persistence``) and its
 API integration:
 
-* plans: save -> read back through a fresh SQLite handle and through
-  ``GET /plans/{id}`` on a new TestClient in the same process; summaries via
-  ``GET /plans``; 404 for unknown ids;
+* plans: save and read back through a fresh SQLite handle and through
+  ``GET /plans/{id}`` on a new TestClient in the same process. Check summaries
+  via ``GET /plans`` and 404 responses for unknown ids.
 * meal logs: upsert per (patient, date, meal), persistence across handles,
   chronological ordering (date, then breakfast/lunch/dinner), inclusive bounds;
-* envelope journal: rules run + clinician approval journaled through the API;
+* envelope journal: rules run + clinician approval journaled through the API.
   ``envelope_effective_at`` reconstructs the APPROVED envelope effective on a
-  date; a date before the first proposal yields ``None``; ordering and
-  same-date tie-breaking; ``list_envelope_history`` is ordered;
+  date. A date before the first proposal yields ``None``. Check ordering and
+  same-date tie-breaking, including ordered ``list_envelope_history`` results.
 * observations: store round-trip, chronological listing, and the API contract
   (metric whitelist, extra="forbid", invalid/unknown patient errors);
 * simulations and review items: full round-trips including acknowledgement and

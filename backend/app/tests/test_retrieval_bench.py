@@ -4,8 +4,8 @@ Obligations, grouped:
 
 * **Labeled set**: the query set loads with expected size/categories and its
   expected chunk ids resolve to real production chunks.
-* **Ranking/fusion**: benchmark metrics are sane and consistently ranked; the
-  fusion row fuses the union of its components' candidates; the production
+* **Ranking/fusion**: benchmark metrics are sane and consistently ranked.
+  The fusion row fuses the union of its components' candidates. The production
   row matches production retrieval while as-is TF-IDF stays a comparator.
 * **Fusion gate**: the held-out diagnostic runs standalone with an unset gate
   and is recorded in the results; irrelevant questions are refused end to end.

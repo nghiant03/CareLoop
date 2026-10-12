@@ -1,4 +1,4 @@
-"""Focused regressions for audit findings 19 and 67–81.
+"""Regressions for KB history, catalogue recovery, adherence, and explanations.
 
 Synthetic fixtures establish failure-path preconditions without changing stored
 clinical history or depending on catalogue rankings that can change.
