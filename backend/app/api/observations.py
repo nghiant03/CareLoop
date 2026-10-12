@@ -1,14 +1,10 @@
-"""Record dated clinical observations for patient profiles, rules, and lab trends.
-
-``observed_at`` is the measurement date; ``recorded_at`` is the UTC receipt
-time. Recording an observation does not approve or edit an envelope.
-"""
+"""Expose clinical observation recording and patient observation history."""
 
 from __future__ import annotations
 
-from datetime import date as date_type
 import math
-from typing import Any, Literal, Optional
+from datetime import UTC, date, datetime
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
@@ -28,8 +24,8 @@ class ObservationRequest(BaseModel):
     metric: Metric
     value: float
     unit: str
-    source: Optional[str] = None
-    observed_at: Optional[str] = None
+    source: str | None = None
+    observed_at: str | None = None
 
 
 def _require_patient(patient_id: str) -> None:
@@ -42,18 +38,20 @@ def _require_patient(patient_id: str) -> None:
 
 @router.post("", status_code=201, summary="Record a clinical observation")
 def create_observation(req: ObservationRequest) -> dict[str, Any]:
-    """Record one observation, normalizing unit spelling only.
+    """Record and return one observation without editing or approving an envelope.
 
-    ``mL/min`` for eGFR is accepted as shorthand for a value that is already
-    body-surface-area indexed (stored as ``mL/min/1.73m2``). No unit
-    conversion is performed, so an absolute un-indexed measurement must not
-    be submitted under that shorthand.
+    ``observed_at`` is the measurement date and defaults to today. ``recorded_at``
+    is the UTC receipt time. Values must be finite and nonnegative. Unknown
+    patients return HTTP 404. Invalid values or unsupported units return HTTP 422.
+
+    Normalize unit spelling without converting values. eGFR ``mL/min`` means
+    an already body-surface-area-indexed value, recorded as ``mL/min/1.73m2``.
+    Do not submit absolute, unindexed measurements under that shorthand.
     """
     _require_patient(req.patient_id)
     units = {
         "serum_K_meq_L": {"meq/l": "mEq/L", "mmol/l": "mEq/L"},
         "serum_PO4_mg_dL": {"mg/dl": "mg/dL"},
-        # Both eGFR spellings denote the same indexed unit; see docstring.
         "egfr": {"ml/min": "mL/min/1.73m2", "ml/min/1.73m2": "mL/min/1.73m2"},
         "hba1c_pct": {"%": "%"},
     }
@@ -62,8 +60,8 @@ def create_observation(req: ObservationRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail={"error": "invalid_observation_value_or_unit"})
     if req.observed_at is not None:
         try:
-            observed = date_type.fromisoformat(req.observed_at)
-            if observed > date_type.today():
+            observed = date.fromisoformat(req.observed_at)
+            if observed > datetime.now(UTC):
                 raise ValueError("future observation")
             req.observed_at = observed.isoformat()
         except ValueError:
@@ -88,6 +86,11 @@ def create_observation(req: ObservationRequest) -> dict[str, Any]:
 def list_observations_endpoint(
     patient_id: str = Query(...),
 ) -> dict[str, Any]:
+    """Return ``patient_id``, ``count``, and observations ordered oldest first.
+
+    Order by measurement date, then receipt time. Patients without observations
+    receive an empty list. Unknown patients return HTTP 404.
+    """
     _require_patient(patient_id)
     observations = persistence.list_observations(patient_id)
     return {
