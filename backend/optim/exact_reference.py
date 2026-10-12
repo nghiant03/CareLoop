@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import math
 from itertools import combinations_with_replacement
+from typing import Any
 
 import numpy as np
 
@@ -111,7 +112,7 @@ def _constraint_cols(envelope) -> tuple[list[tuple[int, float]], list[tuple[int,
     return tg, mn, mx
 
 
-def _variety_table(lookup_size: int, n_slots: int) -> "np.ndarray":
+def _variety_table(lookup_size: int, n_slots: int) -> np.ndarray:
     """Per-distinct-count ``problem._obj_variety`` value for a fixed day size.
 
     For an ``n_slots``-dish day the entropy depends only on how the ``n_slots``
@@ -147,7 +148,7 @@ def _empty_result(n_slots: int, pool_size: int) -> dict:
     }
 
 
-def _track(best: tuple | None, values: "np.ndarray", tuples: list[tuple]) -> tuple | None:
+def _track(best: tuple | None, values: np.ndarray, tuples: list[tuple]) -> tuple | None:
     """Running (value, index_tuple) best with tolerance tie-break.
 
     ``values`` must align with ``tuples``, which must already be in ascending
@@ -312,9 +313,7 @@ def _enumerate_generic(nut, pref, price, tg, mn, mx, weight, lookup_size, n_slot
         n = sum(counts)
         return -sum((c / n) * math.log(c / n) for c in counts)
 
-    best_dev = best_pref = best_cost = best_scalar = None
-    count = 0
-    state = {"dev": None, "pref": None, "cost": None, "scalar": None, "count": 0}
+    state: dict[str, Any] = {"dev": None, "pref": None, "cost": None, "scalar": None, "count": 0}
 
     def _flush(chunk: list[tuple[int, ...]]) -> None:
         """Filter + score one chunk, updating the running bests in place."""
@@ -500,6 +499,6 @@ def plan_vs_exact(envelope, dishes: list[Dish], plan) -> dict:
 
 __all__ = [
     "one_day_exact",
-    "prove_infeasible",
     "plan_vs_exact",
+    "prove_infeasible",
 ]

@@ -182,7 +182,7 @@ def load_dishes(path: str | None = None) -> list[Dish]:
     for row in raw:
         nested = row.get("nutrients")
         if not isinstance(nested, dict):
-            raise ValueError(
+            raise ValueError(  # noqa: TRY004  # documented loader contract
                 f"{path}: dish {row.get('dish_id')!r} has no 'nutrients' "
                 "mapping — this loader reads the nested schema only; use "
                 "backend.optim.real_data.load_dishes for the flat catalogue"

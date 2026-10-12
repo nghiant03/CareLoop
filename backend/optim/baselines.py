@@ -146,7 +146,7 @@ def random_search(
     if not pool:
         return _make_result("random", [], envelope, dishes, 0, 0.0)
     rng = random.Random(seed)
-    best_plan = None
+    best_plan: list[list[str]] = []
     best_key = None
     for _ in range(n_iter):
         indices = [rng.randrange(len(pool)) for _ in range(slots)]
@@ -211,6 +211,7 @@ def greedy_search(
                 if best_score is None or score < best_score:
                     best_score = score
                     best_dish = did
+            assert best_dish is not None  # The allowed pool is nonempty.
             plan.append([best_dish])
             for k in NUTRIENT_KEYS:
                 running[k] += lookup[best_dish].nutrient(k)
@@ -412,7 +413,7 @@ def nsga2_fallback(
                 rank[i] = r
             crowd.update(_crowding(front, vectors))
 
-        def select() -> int:
+        def select(rank: dict[int, int] = rank, crowd: dict[int, float] = crowd) -> int:
             a, b = rng.randrange(pop_size), rng.randrange(pop_size)
             if rank[a] != rank[b]:
                 return a if rank[a] < rank[b] else b
@@ -483,7 +484,7 @@ def nsga2_fallback(
         )
     # Ensure the repaired plan is represented in the front record.
     repaired_objectives, repaired_violations = evaluate(repaired_plan, envelope, dishes)
-    if tuple(best_ind) not in seen or repaired_violations != info(best_ind)[1]:
+    if best_ind is None or tuple(best_ind) not in seen or repaired_violations != info(best_ind)[1]:
         front_entries.append(
             {
                 "plan": repaired_plan,
@@ -519,8 +520,8 @@ def nsga2_fallback(
 
 
 __all__ = [
-    "random_search",
-    "greedy_search",
     "exhaustive_search",
+    "greedy_search",
     "nsga2_fallback",
+    "random_search",
 ]

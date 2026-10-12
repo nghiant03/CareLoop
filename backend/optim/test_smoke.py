@@ -19,16 +19,15 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from shared.envelope_schema import EnvelopeStatus  # noqa: E402
-
-from backend.optim import baselines, spike_pymoo  # noqa: E402
-from backend.optim.problem import (  # noqa: E402
+from backend.optim import baselines, spike_pymoo
+from backend.optim.problem import (
     OBJECTIVE_NAMES,
     EnvelopeNotApprovedError,
     evaluate,
     is_feasible,
 )
-from backend.optim.toy_data import TOY_DISHES  # noqa: E402
+from backend.optim.toy_data import TOY_DISHES
+from shared.envelope_schema import EnvelopeStatus
 
 
 def _envelope():
@@ -55,7 +54,7 @@ def test_feasible_plan_returns_true():
 def test_max_constraint_violation_returns_false():
     # 3x Nasi Lemak/day => sodium 4200 mg > 2000 mg MAX.
     plan = [["nasi_lemak"]] * 21
-    objectives, violations = evaluate(plan, _envelope(), TOY_DISHES)
+    _, violations = evaluate(plan, _envelope(), TOY_DISHES)
     assert is_feasible(plan, _envelope(), TOY_DISHES) is False
     assert any(v["type"] == "max_daily" and v["nutrient"] == "sodium_mg" for v in violations)
 

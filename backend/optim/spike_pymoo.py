@@ -30,7 +30,18 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from shared.envelope_schema import (  # noqa: E402
+from backend.optim import baselines
+from backend.optim.problem import (
+    DAYS,
+    MEALS_PER_DAY,
+    OBJECTIVE_NAMES,
+    allowed_dishes,
+    daily_totals,
+    dish_lookup,
+    evaluate,
+)
+from backend.optim.toy_data import TOY_DISHES
+from shared.envelope_schema import (
     CitationSource,
     ConstraintKind,
     EnvelopeStatus,
@@ -41,18 +52,6 @@ from shared.envelope_schema import (  # noqa: E402
     NutrientKind,
     PatientSummary,
 )
-
-from backend.optim import baselines  # noqa: E402
-from backend.optim.problem import (  # noqa: E402
-    DAYS,
-    MEALS_PER_DAY,
-    OBJECTIVE_NAMES,
-    allowed_dishes,
-    daily_totals,
-    dish_lookup,
-    evaluate,
-)
-from backend.optim.toy_data import TOY_DISHES  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Lazy pymoo import
@@ -329,7 +328,7 @@ def main() -> int:
     print(f"Evaluations           : {result['evaluations']}")
     print("-" * 74)
     print(f"(a) Pareto front size : {result['front_size']}")
-    print(f"(b) Best plan         :")
+    print("(b) Best plan         :")
     print(format_plan(result["plan"], TOY_DISHES))
     objectives = result["objectives"]
     print(

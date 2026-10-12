@@ -113,8 +113,7 @@ def adequacy_first_selection(entries: list[dict], envelope, dishes: list[Dish]) 
                 else:  # TARGET: absolute deviation includes overshoot
                     shortfall = abs(value - aim)
                 rel = _relative(shortfall, aim)
-                if rel > worst:
-                    worst = rel
+                worst = max(worst, rel)
                 if rel > _UNMET_TOL:
                     unmet += 1
         return (worst, unmet, scalar_score(entry["objectives"]), _flat_ids(entry))
@@ -123,7 +122,7 @@ def adequacy_first_selection(entries: list[dict], envelope, dishes: list[Dish]) 
 
 
 __all__ = [
-    "scalar_selection",
-    "normalised_selection",
     "adequacy_first_selection",
+    "normalised_selection",
+    "scalar_selection",
 ]

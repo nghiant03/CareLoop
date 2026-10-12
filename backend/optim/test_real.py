@@ -35,23 +35,27 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from shared.envelope_schema import ConstraintKind, EnvelopeStatus, NutrientConstraint, NutrientKind  # noqa: E402
-
-from backend.optim.api import run  # noqa: E402
-from backend.optim.envelopes import build_benchmark_envelopes  # noqa: E402
-from backend.optim.problem import (  # noqa: E402
+from backend.optim.api import run
+from backend.optim.envelopes import build_benchmark_envelopes
+from backend.optim.problem import (
     OBJECTIVE_NAMES,
     allowed_dishes,
     evaluate,
 )
-from backend.optim.real_data import (  # noqa: E402
+from backend.optim.real_data import (
     FastEvaluator,
     feasibility_precheck,
     load_dishes,
 )
-from backend.optim.solver import solve  # noqa: E402
+from backend.optim.solver import solve
+from shared.envelope_schema import (
+    ConstraintKind,
+    EnvelopeStatus,
+    NutrientConstraint,
+    NutrientKind,
+)
 
 CONTRACT_KEYS = {
     "engine",
@@ -266,9 +270,8 @@ def test_exclusions_shrink_pool_as_expected():
 
 def test_semantic_exclusion_mapping_filters_real_pool():
     """Rulebook semantic exclusions must match their intended catalogue predicates."""
-    from shared.envelope_schema import ExclusionFlag, ExclusionKind
-
     from backend.optim.envelopes import ckd_strict
+    from shared.envelope_schema import ExclusionFlag, ExclusionKind
 
     def pool_with_single_exclusion(kind: ExclusionKind, value: str) -> int:
         base = ckd_strict()
@@ -373,6 +376,7 @@ def test_benchmark_artifacts_regen_and_parse():
         capture_output=True,
         text=True,
         timeout=600,
+        check=False,
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
     assert os.path.exists(smoke_csv) and os.path.exists(smoke_md)
@@ -388,7 +392,8 @@ def test_benchmark_artifacts_regen_and_parse():
     for row in rows:
         assert math.isfinite(float(row["hypervolume"])), row
         assert float(row["runtime_ms"]) >= 0.0
-    smoke_md_text = open(smoke_md, encoding="utf-8").read()
+    with open(smoke_md, encoding="utf-8") as fh:
+        smoke_md_text = fh.read()
     assert "## Recommendation" in smoke_md_text
     assert "nsga3" in smoke_md_text and "sms" in smoke_md_text
     for path in (smoke_csv, smoke_md):  # keep the package tree clean
@@ -402,7 +407,9 @@ def test_benchmark_artifacts_regen_and_parse():
         full_rows = list(csv.DictReader(fh))
     assert full_rows
     assert {"method", "hypervolume", "runtime_ms"} <= set(full_rows[0])
-    assert "## Recommendation" in open(full_md, encoding="utf-8").read()
+    with open(full_md, encoding="utf-8") as fh:
+        full_md_text = fh.read()
+    assert "## Recommendation" in full_md_text
 
 
 TESTS = [

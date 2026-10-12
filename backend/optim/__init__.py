@@ -27,8 +27,8 @@ from .problem import (
 __all__ = [
     "DAYS",
     "MEALS_PER_DAY",
-    "SLOTS",
     "OBJECTIVE_NAMES",
+    "SLOTS",
     "EnvelopeNotApprovedError",
     "allowed_dishes",
     "evaluate",

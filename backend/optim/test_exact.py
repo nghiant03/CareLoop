@@ -30,9 +30,27 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from itertools import combinations_with_replacement as _combinations  # noqa: E402
+from itertools import combinations_with_replacement as _combinations
 
-from shared.envelope_schema import (  # noqa: E402
+from backend.optim.envelopes import build_benchmark_envelopes
+from backend.optim.exact_reference import (
+    one_day_exact,
+    plan_vs_exact,
+    prove_infeasible,
+)
+from backend.optim.problem import (
+    EPS,
+    MEALS_PER_DAY,
+    OBJECTIVE_NAMES,
+    SCALAR_WEIGHTS,
+    TAG_PREFERENCE,
+    allowed_dishes,
+    evaluate,
+)
+from backend.optim.real_data import load_dishes
+from backend.optim.solver import solve
+from backend.optim.toy_data import NUTRIENT_KEYS, Dish
+from shared.envelope_schema import (
     CitationSource,
     ConstraintKind,
     EnvelopeStatus,
@@ -43,25 +61,6 @@ from shared.envelope_schema import (  # noqa: E402
     NutrientKind,
     PatientSummary,
 )
-
-from backend.optim.envelopes import build_benchmark_envelopes  # noqa: E402
-from backend.optim.exact_reference import (  # noqa: E402
-    one_day_exact,
-    plan_vs_exact,
-    prove_infeasible,
-)
-from backend.optim.problem import (  # noqa: E402
-    EPS,
-    MEALS_PER_DAY,
-    OBJECTIVE_NAMES,
-    SCALAR_WEIGHTS,
-    TAG_PREFERENCE,
-    allowed_dishes,
-    evaluate,
-)
-from backend.optim.real_data import load_dishes  # noqa: E402
-from backend.optim.solver import solve  # noqa: E402
-from backend.optim.toy_data import Dish, NUTRIENT_KEYS  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +317,7 @@ def test_plan_vs_exact_gaps_nonnegative_and_variety_excluded():
     # one dish per slot: the day's multiset spread over the 3 meal slots
     day = [[dish_id] for dish_id in best_cost_day]
     plan = day * 7
-    objectives, violations = evaluate(plan, env, TINY_POOL)
+    _, violations = evaluate(plan, env, TINY_POOL)
     assert not violations  # repeating a feasible day stays feasible
 
     report = plan_vs_exact(env, TINY_POOL, plan)

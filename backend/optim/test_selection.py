@@ -26,13 +26,21 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import Any
 
 # Resolve repository imports when pytest loads this module from its directory.
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from shared.envelope_schema import (  # noqa: E402
+from backend.optim.problem import evaluate
+from backend.optim.selection import (
+    adequacy_first_selection,
+    normalised_selection,
+    scalar_selection,
+)
+from backend.optim.toy_data import Dish
+from shared.envelope_schema import (
     ConstraintKind,
     EnvelopeStatus,
     NutrientConstraint,
@@ -40,14 +48,6 @@ from shared.envelope_schema import (  # noqa: E402
     NutrientKind,
     PatientSummary,
 )
-
-from backend.optim.problem import MEALS_PER_DAY, evaluate  # noqa: E402
-from backend.optim.selection import (  # noqa: E402
-    adequacy_first_selection,
-    normalised_selection,
-    scalar_selection,
-)
-from backend.optim.toy_data import Dish  # noqa: E402
 
 
 def _dish(did: str, energy: float, protein: float, sodium: float, price: float, tags: tuple) -> Dish:
@@ -226,7 +226,7 @@ def test_adequacy_key_ranks_shortfall_then_count_then_scalar():
     # Equal worst deviation and unmet count: cheaper equivalent dishes win.
     discounted = replace(SELECTION_POOL[0], dish_id="discount_protein", price_sgd=0)
     pool = SELECTION_POOL + [discounted]
-    cheaper = {"plan": [["discount_protein" if did == "protein_plate" else did for did in meal]
+    cheaper: dict[str, Any] = {"plan": [["discount_protein" if did == "protein_plate" else did for did in meal]
                         for meal in by_name["middle"]["plan"]]}
     cheaper["objectives"], violations = evaluate(cheaper["plan"], env, pool)
     assert not violations

@@ -14,18 +14,17 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
-from shared.envelope_schema import EnvelopeStatus, NutrientEnvelope  # noqa: E402
-
-from backend.optim.problem import allowed_dishes  # noqa: E402
-from backend.optim.real_data import load_dishes  # noqa: E402
-from backend.optim.solver import solve  # noqa: E402
+from backend.optim.problem import allowed_dishes
+from backend.optim.real_data import load_dishes
+from backend.optim.solver import solve
+from shared.envelope_schema import EnvelopeStatus, NutrientEnvelope
 
 
 def run(envelope: NutrientEnvelope, dishes=None, seed: int = 42,
         pop_size: int = 40, n_gen: int = 80,
-        selection: Optional[Callable] = None) -> dict:
+        selection: Callable | None = None) -> dict:
     """Run the optimiser with the given envelope.
 
     Accepts an injected envelope so the API can pass the clinician-approved

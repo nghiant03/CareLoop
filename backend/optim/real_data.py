@@ -41,11 +41,9 @@ from .problem import (
     NUTRIENT_KEYS,
     OBJECTIVE_NAMES,
     SCALAR_WEIGHTS,
-    SLOTS,
     TAG_PREFERENCE,
     ConstraintKind,
     allowed_dishes,
-    scalar_score,
 )
 from .toy_data import Dish
 
@@ -348,6 +346,8 @@ def _greedy_pick_day(
             if best_score is None or score < best_score:
                 best_score = score
                 best_j = j
+        if best_j is None:
+            raise ValueError("cannot choose a meal from an empty dish pool")
         chosen.append(best_j)
         running = running + ev._nut[best_j]
         used[best_j] = used.get(best_j, 0) + 1

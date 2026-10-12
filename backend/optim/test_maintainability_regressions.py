@@ -8,12 +8,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from shared.envelope_schema import (
-    ConstraintKind, EnvelopeStatus, NutrientConstraint, NutrientEnvelope,
-    NutrientKind, PatientSummary,
-)
 from backend.optim import baselines, benchmark, problem, real_data, solver, toy_data
 from backend.optim.exact_reference import one_day_exact
+from shared.envelope_schema import (
+    ConstraintKind,
+    EnvelopeStatus,
+    NutrientConstraint,
+    NutrientEnvelope,
+    NutrientKind,
+    PatientSummary,
+)
 
 
 def _envelope():

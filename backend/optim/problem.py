@@ -57,9 +57,8 @@ from shared.envelope_schema import (
     NutrientEnvelope,
 )
 
-from .toy_data import NUTRIENT_KEYS, Dish
-
 from .exclusion_mapping import semantic_exclusion_hit
+from .toy_data import NUTRIENT_KEYS, Dish
 
 # ---------------------------------------------------------------------------
 # Problem geometry
@@ -438,28 +437,28 @@ def violation_magnitude(violations: list[dict]) -> float:
 
 __all__ = [
     "DAYS",
-    "MEALS_PER_DAY",
-    "SLOTS",
-    "MEAL_LABELS",
     "EPS",
+    "MEALS_PER_DAY",
+    "MEAL_LABELS",
     "OBJECTIVE_NAMES",
-    "TAG_PREFERENCE",
     "SCALAR_WEIGHTS",
+    "SLOTS",
+    "TAG_PREFERENCE",
+    "ConstraintSlot",
     "EnvelopeNotApprovedError",
     "Plan",
-    "ConstraintSlot",
-    "dish_lookup",
-    "sum_nutrients",
-    "daily_totals",
-    "exclusion_for",
     "allowed_dishes",
     "constraint_layout",
     "constraint_names",
     "constraint_vector",
-    "scalar_score",
-    "objective_vector",
+    "daily_totals",
+    "dish_lookup",
     "evaluate",
+    "exclusion_for",
     "is_feasible",
+    "objective_vector",
+    "scalar_score",
+    "sum_nutrients",
     "violation_count",
     "violation_magnitude",
 ]

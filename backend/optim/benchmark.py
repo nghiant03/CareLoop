@@ -67,12 +67,12 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from backend.optim.envelopes import build_benchmark_envelopes  # noqa: E402
-from backend.optim.problem import OBJECTIVE_NAMES  # noqa: E402
-from backend.optim.real_data import load_dishes  # noqa: E402
-from backend.optim.solver import HAS_PYMOO, solve  # noqa: E402
+from backend.optim.envelopes import build_benchmark_envelopes
+from backend.optim.problem import OBJECTIVE_NAMES
+from backend.optim.real_data import load_dishes
+from backend.optim.solver import HAS_PYMOO, solve
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(_HERE, "benchmark_results.csv")
@@ -106,13 +106,14 @@ def _run(method: str, env, dishes, seed: int, pop_size: int, n_gen: int) -> dict
     budget = os.environ.get("CARELOOP_BENCH_BUDGET", "evaluations")
     termination = (("time", float(os.environ.get("CARELOOP_BENCH_SECONDS", "0.5")))
                    if budget == "time" else ("n_eval", pop_size * n_gen))
-    options = {"termination": termination} if method.removesuffix("-raw") in PYMOO_METHODS else {}
+    if method.removesuffix("-raw") not in PYMOO_METHODS:
+        termination = None
     if method.endswith("-raw") and method[:-4] in PYMOO_METHODS:
         return solve(
             env, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen,
-            method=method[:-4], guarantee=False, **options,
+            method=method[:-4], guarantee=False, termination=termination,
         )
-    return solve(env, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen, method=method, **options)
+    return solve(env, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen, method=method, termination=termination)
 
 
 def _is_guaranteed(method: str) -> bool:
@@ -145,7 +146,9 @@ def _hypervolume(F: np.ndarray, lo: np.ndarray, hi: np.ndarray) -> float:
 
     norm = (F - lo) / (hi - lo)
     ref_point = np.full(len(OBJECTIVE_NAMES), REF_MARGIN)
-    return float(HV(ref_point=ref_point).do(norm))
+    volume = HV(ref_point=ref_point).do(norm)
+    assert volume is not None
+    return float(volume)
 
 
 def _mean(values: list[float]) -> float:
@@ -454,10 +457,6 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
 
     if best_guar:
         nsga2_stat = next((s for s in guar_stats if s["method"] == "nsga2"), None)
-        gap = (
-            (nsga2_stat["hv"] - best_guar["hv"]) / max(best_guar["hv"], 1e-9)
-            if nsga2_stat and best_guar["hv"] > 0 else 0.0
-        )
         lines.append(
             f"* Best guaranteed method by mean HV: **{best_guar['method']}** "
             f"(HV {best_guar['hv']:.4f}, {best_guar['ms']:.0f} ms/solve); "

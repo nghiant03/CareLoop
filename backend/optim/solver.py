@@ -21,10 +21,10 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from backend.optim import baselines  # noqa: E402
-from backend.optim.problem import (  # noqa: E402
+from backend.optim import baselines
+from backend.optim.problem import (
     OBJECTIVE_NAMES,
     allowed_dishes,
     evaluate,
@@ -32,8 +32,8 @@ from backend.optim.problem import (  # noqa: E402
     violation_magnitude,
 )
 
-from .exact_reference import one_day_exact  # noqa: E402
-from .real_data import (  # noqa: E402
+from .exact_reference import one_day_exact
+from .real_data import (
     FastEvaluator,
     feasibility_precheck,
     greedy_feasible_plan,
@@ -60,6 +60,7 @@ except Exception as exc:  # noqa: BLE001
 # Extra pymoo algorithms for the benchmark comparison.  Kept in a *separate*
 # guarded block so a broken optional dependency (e.g. AGEMOEA needs numba)
 # can never break the production NSGA-II path above.
+REF_DIRS_4OBJ = None
 try:  # pragma: no cover - depends on environment
     from pymoo.algorithms.moo.age import AGEMOEA
     from pymoo.algorithms.moo.moead import MOEAD
@@ -68,6 +69,9 @@ try:  # pragma: no cover - depends on environment
     from pymoo.decomposition.pbi import PBI
     from pymoo.util.ref_dirs import get_reference_directions
 
+    # Das-Dennis: 35 directions for four objectives, near the benchmark pop=40.
+    if HAS_PYMOO:
+        REF_DIRS_4OBJ = get_reference_directions("das-dennis", 4, n_partitions=4)
     HAS_PYMOO_EXTRAS = HAS_PYMOO
     PYMOO_EXTRAS_IMPORT_ERROR: str | None = None
 except Exception as exc:  # noqa: BLE001
@@ -104,15 +108,6 @@ def _build_pymoo_problem(ev: FastEvaluator, with_constraints: bool = True):
                 out["G"] = G
 
     return _FastMealPlanProblem()
-
-
-# Das-Dennis reference directions for 4 objectives, divergence p=4 ->
-# 35 uniformly spread directions.  Used by NSGA-III (survival) and MOEA/D
-# (weight vectors); 35 is close to the benchmark's pop=40 budget so all
-# methods compare at a similar evaluation count.
-REF_DIRS_4OBJ = None
-if HAS_PYMOO_EXTRAS:  # pragma: no branch
-    REF_DIRS_4OBJ = get_reference_directions("das-dennis", 4, n_partitions=4)
 
 
 def _build_pymoo_algorithm(method: str, pop_size: int):
@@ -248,7 +243,7 @@ def ga_search(envelope, dishes, seed: int = 42, pop_size: int = 40, n_gen: int =
         weights = [float(pop_size - r) for r in range(len(scored))]
         total = sum(weights)
 
-        def select():
+        def select(total: float = total, weights: list[float] = weights):
             pick = rng.random() * total
             acc = 0.0
             for i, w in enumerate(weights):
@@ -490,6 +485,7 @@ def solve(
 
     ok, reason = feasibility_precheck(envelope, dishes)
     if not ok:
+        assert reason is not None  # Failed prechecks always supply a diagnosis.
         # Confirm a failed precheck with exhaustive one-day enumeration.
         # No feasible day proves infeasibility for this single-dish encoding.
         # A feasible day lets search continue, but does not prove horizon
@@ -607,9 +603,9 @@ def solve(
 __all__ = [
     "HAS_PYMOO",
     "HAS_PYMOO_EXTRAS",
-    "PYMOO_METHODS",
-    "PYMOO_IMPORT_ERROR",
     "PYMOO_EXTRAS_IMPORT_ERROR",
+    "PYMOO_IMPORT_ERROR",
+    "PYMOO_METHODS",
     "ga_search",
     "greedy_search",
     "random_search",
