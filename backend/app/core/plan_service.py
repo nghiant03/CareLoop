@@ -120,7 +120,8 @@ def map_plan_result(
     ``adequacy`` assesses each original MIN/TARGET aim in envelope order:
     mean delivery, largest-deviation day, met-day count, and any relaxed floor.
     Compatibility keys ``shortfall``/``shortfall_pct`` also cover TARGET
-    overshoots. Infeasible results have empty days and adequacy arrays.
+    overshoots. Decisions use unrounded delivery and aims; rounding is only for
+    displayed values. Infeasible results have empty days and adequacy arrays.
     """
     solved = solved_envelope or envelope
     lookup = {d.dish_id: d for d in dishes}
@@ -168,12 +169,13 @@ def map_plan_result(
         for key in NUTRIENT_KEYS:
             if key not in nutrients_with_targets and totals_raw.get(key, 0.0) == 0.0:
                 continue
-            value = round(totals_raw.get(key, 0.0), 3)
+            raw_value = totals_raw.get(key, 0.0)
+            value = round(raw_value, 3)
             constraints = targets_by_nutrient.get(key, [])
             compliant: Optional[bool] = None
             for constraint in constraints:
                 if constraint["kind"] == "max":
-                    ok = value <= constraint["value"] + _EPS
+                    ok = raw_value <= constraint["value"] + _EPS
                 elif constraint["kind"] == "min":
                     # Soft floors do not change hard-compliance flags.
                     continue
@@ -221,13 +223,13 @@ def map_plan_result(
             if kind == "max":
                 continue
             key = constraint.nutrient.value
-            aim = round(constraint.value, 3)
+            aim = constraint.value
             series = [day_totals.get(key, 0.0) for day_totals in daily_raw_totals]
             deviations = [abs(aim - value) if kind == "target" else max(0., aim - value) for value in series]
             worst_index = max(range(len(series)), key=lambda i: deviations[i])
             worst_daily = round(series[worst_index], 3)
             deviation = round(deviations[worst_index], 3)
-            deviation_pct = round(deviation / aim * 100.0, 3) if aim > _EPS else 0.0
+            deviation_pct = round(deviations[worst_index] / aim * 100.0, 3) if aim > _EPS else 0.0
             relaxed_aim: Optional[float] = None
             solved_aim = solved_aim_by_key.get((key, kind))
             if solved_aim is not None and abs(solved_aim - aim) > _EPS:
@@ -237,7 +239,7 @@ def map_plan_result(
                     "nutrient": key,
                     "kind": kind,
                     "unit": constraint.unit,
-                    "aim": aim,
+                    "aim": round(aim, 3),
                     "mean_daily": round(sum(series) / len(series), 3),
                     "worst_day": worst_index + 1,
                     "worst_daily": worst_daily,

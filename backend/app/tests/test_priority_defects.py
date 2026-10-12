@@ -92,3 +92,44 @@ def test_nonfinite_explicit_provenance_is_rejected():
     }
     with pytest.raises(ValidationError):
         NutrientEnvelope.model_validate(envelope)
+
+
+@pytest.mark.parametrize(("aim", "delivery", "compliant"), [
+    (1000.0006, 1000.0006, True),
+    (1000.0001, 1000.0002, False),
+])
+def test_max_compliance_uses_unrounded_delivery(aim, delivery, compliant):
+    envelope = _envelope("raw-max", [NutrientConstraint(
+        nutrient="sodium_mg", kind="max", value=aim, unit="mg",
+    )])
+    dishes = [_dish("delivery", sodium_mg=delivery)]
+    out = map_plan_result(_result([["delivery"], [], []]), envelope, dishes)
+    total = next(row for row in out["days"][0]["totals"] if row["nutrient"] == "sodium_mg")
+    assert total["value"] == round(delivery, 3)
+    assert total["compliant"] is compliant
+
+
+@pytest.mark.parametrize(("kind", "delivery", "met"), [
+    ("min", 1000.0002, 0),
+    ("target", 1000.0004, 1),
+    ("target", 1000.0006, 0),
+])
+def test_adequacy_and_relaxation_use_unrounded_original_aim(kind, delivery, met):
+    envelope = _envelope("raw-aim", [NutrientConstraint(
+        nutrient="sodium_mg", kind=kind, value=1000.0004, unit="mg",
+    )])
+    out = map_plan_result(_result([["delivery"], [], []]), envelope,
+                          [_dish("delivery", sodium_mg=delivery)])
+    entry = out["adequacy"][0]
+    assert entry["met_days"] == met
+    assert entry["relaxed_aim"] is None
+    assert out["adequate"] is bool(met)
+
+
+def test_adequacy_percentage_is_rounded_only_after_raw_calculation():
+    envelope = _envelope("raw-percentage", [NutrientConstraint(
+        nutrient="sodium_mg", kind="min", value=1.0004, unit="mg",
+    )])
+    out = map_plan_result(_result([["delivery"], [], []]), envelope,
+                          [_dish("delivery", sodium_mg=0.5)])
+    assert out["adequacy"][0]["shortfall_pct"] == round((1.0004 - 0.5) / 1.0004 * 100, 3)
