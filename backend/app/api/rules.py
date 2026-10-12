@@ -1,10 +1,4 @@
-"""Create a fresh PROPOSED or scope-rejected envelope with its embedded trace.
-
-Accept a patient ID for lookup or an inline patient record. Validate rule inputs
-before native execution, then validate output and persist a fresh identity. Scope
-rejection returns HTTP 200 with empty targets so the UI can explain the refusal;
-eligible proposals still need clinician approval before live planning.
-"""
+"""Expose rule-based nutrient envelope proposals."""
 
 from __future__ import annotations
 
@@ -12,13 +6,20 @@ import math
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    ValidationError,
+    field_validator,
+)
 
-from rules.engine import normalize_patient_labs, run_rules as engine_run_rules
-
-from backend.app.core.approval_gate import put_envelope
 from backend.app.api.patients import get_patient
+from backend.app.core.approval_gate import put_envelope
 from backend.app.models.envelope import NutrientEnvelope
+from rules.engine import normalize_patient_labs
+from rules.engine import run_rules as engine_run_rules
 
 router = APIRouter(prefix="/rules", tags=["rules"])
 
@@ -31,13 +32,12 @@ _INLINE_FIELDS = {
 
 
 class _RulePatientInput(BaseModel):
-    """Live rule inputs, not a persisted profile or historical snapshot.
+    """Validate live rule inputs while preserving extra profile fields.
 
-    Require age, sex and positive weight. Missing/null optional labs remain
-    unknown; supplied numerics must be finite and nonnegative. Numeric strings
-    remain accepted, but booleans are not clinical numbers. Preserve richer
-    fixture fields without treating them as rule inputs. Lab alias precedence
-    is established by normalize_patient_labs before validation.
+    Missing or null optional labs remain unknown. Clinical numbers must be finite
+    and nonnegative. Weight must be positive, as must height when supplied. Numeric
+    strings are accepted, but booleans are rejected. Callers normalize lab aliases before
+    validation. This model is not a stored profile or historical snapshot.
     """
 
     model_config = ConfigDict(extra="allow")
@@ -68,7 +68,7 @@ class _RulePatientInput(BaseModel):
     @classmethod
     def _reject_boolean_number(cls, value: Any) -> Any:
         if isinstance(value, bool):
-            raise ValueError("clinical numbers must not be booleans")
+            raise TypeError("clinical numbers must not be booleans")
         return value
 
     @field_validator("weight_kg", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL",
@@ -108,12 +108,11 @@ def _resolve_patient(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def run_rules_service(patient: dict[str, Any]) -> dict[str, Any]:
-    """Run rules and persist a fresh proposal with its embedded decision trace.
+    """Validate rule inputs and save a fresh envelope with its decision trace.
 
-    Returns ``{"envelope": NutrientEnvelope, "trace": [...]}``. The review
-    queue uses the same service; neither call path grants live approval.
-    Invalid live inputs return JSON-safe 422 before native environment access.
-    Engine/internal failures are not reclassified as malformed client input.
+    Return ``envelope`` as a ``NutrientEnvelope`` and ``trace`` as a list. Saving
+    does not grant approval. Model validation errors return JSON-safe HTTP 422.
+    Other exceptions propagate rather than being classified as client errors.
     """
     try:
         validated = _RulePatientInput.model_validate(normalize_patient_labs(patient))
@@ -135,6 +134,15 @@ def run_rules_service(patient: dict[str, Any]) -> dict[str, Any]:
 
 @router.post("/run", summary="Run the rule engine -> PROPOSED envelope + trace")
 def run_rules(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """Create a fresh envelope and return it with the rule trace.
+
+    Submit a patient ID for lookup or a complete inline record. Inline fields
+    select inline validation, not a partial update to a saved profile. Unknown
+    lookup IDs return HTTP 404 ``patient_not_found``.
+
+    Scope-rejected results return HTTP 200 with empty targets. Eligible results
+    are PROPOSED and require clinician approval before live planning.
+    """
     patient = _resolve_patient(body)
     result = run_rules_service(patient)
 
