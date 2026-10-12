@@ -37,7 +37,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 FDC_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
 
@@ -83,10 +83,10 @@ def _http_get_json(url: str, timeout: float = 15.0) -> dict[str, Any]:
     """GET ``url`` and decode JSON. Raises RateLimitError on HTTP 429."""
     req = urllib.request.Request(url, headers={"User-Agent": "CareLoop/0.1 (data-pipeline)"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
             return json.loads(raw)
-    except urllib.error.HTTPError as exc:  # noqa: PERF203
+    except urllib.error.HTTPError as exc:
         if exc.code == 429:
             raise RateLimitError("USDA FDC returned HTTP 429 (rate limited)") from exc
         raise
@@ -98,7 +98,7 @@ def search_food(
     query: str,
     api_key: str = DEFAULT_API_KEY,
     page_size: int = 5,
-    budget: Optional[RequestBudget] = None,
+    budget: RequestBudget | None = None,
     timeout: float = 15.0,
 ) -> list[dict[str, Any]]:
     """Search FDC for ``query`` and return raw food dicts.
@@ -128,7 +128,7 @@ def search_food(
     return list(payload.get("foods", []) or [])
 
 
-def _extract_nutrient(food: dict[str, Any], nutrient_id: int) -> Optional[float]:
+def _extract_nutrient(food: dict[str, Any], nutrient_id: int) -> float | None:
     """Pull one nutrient value (per 100 g) from an FDC food record."""
     for n in food.get("foodNutrients", []) or []:
         nid = n.get("nutrientId") or n.get("nutrient", {}).get("id")
@@ -147,7 +147,7 @@ def estimate_kp_for_ingredient(
     ingredient: str,
     portion_g: float,
     api_key: str = DEFAULT_API_KEY,
-    budget: Optional[RequestBudget] = None,
+    budget: RequestBudget | None = None,
 ) -> dict[str, Any]:
     """Estimate K/P (mg) for ``portion_g`` of a single ingredient.
 
@@ -184,7 +184,7 @@ def estimate_kp_for_ingredient(
 def estimate_dish_gaps(
     dish: dict[str, Any],
     api_key: str = DEFAULT_API_KEY,
-    budget: Optional[RequestBudget] = None,
+    budget: RequestBudget | None = None,
 ) -> dict[str, Any]:
     """Estimate missing K/P for one dish from its ingredient list.
 
@@ -244,9 +244,9 @@ def estimate_dish_gaps(
 def fill_gaps_in_file(
     path: Path,
     api_key: str = DEFAULT_API_KEY,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     min_interval_s: float = 0.0,
-    budget: Optional[RequestBudget] = None,
+    budget: RequestBudget | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     """Load a dishes JSON, estimate K/P for records missing them.
 
@@ -299,7 +299,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     budget = RequestBudget()
 

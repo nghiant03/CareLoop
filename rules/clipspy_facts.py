@@ -28,7 +28,7 @@ try:  # pragma: no cover - exercised only when clipspy is installed
     import clips  # type: ignore
 
     CLIPS_AVAILABLE = True
-except Exception:  # ImportError, or any native-library load error
+except Exception:  # noqa: BLE001  # ImportError, or any native-library load error
     clips = None  # type: ignore
     CLIPS_AVAILABLE = False
 
@@ -136,7 +136,7 @@ def patient_fact(patient: Any) -> str:
     if isinstance(patient, dict):
         get = patient.get
     else:
-        get = lambda name, default=None: getattr(patient, name, default)  # noqa: E731
+        get = lambda name, default=None: getattr(patient, name, default)
 
     def num(name: str) -> float:
         value = get(name)
@@ -148,7 +148,7 @@ def patient_fact(patient: Any) -> str:
     return (
         "(patient "
         f'(patient_id "{get("patient_id")}") '
-        f"(age {int(get('age'))}) "
+        f"(age {int(get('age') or 0)}) "
         f"(sex {_sym(get('sex'))}) "
         f"(weight_kg {num('weight_kg')}) "
         f"(diagnoses {diagnoses}) "
@@ -204,7 +204,7 @@ def load_templates(env: Any) -> None:
         )
     # Each reference template ends with a standalone closing parenthesis.
     # Environment.build accepts one construct, not the complete template block.
-    for construct in re.findall(r"^\(deftemplate .*?^\)", FACTS_DEFTEMPLATE, re.M | re.S):
+    for construct in re.findall(r"^\(deftemplate .*?^\)", FACTS_DEFTEMPLATE, re.MULTILINE | re.DOTALL):
         env.build(construct)
 
 

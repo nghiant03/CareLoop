@@ -480,4 +480,4 @@ def test_example_trace_regression_includes_new_med_rules():
 
     Its expected firing list must include the medication cautions.
     """
-    assert len(json.load(open(REPO / "rules" / "example_trace.json"))["all_fired_rule_ids"]) == 32
+    assert len(json.loads((REPO / "rules" / "example_trace.json").read_text(encoding="utf-8"))["all_fired_rule_ids"]) == 32

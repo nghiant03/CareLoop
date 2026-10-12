@@ -8,15 +8,14 @@ from the extracted wheel, outside the checkout with its editable root removed.
 
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tarfile
 import tomllib
 import zipfile
+from pathlib import Path
 
 import pytest
-
 
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = {"rules/rules.json", "shared/envelope_schema.json",
@@ -37,7 +36,7 @@ def distributions(tmp_path):
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
     env["PYTHONPATH"] = os.environ.get("CARELOOP_BUILD_PYTHONPATH", "")
     probe = subprocess.run([sys.executable, "-c", "import hatchling.build"],
-                           cwd=tmp_path, env=env, capture_output=True, text=True)
+                           cwd=tmp_path, env=env, capture_output=True, text=True, check=False)
     if probe.returncode:
         pytest.skip("Hatchling build tooling unavailable; no dependencies installed: " + probe.stderr.strip())
     script = """
@@ -46,7 +45,7 @@ from hatchling.build import build_wheel, build_sdist
 print(json.dumps([build_wheel(sys.argv[1]), build_sdist(sys.argv[1])]))
 """
     result = subprocess.run([sys.executable, "-c", script, str(tmp_path)], cwd=ROOT,
-                            env=env, capture_output=True, text=True, timeout=90)
+                            env=env, capture_output=True, text=True, timeout=90, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     wheel, sdist = json.loads(result.stdout.strip().splitlines()[-1])
     return tmp_path / wheel, tmp_path / sdist
@@ -116,7 +115,7 @@ print('CARELOOP_SMOKE=' + json.dumps({'dishes': len(dishes), 'proposal': proposa
                                     'module_root': str(installed), 'kb_loaded': True}))
 """
     result = subprocess.run([sys.executable, "-I", "-c", script, str(installed), str(ROOT)],
-                            cwd=work, env=env, capture_output=True, text=True, timeout=90)
+                            cwd=work, env=env, capture_output=True, text=True, timeout=90, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     # Native shutdown diagnostics can follow the result; they are not its payload.
     results = [line.removeprefix("CARELOOP_SMOKE=") for line in result.stdout.splitlines()

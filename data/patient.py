@@ -21,8 +21,6 @@ canonical aliases.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import ConfigDict, Field
 
 from shared.envelope_schema import PatientSummary
@@ -47,10 +45,11 @@ class Patient(PatientSummary):
     )
 
     height_cm: float = Field(..., gt=0, le=250)
-    bmi: float = Field(..., gt=0, le=100)
-    hba1c_pct: Optional[float] = Field(default=None, ge=0, le=20)
-    systolic_bp: Optional[int] = Field(default=None, ge=0, le=300)
-    diastolic_bp: Optional[int] = Field(default=None, ge=0, le=200)
+    # Full generated records require BMI; historical summaries may omit it.
+    bmi: float = Field(..., gt=0, le=100)  # pyrefly: ignore[bad-override-mutable-attribute]
+    hba1c_pct: float | None = Field(default=None, ge=0, le=20)
+    systolic_bp: int | None = Field(default=None, ge=0, le=300)
+    diastolic_bp: int | None = Field(default=None, ge=0, le=200)
 
     labs_K_monthly: list[float] = Field(
         default_factory=list,
@@ -65,7 +64,7 @@ class Patient(PatientSummary):
         description="Months before today for each longitudinal entry (0 = current).",
     )
 
-    notes: Optional[str] = Field(default=None)
+    notes: str | None = Field(default=None)
 
     def to_summary(self) -> PatientSummary:
         """Project to the canonical audit snapshot used inside envelopes."""

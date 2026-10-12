@@ -8,11 +8,11 @@ Import anywhere in the codebase. Pure data models, no side effects.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class EnvelopeStatus(str, Enum):
@@ -204,7 +204,7 @@ class NutrientEnvelope(BaseModel):
     )
 
     proposed_by: str = Field(default="rules-engine")
-    proposed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    proposed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     approved_by: str | None = None
     approved_at: datetime | None = None
     notes: str | None = None

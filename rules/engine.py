@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -26,16 +26,16 @@ try:
     import clips  # type: ignore
 
     CLIPS_AVAILABLE = True
-except Exception:  # pragma: no cover - only when the venv lacks clipspy
+except Exception:  # noqa: BLE001  # pragma: no cover - only when the venv lacks clipspy
     clips = None  # type: ignore
     CLIPS_AVAILABLE = False
 
-__all__ = ["run_rules", "CLIPS_AVAILABLE"]
+__all__ = ["CLIPS_AVAILABLE", "run_rules"]
 
 _RULES_PATH = Path(__file__).with_name("rules.json")
 
 # Fixed trace/proposal clock for deterministic engine output; storage stamps live proposals.
-_CLOCK = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+_CLOCK = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
 
 _MULTISLOT_FIELDS = {"diagnoses", "meds"}
 _NUMERIC_FIELDS = {"age", "weight_kg", "bmi", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL", "hba1c_pct"}
@@ -88,15 +88,15 @@ _TEMPLATES = [
    (slot bmi (type FLOAT) (default -1.0))
    (slot pregnant (type SYMBOL) (default no))
    (slot hba1c_pct (type FLOAT) (default -1.0)))""",
-    "(deftemplate constraint "
+    ("(deftemplate constraint "
     "(slot nutrient (type SYMBOL)) (slot kind (type SYMBOL)) (slot value (type FLOAT)) "
-    "(slot rule_id (type STRING)) (slot priority (type INTEGER)))",
-    "(deftemplate exclusion "
+    "(slot rule_id (type STRING)) (slot priority (type INTEGER)))"),
+    ("(deftemplate exclusion "
     "(slot kind (type SYMBOL)) (slot value (type STRING)) (slot reason (type STRING)) "
-    "(slot rule_id (type STRING)) (slot priority (type INTEGER)))",
-    "(deftemplate clinical-flag "
+    "(slot rule_id (type STRING)) (slot priority (type INTEGER)))"),
+    ("(deftemplate clinical-flag "
     "(slot key (type SYMBOL)) (slot value (type STRING)) "
-    "(slot rule_id (type STRING)) (slot priority (type INTEGER)))",
+    "(slot rule_id (type STRING)) (slot priority (type INTEGER)))"),
     "(deftemplate fired (slot rule_id (type STRING)))",
 ]
 
@@ -133,7 +133,7 @@ def _num(value: Any) -> float:
         f = float(value)
     except (TypeError, ValueError):
         return -1.0
-    return f if f == f else -1.0  # NaN -> unknown
+    return -1.0 if math.isnan(f) else f  # NaN -> unknown
 
 
 def _ruleset() -> list[dict]:
@@ -240,7 +240,7 @@ def _get_env() -> Any:
     """
     global _ENV
     if _ENV is None:
-        if not CLIPS_AVAILABLE:
+        if clips is None or not CLIPS_AVAILABLE:
             raise RuntimeError(
                 "clipspy is required by rules.engine (pip install clipspy). "
                 "rules.clipspy_facts remains import-safe without it."
@@ -279,7 +279,7 @@ def _prepare(patient: dict) -> dict:
     """Normalize for CLIPS; reject missing, nonfinite or nonpositive weight."""
     patient = normalize_patient_labs(patient)
     try:
-        weight = float(patient.get("weight_kg"))
+        weight = float(patient.get("weight_kg", 0))
     except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError("weight_kg must be finite and positive") from exc
     if not math.isfinite(weight) or weight <= 0:
@@ -396,7 +396,7 @@ def _resolve_conflicts(constraints: list[dict]) -> tuple[dict, dict[str, list[st
     for key, cands in groups.items():
         nutrient, kind = key
 
-        def sort_key(c: dict) -> tuple:
+        def sort_key(c: dict, kind: str = kind) -> tuple:
             strict = -c["value"] if kind == "min" else c["value"]
             return (-c["priority"], strict, c["rule_id"])
 
@@ -572,7 +572,7 @@ def run_rules(patient: dict) -> dict:
         targets = []  # no auto envelope for out-of-scope / clinician-review cases
 
     # ---- trace -------------------------------------------------------------
-    trace = []
+    trace: list[dict[str, Any]] = []
     for rid in sorted(fired_ids, key=lambda r: (-by_id[r]["priority"], r)):
         rule = by_id[rid]
         summary = _action_summary(rule, prep)

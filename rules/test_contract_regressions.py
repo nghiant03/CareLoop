@@ -11,7 +11,12 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from rules import engine
-from shared.envelope_schema import NutrientConstraint, NutrientEnvelope, NutrientKind, PatientSummary
+from shared.envelope_schema import (
+    NutrientConstraint,
+    NutrientEnvelope,
+    NutrientKind,
+    PatientSummary,
+)
 
 
 def patient(**overrides):

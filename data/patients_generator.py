@@ -27,10 +27,9 @@ import json
 import random
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from data.patient import Patient
-
 
 # ---------------------------------------------------------------------------
 # RNG abstraction
@@ -44,7 +43,7 @@ class _StdlibRNG:
     ``integers(low, high)`` with an *exclusive* high bound.
     """
 
-    def __init__(self, seed: Optional[int]) -> None:
+    def __init__(self, seed: int | None) -> None:
         self._r = random.Random(seed)
 
     def random(self) -> float:
@@ -56,7 +55,7 @@ class _StdlibRNG:
     def uniform(self, low: float = 0.0, high: float = 1.0) -> float:
         return self._r.uniform(low, high)
 
-    def integers(self, low: int, high: Optional[int] = None) -> int:
+    def integers(self, low: int, high: int | None = None) -> int:
         if high is None:
             low, high = 0, low
         return self._r.randrange(low, high)
@@ -71,7 +70,7 @@ class _StdlibRNG:
 _NUMPY_NOTICE_SHOWN = False
 
 
-def get_rng(seed: Optional[int]):
+def get_rng(seed: int | None):
     """Return (RNG, backend label), using NumPy or the deterministic stdlib shim."""
     global _NUMPY_NOTICE_SHOWN
     try:  # pragma: no cover - depends on environment
@@ -289,7 +288,7 @@ def make_patient(rng, index: int, archetype: str) -> Patient:
     weight = round(_clip(rng.normal(*spec["weight"]), 35.0, 160.0), 1)
     bmi = round(weight / ((height / 100.0) ** 2), 1)
 
-    age = int(round(_clip(rng.normal(*spec["age"]), 18.0, 95.0)))
+    age = round(_clip(rng.normal(*spec["age"]), 18.0, 95.0))
     egfr = round(_clip(rng.normal(*spec["egfr"]), 3.0, 130.0), 1)
 
     k_current = round(_clip(rng.normal(*spec["k"]), 2.5, 7.0), 2)
@@ -299,8 +298,8 @@ def make_patient(rng, index: int, archetype: str) -> Patient:
     labs_po4 = _longitudinal(rng, po4_current, spec["po4_trend"], 0.15, 1.5, 9.0)
 
     hba1c = round(_clip(spec["hba1c"] + rng.normal(0.0, 0.4), 4.5, 12.0), 1)
-    sbp = int(round(_clip(rng.normal(*spec["sbp"]), 90.0, 200.0)))
-    dbp = int(round(_clip(rng.normal(*spec["dbp"]), 50.0, 120.0)))
+    sbp = round(_clip(rng.normal(*spec["sbp"]), 90.0, 200.0))
+    dbp = round(_clip(rng.normal(*spec["dbp"]), 50.0, 120.0))
 
     return Patient(
         patient_id=pid,
@@ -330,7 +329,7 @@ def make_patient(rng, index: int, archetype: str) -> Patient:
     )
 
 
-def generate(n: int, seed: Optional[int]) -> list[Patient]:
+def generate(n: int, seed: int | None) -> list[Patient]:
     """Generate ``n`` patients by cycling through all archetypes."""
     if n < 0:
         raise ValueError("n must be >= 0")
@@ -360,7 +359,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     _, backend = get_rng(args.seed)
     patients = generate(args.n, args.seed)
