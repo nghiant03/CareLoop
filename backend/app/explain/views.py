@@ -7,7 +7,7 @@ clock, no randomness.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 from shared.provenance import citation_for
 
@@ -84,13 +84,12 @@ def _format_amount(value: Any, unit: str) -> str:
         num = float(value)
     except (TypeError, ValueError):
         return f"{value} {unit}".strip()
-    if unit == "mg" and num >= 1000:
-        if num % 10 == 0:
-            # Grams render only when exact to hundredths of a gram: rounding
-            # must never loosen (or tighten) a stated MAX ceiling or MIN floor.
-            grams = num / 1000.0
-            text = f"{grams:.2f}".rstrip("0").rstrip(".")
-            return f"{text} g"
+    if unit == "mg" and num >= 1000 and num % 10 == 0:
+        # Grams render only when exact to hundredths of a gram: rounding
+        # must never loosen (or tighten) a stated MAX ceiling or MIN floor.
+        grams = num / 1000.0
+        text = f"{grams:.2f}".rstrip("0").rstrip(".")
+        return f"{text} g"
     if num == int(num):
         return f"{int(num)} {unit}".strip()
     return f"{num} {unit}".strip()
@@ -98,7 +97,7 @@ def _format_amount(value: Any, unit: str) -> str:
 
 def _target_citation(
     target: dict[str, Any], fired_rules: list[dict[str, Any]]
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Use exact provenance, or matching legacy actions when provenance is absent."""
     provenance = target.get("provenance")
     if provenance:
@@ -191,7 +190,7 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
                     "summary": (
                         f"{top_mention.get('rule_id')} (priority "
                         f"{top_mention.get('priority', 0)}) has higher priority than "
-                        f"{', '.join(o['rule_id'] for o in lower_mentions)} on "
+                        f"{', '.join(str(o['rule_id']) for o in lower_mentions)} on "
                         f"{nutrient}"
                     ),
                 }
@@ -245,7 +244,9 @@ def _target_phrases(targets: list[dict[str, Any]]) -> list[dict[str, str]]:
     grouped: dict[str, dict[str, Any]] = {}
     for target in targets:
         nutrient = target.get("nutrient")
-        grouped.setdefault(nutrient, {})[target.get("kind")] = target
+        if not isinstance(nutrient, str):
+            continue
+        grouped.setdefault(nutrient, {})[target.get("kind") or ""] = target
 
     lines = []
     for nutrient in _NUTRIENT_ORDER:
@@ -278,7 +279,7 @@ def _target_phrases(targets: list[dict[str, Any]]) -> list[dict[str, str]]:
     return lines
 
 
-def patient_explanation(envelope: dict, plan: Optional[dict] = None) -> dict:
+def patient_explanation(envelope: dict, plan: dict | None = None) -> dict:
     """Plain-language patient view of an envelope.
 
     Render daily targets, avoid-choices, and why-bullets without rule IDs.

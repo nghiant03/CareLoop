@@ -102,7 +102,7 @@ def classify_constraint(nutrient: str, kind: ConstraintKind, limit: float, total
     return row
 
 
-def _completeness(entries: list[Mapping[str, Any]]) -> dict[str, Any]:
+def _completeness(entries: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Count each recognised meal slot once, regardless of its number of dishes."""
     meals_logged = len({e.get("meal") for e in entries if e.get("meal") in MEALS})
     return {
@@ -115,7 +115,7 @@ def _completeness(entries: list[Mapping[str, Any]]) -> dict[str, Any]:
 def _contributors(
     nutrient: str,
     highest_first: bool,
-    entries: list[Mapping[str, Any]],
+    entries: Iterable[Mapping[str, Any]],
     dish_by_id: Mapping[str, Any],
     day_total: float,
 ) -> list[dict[str, Any]]:
@@ -127,7 +127,7 @@ def _contributors(
     """
     per_dish: list[tuple[str, Any, float]] = []
     for entry in entries:
-        dish = dish_by_id.get(entry.get("dish_id"))
+        dish = dish_by_id.get(entry.get("dish_id", ""))
         if dish is None:
             continue
         per_dish.append(
@@ -189,7 +189,7 @@ def analyse_day(
         )
     hard = [r for r in rows if r["status"] == "hard_violation"]
     for entry in ordered:
-        dish = dish_by_id.get(entry.get("dish_id"))
+        dish = dish_by_id.get(entry.get("dish_id") or "")
         if dish is None:
             continue
         flag = exclusion_for(dish, envelope)

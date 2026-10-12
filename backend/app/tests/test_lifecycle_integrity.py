@@ -13,7 +13,6 @@ from backend.app.core import envelope_lifecycle, persistence
 from backend.app.core.approval_gate import get_envelope
 from backend.app.core.trace_store import put_trace, trace_or_none
 from backend.app.main import app
-from shared.envelope_schema import NutrientEnvelope
 from shared.export_schema import schema_text
 
 
@@ -56,11 +55,13 @@ targets = [t.model_copy(deep=True) for t in envelope.targets]
 next(t for t in targets if t.nutrient.value == 'sodium_mg').value = 1234
 edit(envelope, edited_by='second-worker', targets=targets)
 """
+    assert stale is not None
     subprocess.run([sys.executable, "-c", script, stale.envelope_id],
                    env=os.environ.copy(), check=True, capture_output=True, text=True)
     with pytest.raises(persistence.EnvelopeConflictError):
         envelope_lifecycle.approve(stale, approved_by="stale-reviewer")
     current = get_envelope(stale.envelope_id)
+    assert current is not None
     assert current.version == 2 and current.status.value == "EDITED"
     assert next(t.value for t in current.targets if t.nutrient.value == "sodium_mg") == 1234
     assert len(persistence.list_envelope_history("P0001")) == 2
@@ -88,8 +89,11 @@ def test_durable_trace_wins_over_a_stale_process_cache(api):
     put_trace(eid, original["fired_rules"])
     api.post(f"/envelopes/{eid}/edit", json={"notes": "new trace event"})
     current = get_envelope(eid)
-    assert trace_or_none(current)[-1]["rule_id"] == "CLINICIAN-EDIT"
-    assert len(trace_or_none(current)) == len(original["fired_rules"]) + 1
+    assert current is not None
+    trace = trace_or_none(current)
+    assert trace is not None
+    assert trace[-1]["rule_id"] == "CLINICIAN-EDIT"
+    assert len(trace) == len(original["fired_rules"]) + 1
     empty = current.model_copy(update={"fired_rules": []})
     assert trace_or_none(empty) == []
 

@@ -20,9 +20,6 @@ contract as ``backend.optim.toy_data``); the API test follows the
 
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
-
 from backend.app.core.plan_service import map_plan_result, prepare_envelope_for_pool
 from backend.optim.toy_data import Dish
 from shared.envelope_schema import (

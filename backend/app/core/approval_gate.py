@@ -19,28 +19,27 @@ The SQLite journal is authoritative for live reads and atomic proposal IDs.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import Lock
-from typing import Optional
 
 from fastapi import Depends, HTTPException, Path
 from pydantic import BaseModel
 
-from backend.app.models.envelope import EnvelopeStatus, NutrientEnvelope
+from backend.app.models.envelope import NutrientEnvelope
 
 logger = logging.getLogger("careloop.approval_gate")
 
 __all__ = [
-    "EnvelopeNotApprovedError",
     "ENVELOPE_STORE",
-    "put_envelope",
-    "get_envelope",
-    "list_envelopes",
-    "find_latest_envelope_for_patient",
-    "assert_approved",
-    "get_envelope_or_404",
-    "require_approved_envelope",
+    "EnvelopeNotApprovedError",
     "PlanRequest",
+    "assert_approved",
+    "find_latest_envelope_for_patient",
+    "get_envelope",
+    "get_envelope_or_404",
+    "list_envelopes",
+    "put_envelope",
+    "require_approved_envelope",
     "require_approved_envelope_for_patient",
 ]
 
@@ -79,7 +78,7 @@ def put_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) -> N
     return envelope
 
 
-def get_envelope(envelope_id: str) -> Optional[NutrientEnvelope]:
+def get_envelope(envelope_id: str) -> NutrientEnvelope | None:
     """Return an envelope by id, or ``None``."""
     return next((env for env in list_envelopes() if env.envelope_id == envelope_id), None)
 
@@ -94,7 +93,7 @@ def list_envelopes() -> list[NutrientEnvelope]:
     return persistence.current_envelopes()
 
 
-def find_latest_envelope_for_patient(patient_id: str) -> Optional[NutrientEnvelope]:
+def find_latest_envelope_for_patient(patient_id: str) -> NutrientEnvelope | None:
     """Return the most recently proposed envelope for a patient, if any.
 
     Order by ``proposed_at``, not content version or approval time. On equal
@@ -168,4 +167,4 @@ def require_approved_envelope_for_patient(
 
 def utcnow() -> datetime:
     """Timezone-aware UTC now (helper shared by endpoints)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)

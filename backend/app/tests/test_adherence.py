@@ -20,7 +20,7 @@ approval-gate store for precise classification math.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -46,7 +46,7 @@ def _isolated_clinical_state(tmp_path, monkeypatch):
 
 
 def _today(offset_days: int = 0) -> str:
-    return (date.today() + timedelta(days=offset_days)).isoformat()
+    return (datetime.now(UTC).date() + timedelta(days=offset_days)).isoformat()
 
 
 def _log(client, patient_id: str, day: str, meal: str, dish_id: str):
@@ -138,6 +138,7 @@ def test_upsert_replaces_same_slot(client) -> None:
     # one row per (patient, date, meal): the newest log wins
     assert store.count_logs("P0001") == 1
     stored = store.get_log("P0001", day, "lunch")
+    assert stored is not None
     assert stored["dish_id"] == "SG0002"
 
 

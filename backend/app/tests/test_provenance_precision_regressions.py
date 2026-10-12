@@ -8,7 +8,6 @@ from backend.app.chat import answers
 from backend.app.explain.views import clinician_explanation, patient_explanation
 from backend.app.kb.graph_store import load_kb
 
-
 _ROOT = Path(__file__).resolve().parents[3]
 
 

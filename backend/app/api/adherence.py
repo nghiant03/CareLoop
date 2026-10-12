@@ -76,7 +76,7 @@ def _latest_envelope_or_404(patient_id: str) -> Any:
 
 def _date_window(days: int) -> tuple[str, str]:
     """Return inclusive ISO dates ending in UTC."""
-    end = datetime.now(tz=UTC)
+    end = datetime.now(tz=UTC).date()
     start = end - timedelta(days=days - 1)
     return start.isoformat(), end.isoformat()
 
@@ -210,7 +210,11 @@ def _flag_sort_key(flag: dict[str, Any]) -> tuple[int, float]:
 def log_meal(req: MealLogRequest) -> dict[str, Any]:
     """Save or replace a patient's logged meal for one date and meal slot."""
     _require_patient(req.patient_id)
-    dish_ids = [item.dish_id for item in req.items] if req.items else [req.dish_id]
+    if req.items:
+        dish_ids = [item.dish_id for item in req.items]
+    else:
+        assert req.dish_id is not None  # Enforced by MealLogRequest validation.
+        dish_ids = [req.dish_id]
     missing = next((did for did in dish_ids if did not in _dish_index()), None)
     if missing is not None:
         raise HTTPException(

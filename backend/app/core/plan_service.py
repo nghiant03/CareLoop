@@ -8,21 +8,26 @@ changes are disclosed separately from hard feasibility. See
 
 from __future__ import annotations
 
-from typing import Any, Optional
 from dataclasses import dataclass
+from math import isinf, isnan
+from typing import Any
 
+from backend.app.explain.views import patient_explanation
+from backend.optim.api import run as optimise
+from backend.optim.composition import improve_meals
+from backend.optim.problem import (
+    MEAL_LABELS,
+    MEALS_PER_DAY,
+    NUTRIENT_KEYS,
+    allowed_dishes,
+)
+from backend.optim.toy_data import Dish
 from shared.envelope_schema import (
     ConstraintKind,
     NutrientEnvelope,
 )
 
-from backend.app.explain.views import patient_explanation
-from backend.optim.problem import MEAL_LABELS, MEALS_PER_DAY, NUTRIENT_KEYS, allowed_dishes
-from backend.optim.api import run as optimise
-from backend.optim.composition import improve_meals
-from backend.optim.toy_data import Dish
-
-__all__ = ["plan_meals", "PlanningOutcome", "prepare_envelope_for_pool", "map_plan_result"]
+__all__ = ["PlanningOutcome", "map_plan_result", "plan_meals", "prepare_envelope_for_pool"]
 
 _EPS = 1e-9
 
@@ -111,8 +116,8 @@ def map_plan_result(
     result: dict[str, Any],
     envelope: NutrientEnvelope,
     dishes: list[Any],
-    relaxed_constraints: Optional[list[dict[str, Any]]] = None,
-    solved_envelope: Optional[NutrientEnvelope] = None,
+    relaxed_constraints: list[dict[str, Any]] | None = None,
+    solved_envelope: NutrientEnvelope | None = None,
 ) -> dict[str, Any]:
     """Map the optimiser result to the frontend plan contract.
 
@@ -169,7 +174,7 @@ def map_plan_result(
                         },
                     }
                 )
-        totals = []
+        totals: list[dict[str, Any]] = []
         nutrients_with_targets = set(targets_by_nutrient)
         for key in NUTRIENT_KEYS:
             if key not in nutrients_with_targets and totals_raw.get(key, 0.0) == 0.0:
@@ -177,7 +182,7 @@ def map_plan_result(
             raw_value = totals_raw.get(key, 0.0)
             value = round(raw_value, 3)
             constraints = targets_by_nutrient.get(key, [])
-            compliant: Optional[bool] = None
+            compliant: bool | None = None
             for constraint in constraints:
                 if constraint["kind"] == "max":
                     ok = raw_value <= constraint["value"] + _EPS
@@ -235,7 +240,7 @@ def map_plan_result(
             worst_daily = round(series[worst_index], 3)
             deviation = round(deviations[worst_index], 3)
             deviation_pct = round(deviations[worst_index] / aim * 100.0, 3) if aim > _EPS else 0.0
-            relaxed_aim: Optional[float] = None
+            relaxed_aim: float | None = None
             solved_aim = solved_aim_by_key.get((key, kind))
             if solved_aim is not None and abs(solved_aim - aim) > _EPS:
                 relaxed_aim = round(solved_aim, 3)
@@ -264,7 +269,7 @@ def map_plan_result(
             cleaned = dict(violation)
             for key in ("amount", "actual", "limit"):
                 value = cleaned.get(key)
-                if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
+                if isinstance(value, float) and (isnan(value) or isinf(value)):
                     cleaned[key] = None
             safe.append(cleaned)
         return safe

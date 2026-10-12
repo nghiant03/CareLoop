@@ -9,13 +9,17 @@ before retrying; omitting the token cannot detect changes since a client's view
 if the caller has already loaded a newer snapshot.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.app.core.approval_gate import put_envelope
 from backend.app.core.persistence import EnvelopeConflictError
 from shared.envelope_schema import (
-    CitationSource, EnvelopeStatus, ExclusionFlag, NutrientConstraint,
-    NutrientEnvelope, RuleFire,
+    CitationSource,
+    EnvelopeStatus,
+    ExclusionFlag,
+    NutrientConstraint,
+    NutrientEnvelope,
+    RuleFire,
 )
 from shared.provenance import attach_provenance
 
@@ -51,7 +55,7 @@ def approve(envelope: NutrientEnvelope, *, approved_by: str, notes: str | None =
         raise EnvelopeScopeError(updated)
     updated.status = EnvelopeStatus.APPROVED
     updated.approved_by = approved_by
-    updated.approved_at = datetime.now(timezone.utc)
+    updated.approved_at = datetime.now(UTC)
     if notes is not None:
         updated.notes = notes
     return put_envelope(updated)
@@ -93,7 +97,7 @@ def edit(envelope: NutrientEnvelope, *, edited_by: str,
         action += f"; exclusions replaced ({len(exclusions)} entries)"
     citation = CitationSource(guideline="clinician override", section="clinician edit", rule_id="CLINICIAN-EDIT")
     updated.fired_rules.append(RuleFire(
-        rule_id="CLINICIAN-EDIT", fired_at=datetime.now(timezone.utc),
+        rule_id="CLINICIAN-EDIT", fired_at=datetime.now(UTC),
         patient_summary=f"clinician edit by {edited_by}", action_summary=action,
         priority=0, citation=citation,
     ))

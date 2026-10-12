@@ -24,53 +24,47 @@ import re
 import sqlite3
 from contextlib import contextmanager
 from contextvars import ContextVar
-from datetime import date as date_type, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
-from typing import Any, Optional
+from typing import Any
 
 from backend.app.models.envelope import NutrientEnvelope
 
 __all__ = [
-    "db_path",
-    "init_db",
-    "clear_all",
-    # plans
-    "save_plan",
-    "get_plan",
-    "list_plans",
-    "latest_plan_for_patient",
-    # meal logs
-    "put_log",
-    "get_log",
-    "list_logs",
-    "delete_logs_for_patient",
-    "count_logs",
-    "clear_logs",
-    # envelope journal
-    "journal_envelope",
-    "envelope_effective_at",
-    "list_envelope_history",
-    # observations
-    "add_observation",
-    "list_observations",
-    # simulations
-    "save_simulation",
-    "list_simulations",
-    # review queue
-    "create_review_item",
-    "list_review_items",
     "acknowledge_review_item",
-    "record_review_action",
-    "get_review_item",
+    "add_observation",
     "begin_review_proposal",
-    "recover_pending_proposal",
+    "clear_all",
+    "clear_logs",
+    "count_logs",
+    "create_review_item",
+    "db_path",
+    "delete_logs_for_patient",
+    "envelope_effective_at",
     "finalize_review_proposal",
+    "get_log",
+    "get_plan",
+    "get_review_item",
+    "init_db",
+    "journal_envelope",
+    "latest_plan_for_patient",
+    "list_envelope_history",
+    "list_logs",
+    "list_observations",
+    "list_plans",
+    "list_review_items",
+    "list_simulations",
+    "put_log",
+    "record_review_action",
+    "recover_pending_proposal",
+    "save_plan",
+    "save_simulation",
 ]
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_DB = _REPO_ROOT / "data" / "careloop_app.sqlite3"
-_REVIEW_PROPOSAL: ContextVar[Optional[tuple[str, Optional[str]]]] = ContextVar("review_proposal", default=None)
+_REVIEW_PROPOSAL: ContextVar[tuple[str, str | None] | None] = ContextVar("review_proposal", default=None)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS patients (
@@ -176,11 +170,11 @@ def db_path() -> str:
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _today() -> str:
-    return date_type.today().isoformat()
+    return datetime.now(UTC).date().isoformat()
 
 
 def _connect() -> sqlite3.Connection:
@@ -268,15 +262,15 @@ def save_plan(
     patient_id: str,
     envelope_id: str,
     envelope_version: int,
-    engine: Optional[str],
+    engine: str | None,
     feasible: bool,
     violation_count: int,
-    objectives: Optional[dict[str, float] | list[dict[str, Any]]] = None,
-    days: Optional[list[dict[str, Any]]] = None,
-    adequacy: Optional[list[dict[str, Any]]] = None,
-    kb_version: Optional[str] = None,
-    document: Optional[dict[str, Any]] = None,
-    created_at: Optional[str] = None,
+    objectives: dict[str, float] | list[dict[str, Any]] | None = None,
+    days: list[dict[str, Any]] | None = None,
+    adequacy: list[dict[str, Any]] | None = None,
+    kb_version: str | None = None,
+    document: dict[str, Any] | None = None,
+    created_at: str | None = None,
 ) -> str:
     """Persist one generated meal plan; returns the minted plan id.
 
@@ -327,7 +321,7 @@ def _plan_summary(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def get_plan(plan_id: str) -> Optional[dict[str, Any]]:
+def get_plan(plan_id: str) -> dict[str, Any] | None:
     """Full stored plan document (``None`` when the id is unknown).
 
     The returned mapping is the stored response document plus ``plan_id`` and
@@ -359,7 +353,7 @@ def get_plan(plan_id: str) -> Optional[dict[str, Any]]:
     return out
 
 
-def list_plans(patient_id: Optional[str] = None) -> list[dict[str, Any]]:
+def list_plans(patient_id: str | None = None) -> list[dict[str, Any]]:
     """Stored plan summaries (newest first), optionally for one patient."""
     sql = "SELECT * FROM plans"
     params: tuple[Any, ...] = ()
@@ -372,7 +366,7 @@ def list_plans(patient_id: Optional[str] = None) -> list[dict[str, Any]]:
     return [_plan_summary(row) for row in rows]
 
 
-def latest_plan_for_patient(patient_id: str) -> Optional[dict[str, Any]]:
+def latest_plan_for_patient(patient_id: str) -> dict[str, Any] | None:
     """The most recently stored plan summary for a patient, if any."""
     with _connect() as conn:
         row = conn.execute(
@@ -393,8 +387,8 @@ def put_log(
     date: str,
     meal: str,
     dish_id: str,
-    logged_at: Optional[str] = None,
-    items: Optional[list[dict[str, Any]]] = None,
+    logged_at: str | None = None,
+    items: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Replace a meal slot, defaulting its receipt time to UTC now.
 
@@ -425,7 +419,7 @@ def put_log(
     return {**entry, **({"items": items} if items else {})}
 
 
-def get_log(patient_id: str, date: str, meal: str) -> Optional[dict[str, Any]]:
+def get_log(patient_id: str, date: str, meal: str) -> dict[str, Any] | None:
     """Return the log for one slot, or ``None``."""
     with _connect() as conn:
         row = conn.execute(
@@ -446,8 +440,8 @@ def get_log(patient_id: str, date: str, meal: str) -> Optional[dict[str, Any]]:
 
 def list_logs(
     patient_id: str,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[dict[str, Any]]:
     """All logs for a patient, ordered by date then meal order.
 
@@ -495,7 +489,7 @@ def delete_logs_for_patient(patient_id: str) -> int:
         return int(cur.rowcount)
 
 
-def count_logs(patient_id: Optional[str] = None) -> int:
+def count_logs(patient_id: str | None = None) -> int:
     """Count stored meal slots, optionally for one patient, not individual dishes."""
     sql = "SELECT COUNT(*) AS n FROM meal_logs"
     params: tuple[Any, ...] = ()
@@ -571,7 +565,7 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
         if new_proposal:
             base = re.sub(r"-\d+$", "", envelope.envelope_id)
             envelope.envelope_id = _mint_id(conn, "envelope_journal", base + "-", "envelope_id")
-            envelope.proposed_at = datetime.now(timezone.utc)
+            envelope.proposed_at = datetime.now(UTC)
         row = conn.execute(
             "SELECT snapshot_json FROM envelope_journal WHERE envelope_id = ? ORDER BY id DESC LIMIT 1",
             (envelope.envelope_id,),
@@ -660,8 +654,8 @@ def saved_patients() -> dict[str, dict[str, Any]]:
 
 def journal_envelope(
     envelope: NutrientEnvelope | dict[str, Any],
-    event: Optional[str] = None,
-    effective_at: Optional[str] = None,
+    event: str | None = None,
+    effective_at: str | None = None,
 ) -> int:
     """Seed a history row without checking or advancing the lifecycle revision.
 
@@ -701,12 +695,13 @@ def journal_envelope(
             ),
         )
         conn.commit()
-        return int(cur.lastrowid)
+        assert cur.lastrowid is not None  # INSERT into an INTEGER PRIMARY KEY table.
+        return cur.lastrowid
 
 
 def envelope_effective_at(
     patient_id: str, iso_date: str
-) -> Optional[NutrientEnvelope]:
+) -> NutrientEnvelope | None:
     """Reconstruct the envelope effective for ``patient_id`` on ``iso_date``.
 
     The latest journalled APPROVED snapshot whose ``effective_at`` calendar date is
@@ -759,9 +754,9 @@ def add_observation(
     patient_id: str,
     metric: str,
     value: float,
-    unit: Optional[str] = None,
-    source: Optional[str] = None,
-    observed_at: Optional[str] = None,
+    unit: str | None = None,
+    source: str | None = None,
+    observed_at: str | None = None,
 ) -> dict[str, Any]:
     """Record one clinical observation; returns the stored row.
 
@@ -820,9 +815,9 @@ def save_simulation(
     patient_id: str,
     base_envelope_id: str,
     proposed_targets: list[dict[str, Any]] | dict[str, Any],
-    comparison: Optional[dict[str, Any]] = None,
+    comparison: dict[str, Any] | None = None,
     status: str = "OPEN",
-    created_at: Optional[str] = None,
+    created_at: str | None = None,
 ) -> str:
     """Persist one what-if simulation; returns the minted simulation id."""
     created_at = created_at or _utcnow()
@@ -894,8 +889,8 @@ def create_review_item(
     patient_id: str,
     source: str,
     payload: dict[str, Any],
-    created_at: Optional[str] = None,
-    review_id: Optional[str] = None,
+    created_at: str | None = None,
+    review_id: str | None = None,
 ) -> str:
     """Enqueue one clinician review item; returns the review id.
 
@@ -928,8 +923,8 @@ def create_review_item(
 
 
 def list_review_items(
-    status: Optional[str] = None,
-    patient_id: Optional[str] = None,
+    status: str | None = None,
+    patient_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Review items (oldest first), optionally filtered by status and patient."""
     sql = "SELECT * FROM review_items"
@@ -948,7 +943,7 @@ def list_review_items(
     return [_review_row(row) for row in rows]
 
 
-def get_review_item(review_id: str) -> Optional[dict[str, Any]]:
+def get_review_item(review_id: str) -> dict[str, Any] | None:
     """One review item by id, or ``None``."""
     with _connect() as conn:
         row = conn.execute(
@@ -957,7 +952,7 @@ def get_review_item(review_id: str) -> Optional[dict[str, Any]]:
     return _review_row(row) if row is not None else None
 
 
-def acknowledge_review_item(review_id: str) -> Optional[dict[str, Any]]:
+def acknowledge_review_item(review_id: str) -> dict[str, Any] | None:
     """Advance an OPEN item to ACKNOWLEDGED; return the item or ``None`` if absent.
 
     The transition is conditional inside the write reservation, so an item
@@ -1002,7 +997,7 @@ def begin_review_proposal(review_id: str):
         _REVIEW_PROPOSAL.reset(token)
 
 
-def recover_pending_proposal(review_id: str) -> Optional[str]:
+def recover_pending_proposal(review_id: str) -> str | None:
     """Return the exact proposal ID committed by an unfinished review attempt.
 
     Do not infer ownership from patient or journal ordering. Legacy watermark
@@ -1021,7 +1016,7 @@ class ReviewProposalConflictError(Exception):
 
 def finalize_review_proposal(
     review_id: str, envelope_id: str
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Finalize only the matching pending identity; return None if absent.
 
     Read/check/write share a SQLite write reservation across workers. Repeating
@@ -1061,9 +1056,9 @@ def finalize_review_proposal(
 def record_review_action(
     review_id: str,
     action: str,
-    note: Optional[str] = None,
-    linked_envelope_id: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    note: str | None = None,
+    linked_envelope_id: str | None = None,
+) -> dict[str, Any] | None:
     """Record the clinician's action on a review item; returns the item.
 
     The item moves to ``ACTION_RECORDED`` regardless of its previous status.

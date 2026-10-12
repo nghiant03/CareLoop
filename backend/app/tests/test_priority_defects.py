@@ -7,7 +7,7 @@ from backend.app.api import review
 from backend.app.core import persistence
 from backend.app.core.plan_service import map_plan_result
 from backend.app.tests.test_core_api_regressions import (
-    _isolated_stores,  # isolate journal and review state for every test
+    _isolated_stores,  # noqa: F401  # pytest fixture: isolate journal and review state
     _seed_review_item,
 )
 from backend.app.tests.test_plan_adequacy import _dish, _envelope, _result
@@ -43,6 +43,7 @@ def test_stale_computation_cannot_mint_after_other_attempt_finalizes():
 
     review_id = _seed_review_item("priority-computing-overlap")
     patient = get_patient("P0002")
+    assert patient is not None
     with persistence.begin_review_proposal(review_id):
         with persistence.begin_review_proposal(review_id):
             first = review.run_rules_service(patient)["envelope"]

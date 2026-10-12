@@ -22,10 +22,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+
+from backend.app.adherence import store
+from backend.app.core import persistence
+from backend.app.main import app
 from shared.envelope_schema import (
     ConstraintKind,
     EnvelopeStatus,
@@ -34,11 +38,6 @@ from shared.envelope_schema import (
     NutrientKind,
     PatientSummary,
 )
-
-from backend.app.adherence import store
-from backend.app.core import persistence
-from backend.app.main import app
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -77,7 +76,7 @@ def _hand_envelope(
 
 
 def _today(offset_days: int = 0) -> str:
-    return (date.today() + timedelta(days=offset_days)).isoformat()
+    return (datetime.now(UTC).date() + timedelta(days=offset_days)).isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +210,9 @@ def test_meal_log_upsert_persistence_and_ordering() -> None:
     # upsert: the newest log for the same slot replaces the previous dish
     replaced = store.put_log(patient_id, _today(0), "lunch", "SG0004")
     assert store.get_log(patient_id, _today(0), "lunch") == replaced
-    assert store.get_log(patient_id, _today(0), "lunch")["dish_id"] == "SG0004"
+    saved = store.get_log(patient_id, _today(0), "lunch")
+    assert saved is not None
+    assert saved["dish_id"] == "SG0004"
     assert store.get_log(patient_id, _today(0), "breakfast") == b
     assert store.get_log(patient_id, _today(0), "snack") is None
 
@@ -490,7 +491,9 @@ def test_review_item_roundtrip() -> None:
     acked = persistence.acknowledge_review_item(review_id)
     assert acked is not None and acked["status"] == "ACKNOWLEDGED"
     assert acked["acknowledged_at"]
-    assert persistence.get_review_item(review_id)["status"] == "ACKNOWLEDGED"
+    saved = persistence.get_review_item(review_id)
+    assert saved is not None
+    assert saved["status"] == "ACKNOWLEDGED"
     assert persistence.list_review_items(status="OPEN", patient_id=patient_id) == []
 
     actioned = persistence.record_review_action(

@@ -29,7 +29,7 @@ __all__ = [
     "NutrientConstraint",
     "NutrientEnvelope",
     "NutrientKind",
+    "Patient",
     "PatientSummary",
     "RuleFire",
-    "Patient",
 ]

@@ -5,8 +5,8 @@ clinical history or depending on catalogue rankings that can change.
 """
 
 from copy import deepcopy
-from datetime import date, timedelta
-from typing import get_type_hints
+from datetime import UTC, datetime, timedelta
+from typing import Any, ClassVar, get_type_hints
 
 import pytest
 
@@ -40,7 +40,7 @@ def envelope(version=1, envelope_id="ENV-P0001-test"):
 
 class Dish:
     category = "test"
-    tags = []
+    tags: ClassVar[list] = []
 
     def __init__(self, dish_id, sodium, fiber=0):
         self.dish_id = self.name = dish_id
@@ -171,7 +171,7 @@ def test_catalogue_failures_are_503_and_recover_without_restart(client, tmp_path
 def test_blank_ids_cannot_create_complete_zero_nutrient_days(client, payload):
     for meal in store.MEALS:
         response = client.post("/adherence/log", json={
-            "patient_id": "P0001", "date": date.today().isoformat(), "meal": meal, **payload,
+            "patient_id": "P0001", "date": datetime.now(UTC).date().isoformat(), "meal": meal, **payload,
         })
         assert response.status_code == 422
     assert store.count_logs("P0001") == 0
@@ -205,9 +205,9 @@ def test_aggregate_owner_matches_single_and_mixed_classified_days():
 def test_summary_response_preserves_shared_aggregate_rounding_and_empty_policy(client, monkeypatch, group_count):
     env = envelope()
     dish_map = {"A": Dish("A", 1234.56789, 4.12345)}
-    groups = []
+    groups: list[dict[str, Any]] = []
     for index in range(group_count):
-        day = (date.today() - timedelta(days=index)).isoformat()
+        day = (datetime.now(UTC).date() - timedelta(days=index)).isoformat()
         assigned = envelope(version=index + 1)
         entries = [{"date": day, "meal": meal, "dish_id": "A"} for meal in store.MEALS]
         result = analysis.analyse_range(entries, assigned, dish_map)
@@ -236,7 +236,7 @@ def test_historical_flags_join_exact_merged_series_identity(client, monkeypatch,
     logs = []
     dish_map = {"ZERO": Dish("ZERO", 0)}
     for index in range(6):
-        day = (date.today() - timedelta(days=5-index)).isoformat()
+        day = (datetime.now(UTC).date() - timedelta(days=5-index)).isoformat()
         day_map[day] = first if index < 3 else second
         dish_id = f"D{index}"
         dish_map[dish_id] = Dish(dish_id, 1100 + (index % 3) * 100)
@@ -291,7 +291,8 @@ def test_incomplete_days_never_invoke_slope_estimation(monkeypatch):
 
 def test_edited_legacy_values_cannot_borrow_guideline_mentions():
     env = envelope().model_dump(mode="json")
-    env["targets"] = [{"nutrient": "sodium_mg", "kind": "max", "value": 1800, "unit": "mg"}]
+    targets: list[dict[str, Any]] = [{"nutrient": "sodium_mg", "kind": "max", "value": 1800, "unit": "mg"}]
+    env["targets"] = targets
     guideline = {"rule_id": "GUIDELINE", "guideline": "KDIGO", "section": "sodium"}
     env["fired_rules"] = [{"rule_id": "GUIDELINE", "priority": 90,
                            "action_summary": "set sodium_mg max = 2000 mg/d", "citation": guideline}]
@@ -307,10 +308,11 @@ def test_edited_legacy_values_cannot_borrow_guideline_mentions():
 
 def test_mixed_bound_authorship_is_not_collapsed_to_one_source():
     env = envelope().model_dump(mode="json")
-    env["targets"] = [
+    targets: list[dict[str, Any]] = [
         {"nutrient": "protein_g", "kind": "min", "value": 40, "unit": "g"},
         {"nutrient": "protein_g", "kind": "max", "value": 60, "unit": "g"},
     ]
+    env["targets"] = targets
     for target, source, guideline in zip(env["targets"], ["CLINICIAN-EDIT", "RULE"], ["clinician override", "KDIGO"]):
         target["provenance"] = {**target, "citation": {"rule_id": source, "guideline": guideline}}
     why = patient_explanation(env)["why"]

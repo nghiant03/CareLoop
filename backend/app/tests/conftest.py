@@ -41,3 +41,18 @@ def client():
 
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def lenient_client():
+    """TestClient that returns 500 responses instead of raising them.
+
+    Only the fault-injection tests need the unhandled-error response body;
+    every other test keeps the shared strict client.
+    """
+    from fastapi.testclient import TestClient
+
+    from backend.app.main import app
+
+    with TestClient(app, raise_server_exceptions=False) as c:
+        yield c

@@ -16,7 +16,7 @@ def _kb_version() -> str:
     try:
         stats = get_kb().stats()
         return str(stats.get("current_version") or f"nodes:{sum(stats.get('node_counts', {}).values())}")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  # best-effort version label
         logger.warning("knowledge base version unavailable: %s", exc)
         return "unknown"
 
@@ -46,5 +46,5 @@ def try_save_plan_document(response: dict[str, Any], envelope: NutrientEnvelope)
         stored = persistence.get_plan(plan_id)
         response["plan_id"] = plan_id
         response["saved_at"] = stored["saved_at"] if stored else None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  # persistence must not block plan generation
         logger.warning("plan persistence failed: %s", exc)

@@ -28,8 +28,7 @@ real rules-engine envelope and dish dataset.
 
 from __future__ import annotations
 
-from copy import deepcopy
-from datetime import date, timedelta
+from datetime import UTC, datetime
 
 import pytest
 
@@ -46,7 +45,6 @@ from shared.envelope_schema import (
     NutrientKind,
     PatientSummary,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -546,7 +544,7 @@ def test_p0006_roasted_chicken_rice_excluded(client, _isolated_envelope_store) -
         for e in envelope["exclusions"]
     )
 
-    day = (date.today()).isoformat()
+    day = datetime.now(UTC).date().isoformat()
     logged = client.post(
         "/adherence/log",
         json={"patient_id": "P0006", "date": day, "meal": "lunch", "dish_id": "SG0002"},
