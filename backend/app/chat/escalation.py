@@ -4,9 +4,9 @@ Detect configured patterns for requests that should be escalated rather than
 answered as nutrition guidance:
 
 * **emergency** symptoms (chest pain, breathing trouble, stroke signs, ...) —
-  advise urgent care immediately; extreme glucose readings (the configured
-  350 mg/dL category floor, upper tail unbounded, with standard mmol/L
-  conversion) belong here too;
+  advise urgent care immediately. Extreme glucose readings belong here too:
+  the configured category floor is 350 mg/dL with no upper bound. Readings in
+  mmol/L use the standard conversion;
 * **diagnosis** requests ("do I have ...", "what's wrong with me");
 * **medication / dosing changes** (start/stop/adjust prescriptions);
 * **out-of-scope topics** (pregnancy, dialysis, paediatrics, cancer treatment

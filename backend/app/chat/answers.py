@@ -421,8 +421,8 @@ def _constraint_sentences(
     """Render a rule's constraints as patient-safe sentences.
 
     Per-kg coefficients (25-35 kcal/kg, 0.8-1.3 g/kg protein, ...) are never
-    printed as absolute daily doses: with a known body weight the computed
-    daily value is shown, otherwise the sentence says "per kg of body weight".
+    printed as absolute daily doses. With a known positive body weight, show
+    the computed daily value. Otherwise, say "per kg of body weight".
     """
     sentences = []
     for constraint in rule.get("constraints", []):

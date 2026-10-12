@@ -9,9 +9,9 @@ Two audiences, one trace:
   under 2 g a day", short why-bullets from trace citations, no jargon or rule ids
   exposed in the prose.
 
-Both operate on plain dicts (the ``shared/envelope_schema.py`` shapes, as also
-mirrored by ``rules/example_trace.json``) so they can be called with either
-pydantic models (via ``model_dump()``) or raw JSON.
+Both accept plain dictionaries shaped according to ``shared/envelope_schema.py``,
+also mirrored by ``rules/example_trace.json``. Convert Pydantic models with
+``model_dump()`` or pass decoded JSON dictionaries directly.
 """
 
 from backend.app.explain.views import clinician_explanation, patient_explanation

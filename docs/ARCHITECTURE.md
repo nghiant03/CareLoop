@@ -204,10 +204,19 @@ LLM adapter only rephrases an already-grounded answer:
    (`CONFLICT-*`, `SAFETY-*`) are excluded from patient-facing citation
    anchors.
 4. **Citation invariant**: every `answered` response carries at least one
-   citation (`rule_id`, `guideline`, `section`); if no rule can be cited, the
-   answer is refused instead.
+   source citation. Guideline-authored values cite the rule; clinician-authored
+   values cite `CLINICIAN-EDIT` provenance without claiming guideline authorship.
+   An approved value without traceable provenance is withheld rather than
+   borrowing an unrelated rule's citation. Answers lacking a source are refused.
 5. **Low-confidence refusal**: no nutrient detected + best score below
    threshold → refuse and point to the clinician.
+
+The HTTP endpoint returns `status` as `answered`, `refused`, or `escalated`.
+Escalated requests receive a safety message with `escalated: true`. Refusals
+have `escalated: false`. Endpoint citations expose `rule_id`, `guideline`, and
+`url`; clinician-authored provenance has a null URL. Request fields, response
+shape, and identity-resolution errors are documented in the endpoint's OpenAPI
+schema.
 
 ## 6. Module dependency map
 
