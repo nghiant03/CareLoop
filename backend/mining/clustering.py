@@ -108,6 +108,9 @@ def cluster_patients(
         if sil > best_sil:
             best_k, best_labels, best_sil = k, labels, sil
 
+    if best_k is None or best_labels is None:
+        raise ValueError("no clustering produced a finite silhouette score")
+
     profiles = {}
     for cid in sorted(set(best_labels)):
         members = [p for p, lab in zip(patients, best_labels) if lab == cid]
@@ -124,7 +127,7 @@ def cluster_patients(
         }
 
     return {
-        "k": int(best_k),
+        "k": best_k,
         "labels": [int(l) for l in best_labels],
         "silhouette": round(best_sil, 4),
         "profiles": profiles,

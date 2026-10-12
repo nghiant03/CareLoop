@@ -24,8 +24,9 @@ dated observation remains urgent regardless of slope support.
 
 from __future__ import annotations
 
-import numpy as np
 from datetime import date
+
+import numpy as np
 
 _MIN_SERIES_LEN = 3
 
@@ -44,11 +45,11 @@ def _theil_sen_slope(y: list[float], times=None) -> float:
     ``times`` uses elapsed months. Without it, readings are one month apart.
     Return 0.0 when no positive interval exists.
     """
-    y = np.asarray(y, dtype=float)
-    n = len(y)
+    values = np.asarray(y, dtype=float)
+    n = len(values)
     times = list(range(n)) if times is None else times
     slopes = [
-        (y[j] - y[i]) / (times[j] - times[i])
+        (values[j] - values[i]) / (times[j] - times[i])
         for i in range(n - 1) for j in range(i + 1, n) if times[j] > times[i]
     ]
     return float(np.median(slopes)) if slopes else 0.0
@@ -61,13 +62,13 @@ def _ewma_slope(y: list[float], halflife: float = 2.0, times=None) -> float:
     Weights decay with a half-life of ``halflife`` months. Return 0.0 when
     the weighted time variance is zero. Input must contain at least one reading.
     """
-    y = np.asarray(y, dtype=float)
-    x = np.arange(len(y), dtype=float) if times is None else np.asarray(times, dtype=float)
+    values = np.asarray(y, dtype=float)
+    x = np.arange(len(values), dtype=float) if times is None else np.asarray(times, dtype=float)
     w = 0.5 ** ((x[-1] - x) / halflife)
     xbar = float(np.average(x, weights=w))
-    ybar = float(np.average(y, weights=w))
+    ybar = float(np.average(values, weights=w))
     denom = float(np.sum(w * (x - xbar) ** 2))
-    return float(np.sum(w * (x - xbar) * (y - ybar)) / denom) if denom else 0.0
+    return float(np.sum(w * (x - xbar) * (values - ybar)) / denom) if denom else 0.0
 
 
 def _would_flag(slope: float, latest: float, cfg: dict) -> bool:

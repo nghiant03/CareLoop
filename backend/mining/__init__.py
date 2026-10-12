@@ -9,6 +9,6 @@ Default data paths resolve ``<repo>/data/`` from module locations, independent
 of the working directory. Explicit relative paths remain relative to the caller.
 """
 
-from backend.mining import clustering, substitutions, trends  # noqa: F401
+from backend.mining import clustering, substitutions, trends
 
 __all__ = ["clustering", "substitutions", "trends"]

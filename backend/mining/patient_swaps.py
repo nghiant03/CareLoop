@@ -17,8 +17,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from shared.envelope_schema import ConstraintKind, EnvelopeStatus, NutrientEnvelope
-
 from backend.mining.substitutions import suggest_substitutions
 from backend.optim.composition import complete_meals
 from backend.optim.problem import (
@@ -28,14 +26,15 @@ from backend.optim.problem import (
     evaluate,
     exclusion_for,
 )
+from shared.envelope_schema import ConstraintKind, EnvelopeStatus, NutrientEnvelope
 
 __all__ = [
     "DishNotInPlanError",
-    "plan_from_document",
-    "affected_days_for",
-    "patient_substitutions",
-    "apply_patient_swap",
     "SwapOutcome",
+    "affected_days_for",
+    "apply_patient_swap",
+    "patient_substitutions",
+    "plan_from_document",
 ]
 
 _MEAL_ORDER = ("breakfast", "lunch", "dinner")

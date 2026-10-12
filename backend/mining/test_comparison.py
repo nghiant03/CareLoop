@@ -5,9 +5,11 @@ Artifact tests reuse it and write only to temporary paths.
 """
 
 import math
+
 import pytest
 
 from backend.mining import comparison
+
 
 @pytest.fixture(scope="module")
 def results():
@@ -100,7 +102,7 @@ class TestTrends:
         assert rp["n_series"] == 40  # 20 patients x 2 analytes
         assert rp["matches_trends_module"] is True
         assert rp["per_method"]["theil-sen"]["n_flags"] == rp["trends_module_n_flags"]
-        for name, m in rp["per_method"].items():
+        for m in rp["per_method"].values():
             assert 0.0 <= m["jaccard_vs_theil_sen"] <= 1.0
             assert m["mean_abs_slope_delta_vs_theil_sen"] >= 0.0
 

@@ -40,11 +40,13 @@ from __future__ import annotations
 import itertools
 import json
 import warnings
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from scipy.stats import kendalltau
-from sklearn.cluster import HDBSCAN, KMeans
+from sklearn.cluster import HDBSCAN, KMeans  # type: ignore[missing-module-attribute]
 from sklearn.metrics import (
     adjusted_rand_score,
     calinski_harabasz_score,
@@ -86,7 +88,7 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
     head = "| " + " | ".join(headers) + " |"
     sep = "|" + "|".join("---" for _ in headers) + "|"
     body = "\n".join("| " + " | ".join(r) + " |" for r in rows)
-    return "\n".join([head, sep, body])
+    return f"{head}\n{sep}\n{body}"
 
 
 # ---------------------------------------------------------------------------
@@ -103,12 +105,12 @@ def _standardised_features(patients: list[dict]) -> tuple[np.ndarray, list[str]]
     ]
     matrix = clustering._feature_matrix(patients, present)
     scaled = StandardScaler().fit_transform(matrix)
-    return scaled, present
+    return np.asarray(scaled), present
 
 
 def _kmeans_labels(X: np.ndarray, config: dict, seed: int) -> np.ndarray:
     km = KMeans(n_clusters=config["k"], n_init=10, random_state=seed)
-    return km.fit_predict(X)
+    return np.asarray(km.fit_predict(X))
 
 
 def _gmm_labels(X: np.ndarray, config: dict, seed: int) -> np.ndarray:
@@ -121,7 +123,7 @@ def _gmm_labels(X: np.ndarray, config: dict, seed: int) -> np.ndarray:
             n_init=5,
             random_state=seed,
         )
-        return gm.fit_predict(X)
+        return np.asarray(gm.fit_predict(X))
 
 
 def _hdbscan_labels(X: np.ndarray, config: dict, seed: int) -> np.ndarray:
@@ -129,7 +131,7 @@ def _hdbscan_labels(X: np.ndarray, config: dict, seed: int) -> np.ndarray:
     # fitter signature and ignored.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # sklearn FutureWarning re `copy`
-        return HDBSCAN(min_cluster_size=config["min_cluster_size"]).fit_predict(X)
+        return np.asarray(HDBSCAN(min_cluster_size=config["min_cluster_size"]).fit_predict(X))
 
 
 def _cluster_metrics(X: np.ndarray, labels: np.ndarray, drop_noise: bool) -> dict:
@@ -185,12 +187,12 @@ def compare_clustering(patients: list[dict]) -> dict:
     lo, hi = K_RANGE
     ks = [k for k in range(lo, hi + 1) if 2 <= k <= len(patients) - 1]
 
-    methods = {
+    methods: dict[str, dict[str, Any]] = {
         "k-means": {"fitter": _kmeans_labels, "drop_noise": False, "grid": []},
         "gmm": {"fitter": _gmm_labels, "drop_noise": False, "grid": []},
         "hdbscan": {"fitter": _hdbscan_labels, "drop_noise": True, "grid": []},
     }
-    grids = {
+    grids: dict[str, list[dict[str, Any]]] = {
         "k-means": [{"k": k} for k in ks],
         "gmm": [{"k": k, "covariance_type": cov} for k in ks for cov in GMM_COVARIANCE_TYPES],
         "hdbscan": [{"min_cluster_size": m} for m in HDBSCAN_MIN_CLUSTER_SIZES],
@@ -273,14 +275,14 @@ def compare_clustering(patients: list[dict]) -> dict:
         labels = _hdbscan_labels(X, {"min_cluster_size": m}, SEED)
         hdbscan_noise[m] = {
             "noise_points": int((labels == -1).sum()),
-            "n_clusters": len(set(l for l in labels.tolist() if l != -1)),
+            "n_clusters": len({l for l in labels.tolist() if l != -1}),
         }
 
     kmeans_sil_by_k = {
         g["config"]["k"]: g["silhouette"] for g in methods["k-means"]["grid"]
     }
 
-    results = {
+    results: dict[str, Any] = {
         "n_patients": len(patients),
         "features": features,
         "methods": {name: spec["result"] for name, spec in methods.items()},
@@ -316,7 +318,6 @@ def _clustering_verdict(results: dict) -> tuple[str, str]:
     hd = results["methods"]["hdbscan"]
     noise = hd["noise_points"]
     noise_pct = 100.0 * noise / results["n_patients"]
-    gmm = results["methods"]["gmm"]
 
     rationale = {
         "k-means": (
@@ -353,16 +354,16 @@ def _clustering_verdict(results: dict) -> tuple[str, str]:
 
 
 def _ols_slope(y: list[float]) -> float:
-    y = np.asarray(y, dtype=float)
-    x = np.arange(len(y), dtype=float)
-    return float(np.polyfit(x, y, 1)[0])
+    values = np.asarray(y, dtype=float)
+    x = np.arange(len(values), dtype=float)
+    return float(np.polyfit(x, values, 1)[0])
 
 
 # Reuse the production EWMA estimator so the study measures the same slope
 # used for trend de-escalation.
 
 
-ESTIMATORS: dict[str, callable] = {
+ESTIMATORS: dict[str, Callable[[list[float]], float]] = {
     "theil-sen": trends._theil_sen_slope,
     "ols": _ols_slope,
     "ewma": trends._ewma_slope,
@@ -519,7 +520,7 @@ def compare_trends(patients: list[dict]) -> dict:
             ),
         }
 
-    results = {
+    results: dict[str, Any] = {
         "n_months": _N_MONTHS,
         "noise_sd": _NOISE_SD,
         "synthetic": per_method,
@@ -692,7 +693,7 @@ def compare_substitutions(dishes: list[dict]) -> dict:
     examples = []
     for dish in _example_queries(dishes):
         candidates = substitutions._candidates(dish, dishes)
-        row = {"dish": f"{dish['name']} ({dish['category']})"}
+        row: dict[str, str | list[str]] = {"dish": f"{dish['name']} ({dish['category']})"}
         for metric in _METRICS:
             top3 = [
                 by_id[cid]["name"] for cid in rankings[metric][dish["dish_id"]][:3]
@@ -700,7 +701,7 @@ def compare_substitutions(dishes: list[dict]) -> dict:
             row[metric] = top3
         examples.append(row)
 
-    results = {
+    results: dict[str, Any] = {
         "n_queries": len(queries),
         "renal_weights": dict(zip(substitutions.CORE_NUTRIENTS, RENAL_WEIGHTS)),
         "kendall_tau": tau_pairs,
@@ -878,8 +879,7 @@ def build_markdown(r: dict) -> str:
     )
     out.append("")
     scen_rows = []
-    for scenario in _SCENARIOS:
-        spec = _SCENARIOS[scenario]
+    for scenario, spec in _SCENARIOS.items():
         row = [scenario, "flag" if spec["truth"] else "no flag"]
         for name in ESTIMATORS:
             s = t["synthetic"][name]["scenarios"][scenario]
