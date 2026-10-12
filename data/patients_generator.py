@@ -1,9 +1,9 @@
 """Seeded synthetic patient generator for fixtures and demonstrations.
 
-Produces ``N`` synthetic Singapore-relevant patients from a small set of clinical
-archetypes (T2D, HTN, T2D+HTN, CKD 3, CKD 4, CKD 4+hyperkalemia, CKD 5
-pre-dialysis, pregnancy [excluded], healthy control) with longitudinal monthly
-serum K and phosphate values.
+Produces ``N`` synthetic Singapore-relevant patients with longitudinal monthly
+serum K and phosphate values. Clinical archetypes are T2D, HTN, T2D+HTN, CKD 3,
+CKD 4, CKD 4+hyperkalemia, CKD 5 pre-dialysis, pregnancy [excluded], and healthy
+control.
 
 Reproducibility
 ---------------

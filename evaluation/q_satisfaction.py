@@ -7,14 +7,11 @@ For every eligible patient (rule status PROPOSED):
 3. ``plan_service.plan_meals`` (shared with /plans): single-dish preparation
    and search, followed by main/optional-side composition against original aims;
    retained fallback MIN-floor adjustments are disclosed,
-4. verify ``violation_count == 0`` and, for feasible plans, recompute per-day
-   totals from the returned plan and check the HARD constraints (MAX ceilings,
-   in the canonical evaluator) against the SOLVED envelope. MIN floors and TARGETs
-   are soft: their remaining shortfall/distance is reported informationally
-   in ``soft_aims_by_constraint`` — MIN floors as the worst-day shortfall, TARGETs as the
-   mean daily absolute distance, both assessed against the ORIGINAL approved
-   aims (relaxed fallback floors never rewrite the reported aim) — never as
-   a violation.
+4. verify ``violation_count == 0`` and, for feasible plans, recompute daily
+   totals and check hard MAX ceilings against the solved envelope.
+   Report MIN/TARGET gaps against the original approved aims, separately from
+   hard violations. ``_per_day_check`` defines the soft-gap metrics and
+   compatibility fields.
 
 Unsuccessful searches (explicit solver diagnosis, empty plan, nothing served)
 and MIN-relaxation disclosures are reported distinctly. ``infeasibility_status``

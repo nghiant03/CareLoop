@@ -442,10 +442,13 @@ def derive_selection_verdict(
 ) -> tuple[str, Optional[str]]:
     """Derive the selection-ablation verdict from the pooled numbers.
 
-    PASS iff (documented in the module docstring): comparable rows exist for
-    both strategies, adequacy_first feasibility rate == 1.0, adequacy_first's
-    pooled mean worst-day relative shortfall is STRICTLY below scalar's, and
-    its pooled mean cost is at most ``cost_cap`` (10%) above scalar's.
+    PASS requires all four conditions:
+
+    * Comparable rows exist for both strategies.
+    * ``adequacy_first`` feasibility rate equals 1.0.
+    * Its pooled mean worst-day relative shortfall is strictly below scalar's.
+    * Its pooled mean cost is at most ``cost_cap`` above scalar's; default 10%.
+
     Every failed condition is named in the note.
     """
     adq = pooled.get("adequacy_first") or {}
@@ -598,12 +601,15 @@ class CompositionEvaluator:
     def eval_batch(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Evaluate a batch ``(P, slots, 2)``.
 
-        Returns ``(F, G, repetition)``: ``F`` (P, 4) mirrors
-        ``problem.evaluate`` objectives in OBJECTIVE_NAMES order; ``G`` (P,
-        n_constraints) is the canonical shifted MAX violation vector
-        (``G <= 0`` == satisfied, EPS tolerance identical to
-        ``FastEvaluator.g_vector``); ``repetition`` (P,) bool flags the
-        composition encoding's per-day repetition limit.
+        Return ``(F, G, repetition)``:
+
+        * ``F``, shape ``(P, 4)``, mirrors ``problem.evaluate`` objectives in
+          OBJECTIVE_NAMES order.
+        * ``G``, shape ``(P, n_constraints)``, contains canonical shifted MAX
+          violations. ``G <= 0`` means satisfied, with the same EPS tolerance
+          as ``FastEvaluator.g_vector``.
+        * ``repetition``, shape ``(P,)``, contains boolean flags for violations
+          of the composition encoding's per-day repetition limit.
         """
         X = np.asarray(X, dtype=int)
         if X.ndim != 3 or X.shape[1:] != (self.slots, 2):
@@ -692,14 +698,17 @@ class CompositionEvaluator:
 
 def _greedy_individual(ev: CompositionEvaluator, rng: random.Random,
                        tries: int = 40) -> Optional[np.ndarray]:
-    """Build a full 7-day individual one feasible day at a time.
+    """Try to build an ``ev.n_days`` individual one day at a time.
 
-    Days are independent (every hard constraint is per-day), so a plan exists
-    iff a feasible day exists.  Candidates are scored by the projected
-    whole-day MAX violation magnitude after adding them, tie-broken by the
-    candidate's own worst-constraint contribution and a seeded random jitter
-    for diversity.  Returns ``None`` when no feasible day can be constructed
-    within ``tries`` randomised greedy attempts.
+    Validate the completed individual against daily and horizon MAX ceilings
+    and the per-day repetition limit. Daily and horizon checks share the same
+    EPS tolerance, so tolerance-feasible days can still fail the horizon check.
+
+    Score candidates by the day's MAX violation magnitude after adding them.
+    Break ties by the candidate's largest contribution to a constrained nutrient,
+    then seeded random jitter for diversity. Return ``None`` if no full feasible
+    individual is found within ``tries`` attempts; failure is not an
+    infeasibility proof.
     """
     main_pos = {int(g): i for i, g in enumerate(ev.gid_m)}
     side_pos = {int(g): i for i, g in enumerate(ev.gid_s)}
@@ -759,11 +768,11 @@ def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
 
     Repetition is repaired first, on a day that actually contains a
     duplicate: one offending dish is swapped for the lowest-contribution
-    unused candidate from the same pool.  For the most-violated day the
-    search then tries every single-dish replacement (main slots draw from
-    the MAIN pool, side slots from the SIDE pool, never duplicating a global
-    dish id within the day) and takes the replacement minimising the day's
-    total MAX violation magnitude.  Returns ``None`` after ``max_iters``
+    unused candidate from the same pool. Main slots draw from the MAIN pool
+    and side slots from the SIDE pool. Replacements cannot duplicate a global
+    dish id within the day. For the most-violated day, try every single-dish
+    replacement and take the one minimising the day's total MAX violation
+    magnitude. Return ``None`` after ``max_iters``
     iterations without reaching feasibility.
     """
     ind = np.asarray(individual, dtype=int).copy()

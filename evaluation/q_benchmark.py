@@ -105,12 +105,11 @@ def _recommendation() -> str:
 def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
     """Derive the Q4 verdict and its explanation from the headline table.
 
-    The hypervolume winner is computed from the data (highest mean HV across
-    every method row in the benchmark artefact) — it is never hardcoded to a
-    particular algorithm.  PASS requires the HV winner to also report a 0%
-    hard-constraint violation rate (the exact, unrounded rate: any run with a
-    violation makes it nonzero); otherwise the front-quality leader cannot
-    be recommended as-is and the verdict is FAIL.
+    The hypervolume winner has the highest mean HV across all method rows in
+    the benchmark artefact, not a hardcoded algorithm identity. PASS requires
+    that winner's exact, unrounded hard-constraint violation rate to be zero.
+    Any violating run makes the rate nonzero and the verdict FAIL: the
+    front-quality leader cannot then be recommended as-is.
     """
     if not headline:
         return ("FAIL",
@@ -132,9 +131,8 @@ def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
             note += f", level with {runner_up['method']}"
         else:
             note += f", ahead of {runner_up['method']} at {runner_up['mean_hv']:.4f}"
-    # presentation only: exact zero prints as 0%, a tiny nonzero rate keeps
-    # enough precision to be visibly nonzero (decision logic above uses the
-    # unrounded value)
+    # Presentation only: exact zero prints as 0%.
+    # Nonzero rates use three decimal places; the verdict uses the unrounded rate.
     rate = winner["violation_rate"]
     rate_text = "0%" if rate == 0 else f"{rate:.3%}"
     note += f") with a {rate_text} hard-constraint violation rate."

@@ -234,8 +234,9 @@ _RULESET: list[dict] | None = None
 def _get_env() -> Any:
     """Return the shared mutable environment, compiling rules on first use.
 
-    Initialization and rule runs are not synchronized. Raise RuntimeError when
-    clipspy is unavailable or a rule fails to compile.
+    Callers must hold ``_ENV_LOCK``; this helper does not acquire it.
+    ``run_rules`` serializes initialization, execution, and cleanup under that
+    lock. Raise RuntimeError when clipspy is unavailable or a rule fails to compile.
     """
     global _ENV
     if _ENV is None:
