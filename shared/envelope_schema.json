@@ -74,6 +74,7 @@
           "$ref": "#/$defs/ConstraintKind"
         },
         "value": {
+          "description": "Finite value of the attributed constraint",
           "title": "Value",
           "type": "number"
         },
@@ -364,6 +365,7 @@
           "$ref": "#/$defs/ConstraintKind"
         },
         "value": {
+          "description": "Finite daily nutrient aim or ceiling",
           "minimum": 0,
           "title": "Value",
           "type": "number"

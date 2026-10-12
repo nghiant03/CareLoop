@@ -72,7 +72,7 @@ class ConstraintProvenance(BaseModel):
 
     nutrient: NutrientKind
     kind: ConstraintKind
-    value: float
+    value: float = Field(..., allow_inf_nan=False, description="Finite value of the attributed constraint")
     unit: str
     envelope_id: str
     version: int
@@ -111,7 +111,7 @@ class NutrientConstraint(BaseModel):
 
     nutrient: NutrientKind
     kind: ConstraintKind
-    value: float = Field(..., ge=0)
+    value: float = Field(..., ge=0, allow_inf_nan=False, description="Finite daily nutrient aim or ceiling")
     unit: str = Field(..., description="Canonical unit, e.g. 'mg', 'g', 'kcal'")
     provenance: ConstraintProvenance | None = None
 

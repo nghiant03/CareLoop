@@ -51,3 +51,44 @@ def test_stale_computation_cannot_mint_after_other_attempt_finalizes():
             review.run_rules_service(patient)
     assert persistence.get_review_item(review_id) == completed
     assert len(persistence.list_envelope_history("P0002")) == 1
+
+
+@pytest.mark.parametrize("value", [float("inf"), float("-inf"), float("nan"), "Infinity", "-Infinity", "NaN"])
+def test_constraint_model_rejects_nonfinite_values(value):
+    with pytest.raises(ValidationError):
+        NutrientConstraint(nutrient="sodium_mg", kind="max", value=value, unit="mg")
+
+
+@pytest.mark.parametrize("value", ["Infinity", "-Infinity", "NaN"])
+def test_nonfinite_edits_and_simulations_do_not_change_durable_state(client, value):
+    proposed = client.post("/rules/run", json={"patient_id": "P0002"})
+    assert proposed.status_code == 200, proposed.text
+    envelope_id = proposed.json()["envelope"]["envelope_id"]
+    approved = client.post(f"/envelopes/{envelope_id}/approve")
+    assert approved.status_code == 200, approved.text
+    before = client.get(f"/envelopes/{envelope_id}").json()
+    history = persistence.list_envelope_history("P0002")
+    target = {"nutrient": "sodium_mg", "kind": "max", "value": value, "unit": "mg"}
+
+    for path, payload in [
+        (f"/envelopes/{envelope_id}/edit", {"targets": [target]}),
+        ("/simulations", {"patient_id": "P0002", "targets": [target]}),
+    ]:
+        response = client.post(path, json=payload)
+        assert response.status_code == 422, response.text
+        assert response.json()["error"] == "validation_error"
+    assert client.get(f"/envelopes/{envelope_id}").json() == before
+    assert persistence.list_envelope_history("P0002") == history
+    assert persistence.list_simulations("P0002") == []
+
+
+def test_nonfinite_explicit_provenance_is_rejected():
+    target = NutrientConstraint(nutrient="sodium_mg", kind="max", value=1000, unit="mg")
+    envelope = _envelope("finite-provenance", [target]).model_dump(mode="json")
+    envelope["targets"][0]["provenance"] = {
+        "nutrient": "sodium_mg", "kind": "max", "value": "Infinity", "unit": "mg",
+        "envelope_id": envelope["envelope_id"], "version": 1, "author": "test",
+        "citation": {"rule_id": "TEST", "guideline": "Test", "section": "Sodium"},
+    }
+    with pytest.raises(ValidationError):
+        NutrientEnvelope.model_validate(envelope)
