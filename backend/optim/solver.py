@@ -371,15 +371,15 @@ def _diagnose_with_exact(
 
     * ``"proven_infeasible"`` — exhaustive one-day enumeration
       (:func:`exact_reference.one_day_exact`) found NO feasible dish multiset.
-      Every hard constraint is per-day and each slot holds exactly one dish,
-      so no 7-day plan can exist when no feasible day exists — an EXACT
-      infeasibility proof for this encoding.
-    * ``"search_exhausted"`` — a feasible day EXISTS, so search + repair +
-      greedy simply failed to deliver one: a heuristic failure, never
-      misreported as infeasibility. (A feasible day is a necessary, not
-      strictly sufficient, condition: a day within the daily ``problem.EPS``
-      tolerance repeated for a week can exceed the horizon tolerance. The
-      canonical evaluator fences the delivered plan.)
+      Each slot holds exactly one dish, and a feasible horizon requires each
+      day to pass the daily hard checks. No feasible day therefore proves that
+      no 7-day plan exists in this encoding.
+    * ``"search_exhausted"`` — a feasible day exists, but search, repair, and
+      greedy construction failed to deliver a canonically feasible plan.
+      This is not an infeasibility proof. A feasible day is necessary, not
+      strictly sufficient: repeating a day within the daily ``problem.EPS``
+      tolerance can exceed the horizon tolerance. The canonical evaluator
+      validates the delivered plan.
 
     Greedy construction and single-slot repair are incomplete; successful exact
     enumeration does not imply that either heuristic will find a feasible day.
@@ -465,12 +465,11 @@ def solve(
 ) -> dict:
     """Search one dish per slot and return plan metrics, front entries, or a diagnosis.
 
-    ``method``: ``"nsga2"`` (production), the benchmark comparison set
-    ``"nsga3"`` / ``"moead"`` / ``"age"`` / ``"sms"`` (all pymoo; they raise
-    ``RuntimeError`` with the import error when the optional comparison
-    algorithms are unavailable, while ``"nsga2"`` keeps its GA fallback), or
-    raw baselines ``"ga"``, ``"greedy"``, ``"random"`` used by the benchmark
-    harness.
+    ``method`` selects production ``"nsga2"``, pymoo benchmark comparisons
+    ``"nsga3"`` / ``"moead"`` / ``"age"`` / ``"sms"``, or raw benchmark
+    baselines ``"ga"`` / ``"greedy"`` / ``"random"``. Unavailable optional
+    comparison algorithms raise ``RuntimeError`` with the import error.
+    ``"nsga2"`` retains its GA fallback.
 
     ``guarantee`` applies only to pymoo-family methods, including the NSGA-II
     fallback. True enables repair/construction and explicit empty-plan failure.
@@ -491,11 +490,10 @@ def solve(
 
     ok, reason = feasibility_precheck(envelope, dishes)
     if not ok:
-        # The precheck is only a SUFFICIENT infeasibility condition (empty
-        # pool, or a MAX below the least-possible 3-dish day).  Before
-        # diagnosing, confirm with exhaustive one-day enumeration
-        # (exact_reference): if a feasible day exists the envelope is solvable
-        # and solving CONTINUES; otherwise infeasibility is proven exactly.
+        # Confirm a failed precheck with exhaustive one-day enumeration.
+        # No feasible day proves infeasibility for this single-dish encoding.
+        # A feasible day lets search continue, but does not prove horizon
+        # feasibility: repeated daily EPS excess can exceed horizon EPS.
         exact = one_day_exact(envelope, dishes)
         if not exact["feasible_day"]:
             diag = _diagnosis(

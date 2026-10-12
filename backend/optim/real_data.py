@@ -406,10 +406,15 @@ def _build_feasible_day(
 
 
 def greedy_feasible_plan(ev: FastEvaluator, seed: int = 0) -> np.ndarray | None:
-    """Construct a hard-feasible ``ev.n_days`` plan, or return ``None``.
+    """Construct an ``ev.n_days`` candidate satisfying daily MAX checks.
 
-    Bounded greedy retries may miss feasible plans. The solver's exact diagnostic
-    distinguishes search exhaustion from proven single-dish infeasibility.
+    Daily and horizon checks share the same EPS tolerance, so accumulated daily
+    excess can still violate a horizon ceiling. Callers must validate the full
+    candidate with the canonical evaluator before delivery.
+
+    Return ``None`` when bounded greedy retries fail to build a day. These
+    retries may miss feasible plans. The solver's exact diagnostic distinguishes
+    search exhaustion from proven single-dish infeasibility.
     """
     used: dict[int, int] = {}
     days: list[np.ndarray] = []
@@ -430,11 +435,13 @@ def greedy_feasible_plan(ev: FastEvaluator, seed: int = 0) -> np.ndarray | None:
 def repair_plan(
     ev: FastEvaluator, idx: np.ndarray, seed: int = 0
 ) -> np.ndarray | None:
-    """Repair an arbitrary pool plan to feasibility, day by day.
+    """Repair an arbitrary pool candidate against daily MAX ceilings.
 
-    Tries hill-climbing first (keeps most of the optimiser's work), then falls
-    back to a greedy rebuild for stubborn days. Returns a repaired copy, leaving
-    ``idx`` unchanged, or ``None`` if these heuristics fail to find a feasible day.
+    Try hill-climbing first to retain the optimiser's work, then fall back to a
+    greedy rebuild for stubborn days. Return a repaired copy, leaving ``idx``
+    unchanged, or ``None`` if these heuristics fail to find a feasible day.
+    Accumulated daily EPS excess can still violate a horizon ceiling. Callers
+    must validate the full candidate with the canonical evaluator before delivery.
     Only the solver's exact diagnostic can establish single-dish infeasibility;
     heuristic failure alone is search exhaustion.
     """

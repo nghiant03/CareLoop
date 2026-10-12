@@ -4,9 +4,9 @@ Three baselines support comparisons with pymoo NSGA-II:
 
 * :func:`random_search`     — uniform random plans.
 * :func:`greedy_search`     — myopic per-meal construction + local search.
-* :func:`exhaustive_search` — one-day enumeration capped by ``max_combos``
-  (``search_complete`` reports whether the cap truncated it; exact one-day
-  verdicts come from :func:`backend.optim.exact_reference.one_day_exact`).
+* :func:`exhaustive_search` — one-day enumeration capped by ``max_combos``.
+  ``search_complete`` reports whether the cap truncated enumeration. Exact
+  one-day verdicts come from :func:`backend.optim.exact_reference.one_day_exact`.
 
 Plus :func:`nsga2_fallback`, a pure-Python NSGA-II style approximation used by
 ``spike_pymoo.py`` when ``pymoo``/``numpy`` are not installed.  It implements

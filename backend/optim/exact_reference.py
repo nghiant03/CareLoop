@@ -15,8 +15,8 @@ feasibility. When NO feasible day exists, no 7-day plan can exist either —
 exhausting all one-day dish multisets therefore PROVES infeasibility exactly
 for this encoding (no search heuristics involved). The converse is exact only
 strictly inside the limits: daily and horizon slots share the
-``problem.EPS`` tolerance, so a day within the daily tolerance (excess <= EPS)
-can, repeated for a week, exceed the horizon tolerance (7 x excess > EPS).
+``problem.EPS`` tolerance. Repeating a day whose excess is within the daily
+tolerance can exceed the horizon tolerance: excess <= EPS but 7 x excess > EPS.
 ``feasible_day`` is thus a necessary condition for a feasible week, and
 canonical ``problem.evaluate`` authoritatively fences delivery.
 
@@ -40,11 +40,10 @@ constraint) and reports:
   additive quantity, not the negated objective.
 * ``best_scalar`` — the multiset minimising ``problem.SCALAR_WEIGHTS`` over
   the ONE-DAY objective vector (deviation, ``-mean(pref_sum)``, variety of the
-  single day, cost).  Simplification: preference and variety are scored in
-  their per-day scaling (mean over the day's dishes; variety over a single
-  3-dish day), which is NOT the horizon scaling the 7-day objectives use
-  (mean over 21 dishes; horizon-wide entropy).  ``best_scalar`` is therefore
-  a per-day reference point, not a decomposed horizon optimum.
+  single day, cost). Preference uses the mean over the day's dishes, and
+  variety uses a single 3-dish day. The 7-day objectives instead use the mean
+  over 21 dishes and horizon-wide entropy. ``best_scalar`` is therefore a
+  per-day reference point, not a decomposed horizon optimum.
 
 Tie-breaks are lexicographic on the sorted dish-id tuple (the pool is sorted
 by ``dish_id``, so index tuples compare like id tuples), keeping every result
@@ -151,8 +150,9 @@ def _empty_result(n_slots: int, pool_size: int) -> dict:
 def _track(best: tuple | None, values: "np.ndarray", tuples: list[tuple]) -> tuple | None:
     """Running (value, index_tuple) best with tolerance tie-break.
 
-    ``values`` aligns with ``tuples`` (already in ascending lexicographic
-    order); returns the updated best or ``None`` when no candidate exists.
+    ``values`` must align with ``tuples``, which must already be in ascending
+    lexicographic order. Return the updated best, retaining the supplied best
+    when no candidate exists. Return ``None`` if neither supplies a candidate.
     """
     if values.size == 0:
         return best
@@ -394,9 +394,9 @@ def plan_vs_exact(envelope, dishes: list[Dish], plan) -> dict:
     Recomputes the delivered plan's per-day additive quantities with the
     ``problem`` helpers and compares them with :func:`one_day_exact`:
 
-    * ``gaps`` — per day, ``day_value - exact_one_day_best`` (>= 0 for feasible
-      single-dish plans in the reference encoding; not guaranteed for broader
-      compositions, which the reference does not enumerate);
+    * ``gaps`` — per day, ``day_value - exact_one_day_best``. Gaps are >= 0 for
+      feasible single-dish plans in the reference encoding. This is not
+      guaranteed for broader compositions, which the reference does not enumerate.
     * ``mean_gap`` — mean of the daily gaps;
     * ``seven_day_lower_bound`` — ``7 x per-day best``, an exact lower bound on
       the 7-day SUM of the additive quantity. Cost is summed over the horizon;

@@ -24,7 +24,7 @@ phosphate_additive_processed``   per-serving phosphorus density is the available
                                  proxy for additive-heavy processed food)
 ``dish_category=                 ``category == "drink"`` AND ``sugar_g > 5``
 sugar_sweetened_beverage``
-``diet_pattern=high_glycaemic_   ``carbs_g > 75`` (dataset p75 = 65 g; very large
+``diet_pattern=high_glycaemic_   ``carbs_g > 75`` (dataset p75 = 60 g; very large
 load``                           refined-carb portions)
 ``ingredient=potassium_chloride`` literal ingredient match (unchanged; no dish in
                                  the dataset carries it, correctly a no-op)

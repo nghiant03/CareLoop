@@ -25,7 +25,7 @@ import os
 import sys
 import time
 
-# Allow direct execution: `python backend/optim/test_exact.py`.
+# Resolve repository imports when pytest loads this module from its directory.
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)

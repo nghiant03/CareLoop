@@ -38,6 +38,11 @@ def plan_meals(envelope: NutrientEnvelope, dishes: list[Dish], *, seed: int = 42
                pop_size: int = 40, n_gen: int = 80) -> PlanningOutcome:
     """Solve and compose meals without persisting clinical state.
 
+    Live callers must first enforce the approval gate: an APPROVED,
+    scope-eligible envelope with nonempty targets. The optimiser checks status
+    but this helper does not enforce scope or target readiness. Simulation and
+    evaluation callers supply locally approved copies, not live approvals.
+
     API planning, simulations, and evaluation share this policy. Composition
     scores the original aims; only the single-dish fallback uses relaxed floors.
     """

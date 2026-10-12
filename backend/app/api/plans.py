@@ -1,11 +1,14 @@
 """Generate and retrieve meal plans, gated on an approved envelope for generation."""
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.app.core import persistence
-from backend.app.core.approval_gate import PlanRequest, require_approved_envelope_for_patient
+from backend.app.core.approval_gate import (
+    PlanRequest,
+    require_approved_envelope_for_patient,
+)
 from backend.app.core.plan_service import map_plan_result, plan_meals
 from backend.app.core.plan_storage import try_save_plan_document
 from backend.app.models.envelope import NutrientEnvelope
@@ -38,7 +41,7 @@ def create_plan(
 
 
 @router.get("", summary="List stored plan summaries")
-def list_plans_endpoint(patient_id: Optional[str] = Query(default=None)) -> dict[str, Any]:
+def list_plans_endpoint(patient_id: str | None = Query(default=None)) -> dict[str, Any]:
     plans = persistence.list_plans(patient_id)
     return {"count": len(plans), "plans": plans}
 
