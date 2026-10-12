@@ -322,11 +322,11 @@ def proposal_review(review_id: str) -> dict[str, Any]:
         )
     action = row["action"] or {}
     envelope_id = action.get("envelope_id") if action.get("action") == "proposal_pending" else None
-    if envelope_id is None:
-        with persistence.begin_review_proposal(review_id):
-            result = run_rules_service(dict(patient))
-        envelope_id = result["envelope"].envelope_id
     try:
+        if envelope_id is None:
+            with persistence.begin_review_proposal(review_id):
+                result = run_rules_service(dict(patient))
+            envelope_id = result["envelope"].envelope_id
         updated = persistence.finalize_review_proposal(review_id, envelope_id)
     except persistence.ReviewProposalConflictError as exc:
         raise HTTPException(

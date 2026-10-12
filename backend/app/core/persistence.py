@@ -70,7 +70,7 @@ __all__ = [
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_DB = _REPO_ROOT / "data" / "careloop_app.sqlite3"
-_REVIEW_PROPOSAL: ContextVar[Optional[str]] = ContextVar("review_proposal", default=None)
+_REVIEW_PROPOSAL: ContextVar[Optional[tuple[str, Optional[str]]]] = ContextVar("review_proposal", default=None)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS patients (
@@ -538,12 +538,16 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
     made on other write failures; callers needing one must copy before calling.
 
     Inside ``begin_review_proposal``, a new snapshot and its exact pending
-    review identity commit together. An already-pending attempt is reused.
+    review identity commit together. An already-pending attempt is reused;
+    another action recorded during computation raises ReviewProposalConflictError
+    before a snapshot is appended.
     """
     with _LOCK, _connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        review_id = _REVIEW_PROPOSAL.get() if new_proposal else None
-        if review_id is not None:
+        proposal_attempt = _REVIEW_PROPOSAL.get() if new_proposal else None
+        review_id = None
+        if proposal_attempt is not None:
+            review_id, expected_action_json = proposal_attempt
             review = conn.execute(
                 "SELECT * FROM review_items WHERE review_id = ?", (review_id,)
             ).fetchone()
@@ -562,6 +566,8 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
                 for field in NutrientEnvelope.model_fields:
                     setattr(envelope, field, getattr(existing, field))
                 return
+            if review["action_json"] != expected_action_json:
+                raise ReviewProposalConflictError(review_id)
         if new_proposal:
             base = re.sub(r"-\d+$", "", envelope.envelope_id)
             envelope.envelope_id = _mint_id(conn, "envelope_journal", base + "-", "envelope_id")
@@ -980,8 +986,16 @@ def begin_review_proposal(review_id: str):
     ``store_envelope`` commits the exact envelope ID in a pending action with
     the snapshot. Engine failures leave the review unchanged. Context-local
     binding keeps unrelated requests isolated without changing the rule service.
+    Capture the starting action so a clinician action or finalized attempt during
+    computation cannot be overwritten. No write lock is held during rule execution.
     """
-    token = _REVIEW_PROPOSAL.set(review_id)
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT action_json FROM review_items WHERE review_id = ?", (review_id,)
+        ).fetchone()
+    if row is None:
+        raise ValueError("missing review item")
+    token = _REVIEW_PROPOSAL.set((review_id, row["action_json"]))
     try:
         yield
     finally:
