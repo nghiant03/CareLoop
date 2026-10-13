@@ -120,7 +120,7 @@ def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
                 "(full rule in `evaluation/q_ablation.py` module docstring)."))
     add("")
 
-    # ------------------------------------------------------------- composition
+    # Composition
     comp = q6["composition_ablation"]
     add("### Meal-composition ablation: 1-dish vs 2-dish (main + side) encoding")
     add("")
@@ -158,7 +158,7 @@ def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
         "annotations, not verified data.")
     add("")
 
-    # ---------------------------------------------------------- exact reference
+    # Exact reference
     exact = q6["exact_reference"]
     add("### Exact-reference quality (scalar-selected plans, seed "
         f"{exact['seed']})")
@@ -217,7 +217,7 @@ def render_report(results: dict[str, Any]) -> str:
         "wall-clock runtimes. Machine-readable twin: `evaluation/results.json`.")
     add("")
 
-    # ------------------------------------------------------------------ summary
+    # Summary
     add("## Headline verdicts")
     add("")
     headline_rows: list[list[Any]] = [
@@ -260,7 +260,7 @@ def render_report(results: dict[str, Any]) -> str:
     add(_table(["Question", "Verdict", "Headline number"], headline_rows))
     add("")
 
-    # ------------------------------------------------------------------ Q1
+    # Q1
     add("## Q1 — Traceability")
     add("")
     add(q1["definition"])
@@ -280,7 +280,7 @@ def render_report(results: dict[str, Any]) -> str:
         f"traceable.")
     add("")
 
-    # ------------------------------------------------------------------ Q2
+    # Q2
     add("## Q2 — Conflict resolution")
     add("")
     add(q2["definition"])
@@ -297,7 +297,7 @@ def render_report(results: dict[str, Any]) -> str:
         f"{q2['verdict']}.**")
     add("")
 
-    # ------------------------------------------------------------------ Q3
+    # Q3
     add("## Q3 — Constraint satisfaction")
     add("")
     add(q3["definition"])
@@ -322,7 +322,7 @@ def render_report(results: dict[str, Any]) -> str:
         f"removal restores greedy feasibility it is listed as a blocker.")
     add("")
 
-    # ------------------------------------------------------------------ Q4
+    # Q4
     add("## Q4 — Quality/runtime (optimiser benchmark)")
     add("")
     add(q4["definition"])
@@ -354,7 +354,7 @@ def render_report(results: dict[str, Any]) -> str:
     add(f"Verdict: **{q4['verdict']}** — {q4['verdict_note']}")
     add("")
 
-    # ------------------------------------------------------------------ Q5
+    # Q5
     add("## Q5 — Groundedness (chat)")
     add("")
     add(q5["definition"])
@@ -406,11 +406,11 @@ def render_report(results: dict[str, Any]) -> str:
                [[r["criterion"], r["scale"], r["how_to_score"]] for r in q5["expert_review_rubric"]]))
     add("")
 
-    # ------------------------------------------------------------------ Q6
+    # Q6
     if q6:
         _render_q6(add, q6, _table, _fmt)
 
-    # ------------------------------------------------------------------ limits
+    # Limitations
     add("## Limitations & known caveats")
     add("")
     add("1. **Encoding: hard = MAX ceilings + exclusions only (PLAN.md module 4).** "

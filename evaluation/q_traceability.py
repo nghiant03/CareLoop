@@ -1,10 +1,8 @@
 """Q1 — Traceability: every envelope constraint/exclusion cites a fired rule.
 
-For all 20 patients the rule engine runs once; each envelope target and each
-exclusion must be traceable to at least one fired trace row whose citation
-carries guideline + section + rule_id.  Out-of-scope / REJECTED patients
-legitimately have no nutrient targets and are counted separately (their
-exclusions and trace rows are still checked, as a bonus signal).
+Targets and exclusions need a matching trace action with guideline, section,
+and rule ID. Count rejected patients separately but still check their exclusions
+and trace citations.
 """
 
 from __future__ import annotations

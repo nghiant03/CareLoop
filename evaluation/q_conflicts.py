@@ -1,10 +1,7 @@
 """Q2 — Conflict resolution: scripted conflict cases with expected outcomes.
 
-Each case is a patient fixture plus a list of machine-checked expectations
-against the engine's envelope + trace.  The case table encodes the documented
-priority hierarchy (CKD 90 > safety 88 > hyperkalaemia 85 > CKD general 80 >
-DASH 70 > ADA 60 > generic 50) and its edge cases, including the salience-tie
-merge behaviour.
+Check envelopes and traces against the priority and tie policies in
+``rules/ENGINE.md``.
 """
 
 from __future__ import annotations
@@ -25,9 +22,6 @@ __all__ = ["conflict_cases", "evaluate_q2"]
 Check = Callable[[dict[str, Any], list[dict[str, Any]]], bool]
 
 
-# ---------------------------------------------------------------------------
-# Patient fixtures (synthetic; shapes follow data/patients.json)
-# ---------------------------------------------------------------------------
 
 def _fixture(patient_id: str, weight: float, diagnoses: list[str], *,
              egfr: float | None = None, k: float | None = None, po4: float | None = None,

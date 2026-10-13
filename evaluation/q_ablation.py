@@ -1,28 +1,16 @@
 """Q6 — Paired selection ablation, experimental composition, and exact reference.
 
-Selection reuses each eligible patient/seed NSGA-II front across the scalar,
-normalised, and adequacy-first strategies in ``backend.optim.selection``.
-Local APPROVED copies satisfy the evaluator's gate without writing application
-state. All metrics use original aims, never relaxed MIN floors. ``adequacy_rows``
-defines the gap and met-day calculations.
+Reuse each patient/seed front across selection strategies and score original
+aims. Local approval copies never write clinical state. ``adequacy_rows`` owns
+gap semantics and ``derive_selection_verdict`` owns PASS conditions.
 
-Composition compares single-dish meals with an experimental GA over exactly
-one main and one side per slot, with no repeated dish within a day. This is not
-production's optional-side search. ``CompositionEvaluator`` defines role pools
-and constraints. ``composition_ga`` defines the search and returned archive.
-The phase defaults to eight eligible patients and one seed. Results are
-informational because meal roles are heuristic and catalogue values unverified.
-Serving twice as many dishes also limits direct cost and nutrient comparisons.
+Experimental composition requires one main and one side per meal, with no
+daily dish repetition. It differs from production's optional-side search.
+Heuristic roles, unverified nutrients, and doubled dish counts limit comparisons.
+Composition results are informational and receive no verdict.
 
-The exact reference compares each patient's first-seed scalar plan with
-single-dish one-day additive optima. ``backend.optim.exact_reference`` documents
-the bounds: they exclude horizon-wide variety and do not establish a
-four-objective optimum or composition infeasibility.
-
-Only selection receives a verdict. PASS requires comparable scalar and
-adequacy-first rows, all adequacy-first plans hard-feasible, strictly lower
-pooled worst-day relative gaps, and no more than 10% higher pooled cost.
-``derive_selection_verdict`` names every failed condition.
+Exact-reference bounds cover single-dish additive quantities, not horizon
+variety, a four-objective optimum, or composition infeasibility.
 """
 
 from __future__ import annotations
@@ -116,11 +104,7 @@ def _mean(values: list) -> float | None:
 
 
 def _approve(envelope_model: Any) -> Any:
-    """Simulate the clinician approval gate (content unchanged, status flipped).
-
-    Mirrors ``evaluation.q_satisfaction._approve``; the solver requires
-    EnvelopeStatus.APPROVED and no app store is touched.
-    """
+    """Locally approve an evaluation copy without writing application state."""
     return envelope_model.model_copy(update={
         "status": "APPROVED",
         "approved_by": "evaluation-suite (simulated clinician approval)",
@@ -128,25 +112,16 @@ def _approve(envelope_model: Any) -> Any:
     })
 
 
-# ---------------------------------------------------------------------------
-# Adequacy metrics (pure functions over daily totals; plan_service semantics)
-# ---------------------------------------------------------------------------
 def adequacy_rows(daily: list[dict[str, float]], envelope: Any) -> list[dict[str, Any]]:
-    """Per MIN/TARGET aim adequacy of daily totals vs the ORIGINAL aims.
+    """Score each original MIN/TARGET aim in envelope order, excluding MAX.
 
-    Semantics mirror ``backend/app/core/plan_service.py`` ``adequacy[]``:
-    one entry per MIN/TARGET constraint in envelope order (MAX ceilings are
-    excluded — ceiling compliance is a hard-feasibility matter); the worst
-    day has the largest gap: ``max(0, aim - total)`` for MIN, or
-    ``abs(aim - total)`` for TARGET. Mean and worst gaps are nonnegative;
-    the relative worst-gap percentage is 0 when ``aim <= _EPS``. A day meets
-    the aim when its gap is at most ``_EPS``. The serialized ``shortfall``
-    names also cover two-sided TARGET deviation for compatibility.
+    MIN gaps are shortfalls. TARGET gaps include overshoots. The worst day has
+    the largest gap, and a gap <= _EPS meets the aim. Relative worst-gap
+    percentage is zero for aims <= _EPS. Legacy ``shortfall`` keys cover both
+    gap types, matching ``plan_service``.
 
-    ``mean_daily_shortfall`` is unit-bearing (kcal/g/mg per nutrient) and
-    must not be pooled across aims into one raw average. Cross-aim
-    aggregation uses the dimensionless ``mean_daily_rel_shortfall_pct``
-    (mean over days of gap/aim, percent).
+    Raw gaps retain nutrient units and cannot be pooled across aims. Use
+    ``mean_daily_rel_shortfall_pct`` for dimensionless cross-aim averages.
     """
     rows: list[dict[str, Any]] = []
     for constraint in envelope.targets:
@@ -237,9 +212,7 @@ def _pool_strategy_metrics(strategy_rows: list[dict[str, Any]]) -> dict[str, Any
     return out
 
 
-# ---------------------------------------------------------------------------
-# Phase 1 — selection ablation
-# ---------------------------------------------------------------------------
+# Paired selection ablation
 def solve_guarded(envelope: Any, dishes: list[Dish], seed: int, pop_size: int,
                   n_gen: int) -> dict[str, Any]:
     """``solver.solve`` with the production NSGA-II configuration."""
@@ -256,16 +229,11 @@ def evaluate_selection_ablation(
     pop_size: int = 40,
     n_gen: int = 80,
 ) -> tuple[dict[str, Any], dict[tuple[str, int], dict[str, Any]]]:
-    """Run the paired selection ablation.
+    """Return ``(summary, internals)`` for paired front selection.
 
-    Returns ``(summary, internals)``.  ``summary`` is the serialised half:
-    pooled per-strategy metrics, per-patient rows (with per-nutrient
-    adequacy) and paired deltas.
-
-    ``internals`` maps ``(patient_id, seed)`` to ``{"front": entries,
-    "scalar_plan": plan, "infeasibility_status": str}`` for the downstream
-    phases (composition pairing and exact reference).  It stays in-process
-    only and is intentionally NOT part of the serialised result.
+    Serialize pooled metrics, patient adequacy rows, and paired deltas in
+    ``summary``. Keep ``internals[(patient_id, seed)]`` fronts, scalar plans,
+    and infeasibility status in-process for composition and exact-reference phases.
     """
     from shared.envelope_schema import NutrientEnvelope
 
@@ -479,26 +447,13 @@ def derive_selection_verdict(
     return "PASS", None
 
 
-# ---------------------------------------------------------------------------
-# Phase 2 — meal-composition ablation (2-dish main + side encoding)
-# ---------------------------------------------------------------------------
+# Experimental two-dish composition
 class CompositionEvaluator:
-    """Vectorised numpy evaluator for the 2-dish (main + side) encoding.
+    """Evaluate arrays shaped ``(n_days * 3, 2)``: MAIN index, then SIDE index.
 
-    Objective and hard-constraint semantics are canonical: identical
-    objective definitions (deviation / preference_fit / variety / cost, all
-    minimised, in :data:`OBJECTIVE_NAMES` order), identical EPS tolerance
-    and the same daily + horizon MAX constraint ordering as
-    ``problem.evaluate`` — verified against it in
-    ``evaluation/test_ablation.py``.
-
-    On top of those canonical constraints, the composition encoding adds
-    its own repetition limit: no dish id twice within the same day.  It is
-    reported separately in :meth:`eval_batch` and is NOT part of
-    ``problem.evaluate``.
-
-    Individuals are ``np.ndarray`` of shape ``(n_days * 3, 2)``: column 0
-    indexes the MAIN pool, column 1 the SIDE pool.
+    Objectives, MAX ordering, and EPS tolerance match ``problem.evaluate``.
+    A separate per-day repetition check forbids duplicate dish IDs. That rule
+    belongs to this experimental encoding, not the canonical evaluator.
     """
 
     def __init__(self, envelope: Any, dishes: list[Dish], n_days: int = 7):
@@ -529,9 +484,7 @@ class CompositionEvaluator:
         self.size_m = len(mains)
         self.size_s = len(sides)
 
-        # Global dish-id positions (unique per dish_id across the full pool)
-        # drive the variety objective and the repetition check — a dish can be
-        # eligible as both MAIN and SIDE and must count as the same dish.
+        # A dish eligible for both roles must count once in variety/repetition checks.
         gpos = {d.dish_id: i for i, d in enumerate(dishes)}
         self.gid_m = np.array([gpos[d.dish_id] for d in mains], dtype=int)
         self.gid_s = np.array([gpos[d.dish_id] for d in sides], dtype=int)
@@ -570,7 +523,6 @@ class CompositionEvaluator:
         ]
         self.n_constraints = len(self.max_daily) * (n_days + 1)
 
-    # -- decoding ----------------------------------------------------------
     def to_plan(self, individual: np.ndarray) -> list[list[str]]:
         """Decode an individual into n_days * MEALS_PER_DAY two-dish meals."""
         ind = np.asarray(individual, dtype=int)
@@ -596,7 +548,6 @@ class CompositionEvaluator:
             ind[s, 0], ind[s, 1] = main_pos[main_id], side_pos[side_id]
         return ind
 
-    # -- batch evaluation ---------------------------------------------------
     def eval_batch(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Evaluate a batch ``(P, slots, 2)``.
 
@@ -881,7 +832,6 @@ def composition_ga(
         scalars = F @ np.array([SCALAR_WEIGHTS[k] for k in OBJECTIVE_NAMES])
         return F, G, rep, feasible, scalars
 
-    # -- initial population: one greedy-built individual + random ones -----
     pop: list[np.ndarray] = []
     greedy = _greedy_individual(ev, rng)
     if greedy is not None:
@@ -989,9 +939,6 @@ def composition_ga(
     }
 
 
-# ---------------------------------------------------------------------------
-# Phase 2 driver — bounded composition ablation
-# ---------------------------------------------------------------------------
 def eligible_patients(patients: list[dict[str, Any]], limit: int | None = None
                       ) -> list[dict[str, Any]]:
     """Eligible (non-REJECTED) patients, optionally limited to the first N."""
@@ -1122,9 +1069,7 @@ def evaluate_composition_ablation(
     }
 
 
-# ---------------------------------------------------------------------------
-# Phase 3 — exact-reference quality reporting
-# ---------------------------------------------------------------------------
+# Exact-reference comparison
 def evaluate_exact_reference(
     per_patient: list[dict[str, Any]],
     internals: dict[tuple[str, int], dict[str, Any]],
@@ -1209,9 +1154,6 @@ def evaluate_exact_reference(
     }
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 def evaluate_q6(
     patients: list[dict[str, Any]] | None = None,
     dishes: list[Dish] | None = None,

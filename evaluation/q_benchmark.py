@@ -1,11 +1,8 @@
 """Q4 — Quality/runtime: consume the existing optimiser benchmark artefacts.
 
-By default this module does NOT re-run the benchmark; it parses
-``backend/optim/benchmark_results.csv`` (per-run rows) and
-``backend/optim/benchmark_results.md`` (recommendation) and recomputes the
-headline table (all methods recorded in the artefact: hypervolume, violations,
-runtime).  ``--rerun-benchmark`` re-executes ``backend.optim.benchmark``
-and re-reads the artefacts; runtime depends on the environment.
+Read the existing benchmark CSV and Markdown rather than running search.
+``--rerun-benchmark`` regenerates them first. Include every recorded method
+and keep violation rates unrounded for verdict decisions.
 """
 
 from __future__ import annotations
@@ -36,8 +33,7 @@ def _summary_table(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
         if row["phase"] == "main":
             by_method[row["method"]].append(row)
     table = []
-    # Every method recorded in the artefact, in a stable order — no hardcoded
-    # subset (the benchmark tracks more algorithms than the original four).
+    # Include every recorded method, not a fixed comparison subset.
     for method in sorted(by_method):
         runs = by_method[method]
         hvs = [float(r["hypervolume"]) for r in runs]
@@ -50,9 +46,7 @@ def _summary_table(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
             "runs": len(runs),
             "mean_hv": round(statistics.fmean(hvs), 4),
             "hv_std": round(statistics.pstdev(hvs), 4) if len(hvs) > 1 else 0.0,
-            # exact fraction: PASS decisions must not see a rounded-to-zero
-            # rate (1 violation in 2001 runs would round to 0.0). Rendering
-            # rounds for presentation only.
+        # Rounding a nonzero rate to zero would incorrectly permit PASS.
             "violation_rate": sum(1 for v in violations if v > 0) / len(violations),
             "mean_runtime_ms": round(statistics.fmean(runtimes), 1),
             "mean_search_evaluations": statistics.fmean(float(r["evaluations"]) for r in runs) if all(r.get("evaluations") for r in runs) else None,

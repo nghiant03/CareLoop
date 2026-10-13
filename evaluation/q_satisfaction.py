@@ -1,23 +1,11 @@
 """Q3 — Constraint satisfaction: engine -> approval -> optimiser -> verification.
 
-For every eligible patient (rule status PROPOSED):
-1. run the rule engine -> envelope,
-2. programmatically approve (status APPROVED, content untouched) — mirroring
-   the clinician gate,
-3. ``plan_service.plan_meals`` (shared with /plans): single-dish preparation
-   and search, followed by main/optional-side composition against original aims;
-   retained fallback MIN-floor adjustments are disclosed,
-4. verify ``violation_count == 0`` and, for feasible plans, recompute daily
-   totals and check hard MAX ceilings against the solved envelope.
-   Report MIN/TARGET gaps against the original approved aims, separately from
-   hard violations. ``_per_day_check`` defines the soft-gap metrics and
-   compatibility fields.
+Run eligible proposals through local approval and ``plan_service.plan_meals``.
+Recompute hard compliance against the solved envelope and soft gaps against
+original aims. Report search failure and retained MIN relaxations separately.
 
-Unsuccessful searches (explicit solver diagnosis, empty plan, nothing served)
-and MIN-relaxation disclosures are reported distinctly. ``infeasibility_status``
-distinguishes proven single-dish infeasibility from search exhaustion. A
-leave-one-out greedy diagnostic reports which removed MAX ceilings let that
-heuristic find a plan; it is not a proof that those ceilings are sole blockers.
+Exact diagnoses apply only to single-dish encoding. Leave-one-out greedy
+results identify helpful MAX removals, not unique blockers or impossibility.
 """
 
 from __future__ import annotations
@@ -46,20 +34,14 @@ def _approve(envelope_model: Any) -> Any:
 
 def _per_day_check(plan: list[list[str]], solved_envelope: Any, dishes: list[Any],
                    aims_envelope: Any = None) -> dict[str, Any]:
-    """Recompute per-day totals; verify HARD (MAX) constraints per day.
+    """Recompute daily MAX compliance and informational MIN/TARGET gaps.
 
-    MIN floors / TARGET values are soft: their residual
-    shortfall/distance is summarised informationally, never as a violation.
+    Hard checks use ``solved_envelope``. Soft gaps use ``aims_envelope`` when
+    supplied so relaxed floors cannot hide misses. MIN reports worst-day
+    shortfall. TARGET reports mean absolute daily distance, preventing cancellation.
 
-    ``soft_aims_by_constraint`` is keyed by ``"<nutrient>:<kind>"`` so a nutrient with
-    both a MIN floor and a TARGET keeps both entries. MIN entries report the
-    worst-day shortfall; TARGET entries report the mean over days of the
-    per-day absolute distance, so deviations on different days cannot cancel.
-    Summaries are computed against ``aims_envelope`` when given — the ORIGINAL
-    approved envelope — so relaxed fallback floors in the solved envelope
-    never rewrite the reported aim; hard MAX verification always uses
-    ``solved_envelope``. ``soft_aims`` retains the legacy nutrient-keyed,
-    last-aim-wins projection for old readers; use the new map for all aims.
+    ``soft_aims_by_constraint`` preserves each ``<nutrient>:<kind>`` aim.
+    Legacy ``soft_aims`` keeps only the last aim for each nutrient.
     """
     from backend.optim.problem import daily_totals
 

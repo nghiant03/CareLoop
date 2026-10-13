@@ -1,22 +1,12 @@
 """Q5 — Groundedness: scripted chat questions scored for citation accuracy.
 
-``answer(question, kb, envelope=None, role="patient")`` returns
-``{"status": answered|refused|escalated, "citations": [...], "escalation": ...}``
-where each citation carries ``rule_id`` / ``guideline`` / ``section``.
+Grounded cases require an acceptable constraint-producing rule citation,
+complete citation metadata, and structured claim coverage. These checks do not
+prove prose entailment. Escalation cases require the expected category, and
+irrelevant questions must be refused.
 
-Scoring:
-* **grounded** questions must be ``answered`` with >=1 citation whose
-  ``rule_id`` is in the question's acceptable set (rules that actually produce
-  a constraint for the asked nutrient) and every citation must carry a complete
-  provenance triple. Structured claims must cover the answer text and pass
-  ``_claim_sources_consistent``'s metadata checks, not semantic entailment;
-* **escalation** cases must be ``escalated`` with the expected category;
-* **irrelevant** questions must be ``refused`` (never answered from plan
-  numbers or invented content).
-
-Historical filter failures and unsupported nutrient requests are retained as
-``known_gaps`` regression probes. Every probe must pass for the verdict to PASS;
-the separate overall pass rate covers only the main question sets above.
+``known_gaps`` retains historical regression probes. All must pass for PASS,
+but they are excluded from the main question-set pass rate.
 """
 
 from __future__ import annotations
