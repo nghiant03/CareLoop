@@ -1,7 +1,7 @@
 """Export the canonical model's serialization schema using wire aliases.
 
-``python -m shared.export_schema`` writes the mirror; ``--check`` only verifies
-it and exits nonzero when missing or stale.
+``python -m shared.export_schema`` prints the schema. Use ``--output`` for an
+explicit export; no generated mirror is kept in the source tree.
 """
 
 import argparse
@@ -9,9 +9,6 @@ import json
 from pathlib import Path
 
 from shared.envelope_schema import NutrientEnvelope
-
-SCHEMA_PATH = Path(__file__).with_name("envelope_schema.json")
-
 
 def schema_text() -> str:
     schema = NutrientEnvelope.model_json_schema(by_alias=True, mode="serialization")
@@ -22,11 +19,10 @@ def schema_text() -> str:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--output", type=Path, help="explicit export destination; otherwise stdout")
     args = parser.parse_args()
     expected = schema_text()
-    if args.check:
-        if not SCHEMA_PATH.exists() or SCHEMA_PATH.read_text() != expected:
-            parser.exit(1, "Envelope schema is stale.\n")
+    if args.output:
+        args.output.write_text(expected, encoding="utf-8")
     else:
-        SCHEMA_PATH.write_text(expected)
+        print(expected, end="")

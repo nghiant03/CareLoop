@@ -2,7 +2,7 @@
 
 Suite: CareLoop automated evaluation v1 · optimiser seed 42 (pop 40, gen 80, NSGA-II) · 20 patients · 214-dish pool
 
-Reproduce with `.venv/bin/python -m evaluation.run` (add `--rerun-benchmark` to regenerate the optimiser benchmark artefacts). Deterministic apart from wall-clock runtimes. Machine-readable twin: `evaluation/results.json`.
+Reproduce with `.venv/bin/python -m evaluation.run` (add `--rerun-benchmark` to regenerate the optimiser benchmark artefacts). Deterministic apart from wall-clock runtimes. New runs write machine-readable results beside their generated report under the configured artifact directory; this historical snapshot has no tracked JSON twin.
 
 ## Headline verdicts
 

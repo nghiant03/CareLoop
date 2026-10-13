@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-RESOURCES = {"rules/rules.json", "shared/envelope_schema.json",
+RESOURCES = {"rules/rules.json",
              "data/dishes.json", "data/patients.json"}
 
 
@@ -109,7 +109,7 @@ assert proposal.scope_eligible is False
 assert proposal.targets == []
 kb = get_kb()
 assert kb.stats()['node_counts']
-assert json.loads((installed / 'shared/envelope_schema.json').read_text())['$defs']
+assert envelope_schema.NutrientEnvelope.model_json_schema(by_alias=True, mode='serialization')['$defs']
 assert not list((installed / 'data').glob('*.sqlite*'))
 print('CARELOOP_SMOKE=' + json.dumps({'dishes': len(dishes), 'proposal': proposal.envelope_id,
                                     'module_root': str(installed), 'kb_loaded': True}))

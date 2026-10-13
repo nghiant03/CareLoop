@@ -214,7 +214,7 @@ def render_report(results: dict[str, Any]) -> str:
     add("")
     add("Reproduce with `.venv/bin/python -m evaluation.run` (add `--rerun-benchmark` "
         "to regenerate the optimiser benchmark artefacts). Deterministic apart from "
-        "wall-clock runtimes. Machine-readable twin: `evaluation/results.json`.")
+        "wall-clock runtimes. Machine-readable results are written beside this report as `results.json`.")
     add("")
 
     # Summary

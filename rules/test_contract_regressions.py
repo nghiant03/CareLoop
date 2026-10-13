@@ -123,7 +123,7 @@ def test_json_and_python_unit_reader_parity(nutrient, unit):
     target = {"nutrient": nutrient.value, "kind": "max", "value": 1, "unit": unit}
     envelope["targets"] = [target]
     canonical = "kcal" if nutrient == NutrientKind.ENERGY_KCAL else "mg" if nutrient.value.endswith("_mg") else "g"
-    schema = json.loads(Path("shared/envelope_schema.json").read_text())
+    schema = NutrientEnvelope.model_json_schema(by_alias=True, mode="serialization")
     errors = list(Draft202012Validator(schema).iter_errors(envelope))
     assert bool(errors) == (unit != canonical)
     if unit == canonical:

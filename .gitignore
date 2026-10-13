@@ -57,3 +57,7 @@ Thumbs.db
 *.db
 *.db-*
 artifacts/
+
+# Generated schema and retrieval snapshots are not source inputs.
+/shared/envelope_schema.json
+/backend/app/chat/retrieval_bench_results.json

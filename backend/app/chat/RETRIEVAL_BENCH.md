@@ -61,4 +61,4 @@ Ranking winner: **bm25_word_syn**. Keep BM25 with synonyms in production. Fusion
 
 ## Limitations
 
-Small, internally authored development/test sets and semantic relevance labels do not establish clinical validity. Some end-to-end questions overlap ranking questions; those are complementary metrics, not independent evidence. Q5 separately checks patient applicability, clinician overrides and exact approved values. Full per-query results, thresholds and development examples are in `retrieval_bench_results.json`.
+Small, internally authored development/test sets and semantic relevance labels do not establish clinical validity. Some end-to-end questions overlap ranking questions; those are complementary metrics, not independent evidence. Q5 separately checks patient applicability, clinician overrides and exact approved values. New runs write full per-query results, thresholds and development examples to `artifacts/retrieval/retrieval_bench_results.json` (or the configured artifact root), not this source directory.
