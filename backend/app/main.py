@@ -1,16 +1,4 @@
-"""CareLoop FastAPI application entrypoint.
-
-Run locally::
-
-    uvicorn backend.app.main:app --reload --port 8000
-
-Responsibilities:
-- lifespan logging and knowledge-base warmup
-- dev-permissive CORS for the React UI
-- exception handlers that keep error bodies stable for the frontend
-- mounting of the patient / rules / envelope / plan / chat routers
-- the ``/healthz`` liveness probe
-"""
+"""Assemble the HTTP app, startup warmup, and shared error responses."""
 
 from __future__ import annotations
 
@@ -83,11 +71,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# ---------------------------------------------------------------------------
-# Exception handlers
-# ---------------------------------------------------------------------------
 
 
 @app.exception_handler(EnvelopeNotApprovedError)
@@ -163,9 +146,6 @@ async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# Routers
-# ---------------------------------------------------------------------------
 
 app.include_router(patients.router)
 app.include_router(adherence.router)

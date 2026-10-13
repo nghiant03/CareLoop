@@ -121,17 +121,13 @@ def map_plan_result(
 ) -> dict[str, Any]:
     """Map the optimiser result to the frontend plan contract.
 
-    ``envelope`` supplies original aims and the explanation; simulations pass
-    their local input here. ``solved_envelope`` supplies displayed constraints
-    and may have lower MIN floors. Neither input is mutated.
+    ``envelope`` supplies original aims and explanations. ``solved_envelope``
+    supplies displayed constraints, including relaxed floors. Leave both unchanged.
 
-    Flat day-major meals become ``days[].slots`` and per-nutrient totals.
-    ``compliant`` checks MAX ceilings only and is ``None`` without a MAX.
-    ``adequacy`` assesses each original MIN/TARGET aim in envelope order:
-    mean delivery, largest-deviation day, met-day count, and any relaxed floor.
-    Compatibility keys ``shortfall``/``shortfall_pct`` also cover TARGET
-    overshoots. Decisions use unrounded delivery and aims; rounding is only for
-    displayed values. Infeasible results have empty days and adequacy arrays.
+    Map day-major meals to ``days[].slots`` and totals. ``compliant`` checks
+    MAX only and is None without a ceiling. ``adequacy`` scores original
+    MIN/TARGET aims in envelope order. Legacy ``shortfall`` keys include TARGET
+    overshoots. Decide before rounding. Infeasible results have no days or adequacy.
     """
     solved = solved_envelope or envelope
     lookup = {d.dish_id: d for d in dishes}

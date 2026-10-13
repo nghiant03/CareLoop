@@ -1,9 +1,4 @@
-"""CareLoop backend application package.
-
-Ensures the repository root is importable so the canonical schemas in
-``shared/`` can be imported as ``shared.envelope_schema`` regardless of how the
-app is launched (uvicorn, pytest, or ``python -m``).
-"""
+"""Add the repository root to the import path for shared contracts."""
 
 from __future__ import annotations
 

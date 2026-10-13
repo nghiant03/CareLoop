@@ -1,11 +1,4 @@
-"""Process-wide knowledge-base singleton for the API layer.
-
-Loads ``rules/rules.json`` + ``data/dishes.json`` into the versioned
-``KBGraph`` in in-memory SQLite and caches the retrieval index per built graph.
-Called from the app lifespan for warm-up and lazily by the
-chat / kb-stats endpoints, so tests and tools can import the module without
-side effects.
-"""
+"""Load rules and dishes into a process-wide, in-memory KB on first access."""
 
 from __future__ import annotations
 

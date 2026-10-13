@@ -1,32 +1,17 @@
 """Retrieval method benchmark for the grounded chat pipeline.
 
-All methods use production ``KBIndex`` chunks: one per current rule and dish.
+Compare BM25, TF-IDF variants, and rank fusion using production ``KBIndex``
+chunks. Measure hit@k, MRR, end-to-end citation checks, and irrelevant-query
+refusal. Citation checks cover rule IDs and structured claims, not arbitrary
+prose entailment.
 
-* ``bm25_word_syn`` — production BM25 with stopword filtering and query expansion;
-* ``bm25_word_nosyn``       — same scorer, raw query (no expansion);
-* ``tfidf_word_asis_{syn,nosyn}`` — word TF-IDF, the historical comparator;
-* ``tfidf_word_sublinear_{syn,nosyn}`` — ``sublinear_tf=True``;
-* ``tfidf_char_wb_3_5_{syn,nosyn}`` — char_wb 3-5 gram TF-IDF;
-* ``bm25_rrf_char`` — Reciprocal Rank Fusion (Cormack/Clarke/Büttcher,
-  SIGIR 2009, k=60) of the production BM25 ranking and the
-  ``tfidf_char_wb_3_5_syn`` ranking: ``score(d) = sum_m 1/(k + rank_m(d))``
-  over the union of candidate ids, top-50 candidates per component,
-  deterministic tie-break on ``chunk_id``.
+Experimental gates use disjoint development questions. The production BM25
+gate remains fixed and was not independently calibrated from the ranking set.
+Held-out fusion overlap is diagnostic only. ``_answer_with_method`` temporarily
+patches process-wide state and is unsafe alongside concurrent answer calls.
 
-Ranking metrics are hit@1, hit@3, hit@5, and MRR over 58 labeled questions,
-including guideline, conflict, dish, and typo queries. Experimental refusal
-gates are selected on disjoint development questions before held-out scoring.
-The deployed BM25 gate stays fixed; its historical calibration was not
-independent of the ranking set. Held-out fusion overlap is diagnostic only.
-
-Ten end-to-end questions exercise ``answers.answer`` with each method's gate.
-Citation accuracy requires an acceptable rule ID and support for every exposed
-claim. Production and fusion also undergo irrelevant-question refusal checks.
-``_answer_with_method`` documents the temporary module-state changes.
-
-Run: ``.venv/bin/python -m backend.app.chat.retrieval_bench``
-Deterministic: fixed query order, deterministic vectorizers/tokenizers,
-deterministic tie-breaking on ``chunk_id``, no timestamps in the artifacts.
+Run: ``.venv/bin/python -m backend.app.chat.retrieval_bench``. Artifacts use
+fixed query order and chunk-ID tie-breaks, without timestamps.
 """
 
 from __future__ import annotations
@@ -59,8 +44,7 @@ RULES_PATH = _REPO_ROOT / "rules" / "rules.json"
 DISHES_PATH = _REPO_ROOT / "data" / "dishes.json"
 RESULTS_PATH = Path(__file__).resolve().parent / "retrieval_bench_results.json"
 
-# Name of the production configuration row in the results (must match what
-# ``backend/app/chat/retrieval.KBIndex`` actually runs — asserted in tests).
+# This row must match the deployed KBIndex configuration.
 PROD_NAME = "bm25_word_syn"
 
 # Reciprocal Rank Fusion parameters (Cormack/Clarke/Büttcher, SIGIR 2009):
@@ -69,11 +53,8 @@ PROD_NAME = "bm25_word_syn"
 RRF_K = 60
 RRF_COMPONENT_DEPTH = 50
 
-# Default gate for an uncalibrated fusion method, on the RRF score scale rather
-# than BM25's scale. ``evaluate`` replaces experimental gates using disjoint
-# development examples before held-out scoring. ``diagnose_fusion_gate`` reports
-# held-out overlap diagnostically and must never retune a gate from those scores.
-# See RETRIEVAL_BENCH.md for the evaluation protocol.
+# Uncalibrated RRF fallback, not a BM25-scale threshold. Evaluation calibrates
+# experimental gates on development examples, never held-out scores.
 FUSION_MIN_SCORE = 0.04
 
 # End-to-end spot-check: supported nutrient questions need grounded citations;
@@ -92,14 +73,9 @@ END_TO_END_QUESTIONS = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Labeled query set
-# ---------------------------------------------------------------------------
 
-# Rule groups relevant per topic. "How much X" groups mirror the acceptable
-# sets in evaluation/q_groundedness.py (rules that actually PRODUCE a
-# constraint for the nutrient); topic groups are broader but still genuinely
-# on-topic rule chunks.
+# Intake questions require constraint-producing rules. Broader topic questions
+# may use other relevant rules. See evaluation/q_groundedness.py.
 _SODIUM = ["CKD-2024-SODIUM-2000", "CONFLICT-SODIUM-CKD-WINS",
            "DASH-2025-SODIUM-2300", "DASH-2025-SODIUM-1500",
            "ADA-2026-SODIUM-2300", "GEN-SODIUM-2300"]
@@ -149,7 +125,7 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
     """
     R = _rules
     queries: list[dict[str, Any]] = [
-        # -- guideline / nutrient questions (mirror evaluation/q_groundedness)
+        # Guideline/nutrient queries mirror evaluation/q_groundedness.
         {"id": "g01", "category": "guideline_nutrient", "query": "How much sodium can I have per day?", "relevant": R(*_SODIUM)},
         {"id": "g02", "category": "guideline_nutrient", "query": "Is salt bad for my blood pressure?", "relevant": R(*_SODIUM)},
         {"id": "g03", "category": "guideline_nutrient", "query": "What is the sodium limit for someone with high blood pressure?", "relevant": R(*_SODIUM)},
@@ -170,13 +146,13 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
         {"id": "g18", "category": "guideline_nutrient", "query": "at least how much protein should I eat daily", "relevant": R(*_PROTEIN)},
         {"id": "g19", "category": "guideline_nutrient", "query": "low sodium eating tips", "relevant": R(*_SODIUM)},
         {"id": "g20", "category": "guideline_nutrient", "query": "potassium rich foods guidance", "relevant": R(*_POTASSIUM)},
-        # -- conflict questions
+        # Conflicts
         {"id": "c01", "category": "conflict", "query": "My kidney guideline says 2000 mg sodium but the hypertension guideline says 2300 mg - which applies?", "relevant": R(*_CONFLICT_SODIUM)},
         {"id": "c02", "category": "conflict", "query": "One guideline tells me to eat more potassium, another says limit potassium - what do I follow?", "relevant": R(*_CONFLICT_K)},
         {"id": "c03", "category": "conflict", "query": "Why do the sodium limits differ between the DASH and kidney guidelines?", "relevant": R("CONFLICT-SODIUM-CKD-WINS", "CKD-2024-SODIUM-2000", "DASH-2025-SODIUM-2300", "DASH-2025-SODIUM-1500")},
         {"id": "c04", "category": "conflict", "query": "Which rule wins when two guidelines disagree about potassium?", "relevant": R(*_CONFLICT_K)},
         {"id": "c05", "category": "conflict", "query": "conflicting advice about salt intake for kidney disease", "relevant": R(*_CONFLICT_SODIUM)},
-        # -- phrasing variants incl. typos
+        # Phrasing variants and typos
         {"id": "t01", "category": "variant_typo", "query": "how much soduim per day", "relevant": R(*_SODIUM), "note": "typo: sodium"},
         {"id": "t02", "category": "variant_typo", "query": "wat is my daily salt limit", "relevant": R(*_SODIUM), "note": "typo: what"},
         {"id": "t03", "category": "variant_typo", "query": "protien intake advice for ckd", "relevant": R("CKD-2024-PROTEIN-055-08", "CKD-2024-PROTEIN-CEILING-13"), "note": "typo: protein"},
@@ -185,7 +161,7 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
         {"id": "t06", "category": "variant_typo", "query": "potasium limit", "relevant": R(*_POTASSIUM), "note": "typo: potassium"},
         {"id": "t07", "category": "variant_typo", "query": "phospherus in my diet", "relevant": R(*_PHOS), "note": "typo: phosphorus"},
         {"id": "t08", "category": "variant_typo", "query": "can i drink sweet fizzy drinks", "relevant": R(*_SUGAR), "note": "plain phrasing for sugar rules"},
-        # -- topical / non-constraint rules
+        # Topic rules without nutrient constraints
         {"id": "p01", "category": "topic", "query": "can i use salt substitute", "relevant": R(*_K_SALT_SUB)},
         {"id": "p02", "category": "topic", "query": "is potassium based salt replacer safe for me", "relevant": R(*_K_SALT_SUB)},
         {"id": "p03", "category": "topic", "query": "can i drink alcohol with high blood pressure", "relevant": R("DASH-2025-ALCOHOL")},
@@ -198,7 +174,7 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
         {"id": "p10", "category": "topic", "query": "sglt2 medicine and my diet", "relevant": R("MED-SGLT2I-CONTEXT")},
         {"id": "p11", "category": "topic", "query": "what does the dash dietary pattern recommend", "relevant": R("DASH-2025-MINERALS", "DASH-2025-FIBER-30", "DASH-2025-SATFAT-6PCT", "DASH-2025-SODIUM-2300", "DASH-2025-SODIUM-1500")},
         {"id": "p12", "category": "topic", "query": "metformin and diet advice", "relevant": R("MED-METFORMIN-CONTEXT")},
-        # -- dish / nutrient-content questions
+        # Dish nutrient content
         {"id": "d01", "category": "dish", "query": "How much sodium is in Chicken Rice (Hainanese)?", "relevant": ["dish:SG0001"]},
         {"id": "d02", "category": "dish", "query": "sodium content of chicken rice", "relevant": ["dish:SG0001", "dish:SG0002"]},
         {"id": "d03", "category": "dish", "query": "how much soduim in chiken rice", "relevant": ["dish:SG0001", "dish:SG0002"], "note": "typos: sodium, chicken"},
@@ -218,9 +194,6 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
     return queries
 
 
-# ---------------------------------------------------------------------------
-# Methods
-# ---------------------------------------------------------------------------
 
 def _tokenize(text: str) -> list[str]:
     """Reuse the production tokenizer so benchmark and deployed BM25 tokens agree."""
@@ -406,9 +379,6 @@ def build_methods(kb: KBGraph) -> dict[str, BenchMethod]:
     return methods
 
 
-# ---------------------------------------------------------------------------
-# Metrics
-# ---------------------------------------------------------------------------
 
 def _query_metrics(ranked_ids: list[str], relevant: set[str]) -> dict[str, float]:
     hits = {
@@ -519,9 +489,6 @@ def _end_to_end_spot_check(
     }
 
 
-# ---------------------------------------------------------------------------
-# Fusion gate diagnostic (RRF score scale) + irrelevant refusal
-# ---------------------------------------------------------------------------
 
 # Add held-out typo probes: shared character n-grams can match garbled text,
 # so clean irrelevant questions alone understate fusion's refusal risk.
@@ -580,9 +547,7 @@ def diagnose_fusion_gate(
         (r for r in relevant_rows if r["category"] != "variant_typo"),
         key=lambda r: (r["best_score"], r["id"]),
     )
-    # The gate attribute exists but is unset before ``calibrate_methods`` runs,
-    # so an explicit None check is required: ``getattr`` with a default cannot
-    # supply FUSION_MIN_SCORE, and the held-out scores must never select it.
+    # An unset gate needs the fallback, not calibration on held-out scores.
     threshold = (
         method.min_score if method.min_score is not None else FUSION_MIN_SCORE
     )
@@ -626,9 +591,6 @@ def _irrelevant_refusal_check(
     return out
 
 
-# ---------------------------------------------------------------------------
-# Evaluation
-# ---------------------------------------------------------------------------
 
 # Development-only examples. None belongs to the held-out ranking/e2e sets.
 _CALIBRATION_RELEVANT = [
@@ -794,9 +756,6 @@ def render_report(results):
     return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def _fmt(value: float) -> str:
     return f"{value:.2f}"

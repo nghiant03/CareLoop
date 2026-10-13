@@ -1,8 +1,4 @@
-"""Versioned knowledge-base graph store (SQLite + NetworkX prototype).
-
-Implements the logical model from ``rules/neo4j_schema_design.md`` per the
-decision in ``rules/SCHEMA_DECISION.md``.
-"""
+"""Versioned SQLite knowledge graph with NetworkX snapshot views."""
 
 from backend.app.kb.graph_store import KBGraph, load_kb, unit_for_nutrient
 

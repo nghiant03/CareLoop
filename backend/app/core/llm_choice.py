@@ -1,28 +1,9 @@
-"""Resolve LLM and embedding configuration without constructing clients.
+"""Resolve provider metadata without constructing clients or checking availability.
 
-Configured defaults
--------------------
-Embeddings
-    - default: ``nomic-embed-text`` served by a local **Ollama** instance.
-    - override: set ``CARE_LOOP_LLM_BACKEND=local_st`` to use
-      ``sentence-transformers/all-MiniLM-L6-v2`` (no Ollama required).
-
-Chat LLM
-    - default (no API keys): ``llama3.2:3b`` via local **Ollama**.
-    - if ``OPENAI_API_KEY`` is set: ``gpt-4o-mini`` (OpenAI).
-    - if ``GOOGLE_API_KEY`` is set: ``gemini-2.0-flash`` (Google).
-
-Resolution priority (first match wins)
---------------------------------------
-1. ``CARE_LOOP_LLM_BACKEND=openai|google|ollama`` selects that chat provider.
-2. With no backend override, ``OPENAI_API_KEY`` selects OpenAI, then
-   ``GOOGLE_API_KEY`` selects Google.
-3. Otherwise resolve Ollama. Unrecognised backend names also use this fallback.
-``CARE_LOOP_LLM_MODEL`` overrides the chosen provider's model, not its provider.
-Embedding resolution is independent of API-key detection.
-
-These are resolved choices, not evidence that a provider serves traffic.
-The active chat adapter is selected separately in ``chat/llm.py``.
+Chat priority: ``CARE_LOOP_LLM_BACKEND`` override, OpenAI key, Google key,
+then Ollama. Unknown backend names fall back to Ollama. ``CARE_LOOP_LLM_MODEL``
+overrides the model only. Embeddings resolve independently of API keys.
+``chat/llm.py`` selects the adapter that actually serves requests.
 """
 
 from __future__ import annotations

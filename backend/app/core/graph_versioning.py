@@ -52,7 +52,6 @@ class GraphStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
 
-    # -- plumbing -----------------------------------------------------------
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path))
@@ -92,7 +91,6 @@ class GraphStore:
                 """
             )
 
-    # -- writes -------------------------------------------------------------
 
     def append_node(
         self,
@@ -170,7 +168,6 @@ class GraphStore:
             )
         return new_version
 
-    # -- reads --------------------------------------------------------------
 
     def get_current(self, label: str, node_id: str) -> dict[str, Any] | None:
         """Return the current version of a node, or ``None``."""
@@ -233,7 +230,6 @@ class GraphStore:
             "valid_to": row["valid_to"],
         }
 
-    # -- materialisation ----------------------------------------------------
 
     def materialise_current(self) -> nx.MultiDiGraph:
         """Build a NetworkX graph of the current-state subgraph."""
@@ -259,11 +255,6 @@ class GraphStore:
 
     def close(self) -> None:
         """No-op: connections are short-lived per operation."""
-
-
-# ---------------------------------------------------------------------------
-# Demo
-# ---------------------------------------------------------------------------
 
 
 def _demo(db_path: str | Path | None = None) -> None:

@@ -1,8 +1,4 @@
-"""Explanation view builders (implementation).
-
-Deterministic and pure: same inputs always produce the same dict, no I/O, no
-clock, no randomness.
-"""
+"""Build deterministic explanation views without I/O or clinical-state changes."""
 
 from __future__ import annotations
 
@@ -74,11 +70,6 @@ _PLAIN_AVOID = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
-
-
 def _format_amount(value: Any, unit: str) -> str:
     try:
         num = float(value)
@@ -107,11 +98,6 @@ def _target_citation(
             return None
         return provenance.get("citation")
     return citation_for(target, fired_rules)
-
-
-# ---------------------------------------------------------------------------
-# Clinician view
-# ---------------------------------------------------------------------------
 
 
 def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
@@ -148,7 +134,6 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
 
     conflicts: list[dict[str, Any]] = []
 
-    # 1) Resolutions explicitly recorded by CONFLICT-* rules in the trace.
     for fired in fired_rules:
         if str(fired.get("rule_id", "")).startswith(_CONFLICT_PREFIX):
             conflicts.append(
@@ -159,8 +144,7 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
                 }
             )
 
-    # Nutrient mentions can overlap without conflicting (e.g. independent MIN/MAX).
-    # Keep this display heuristic separate from recorded engine resolutions.
+    # Mention overlap is not a recorded conflict: MIN and MAX may coexist.
     priority_overlaps: list[dict[str, Any]] = []
     by_nutrient: dict[str, list[dict[str, Any]]] = {}
     for fired in fired_rules:
@@ -232,11 +216,6 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
         "constraints": constraints,
         "exclusions": exclusions,
     }
-
-
-# ---------------------------------------------------------------------------
-# Patient view
-# ---------------------------------------------------------------------------
 
 
 def _target_phrases(targets: list[dict[str, Any]]) -> list[dict[str, str]]:

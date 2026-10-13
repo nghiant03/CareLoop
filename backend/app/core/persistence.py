@@ -1,19 +1,13 @@
 """Durable SQLite storage for clinical workflows.
 
-Stores patient profiles, plans, meal logs, envelope history, observations,
-simulations, and review items. Reads use fresh connections rather than process
-caches. Each operation owns its connection and transaction.
+Each operation owns a fresh connection and transaction. ``CARELOOP_APP_DB``
+is resolved at call time and defaults to tracked ``data/careloop_app.sqlite3``.
+Tests must use an isolated path. Schema initialization is cached per path.
 
-``CARELOOP_APP_DB`` is resolved at call time, defaulting to the tracked
-``data/careloop_app.sqlite3``. Tests must select an isolated path before using
-the store. Schema initialization is cached per path; the legacy-column
-migration reserves the database write before rechecking, so concurrent
-processes initializing the same file cannot interleave their checks.
-
-Sequential IDs are minted under a SQLite write reservation, protecting the
-read-max/insert sequence across workers. Normal workflows retain minted rows;
-test cleanup can delete them. Live envelope writes use ``store_envelope`` for
-revision checks; ``journal_envelope`` is an unchecked history-seeding helper.
+SQLite write reservations protect migrations, ID allocation, and lifecycle
+revision checks across workers. IDs can be reused only after minted rows are
+removed. Use ``store_envelope`` for live writes. ``journal_envelope`` seeds
+history without revision checks.
 """
 
 from __future__ import annotations
@@ -178,7 +172,7 @@ def _today() -> str:
 
 
 def _connect() -> sqlite3.Connection:
-    """Open a short-lived connection, applying the schema once per path."""
+    """Open a connection, initializing the schema once per database path."""
     path = db_path()
     parent = Path(path).parent
     if str(parent):
@@ -188,15 +182,10 @@ def _connect() -> sqlite3.Connection:
             if path not in _INITIALIZED:  # double-checked
                 conn = sqlite3.connect(path)
                 try:
-                    # Idempotent schema creation; every statement is IF NOT
-                    # EXISTS, so a concurrent initializer cannot interleave
-                    # harmfully with this part.
+                    # IF NOT EXISTS keeps schema creation safe across workers.
                     conn.executescript(_SCHEMA)
-                    # Reserve the database write before rechecking and changing
-                    # the schema: _INIT_LOCK is process-local, and a second
-                    # process initializing the same file could otherwise pass
-                    # the same column check and fail its ALTER with "duplicate
-                    # column name".
+                    # Reserve writes before checking columns: _INIT_LOCK cannot
+                    # prevent another process from attempting the same ALTER.
                     conn.execute("BEGIN IMMEDIATE")
                     if "items_json" not in {r[1] for r in conn.execute("PRAGMA table_info(meal_logs)")}:
                         conn.execute("ALTER TABLE meal_logs ADD COLUMN items_json TEXT")
@@ -253,9 +242,7 @@ def _mint_id(conn: sqlite3.Connection, table: str, prefix: str, column: str) -> 
     return candidate
 
 
-# ---------------------------------------------------------------------------
 # Plans
-# ---------------------------------------------------------------------------
 
 
 def save_plan(
@@ -377,9 +364,7 @@ def latest_plan_for_patient(patient_id: str) -> dict[str, Any] | None:
     return _plan_summary(row) if row is not None else None
 
 
-# ---------------------------------------------------------------------------
-# Meal logs (same semantics as backend.app.adherence.store)
-# ---------------------------------------------------------------------------
+# Meal logs
 
 
 def put_log(
@@ -508,9 +493,7 @@ def clear_logs() -> None:
         conn.commit()
 
 
-# ---------------------------------------------------------------------------
 # Envelope journal
-# ---------------------------------------------------------------------------
 
 
 class EnvelopeConflictError(Exception):
@@ -745,9 +728,7 @@ def list_envelope_history(patient_id: str) -> list[dict[str, Any]]:
     ]
 
 
-# ---------------------------------------------------------------------------
 # Observations
-# ---------------------------------------------------------------------------
 
 
 def add_observation(
@@ -806,9 +787,7 @@ def list_observations(patient_id: str) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-# ---------------------------------------------------------------------------
 # Simulations
-# ---------------------------------------------------------------------------
 
 
 def save_simulation(
@@ -866,9 +845,7 @@ def list_simulations(patient_id: str) -> list[dict[str, Any]]:
     return out
 
 
-# ---------------------------------------------------------------------------
 # Review queue
-# ---------------------------------------------------------------------------
 
 
 def _review_row(row: sqlite3.Row) -> dict[str, Any]:
@@ -1086,11 +1063,6 @@ def record_review_action(
             "SELECT * FROM review_items WHERE review_id = ?", (review_id,)
         ).fetchone()
     return _review_row(row)
-
-
-# ---------------------------------------------------------------------------
-# Test / maintenance helpers
-# ---------------------------------------------------------------------------
 
 
 def clear_all() -> None:

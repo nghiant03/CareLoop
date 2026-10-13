@@ -1,9 +1,6 @@
-"""Patient models.
+"""API patient profiles and canonical envelope snapshots.
 
-``PatientSummary`` is the canonical audit-friendly subset frozen inside every
-envelope (re-exported from ``shared/``). ``Patient`` is the richer synthetic
-profile accepted by the patient API. The richer dataset-generator model is
-``data.patient.Patient``.
+The dataset generator's extended record lives in ``data.patient``.
 """
 
 from __future__ import annotations

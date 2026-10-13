@@ -46,12 +46,10 @@ class TemplateLLM:
 def build_adapter(
     env: dict[str, str] | None = None,
 ) -> tuple[LLMAdapter, dict[str, Any]]:
-    """Return the active ``(adapter, info)`` pair.
+    """Return ``(TemplateLLM, info)`` regardless of the resolved provider.
 
-    ``info["resolved"]`` mirrors ``llm_choice.choose_llm`` (documented priority:
-    explicit override -> OPENAI_API_KEY -> GOOGLE_API_KEY -> local Ollama);
-    ``info["active"]`` names the adapter actually serving completions, which in
-    this implementation is always the deterministic template adapter.
+    ``info["resolved"]`` reports configuration from ``llm_choice.choose_llm``.
+    ``info["active"]`` identifies the template adapter serving completions.
     """
     choice = choose_llm(env if env is not None else os.environ)
     return TemplateLLM(), {"resolved": asdict(choice), "active": TemplateLLM.name}

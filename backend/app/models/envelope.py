@@ -1,10 +1,4 @@
-"""Envelope model re-export.
-
-The source of truth is ``shared/envelope_schema.py``. This module preserves the
-backend import path without defining a second contract.
-
-Do NOT redefine the models here — edits belong in ``shared/``.
-"""
+"""Compatibility imports. Define and edit envelope models in ``shared/``."""
 
 from __future__ import annotations
 

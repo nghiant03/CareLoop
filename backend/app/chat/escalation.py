@@ -1,20 +1,6 @@
-"""Pattern-based escalation filter for out-of-scope chat requests.
+"""Escalate configured emergency, diagnosis, medication, and scope patterns.
 
-Detect configured patterns for requests that should be escalated rather than
-answered as nutrition guidance:
-
-* **emergency** symptoms (chest pain, breathing trouble, stroke signs, ...) —
-  advise urgent care immediately. Extreme glucose readings belong here too:
-  the configured category floor is 350 mg/dL with no upper bound. Readings in
-  mmol/L use the standard conversion;
-* **diagnosis** requests ("do I have ...", "what's wrong with me");
-* **medication / dosing changes** (start/stop/adjust prescriptions);
-* **out-of-scope topics** (pregnancy, dialysis, paediatrics, cancer treatment
-  and other non-nutrition clinical domains).
-
-The regex filter prioritizes escalation when a configured safety pattern matches.
-No match is not proof that a question is safe or in scope; this is not a clinical
-classifier. Matching is deterministic and uses no model.
+Matching is deterministic. No match does not establish clinical safety or scope.
 """
 
 from __future__ import annotations
@@ -23,10 +9,7 @@ import re
 
 __all__ = ["CATEGORIES", "check"]
 
-# Drug / medication vocabulary for medication-change detection. Specific
-# agents commonly managed in CKD/T2D care plus generic medication words, so
-# e.g. "should I stop taking metformin?" or "can I skip my insulin today?"
-# are escalated even though no generic word appears.
+# Drug names catch change requests that omit generic medication words.
 _DRUGS = (
     r"(?:metformin|insulin|lisinopril|enalapril|losartan|valsartan|"
     r"dapagliflozin|empagliflozin|furosemide|spironolactone|"

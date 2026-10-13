@@ -1,27 +1,12 @@
 """Versioned knowledge-base graph store (SQLite + NetworkX).
 
-Implements the logical model documented in ``rules/neo4j_schema_design.md``
-(the SQLite + NetworkX prototype backend chosen in ``rules/SCHEMA_DECISION.md``):
+Node content is immutable. New versions close the previous validity interval.
+Edges are immutable, pinned to node versions, and inactive when either endpoint
+closes. Identical edge writes reuse the existing row.
 
-``Patient -> Diagnosis -> Guideline -> Rule -> NutrientConstraint -> Dish -> NutrientProfile``
-
-Storage uses **versioned validity intervals**, not separate valid-time and
-transaction-time axes:
-
-* ``nodes(logical_id, version, label, props, source, checksum, valid_from, valid_to)``
-  — one row per version, PK ``(logical_id, version)``. Writing a new version
-  closes the previous open row (``valid_to`` = new ``valid_from``) — the single
-  documented write to history. Content columns (``props``/``label``/``source``/
-  ``checksum``) are protected by a trigger and can never be updated.
-* ``edges(rel_type, src_id, src_version, dst_id, dst_version, props, valid_from)``
-  — edges are *pure appends*: each edge row is pinned to explicit node versions,
-  so an old edge automatically goes inactive when its endpoint version is
-  closed. No edge is ever updated or deleted. Re-asserting an edge identical
-  in type, endpoints, pinned versions, and props is idempotent, so identical
-  rule reimports do not duplicate relationships.
-
-A NetworkX ``MultiDiGraph`` view is materialised on demand for the current
-state or any point-in-time snapshot.
+NetworkX views select current state or a timestamp. Validity has one time axis,
+not separate valid-time and transaction-time histories. See
+``rules/neo4j_schema_design.md`` and ``rules/SCHEMA_DECISION.md``.
 """
 
 from __future__ import annotations
@@ -159,7 +144,6 @@ class KBGraph:
         self._conn.row_factory = sqlite3.Row
         self._init_schema()
 
-    # -- schema -------------------------------------------------------------
 
     def _init_schema(self) -> None:
         self._conn.executescript(
@@ -218,7 +202,6 @@ class KBGraph:
     def close(self) -> None:
         self._conn.close()
 
-    # -- writes --------------------------------------------------------------
 
     def append_node(
         self,
@@ -229,17 +212,13 @@ class KBGraph:
         version: int | None = None,
         valid_from: str | None = None,
     ) -> int:
-        """Append a new version of a node; returns the version number.
+        """Append node content and close its previous interval. Return the version.
 
-        Close the previous interval by setting ``valid_to`` and insert a row.
-        A trigger protects existing content. If the current props checksum
-        matches, return its existing version without appending, even when other
-        metadata differs. ``valid_from`` defaults to UTC now.
-
-        An explicit ``version`` must be strictly newer than every existing
-        version of the node, and ``valid_from`` must not predate the currently
-        open version; both are rejected with ValueError before any write.
-        Omitting ``version`` retains automatic allocation.
+        Matching current props reuse the existing version, ignoring metadata
+        differences. Otherwise allocate a version or require the supplied one
+        to exceed every existing version. ``valid_from`` defaults to UTC now
+        and cannot predate the open version. Invalid ordering raises ValueError
+        before writing.
         """
         with self._conn:
             return self._append_node(
@@ -265,8 +244,6 @@ class KBGraph:
             (logical_id,),
         ).fetchone()
         if cur is not None and cur["checksum"] == checksum:
-            # Identical content already current: no new version (append-only
-            # versioning tracks *changes*, not re-assertions).
             return int(cur["version"])
         row = self._conn.execute(
             "SELECT COALESCE(MAX(version), 0) AS v FROM nodes WHERE logical_id = ?",
@@ -336,9 +313,7 @@ class KBGraph:
         dst_version = dst_version if dst_version is not None else self._current_version_of(dst_id)
         props_json = json.dumps(props or {}, sort_keys=True, separators=(",", ":"))
         ts = valid_from or _utcnow()
-        # Idempotent re-assertion of an identical pinned relationship: an
-        # identical rule reimport must not duplicate edge rows (which would
-        # also duplicate the constraints returned for the rule).
+        # Reimports must not duplicate edges or the constraints reached through them.
         existing = self._conn.execute(
             "SELECT edge_id FROM edges WHERE rel_type = ? AND src_id = ? "
             "AND src_version = ? AND dst_id = ? AND dst_version = ? AND props = ?",
@@ -364,15 +339,10 @@ class KBGraph:
         source: str | None = None,
         valid_from: str | None = None,
     ) -> int:
-        """Append one version of a rule plus its graph neighbourhood.
+        """Append a rule and its graph neighbourhood in one transaction.
 
-        Creates/updates the Guideline, Section, Rule, Diagnosis,
-        NutrientConstraint and ExclusionFlag nodes and their edges per the
-        reference model, in one transaction: a malformed rule is rejected
-        before any write and a mid-append failure rolls the whole
-        neighbourhood back, leaving existing history untouched. A shared
-        guideline revision re-pins every current section of that guideline so
-        unchanged sections stay connected. Returns the new rule version number.
+        Validate before writing and roll back all changes on failure. Guideline
+        revisions reconnect every current section. Return the rule version.
         """
         _validate_rule(rule)
         ts = valid_from or _utcnow()
@@ -400,10 +370,8 @@ class KBGraph:
                 version=None,
                 valid_from=ts,
             )
-            # A guideline version bump must not disconnect its unchanged
-            # sections: re-pin every current section to the guideline's
-            # current version (idempotent when that edge already exists).
-            # Historical pinned edges are never deleted.
+            # Reconnect unchanged sections to the new guideline version without
+            # deleting their historical edges.
             for section_lid in self._current_sections_of(guideline):
                 self._append_edge("HAS_SECTION", gid, section_lid, valid_from=ts)
 
@@ -497,7 +465,6 @@ class KBGraph:
             r["logical_id"] for r in rows if r["logical_id"].startswith(prefix)
         )
 
-    # -- internal reads ------------------------------------------------------
 
     def _current_version_of(self, logical_id: str) -> int:
         row = self._conn.execute(
@@ -521,7 +488,6 @@ class KBGraph:
             "valid_to": row["valid_to"],
         }
 
-    # -- reads ---------------------------------------------------------------
 
     def nodes(
         self,
@@ -776,7 +742,6 @@ class KBGraph:
             "edge_counts": edge_counts,
         }
 
-    # -- convenience accessors used by retrieval/chat -------------------------
 
     def rules(self) -> list[dict[str, Any]]:
         """All current rules."""
@@ -799,11 +764,6 @@ class KBGraph:
             out.append(dish)
         out.sort(key=lambda d: d["dish_id"])
         return out
-
-
-# ---------------------------------------------------------------------------
-# Loader
-# ---------------------------------------------------------------------------
 
 
 def load_kb(

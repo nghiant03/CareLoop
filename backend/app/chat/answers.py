@@ -1,9 +1,8 @@
 """Compose cited nutrition answers from applicable KB rules and envelope context.
 
-Every answered response is grounded and carries at least one citation. Only
-APPROVED envelope values are quoted as personal targets; patient-role requests
-with a REJECTED envelope are refused. The default path is deterministic; an
-optional LLM adapter may rephrase the assembled text. 
+Personal targets require APPROVED envelopes. Patient requests with REJECTED
+envelopes are refused. Templates are deterministic and include citations.
+Optional LLM rephrasing is not checked for grounding.
 """
 
 from __future__ import annotations
@@ -23,8 +22,7 @@ __all__ = [
     "format_value",
 ]
 
-# Cap on supporting sentences. The primary answer (envelope sentence or
-# anchor rule) is not counted and can span several sentences.
+# Supporting-text limit excludes the primary envelope or rule answer.
 MAX_ANSWER_PROSE_PARTS = 3
 
 # Trace row format: ``set <nutrient> <kind> = <coef> <unit>/kg/d`` with no
@@ -33,12 +31,10 @@ _UNSCALED_COEFFICIENT_ROW = re.compile(
     r"set (?P<nutrient>\w+) (?P<kind>\w+) = (?P<value>-?[\d.]+) (?P<unit>\w+)/kg/d"
 )
 
-# Mirror of rules/engine.py ``_PER_KG_NUTRIENTS``. Per-kg values must never
-# render as absolute daily doses.
+# Keep in sync with rules.engine: per-kg values are not daily doses.
 _PER_KG_NUTRIENTS = {"energy_kcal", "protein_g"}
 
-# Conflict/safety bookkeeping, not guideline content: never anchor a
-# patient-facing citation.
+# Internal bookkeeping rules cannot anchor patient-facing citations.
 _INTERNAL_RULE_PREFIXES = ("CONFLICT-", "SAFETY-")
 
 # Prevents clinician-authored values from claiming guideline authorship.
@@ -83,8 +79,7 @@ _COMPILED_NUTRIENTS = {
     for nutrient, patterns in _NUTRIENT_PATTERNS.items()
 }
 
-# This order determines which nutrient receives the anchor when several match.
-# Saturated-fat questions can also match total fat; prefer sat_fat_g first.
+# Prefer saturated fat before total fat when a question matches both.
 _NUTRIENT_ORDER = [
     "sodium_mg", "potassium_mg", "phosphorus_mg", "protein_g", "energy_kcal",
     "fiber_g", "sat_fat_g", "carbs_g", "fat_g", "sugar_g",
@@ -252,23 +247,15 @@ def _status_of(envelope: dict[str, Any]) -> str:
 
 
 def _target_is_unscaled_per_kg(envelope: dict[str, Any], target: dict[str, Any]) -> bool:
-    """True when an envelope target still carries a raw per-kg coefficient.
+    """Detect an unscaled per-kg target from its matching source trace.
 
-    The engine scales per-kg coefficients by weight whenever the weight is
-    known; the producing trace row then reads
-    ``set <nutrient> <kind> = <coef> <unit>/kg/d -> <scaled> <unit>/d``.
-    A row with the ``/kg/d`` marker but no ``-> <scaled>`` clause means the
-    weight was unknown and the stored value is still the coefficient.
-
-    Legacy traces are interpreted against the *current* target: a clinician
-    replacement is an absolute daily value, and a coefficient row counts only
-    when it actually produced the stored value.
+    Raw rows contain ``/kg/d`` without a ``-> <scaled>`` value. Match the
+    current target, not an obsolete rule value. Clinician edits are daily doses.
     """
     nutrient = target.get("nutrient", "")
     if nutrient not in _PER_KG_NUTRIENTS:
         return False
-    # Resolve the author before interpreting units; legacy edits may lack
-    # explicit provenance even when their absolute value equals a coefficient.
+    # Legacy clinician doses may equal a coefficient without being per-kg.
     citation = _target_citation(target, envelope.get("fired_rules") or [])
     if not citation or citation.get("rule_id") == _CLINICIAN_EDIT_RULE_ID:
         return False
@@ -375,8 +362,7 @@ def _envelope_context(
         core = f"a daily {label} target of {amount}"
     sentence = f"Your clinician-approved plan sets {core}."
 
-    # Match exact constraint provenance before legacy trace inference; citations[0]
-    # could attribute an edited number to an unrelated guideline.
+    # A general envelope citation cannot establish who authored this value.
     citation = _target_citation(target, envelope.get("fired_rules") or [])
     if citation and not all(citation.get(key) for key in ("rule_id", "guideline", "section")):
         citation = None
@@ -409,11 +395,9 @@ def _rule_sentence(rule: dict[str, Any], role: str) -> str:
 def _constraint_sentences(
     rule: dict[str, Any], role: str, weight_kg: float | None = None
 ) -> list[str]:
-    """Render a rule's constraints as patient-safe sentences.
+    """Render constraints, scaling per-kg values only with a positive weight.
 
-    Per-kg coefficients (25-35 kcal/kg, 0.8-1.3 g/kg protein, ...) are never
-    printed as absolute daily doses. With a known positive body weight, show
-    the computed daily value. Otherwise, say "per kg of body weight".
+    Without weight, retain the "per kg of body weight" qualifier.
     """
     sentences = []
     for constraint in rule.get("constraints", []):
@@ -553,7 +537,6 @@ def answer(
     # Prefer the current profile for rule applicability, then the frozen snapshot.
     applicability_patient = patient or (envelope or {}).get("patient_snapshot")
 
-    # 1) Envelope numbers (approved only; pending/declined get fixed text).
     if env_ctx is not None:
         parts.append(env_ctx["sentence"])
         if env_ctx["citation"]:
@@ -563,7 +546,7 @@ def answer(
                        "envelope_id": (envelope or {}).get("envelope_id"),
                        "version": (envelope or {}).get("version"), "citation": env_ctx["citation"]})
 
-    # 2) Choose an applicable nutrient anchor independently of envelope approval.
+    # General guideline anchors do not depend on personal-target approval.
     anchor = (
         _anchor_rule(kb, nutrients, role, applicability_patient)
         if nutrients
@@ -583,8 +566,6 @@ def answer(
         claims.extend({"text": text, "source": "rule", "citation": _citation_of_rule(anchor)} for text in sentences)
         citations.append(_citation_of_rule(anchor))
 
-    # 3) Supporting retrieved chunks (rule chunks add citations, dish chunks
-    #    add food facts).
     if anchor is not None or env_ctx is not None or best_score > retrieval.MIN_SCORE:
         used_anchor = anchor["rule_id"] if anchor else None
         for hit in hits:

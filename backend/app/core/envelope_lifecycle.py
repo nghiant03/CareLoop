@@ -1,12 +1,10 @@
 """Clinician transitions over durable, revision-checked envelope snapshots.
 
-Each transition persists and returns a deep copy, leaving its input untouched.
-Successful writes advance ``lifecycle_revision``. ``expected_revision``, when
-supplied, must match the input snapshot's revision or ``EnvelopeConflictError``
-is raised. Persistence always checks that snapshot against the durable revision,
-even when the client token is omitted. A conflict requires reloading and review
-before retrying; omitting the token cannot detect changes since a client's view
-if the caller has already loaded a newer snapshot.
+Transitions persist and return deep copies, leaving inputs unchanged. Writes
+advance ``lifecycle_revision`` and check it against durable state. A supplied
+``expected_revision`` must also match the input or raise ``EnvelopeConflictError``.
+Reload and review after conflicts. Without a client token, loading a fresh input
+cannot detect changes since the client's earlier view.
 """
 
 from datetime import UTC, datetime
@@ -46,8 +44,7 @@ def approve(envelope: NutrientEnvelope, *, approved_by: str, notes: str | None =
     """Persist an APPROVED copy with reviewer and UTC approval time.
 
     Raise ``EnvelopeScopeError`` for rejected, scope-ineligible, or targetless
-    inputs. ``notes=None`` preserves existing notes; content version is unchanged.
-    Copy ownership and revision conflicts follow the module's transition contract.
+    inputs. ``notes=None`` preserves existing notes. Content version is unchanged.
     """
     updated = _transition_copy(envelope, expected_revision)
     _require_eligible(updated)
@@ -68,10 +65,9 @@ def edit(envelope: NutrientEnvelope, *, edited_by: str,
     """Persist an EDITED copy, clear approval, and increment the content version.
 
     Raise ``EnvelopeScopeError`` for rejected or scope-ineligible inputs. ``None``
-    preserves a field; supplied target/exclusion lists replace it in full (empty
-    lists clear it). Every call appends a clinician-edit trace, even for notes-only
-    edits; replacement targets receive clinician provenance. Copy ownership and
-    revision conflicts follow the module's transition contract.
+    preserves a field. Supplied lists replace it in full, including empty lists.
+    Every call appends a clinician-edit trace, even for notes-only edits.
+    Replacement targets receive clinician provenance.
     """
     updated = _transition_copy(envelope, expected_revision)
     _require_eligible(updated)
@@ -112,8 +108,7 @@ def reject(envelope: NutrientEnvelope, *, reason: str | None = None,
     """Persist a REJECTED copy and clear approval without changing content version.
 
     A nonempty reason replaces notes. Any input status or scope eligibility is
-    accepted. Copy ownership and revision conflicts follow the module's
-    transition contract.
+    accepted.
     """
     updated = _transition_copy(envelope, expected_revision)
     updated.status = EnvelopeStatus.REJECTED

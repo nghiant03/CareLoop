@@ -1,19 +1,8 @@
-"""Approval-gate invariant.
+"""Gate live planning on approval, scope eligibility, and nonempty targets.
 
-Live planning requires an APPROVED, scope-eligible envelope with nonempty targets.
-HTTP dependencies enforce this gate. Informational views and chat may inspect
-other lifecycle states; personal target guidance still requires approval.
-See docs/ARCHITECTURE.md for the lifecycle and chat contracts.
-
-Use ``require_approved_envelope`` for path-keyed requests and
-``require_approved_envelope_for_patient`` for a ``PlanRequest`` body.
-
-Failure of any gate condition raises :class:`EnvelopeNotApprovedError`, which
-``backend.app.main`` renders as HTTP 409 with body::
-
-    {"error": "envelope_not_approved", "status": "<CURRENT_STATUS>"}
-
-The SQLite journal is authoritative for live reads and atomic proposal IDs.
+Path dependencies load by envelope ID. Body dependencies gate the patient's
+latest proposal. Failures become HTTP 409 ``envelope_not_approved`` responses.
+Live reads use the SQLite journal, not the compatibility cache.
 """
 
 from __future__ import annotations
@@ -55,9 +44,7 @@ class EnvelopeNotApprovedError(Exception):
         )
 
 
-# ---------------------------------------------------------------------------
-# Compatibility mirror; live reads always use SQLite
-# ---------------------------------------------------------------------------
+# Compatibility mirror only. Live reads use SQLite.
 
 ENVELOPE_STORE: dict[str, NutrientEnvelope] = {}
 _STORE_LOCK = Lock()
@@ -114,11 +101,6 @@ def assert_approved(envelope: NutrientEnvelope) -> NutrientEnvelope:
     if not envelope.is_ready_for_optimisation():
         raise EnvelopeNotApprovedError(envelope)
     return envelope
-
-
-# ---------------------------------------------------------------------------
-# FastAPI dependencies
-# ---------------------------------------------------------------------------
 
 
 def get_envelope_or_404(
