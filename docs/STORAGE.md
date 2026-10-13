@@ -5,23 +5,62 @@ This is a storage baseline, not a claim of deployment or clinical readiness.
 
 | Category | Location | Version control |
 |---|---|---|
-| Rules, dish catalogue, synthetic patient fixtures, schema mirror | `rules/`, `data/*.json`, `shared/` | Keep versioned |
-| Reviewed benchmark/evaluation snapshots | Existing report and results files alongside modules | Keep versioned; publish deliberately |
+| Rules, dish catalogue, synthetic patient fixtures | External `CARELOOP_DATASET_DIR/fixtures/` | Never bundle; provision separately |
+| Reviewed benchmark/evaluation snapshots | Markdown summaries in source; raw results in external `benchmarks/` | Raw data untracked; publish summaries deliberately |
 | Application database | `CARELOOP_APP_DB`; otherwise `$XDG_STATE_HOME/careloop/careloop_app.sqlite3` or `~/.local/state/careloop/careloop_app.sqlite3` | Never commit |
 | Knowledge authoring journal | Operator-selected `CARELOOP_KNOWLEDGE_DB`; separate draft/review/publish storage | Never commit; see [KNOWLEDGE.md](KNOWLEDGE.md) |
-| New evaluation, optimizer and retrieval runs | `./artifacts/{evaluation,optim,retrieval}/`; root override `CARELOOP_ARTIFACT_DIR` | Ignored; archive selected runs externally |
+| PostgreSQL clinical storage | `CARELOOP_APP_DATABASE_URL` or `_FILE`; default Compose database `careloop_clinical` | Runtime credentials ignored, never committed |
+| PostgreSQL knowledge journal | `CARELOOP_KNOWLEDGE_DATABASE_URL` or `_FILE`; separate `careloop_knowledge` database | Runtime reads only; operator journal writes |
+| New evaluation, optimizer and retrieval runs | External dataset `outputs/{evaluation,optim,retrieval}/`; override `CARELOOP_ARTIFACT_DIR` | Never commit |
 
 Database paths resolve when used. Benchmark output constants resolve on module
 import, so set environment variables before launching a run. Existing
 `--out-dir` for evaluation and `write_results(path=...)` for retrieval remain
 supported. For experiment isolation, give each run a distinct artifact root.
-Experimental scripts such as `spike_pymoo.py` and the mining comparison writer
-retain their existing explicit output interfaces; this change covers the main
-evaluation, optimizer benchmark and retrieval benchmark workflows.
+Mining comparisons write external `outputs/mining/COMPARISON.md` and
+`comparison_results.json`; the committed historical report remains unchanged.
+Experimental `spike_pymoo.py` also writes outside the checkout. See [DATASETS.md](DATASETS.md).
+
+## PostgreSQL deployment and import
+
+The single root `compose.yaml` now includes PostgreSQL, an explicit schema
+migration service, knowledge operator tooling, backend and frontend. See
+[POSTGRES.md](POSTGRES.md) and [deploy/README.md](../deploy/README.md).
+This configuration never auto-imports a SQLite file or approves knowledge.
+
+The legacy path settings above remain available for imports and fixture tests.
+Do not set both a PostgreSQL URL and a SQLite path for the same domain. A bad
+URL, inaccessible server or absent schema fails closed; no SQLite fallback is
+attempted. URL-file secrets are loaded without printing credentials. Runtime
+roles cannot migrate schemas; schema initialization needs the migration admin.
+
+With source and target application writers stopped, use
+`python -m backend.storage.migrate import-sqlite --component clinical --source ...
+--writers-stopped`. Select the target using the corresponding DATABASE_URL_FILE
+environment variable. Repeat separately for a real knowledge SQLite journal if
+one exists. The import takes a read-only WAL-aware snapshot, checks integrity,
+rejects unexpected tables/columns, refuses populated targets or repeat imports,
+and compares every imported column by row-multiset hash before committing.
+JSON payloads remain TEXT so stored snapshot/citation bytes and existing knowledge
+hashes are preserved; this version does not introduce JSONB numeric reformatting.
+Generated identity counters are restarted transactionally after preserved IDs.
+Each database import is atomic; the pair of imports is not one transaction.
+
+The PostgreSQL boundary keeps the prior conservative write serialization using
+transaction-scoped advisory locks per domain. Reads proceed independently.
+This supports networked application processes safely but is not proof of high
+concurrent-write throughput. Pool limits apply per process/database connection
+URL (`CARELOOP_DB_POOL_MAX_SIZE`, default 5); account for workers and operator
+connections when sizing server connection limits. Finer-grained locks are a
+separate optimization, not an assumed migration benefit.
+
+SQLite backup/relocation instructions below apply only to legacy storage.
+PostgreSQL backup and restore instructions are in POSTGRES.md.
 
 ## Existing checkout: preserve and relocate state
 
-The old `data/careloop_app.sqlite3` is retained locally but no longer tracked.
+The old `data/careloop_app.sqlite3` was relocated to external dataset
+`legacy/careloop_app.sqlite3` and is no longer tracked.
 It is not a demo fixture. Historical commits still contain it; ignoring a file
 does not remove it from history. Assess its contents before sharing repository
 history. History rewriting requires a separate, coordinated decision.

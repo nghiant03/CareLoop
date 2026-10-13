@@ -60,21 +60,18 @@ answers without a citation. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 ## Repository layout
 
 For the local container stack (frontend, backend, persistent clinical storage),
-see [`deploy/README.md`](deploy/README.md). It runs the current SQLite application;
-the separate PostgreSQL preparation stack does not migrate or replace its storage.
+see [`deploy/README.md`](deploy/README.md). One Compose stack runs PostgreSQL,
+schema migration, knowledge tooling, backend and frontend. Follow the
+[verified migration guide](docs/POSTGRES.md) before importing existing state.
 
 ```
 CareLoop/
 ├── shared/                      Cross-cutting contract (single source of truth)
 │   ├── envelope_schema.py       Pydantic NutrientEnvelope + RuleFire + ...
-│   └── envelope_schema.json     JSON Schema (language-agnostic mirror)
+│   └── export_schema.py         On-demand JSON Schema export from Pydantic
 ├── rules/                       Lane A — knowledge & rules
-│   ├── rules.json               61 rules (guideline-sourced + medication/
-│   │                            scope/conflict extensions, 2 internal safety)
 │   ├── engine.py                CLIPS forward-chaining engine (run_rules)
-│   ├── ENGINE.md                Engine design, conflict resolution, trace
-│   ├── example_trace.json       Hand-worked CKD4 + HTN + K⁺ 5.4 trace
-│   └── clipspy_facts.py / SCHEMA_DECISION.md / neo4j_schema_design.md
+│   └── clipspy_facts.py          Patient fact mapping
 ├── backend/
 │   ├── app/                     FastAPI service
 │   │   ├── main.py              uvicorn entry; CORS; 409 gate handler
@@ -89,12 +86,12 @@ CareLoop/
 │   │   ├── explain/             clinician + patient explanation views
 │   │   └── tests/               API, gate, chat, explain, adherence, e2e tests
 │   ├── optim/                   Lane B — meal-plan optimiser
+│   ├── datasets/                Dataset tooling only; no raw data
 │   │   ├── problem.py / real_data.py / solver.py / api.py
 │   │   ├── baselines.py / benchmark.py / benchmark_results.md
 │   │   └── envelopes.py / spike_pymoo.py / toy_data.py
 │   └── mining/                  trends (Theil–Sen + EWMA), clustering,
 │                                renal-weighted substitutions, COMPARISON.md
-├── data/                        Lane C — 214 SG dishes, 20 synthetic patients, USDA gap filler
 ├── frontend/                    React 19 + Vite + Tailwind (6 screens)
 ├── notebooks/                   Exploration notebooks
 ├── docs/                        User guides, demo script, architecture
@@ -108,6 +105,10 @@ CareLoop/
 Prereqs: Python 3.11+ and Node for the frontend. Set up the backend from the
 repository root with `uv venv .venv`, then
 `uv pip install --python .venv/bin/python -e '.[dev]'`.
+
+Provision external fixtures first; a fresh checkout intentionally contains no
+datasets. Set `CARELOOP_DATASET_DIR` to an absolute directory outside the checkout
+(default `~/.local/share/careloop/datasets`). See [DATASETS.md](docs/DATASETS.md).
 
 ### 1. Backend (port 8000)
 
@@ -148,6 +149,11 @@ curl -sS -X POST $P/plans -H 'content-type: application/json' \
 ```
 
 Approvals, embedded traces, created patients, saved plans, meal logs, observations,
+simulations and review actions use PostgreSQL in deployment through
+`CARELOOP_APP_DATABASE_URL` or its `_FILE` secret. Knowledge has a separate
+`CARELOOP_KNOWLEDGE_DATABASE_URL[_FILE]`. Runtime checks migrated schemas; it
+never performs PostgreSQL DDL or auto-imports legacy state.
+For legacy development/tests, approvals, plans, meal logs, observations,
 simulations and review actions persist in SQLite (`CARELOOP_APP_DB`, default
 `$XDG_STATE_HOME/careloop/careloop_app.sqlite3` or
 `~/.local/state/careloop/careloop_app.sqlite3`). Existing checkout databases
@@ -169,7 +175,7 @@ nutrient values remain unverified and prices are synthetic estimates.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/healthz` | liveness probe (+ `GET /` service banner) |
-| GET | `/patients` | list patients (reads `data/patients.json` + overlay) |
+| GET | `/patients` | list external synthetic fixtures + durable patient records |
 | GET | `/patients/{patient_id}` | fetch one patient (404 if absent) |
 | POST | `/patients` | create a patient (durable SQLite profile) |
 | POST | `/rules/run` | patient id → PROPOSED `NutrientEnvelope` + `RuleFire` trace |
@@ -200,7 +206,7 @@ Interactive docs: `http://localhost:8000/docs`.
    `backend/app/core/approval_gate.py`; violations render as
    `HTTP 409 {"error": "envelope_not_approved", "status": ...}`.
 2. **The contract lives in `shared/envelope_schema.py`.** Engine, optimiser and
-   API import it; `shared/envelope_schema.json` is the language-agnostic mirror.
+   API import it; language-agnostic JSON Schema is generated from it on demand.
 3. **Conflict priority `CKD > HTN > T2D` on sodium** (KDIGO 2000 mg overrides
    DASH/ADA 2300 mg). Losing rules keep their trace rows with an explicit
    `SUPERSEDED: superseded by <rule> ...` marker. Potassium and phosphorus are
@@ -243,6 +249,6 @@ Interactive docs: `http://localhost:8000/docs`.
 .venv/bin/python -m pytest backend -q          # API, gate, chat, explain, adherence, e2e
 .venv/bin/python -m pytest backend/mining -q   # trends / clustering / substitutions
 .venv/bin/python backend/optim/test_real.py    # optimiser on the real dish pool
-.venv/bin/python -m shared.export_schema --check
+.venv/bin/python -m pytest shared -q
 npm --prefix frontend test                   # frontend race and contract regressions
 ```

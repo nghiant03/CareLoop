@@ -2,7 +2,7 @@
 
 Multi-objective meal-plan optimiser that turns a clinician-**APPROVED**
 `NutrientEnvelope` into a 7-day × 3-meal plan that never violates the envelope's
-hard constraints — on the real 214-dish `data/dishes.json` pool by default.
+hard constraints — on the external 214-dish curated fixture pool or published release.
 
 > **Architectural invariant:** only `EnvelopeStatus.APPROVED` envelopes may be
 > consumed. `evaluate()` / `is_feasible()` raise `EnvelopeNotApprovedError`
@@ -18,7 +18,7 @@ hard constraints — on the real 214-dish `data/dishes.json` pool by default.
 | File | Purpose |
 |---|---|
 | `problem.py` | Formal problem spec: decision vars, 4 objectives, hard constraints (MAX + exclusions), `evaluate()`, `is_feasible()`, `constraint_vector()`. |
-| `toy_data.py` | Toy pool of 8 Singapore-ish dishes (still used by the spike and smoke tests; the production pool is `data/dishes.json`). |
+| `toy_data.py` | Toy pool of 8 Singapore-ish dishes for explicit spike/smoke tests; normal catalogue input is external or database-managed. |
 | `exclusion_mapping.py` | Documented bridge from rulebook exclusion values (e.g. `high_potassium_foods`) to per-serving dish nutrient thresholds — without it the rulebook exclusions match zero dataset dishes. |
 | `real_data.py` | Real dish-pool loader (`load_dishes()`), `FastEvaluator` (numpy mirror of `evaluate`), feasibility precheck, greedy constructive builder, plan repair. |
 | `envelopes.py` | Four hand-built APPROVED envelopes (CKD-strict, CKD+hyperkalemia, T2D+HTN, T2D-only) validated against `shared/envelope_schema`. |
@@ -80,7 +80,7 @@ as `G ≤ 0` and used by the fallback's constraint-dominance.
 
 ## Real dataset + feasibility guarantee
 
-`api.run` defaults to the real 214-dish pool (`data/dishes.json` via
+`api.run` defaults to the external 214-dish curated pool (via
 `real_data.load_dishes()`). Key guarantees and mechanics:
 
 * **Feasibility guarantee** — `run()` never returns an infeasible plan. If the
@@ -94,7 +94,7 @@ as `G ≤ 0` and used by the fallback's constraint-dominance.
 * **FastEvaluator** — numpy mirror of `problem.evaluate` for pool-drawn plans
   (same objectives, same canonical constraint ordering, same EPS tolerance);
   ~50x faster, verified against the canonical evaluator in `test_real.py`.
-* **Cost placeholder** — `data/dishes.json` has no `price_sgd`; a
+* **Cost placeholder** — the external dish fixture has no `price_sgd`; a
   deterministic synthetic price (`2.5 + 0.004·kcal + 0.02·protein`) keeps the
   cost objective non-degenerate until real pricing lands.
 * All hard constraints are per-day, so a plan is feasible iff every day is —

@@ -10,12 +10,20 @@ distinctions and [the architecture](docs/ARCHITECTURE.md) for documented contrac
 ## Sources of truth and module responsibilities
 
 - `shared/envelope_schema.py` defines the canonical Python envelope contract;
-  `backend/app/models/envelope.py` re-exports it. The JSON Schema in
-  `shared/envelope_schema.json` is its cross-language mirror.
-- `rules/engine.py` derives proposals and rule traces from `rules/rules.json`.
+  `backend/app/models/envelope.py` re-exports it. JSON Schema is generated from
+  that model on demand; no mirror is tracked.
+- `rules/engine.py` derives proposals and rule traces from the external rule fixture
+  in development or the pinned knowledge release in database mode.
   See `rules/ENGINE.md` for conflict resolution and scope rules.
 - `backend/app/core/` owns approval-gate helpers, durable application storage,
   and plan preparation/mapping. `backend/app/api/` exposes HTTP workflows.
+- `backend/storage/` owns pooled PostgreSQL connections, explicit schema migrations,
+  and verified SQLite imports. Deployment uses separate clinical/knowledge databases
+  and URL-file secrets; never initialize PostgreSQL schema from runtime startup.
+- `backend/datasets/` contains code only. `CARELOOP_DATASET_DIR` selects an absolute
+  directory outside the checkout (default `~/.local/share/careloop/datasets`).
+  Never bundle raw datasets in source control, wheels or container images. See
+  `docs/DATASETS.md`; fixture-based tests require separately provisioned inputs.
 - `backend/optim/` owns search and canonical plan evaluation; `backend/mining/`
   owns trends and substitutions. `backend/app/adherence/` analyzes logged meals.
 - `backend/app/chat/` retrieves evidence and composes answers;
@@ -27,8 +35,8 @@ distinctions and [the architecture](docs/ARCHITECTURE.md) for documented contrac
   databases separate. Actor labels are attestations, not authenticated identities.
 - `frontend/src/api.ts` adapts HTTP responses for the frontend; view contracts
   live in `frontend/src/types.ts`. Check actual response shapes when changing
-  either side. Regenerate the JSON Schema with
-  `.venv/bin/python -m shared.export_schema` after model changes.
+  either side. Export JSON Schema only when needed with
+  `.venv/bin/python -m shared.export_schema --output <external-path>`.
 - `evaluation/` contains evaluation workflows and generated reports. Consult
   `evaluation/run.py` and `evaluation/run_eval.py` before regenerating artifacts.
 
@@ -46,7 +54,7 @@ Current cross-router imports do not establish a required dependency direction.
   relaxed floors and assess adequacy against the original approved aims.
 - Fresh proposals receive fresh envelope IDs; edits increment the version of
   an existing envelope. Preserve historical snapshots and citation provenance.
-- The SQLite application journal is authoritative for envelope state. Preserve
+- The configured clinical journal is authoritative for envelope state. Preserve
   embedded traces across restarts; they take precedence over legacy side stores.
 - Adherence uses approval coverage effective on the logged date. Uncovered dates
   remain unattributed; only complete logged days enter trend calculations.
@@ -64,7 +72,7 @@ Run from the repository root using the existing environment:
 
 ```sh
 .venv/bin/python -m pytest rules backend evaluation -q
-.venv/bin/python -m shared.export_schema --check
+.venv/bin/python -m pytest shared -q
 npm --prefix frontend run lint
 npm --prefix frontend test
 npm --prefix frontend run build
@@ -79,8 +87,12 @@ probes, set `CARELOOP_APP_DB` to a temporary database before importing applicati
 code; the default runtime database uses the user's state directory, never the
 checkout. Legacy `data/careloop_app.sqlite3` requires explicit migration or an
 override. See `docs/STORAGE.md`; preserve local databases and published evidence.
-Main evaluation/optimizer/retrieval runs write to ignored `artifacts/` by default
-(`CARELOOP_ARTIFACT_DIR` overrides the root). Publish report snapshots deliberately.
+Main evaluation/optimizer/retrieval runs write to external dataset `outputs/` by
+default (`CARELOOP_ARTIFACT_DIR` overrides the external root). Publish report snapshots deliberately.
+Mining comparisons also write to external `outputs/mining/`, never the published report
+by default. PostgreSQL integration tests require `CARELOOP_TEST_POSTGRES_URL`
+and create/drop only unique test databases; skipped cases are not server verification.
+See `docs/POSTGRES.md` for schema/data migration and the single Compose stack.
 
 The Python manifest is the repository-root `pyproject.toml` (single `careloop`
 distribution covering `backend/`, `shared/`, and `rules/`); the frontend manifest

@@ -1,7 +1,7 @@
 # CareLoop Mining
 
 Knowledge-discovery modules over the synthetic CareLoop dataset
-(`data/patients.json`, `data/dishes.json`). Pure-Python + numpy/scikit-learn,
+(external patient/dish fixtures; see `docs/DATASETS.md`). Pure-Python + numpy/scikit-learn,
 no network access, fully deterministic.
 
 Wired into the API by `backend/app/api/mining.py`:
@@ -27,7 +27,7 @@ each profile has `size`, `means` (original units, 3 d.p.) and
 
 ### `substitutions`
 
-- `load_dishes()` — cached loader for `data/dishes.json`.
+- `load_dishes()` — cached loader for the external dish fixture or published release.
 - `nutrient_distance(dish_a, dish_b)` — v1: Euclidean distance over the 6
   core nutrients (`energy_kcal`, `protein_g`, `sodium_mg`, `potassium_mg`,
   `phosphorus_mg`, `carbs_g`), each min-max normalised across the whole dish

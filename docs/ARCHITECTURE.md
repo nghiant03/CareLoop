@@ -7,8 +7,8 @@ describes the system as built.
 ## 1. The envelope contract is the hub
 
 Every module speaks one data shape: the **nutrient envelope**
-(`shared/envelope_schema.py`, Pydantic v2, mirrored as
-`shared/envelope_schema.json`). It carries:
+(`shared/envelope_schema.py`, Pydantic v2; JSON Schema is generated on demand,
+not stored as a second tracked contract). It carries:
 
 - `targets[]` — per-nutrient constraints (`MAX` / `MIN` / `TARGET`, canonical
   units from `NutrientKind`),
@@ -42,7 +42,7 @@ Enforced in the API layer (`backend/app/core/approval_gate.py`), not by
 convention:
 
 - `POST /rules/run` produces a `PROPOSED` or scope-rejected envelope and stores it in
-  the SQLite journal (transactionally allocated IDs; durable live authority).
+  the clinical journal (transactionally allocated IDs; durable live authority).
 - `core/envelope_lifecycle.py` handles clinician transitions:
   `/approve → APPROVED`, `/edit → EDITED` (clears
   approval; re-approval required), `/reject → REJECTED`. Approving an
@@ -50,8 +50,9 @@ convention:
   is refused with `HTTP 422 {"error": "out_of_scope_envelope"}` — scope decisions are not
   overridable through edits or approval. Proposal-owned `scope_eligible` is
   independent of editable notes. Rejected proposals require a fresh rule run.
-- `lifecycle_revision` advances on every durable transition. SQLite checks the
-  previous revision under a write reservation before appending a snapshot;
+- `lifecycle_revision` advances on every durable transition. PostgreSQL uses a
+  transaction advisory write reservation (legacy SQLite uses BEGIN IMMEDIATE)
+  to check the previous revision before appending a snapshot;
   stale updates return HTTP 409 `envelope_conflict`. Clients can also send
   `expected_revision` to detect changes since they viewed the envelope. This
   optional request field preserves older clients; the web UI always sends it.
@@ -73,20 +74,23 @@ convention:
   optimiser.
 
 The durable envelope's embedded `RuleFire` trace is authoritative for explanations.
-The application journal lives outside source by default; `CARELOOP_APP_DB`
-selects an explicit deployment path. See [STORAGE.md](STORAGE.md) for migration,
+Deployment uses `CARELOOP_APP_DATABASE_URL` or its `_FILE` secret for PostgreSQL.
+`CARELOOP_APP_DB` remains the legacy SQLite source/test override, not a URL.
+PostgreSQL schema migrations are explicit, outside runtime startup.
+See [STORAGE.md](STORAGE.md) for migration,
 backups, and the separation between run outputs and published evidence.
 `trace_store.py` serializes that trace; legacy side-store data is used only for
 inputs lacking an embedded trace, never to override a durable snapshot.
 
 ## 3. Versioned knowledge base
 
-`backend/app/kb/graph_store.py` loads `rules/rules.json` + `data/dishes.json`
+For fixture development, `backend/app/kb/graph_store.py` loads external rule and dish fixtures
 into a graph on an **in-memory SQLite** database (the recorded prototype
 decision; `rules/SCHEMA_DECISION.md`) with NetworkX for graph queries.
 
 In database mode, those inputs instead come from a pinned published snapshot in
-the separate `backend/knowledge/` authoring journal. The graph/retrieval index
+the separate PostgreSQL `backend/knowledge/` authoring journal (legacy SQLite
+journals remain importable). The graph/retrieval index
 remains a derived in-memory read model. Drafts, reviews and releases are durable,
 append-only records; runtime never writes or auto-imports the authoring database.
 See [KNOWLEDGE.md](KNOWLEDGE.md) for operator security, compatibility and rollout.
@@ -144,7 +148,7 @@ effective on that date. Dates without approval coverage are explicitly
 unattributed, never backfilled with today's targets. Only complete days enter
 trend calculations and soft-gap aggregates; partial-day hard violations remain visible.
 
-- **Adherence** (`backend/app/adherence/` + `api/adherence.py`): durable SQLite
+- **Adherence** (`backend/app/adherence/` + `api/adherence.py`): durable clinical
   meal-log store (multiple dishes and serving quantities per meal, newest save wins) and
   a pure analysis module. `MAX` totals that are exceeded are **hard
   violations** (the same semantics the optimiser treats as unbreakable);
@@ -152,7 +156,7 @@ trend calculations and soft-gap aggregates; partial-day hard violations remain v
   a per-nutrient exposure series (magnitude in the "bad" direction) and flags
   Theil–Sen trends as `worsening`/`improving` with `alert`/`review` severity.
 - **Dish catalogue** (`api/dishes.py`): deterministic read-only views over
-  `data/dishes.json` (`GET /dishes?category=&search=`, `GET /dishes/{id}`) —
+  the external dish fixture (`GET /dishes?category=&search=`, `GET /dishes/{id}`) —
   the searchable picker behind the meal-logging screen.
 
 - **Rule engine** (`rules/engine.py`): CLIPS forward-chaining decides *which*
@@ -257,9 +261,9 @@ schema.
   timezone name at that instant, not necessarily an IANA ID; the offset is in
   minutes east of UTC. The endpoint reads no database and introduces no
   configurable timezone policy.
-- The KB is rebuilt in memory per process from `rules/rules.json` +
-  `data/dishes.json`; dish values are manual-curation estimates
-  (`verified: false`, see `data/README.md`).
+- The KB is rebuilt in memory per process from external rule and dish fixtures
+  or the published database release; fixture dish values are manual-curation estimates
+  (`verified: false`, see [DATASETS.md](DATASETS.md)).
 - Production main/side composition uses normalised original-target adequacy.
   Main/side eligibility is heuristic; constrained patients may retain shortfalls.
   The single-dish fallback discloses soft-floor relaxation when used.

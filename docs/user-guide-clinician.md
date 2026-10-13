@@ -234,7 +234,7 @@ curl -sS http://127.0.0.1:8000/kb/stats | jq
 
 Node/edge counts of the versioned KB (rules, dishes, constraints, citations),
 the current version tag, and the retrieval-chunk count. Quick sanity check
-that the backend loaded `rules/rules.json` + `data/dishes.json`.
+that the backend loaded the external rule/dish fixtures or the selected published release.
 
 ## 9. Grounded chat
 

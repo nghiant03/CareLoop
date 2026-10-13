@@ -44,8 +44,8 @@ backend/
     └── tests/                # smoke, gate, KB, chat, explain, e2e tests
 ```
 
-The canonical contracts live in `shared/envelope_schema.py` (Pydantic v2) and
-`shared/envelope_schema.json` (JSON Schema). `backend/app/models/envelope.py`
+The canonical contracts live in `shared/envelope_schema.py` (Pydantic v2).
+JSON Schema exports are derived on demand. `backend/app/models/envelope.py`
 only re-exports them — never redefine the schema in the backend.
 
 ## Setup
@@ -181,7 +181,7 @@ python -m backend.app.core.llm_choice   # prints resolved choices
 
 ```bash
 .venv/bin/python -m pytest backend -q
-.venv/bin/python -m shared.export_schema --check
+.venv/bin/python -m pytest shared -q
 # or: python -m backend.app.tests.test_smoke
 ```
 

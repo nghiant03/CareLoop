@@ -1,11 +1,32 @@
 # Database-managed knowledge
 
-The operator CLI manages rules and the dish catalogue in a **separate SQLite
-authoring database**. Drafts never authorize runtime use. The service loads one
+## PostgreSQL deployment
+
+The root Compose stack selects a PostgreSQL published release. Configure
+`CARELOOP_KNOWLEDGE_DATABASE_URL` or `CARELOOP_KNOWLEDGE_DATABASE_URL_FILE` for
+runtime readers and operator commands, with separate credentials. Never also
+set the legacy `CARELOOP_KNOWLEDGE_DB` path. Run schema migrations with the admin
+role through `backend.storage.migrate init`, not the operator `init` command;
+on PostgreSQL the latter only verifies an existing schema.
+
+[POSTGRES.md](POSTGRES.md) is the deployment/bootstrap/import guide. Database
+roles replace filesystem-only access controls on the journal. Runtime reads
+use read-only transactions and a reader role; operator writes are append-only.
+Privileged administrators can still bypass guards. Actor labels still do not
+authenticate people or establish clinical validity.
+
+The SQLite paths/commands below document legacy import sources and isolated
+fixture development. In PostgreSQL deployment, select a URL-file secret instead
+of a SQLite path, then use the same import/edit/review/publish commands. No
+published release is fabricated when migrating from fixture files.
+
+The operator CLI manages rules and the dish catalogue in a **separate PostgreSQL
+authoring database** in deployment; SQLite journals remain supported as legacy
+import sources and isolated fixture tests. Drafts never authorize runtime use. The service loads one
 explicitly selected, reviewed, published release through read-only connections,
 then pins its contents for the process lifetime.
 
-`rules/rules.json` and `data/dishes.json` remain bootstrap and regression fixtures
+External `fixtures/rules.json` and `fixtures/dishes.json` remain bootstrap and regression fixtures
 in Git. In database mode they are not the live source, fallback, or authoring
 authority. The in-memory graph/BM25 index remains a derived read model, not the
 authoring journal. The patient-workflow database remains separate.
@@ -48,8 +69,8 @@ export CARELOOP_KNOWLEDGE_DB=/absolute/private/path/careloop_knowledge.sqlite3
 umask 077
 .venv/bin/python -m backend.knowledge init
 .venv/bin/python -m backend.knowledge import \
-  --draft-id bootstrap --rules-file rules/rules.json \
-  --dishes-file data/dishes.json --actor AUTHOR
+  --draft-id bootstrap --rules-file "$CARELOOP_DATASET_DIR/fixtures/rules.json" \
+  --dishes-file "$CARELOOP_DATASET_DIR/fixtures/dishes.json" --actor AUTHOR
 .venv/bin/python -m backend.knowledge show --draft-id bootstrap
 .venv/bin/python -m backend.knowledge review \
   --draft-id bootstrap --expected-revision 1 --actor REVIEWER \
@@ -109,12 +130,12 @@ treating historical fixture benchmark snapshots as evidence for changed data.
 .venv/bin/python -m backend.knowledge clone \
   --release-id knowledge-2026-10 --draft-id next --actor AUTHOR
 .venv/bin/python -m backend.knowledge export \
-  --draft-id next --out-dir artifacts/knowledge-edit
+  --draft-id next --out-dir "$CARELOOP_DATASET_DIR/outputs/knowledge-edit"
 # Edit the exported rules.json/dishes.json, not the published database rows.
 .venv/bin/python -m backend.knowledge edit \
   --draft-id next --expected-revision 1 --actor AUTHOR --note 'Explain changes' \
-  --rules-file artifacts/knowledge-edit/rules.json \
-  --dishes-file artifacts/knowledge-edit/dishes.json
+  --rules-file "$CARELOOP_DATASET_DIR/outputs/knowledge-edit/rules.json" \
+  --dishes-file "$CARELOOP_DATASET_DIR/outputs/knowledge-edit/dishes.json"
 .venv/bin/python -m backend.knowledge history --draft-id next
 ```
 
@@ -139,7 +160,8 @@ historical-log/saved-plan compatibility design.
 Back up both the knowledge journal and patient journal using consistent SQLite
 snapshots (see [STORAGE.md](STORAGE.md)). Do not copy only an active database file
 and omit its WAL. Store backups privately outside Git; rehearse restoration.
-This remains a single-host SQLite design, not a cross-host replica database.
+These snapshot instructions apply to SQLite sources. PostgreSQL logical
+backup/restore and deployment limits are documented in POSTGRES.md.
 
 First rehearse bootstrap and the chosen release against copies of application
 state, verifying scope exclusions, target approval gates, citations, plan
