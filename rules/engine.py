@@ -1,14 +1,9 @@
 """Clinical rules compiled to CLIPS, then assembled into envelope and trace dicts.
 
-Rules choose constraints by salience; Python scales per-kg values, resolves
-conflicts, and suppresses targets for scope-rejected proposals. The fixed clock
-and sorted output make sequential runs deterministic for unchanged inputs.
-Returned shapes follow ``shared/envelope_schema.py``. See ``rules/ENGINE.md``
-for rule policy and tie-breaking.
-
-``run_rules`` serializes access to its shared CLIPS environment. Import tolerates
-missing clipspy, but invoking the engine does not; ``rules.clipspy_facts`` supplies
-import-safe reference helpers.
+CLIPS chooses fired rules. Python scales per-kg values, resolves conflicts, and
+suppresses scope-rejected targets. ``rules/ENGINE.md`` owns priority/tie policy.
+``run_rules`` serializes the shared environment and returns canonical schema
+dicts without persistence. Import is allowed without clipspy, execution is not.
 """
 
 from __future__ import annotations
@@ -101,9 +96,6 @@ _TEMPLATES = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Small helpers
-# ---------------------------------------------------------------------------
 
 def _sym(value: Any) -> str:
     """Render a value as a CLIPS-safe symbol token."""
@@ -144,9 +136,6 @@ def _ruleset() -> list[dict]:
     return _RULESET
 
 
-# ---------------------------------------------------------------------------
-# CLIPS compilation
-# ---------------------------------------------------------------------------
 
 def _condition_to_clips(cond: dict) -> str:
     field, op, value = cond["field"], cond["op"], cond["value"]
@@ -257,9 +246,6 @@ def _get_env() -> Any:
     return _ENV
 
 
-# ---------------------------------------------------------------------------
-# Patient preparation
-# ---------------------------------------------------------------------------
 
 def normalize_patient_labs(patient: dict) -> dict:
     """Copy lab aliases to wire names; an explicit wire name takes precedence.
@@ -324,9 +310,6 @@ def _patient_fact(p: dict) -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# Fact harvest
-# ---------------------------------------------------------------------------
 
 def _harvest(env: Any) -> tuple[list[dict], list[dict], list[dict], set[str]]:
     constraints: list[dict] = []
@@ -369,9 +352,6 @@ def _harvest(env: Any) -> tuple[list[dict], list[dict], list[dict], set[str]]:
     return constraints, exclusions, flags, fired
 
 
-# ---------------------------------------------------------------------------
-# Python assembly: conflict resolution, scaling, envelope + trace
-# ---------------------------------------------------------------------------
 
 def _scale(nutrient: str, value: float, weight_kg: float) -> float:
     if nutrient in _PER_KG_NUTRIENTS and weight_kg > 0:
@@ -523,7 +503,6 @@ def run_rules(patient: dict) -> dict:
 
     winners, losses = _resolve_conflicts(constraints)
 
-    # ---- nutrient targets -------------------------------------------------
     weight = prep["weight_kg"]
     targets = [
         {
@@ -535,7 +514,7 @@ def run_rules(patient: dict) -> dict:
         for (nutrient, kind), c in sorted(winners.items())
     ]
 
-    # ---- exclusions (dedupe by (kind, value), highest priority wins) -------
+    # Deduplicate exclusions by kind/value, preferring higher priority.
     def _excl_better(a: dict, b: dict) -> bool:
         if a["priority"] != b["priority"]:
             return a["priority"] > b["priority"]
@@ -557,7 +536,6 @@ def run_rules(patient: dict) -> dict:
         for _, e in sorted(best_exclusions.items())
     ]
 
-    # ---- flags, scope gates ------------------------------------------------
     flags_sorted = sorted(flags, key=lambda f: (f["key"], f["value"], f["rule_id"]))
     out_of_scope_rules = sorted(
         {f["rule_id"] for f in flags if f["key"] == "careloop_eligible" and f["value"] == "false"}
@@ -571,7 +549,6 @@ def run_rules(patient: dict) -> dict:
     if status == "REJECTED":
         targets = []  # no auto envelope for out-of-scope / clinician-review cases
 
-    # ---- trace -------------------------------------------------------------
     trace: list[dict[str, Any]] = []
     for rid in sorted(fired_ids, key=lambda r: (-by_id[r]["priority"], r)):
         rule = by_id[rid]
@@ -597,7 +574,6 @@ def run_rules(patient: dict) -> dict:
             seen.add(row["rule_id"])
             citations.append(row["citation"])
 
-    # ---- notes / cautions --------------------------------------------------
     notes_parts: list[str] = []
     if out_of_scope:
         notes_parts.append(

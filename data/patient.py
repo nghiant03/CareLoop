@@ -1,22 +1,7 @@
-"""Synthetic patient records with clinical archetypes and longitudinal labs.
+"""Extend canonical patient snapshots with synthetic vitals and lab histories.
 
-Defines the *full* patient record used by the synthetic generator. It extends the
-canonical :class:`shared.envelope_schema.PatientSummary` (the audit-friendly subset
-frozen with every envelope) with the extra fields the mining / trend-detection
-modules need: clinical archetype, longitudinal monthly labs, vitals and body
-composition.
-
-Import contract
----------------
-``PatientSummary`` is reused verbatim so that a ``Patient`` can always be
-projected down to the canonical snapshot via :meth:`Patient.to_summary`.
-
-Serialisation note
-------------------
-``PatientSummary`` declares ``serum_k_meq_l`` / ``serum_po4_mg_dl`` with the
-aliases ``serum_K_meq_L`` / ``serum_PO4_mg_dL`` (``populate_by_name=True``).
-The generator writes JSON with ``by_alias=True`` so the on-disk shape uses the
-canonical aliases.
+Serialize with ``by_alias=True`` to retain the wire lab names
+``serum_K_meq_L`` and ``serum_PO4_mg_dL``.
 """
 
 from __future__ import annotations

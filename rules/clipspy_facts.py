@@ -1,19 +1,8 @@
 """Reference CLIPS templates and pure fact-rendering helpers.
 
-Import attempts to load clipspy but remains usable if that import fails.
-Callers create environments and load templates explicitly. These are reference
-shapes, not the engine's active templates: ``rules.engine`` defines its own
-constraint facts and additional patient fields. Citation nesting and constraint
-provenance are assembled in Python, not represented one-to-one by these slots.
-
-Usage with clipspy installed::
-
-    import clips
-    from rules.clipspy_facts import load_templates, patient_fact
-    env = clips.Environment()
-    load_templates(env)
-    env.assert_string(patient_fact(patient_summary))
-    env.run()
+Mapping helpers remain importable without clipspy. Callers own environments and
+load templates explicitly. These reference shapes are not ``rules.engine``'s
+active templates. Python assembly supplies nested citations and provenance.
 """
 
 from __future__ import annotations
@@ -21,9 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# ---------------------------------------------------------------------------
 # Guard native-library loading so pure mapping helpers remain importable without CLIPS.
-# ---------------------------------------------------------------------------
 try:  # pragma: no cover - exercised only when clipspy is installed
     import clips  # type: ignore
 
@@ -33,9 +20,6 @@ except Exception:  # noqa: BLE001  # ImportError, or any native-library load err
     CLIPS_AVAILABLE = False
 
 
-# ---------------------------------------------------------------------------
-# CLIPS deftemplates
-# ---------------------------------------------------------------------------
 # Enum-like slots use symbols; free-text fields use strings. Nutrient/kind/unit
 # tokens follow the shared schema, while unknown numeric labs use -1.0.
 FACTS_DEFTEMPLATE = r"""
@@ -116,9 +100,6 @@ FACTS_DEFTEMPLATE = r"""
 """
 
 
-# ---------------------------------------------------------------------------
-# Pure mapping helpers (no CLIPS required to call these)
-# ---------------------------------------------------------------------------
 def _sym(value: Any) -> str:
     """Replace spaces with underscores; this is not general CLIPS input escaping."""
     text = str(value).strip().replace(" ", "_")

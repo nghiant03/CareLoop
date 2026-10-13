@@ -1,23 +1,10 @@
 """Seeded synthetic patient generator for fixtures and demonstrations.
 
-Produces ``N`` synthetic Singapore-relevant patients with longitudinal monthly
-serum K and phosphate values. Clinical archetypes are T2D, HTN, T2D+HTN, CKD 3,
-CKD 4, CKD 4+hyperkalemia, CKD 5 pre-dialysis, pregnancy [excluded], and healthy
-control.
+Cycle through ``ARCHETYPES`` and generate monthly potassium/phosphate histories.
+One seed drives every draw. NumPy is preferred, with a stdlib fallback for
+standalone use. Results depend on the RNG backend and Python/NumPy version.
 
-Reproducibility
----------------
-A single integer seed drives every random draw. When NumPy is installed we use
-``numpy.random.default_rng(seed)``. NumPy is a backend runtime dependency;
-standalone runs without it fall back to a small stdlib ``random.Random(seed)``
-shim that mirrors the subset
-of the ``Generator`` API we use (``normal``/``uniform``/``integers``/``choice``/
-``random``). Output is reproducible for a fixed seed, selected RNG backend,
-and Python/NumPy version; the two RNG backends do not promise identical output.
-
-Usage
------
-    python -m data.patients_generator --n 20 --seed 0 --out data/patients.json
+Run: ``python -m data.patients_generator --n 20 --seed 0 --out data/patients.json``.
 """
 
 from __future__ import annotations
@@ -31,9 +18,6 @@ from typing import Any
 
 from data.patient import Patient
 
-# ---------------------------------------------------------------------------
-# RNG abstraction
-# ---------------------------------------------------------------------------
 
 
 class _StdlibRNG:
@@ -88,9 +72,6 @@ def get_rng(seed: int | None):
         return _StdlibRNG(seed), "stdlib.random.Random"
 
 
-# ---------------------------------------------------------------------------
-# Clinical archetypes
-# ---------------------------------------------------------------------------
 # Each archetype is a dict of distribution parameters. Ranges are (mean, sd).
 # ``k_trend`` / ``po4_trend`` are the total drift across the 6-month window
 # (recent value minus oldest value); positive => rising trend.
@@ -245,11 +226,6 @@ ARCHETYPES: dict[str, dict[str, Any]] = {
 ARCHETYPE_ORDER = list(ARCHETYPES.keys())
 
 
-# ---------------------------------------------------------------------------
-# Generation helpers
-# ---------------------------------------------------------------------------
-
-
 def _clip(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
@@ -339,11 +315,6 @@ def generate(n: int, seed: int | None) -> list[Patient]:
         archetype = ARCHETYPE_ORDER[i % len(ARCHETYPE_ORDER)]
         patients.append(make_patient(rng, i + 1, archetype))
     return patients
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 
 def _build_parser() -> argparse.ArgumentParser:

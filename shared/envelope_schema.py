@@ -1,10 +1,4 @@
-"""CareLoop canonical schemas.
-
-Single source of truth for the contracts that pass between modules:
-rules engine -> clinician gate -> optimiser -> meal plan -> RAG chat -> UI.
-
-Import anywhere in the codebase. Pure data models, no side effects.
-"""
+"""Canonical envelope, patient-snapshot, and rule-trace data contracts."""
 
 from __future__ import annotations
 

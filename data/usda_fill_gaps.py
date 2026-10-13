@@ -1,28 +1,15 @@
 """Experimental USDA nutrient gap estimates requiring recipe and human review.
 
-For dish records missing potassium or phosphorus, estimate K/P per serving using
-the USDA FoodData Central (FDC) search API with a dish's ingredient list.
+Estimate missing per-serving potassium/phosphorus from FoodData Central hits.
+USDA values are per 100 g. Equal ingredient weight shares substitute for unknown
+recipe quantities, so estimates require recipe and portion review before use.
 
-API / rate limits
------------------
-* Endpoint: ``https://api.nal.usda.gov/fdc/v1/foods/search?api_key=...``
-* ``DEMO_KEY`` is shared and rate-limited. Set ``USDA_API_KEY`` for authenticated
-  imports; server quotas are independent of the local request budget.
-* Search handles network/HTTP/JSON failures; rate limits propagate to the CLI or
-  file importer, which stops the run. Input or response-shape
-  errors can still raise. Estimates require human review before verification.
+Set ``USDA_API_KEY`` for imports rather than relying on the shared demo key.
+Local request budgets do not replace server quotas. Rate limits stop imports,
+which retain completed dishes. Search failures and unknown values follow each
+helper's contract.
 
-USDA values are per 100 g. Recipe quantities are unavailable, so the serving
-weight is split equally across ingredients. These estimates require recipe and
-portion review before clinical use.
-
-Usage
------
-    # One-off probe for a single ingredient
-    python -m data.usda_fill_gaps --ingredient "white rice" --portion-g 200
-
-    # Fill gaps across the curated dish set (cap requests!)
-    python -m data.usda_fill_gaps --dishes data/dishes.json --limit 10
+Run: ``python -m data.usda_fill_gaps --dishes data/dishes.json --limit 10``.
 """
 
 from __future__ import annotations
