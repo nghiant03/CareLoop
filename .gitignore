@@ -47,3 +47,12 @@ Thumbs.db
 
 # Agents
 .agents/
+
+# Runtime state and unpublished run outputs
+*.sqlite3
+*.sqlite3-*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+artifacts/

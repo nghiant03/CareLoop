@@ -68,7 +68,11 @@ including failures, warnings, or unavailable tools; do not weaken checks to pass
 
 Pytest's root `conftest.py` isolates the application database. For standalone
 probes, set `CARELOOP_APP_DB` to a temporary database before importing application
-code; the default `data/careloop_app.sqlite3` is tracked application state.
+code; the default runtime database uses the user's state directory, never the
+checkout. Legacy `data/careloop_app.sqlite3` requires explicit migration or an
+override. See `docs/STORAGE.md`; preserve local databases and published evidence.
+Main evaluation/optimizer/retrieval runs write to ignored `artifacts/` by default
+(`CARELOOP_ARTIFACT_DIR` overrides the root). Publish report snapshots deliberately.
 
 The Python manifest is the repository-root `pyproject.toml` (single `careloop`
 distribution covering `backend/`, `shared/`, and `rules/`); the frontend manifest

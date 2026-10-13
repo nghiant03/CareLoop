@@ -1,7 +1,8 @@
 """Durable SQLite storage for clinical workflows.
 
 Each operation owns a fresh connection and transaction. ``CARELOOP_APP_DB``
-is resolved at call time and defaults to tracked ``data/careloop_app.sqlite3``.
+is resolved at call time; the default lives in the user's state directory.
+Legacy checkout databases require explicit migration or a path override.
 Tests must use an isolated path. Schema initialization is cached per path.
 
 SQLite write reservations protect migrations, ID allocation, and lifecycle
@@ -24,6 +25,7 @@ from threading import Lock
 from typing import Any
 
 from backend.app.models.envelope import NutrientEnvelope
+from backend.storage_paths import default_app_db_path
 
 __all__ = [
     "acknowledge_review_item",
@@ -57,7 +59,7 @@ __all__ = [
 ]
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_DEFAULT_DB = _REPO_ROOT / "data" / "careloop_app.sqlite3"
+_LEGACY_DB = _REPO_ROOT / "data" / "careloop_app.sqlite3"
 _REVIEW_PROPOSAL: ContextVar[tuple[str, str | None] | None] = ContextVar("review_proposal", default=None)
 
 _SCHEMA = """
@@ -159,8 +161,18 @@ _MEAL_ORDER = ("breakfast", "lunch", "dinner")
 
 
 def db_path() -> str:
-    """Resolve the app database path lazily from ``CARELOOP_APP_DB``."""
-    return os.environ.get("CARELOOP_APP_DB") or str(_DEFAULT_DB)
+    """Resolve storage lazily; never silently abandon an unmigrated legacy DB."""
+    configured = os.environ.get("CARELOOP_APP_DB")
+    if configured:
+        return str(Path(configured).expanduser())
+    destination = default_app_db_path()
+    if _LEGACY_DB.exists() and not destination.exists():
+        raise RuntimeError(
+            "Legacy CareLoop database found. Run `python -m backend.app.core.migrate_storage "
+            "--source data/careloop_app.sqlite3`, or set CARELOOP_APP_DB explicitly. "
+            "See docs/STORAGE.md; the existing database has not been modified."
+        )
+    return str(destination)
 
 
 def _utcnow() -> str:
@@ -176,7 +188,14 @@ def _connect() -> sqlite3.Connection:
     path = db_path()
     parent = Path(path).parent
     if str(parent):
-        parent.mkdir(parents=True, exist_ok=True)
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if path != ":memory:":
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            pass  # Existing storage and its permissions remain operator-owned.
+        else:
+            os.close(fd)
     if path not in _INITIALIZED:
         with _INIT_LOCK:
             if path not in _INITIALIZED:  # double-checked

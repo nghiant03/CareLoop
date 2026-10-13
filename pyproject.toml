@@ -40,7 +40,7 @@ exclude = ["**/*.sqlite3", "**/*.sqlite3-*", "**/*.sqlite", "**/*.sqlite-*", "**
 [tool.hatch.build.targets.wheel]
 # Preserve installation-relative resource paths without shipping clinical state.
 # For wheel smoke/deployment, set CARELOOP_APP_DB to an external writable path
-# before importing the app. The installation-relative default is checkout-oriented;
+# before importing the app. The default uses the user's state directory;
 # bundling resources alone does not establish a supported deployment contract.
 only-include = ["backend", "shared", "rules", "data/dishes.json", "data/patients.json"]
 

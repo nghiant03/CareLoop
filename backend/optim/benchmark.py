@@ -1,7 +1,8 @@
 """Compare guaranteed search, raw search, and baselines on catalogue dishes.
 
 Run with ``.venv/bin/python -m backend.optim.benchmark``. Write per-run CSV
-and Markdown summaries to ``benchmark_results.{csv,md}``. Set
+and Markdown summaries to ``artifacts/optim/benchmark_results.{csv,md}``
+(root override: ``CARELOOP_ARTIFACT_DIR``). Set
 ``CARELOOP_BENCH_SMOKE=1`` for reduced budgets and separate smoke artifacts.
 
 Hypervolume uses per-envelope bounds pooled across all feasible main-phase
@@ -31,8 +32,9 @@ from backend.optim.envelopes import build_benchmark_envelopes
 from backend.optim.problem import OBJECTIVE_NAMES
 from backend.optim.real_data import load_dishes
 from backend.optim.solver import HAS_PYMOO, solve
+from backend.storage_paths import artifact_dir
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
+_HERE = str(artifact_dir("optim"))
 CSV_PATH = os.path.join(_HERE, "benchmark_results.csv")
 MD_PATH = os.path.join(_HERE, "benchmark_results.md")
 
@@ -118,6 +120,8 @@ def _std(values: list[float]) -> float:
 
 
 def main() -> int:
+    os.makedirs(os.path.dirname(CSV_PATH), exist_ok=True)
+    os.makedirs(os.path.dirname(MD_PATH), exist_ok=True)
     t_start = time.perf_counter()
     dishes = load_dishes()
     envelopes = build_benchmark_envelopes()

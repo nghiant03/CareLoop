@@ -346,7 +346,7 @@ def render_report(results: dict[str, Any]) -> str:
     add(_table(["Pop", "Gen", "Mean HV", "Mean runtime (ms)"],
                [[s["pop"], s["gen"], s["mean_hv"], s["mean_runtime_ms"]] for s in q4["sweep"]]))
     add("")
-    add("### Recommendation (verbatim from `backend/optim/benchmark_results.md`)")
+    add(f"### Recommendation (verbatim from `{q4['artefacts']['md']}`)")
     add("")
     for line in q4["recommendation"].splitlines():
         add(line)

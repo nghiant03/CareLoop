@@ -31,7 +31,7 @@ from backend.app.api import (
 )
 from backend.app.core.approval_gate import EnvelopeNotApprovedError
 from backend.app.core.envelope_lifecycle import EnvelopeScopeError
-from backend.app.core.persistence import EnvelopeConflictError
+from backend.app.core.persistence import EnvelopeConflictError, init_db
 
 logger = logging.getLogger("careloop")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -40,6 +40,8 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("CareLoop backend starting (version=%s)", __version__)
+    # Storage failures must prevent serving, not masquerade as a healthy startup.
+    init_db()
     try:
         # Warm the KB only; BM25 is built on first retrieval. Log load failures
         # without blocking startup; lazy endpoint loading can retry them.

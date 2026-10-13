@@ -73,6 +73,9 @@ convention:
   optimiser.
 
 The durable envelope's embedded `RuleFire` trace is authoritative for explanations.
+The application journal lives outside source by default; `CARELOOP_APP_DB`
+selects an explicit deployment path. See [STORAGE.md](STORAGE.md) for migration,
+backups, and the separation between run outputs and published evidence.
 `trace_store.py` serializes that trace; legacy side-store data is used only for
 inputs lacking an embedded trace, never to override a durable snapshot.
 

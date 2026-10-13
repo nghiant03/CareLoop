@@ -26,6 +26,7 @@ from evaluation.q_groundedness import evaluate_q5
 from evaluation.q_satisfaction import evaluate_q3
 from evaluation.q_traceability import evaluate_q1
 from evaluation.report import render_report
+from backend.storage_paths import artifact_dir
 
 __all__ = ["main", "run_suite"]
 
@@ -145,7 +146,7 @@ def _print_headlines(results: dict[str, Any]) -> None:
           f"[{q3['verdict']}] ({q3['infeasible_plans']} infeasible, "
           f"{q3['relaxed_envelopes']} relaxed)")
     print(f"  Q4 optimiser benchmark:   {q4['verdict']} (consumed from "
-          f"backend/optim/benchmark_results.csv, {q4['artefacts']['main_runs']} main runs)")
+          f"{q4['artefacts']['csv']}, {q4['artefacts']['main_runs']} main runs)")
     print(f"  Q5 groundedness:          grounded {q5['grounded']['passed']}/{q5['grounded']['total']} "
           f"({pct(q5['grounded']['citation_accuracy'])} citation accuracy), "
           f"escalation {q5['escalation']['passed']}/{q5['escalation']['total']}, "
@@ -177,8 +178,8 @@ def main(argv: list[str] | None = None) -> int:
         help="re-run backend.optim.benchmark (~21s) before consuming its artefacts",
     )
     parser.add_argument(
-        "--out-dir", default=str(ROOT / "evaluation"),
-        help="directory for results.json / EVALUATION.md (default: evaluation/)",
+        "--out-dir", default=str(artifact_dir("evaluation")),
+        help="directory for results.json / EVALUATION.md (default: artifacts/evaluation/)",
     )
     parser.add_argument(
         "--quick", action="store_true",

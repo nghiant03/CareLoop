@@ -144,7 +144,11 @@ curl -sS -X POST $P/plans -H 'content-type: application/json' \
 
 Approvals, embedded traces, created patients, saved plans, meal logs, observations,
 simulations and review actions persist in SQLite (`CARELOOP_APP_DB`, default
-`data/careloop_app.sqlite3`). Proposal IDs are allocated transactionally.
+`$XDG_STATE_HOME/careloop/careloop_app.sqlite3` or
+`~/.local/state/careloop/careloop_app.sqlite3`). Existing checkout databases
+require explicit migration; see [storage and deployment guidance](docs/STORAGE.md).
+New evaluation and benchmark runs write to ignored `artifacts/` directories,
+separate from reviewed, committed reports. Proposal IDs are allocated transactionally.
 Production plans use main-plus-optional-side meals and normalised adequacy-first
 selection. Hard feasibility and original-target adequacy are reported separately;
 nutrient values remain unverified and prices are synthetic estimates.

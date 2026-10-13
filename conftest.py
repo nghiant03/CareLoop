@@ -1,6 +1,6 @@
 """Select an isolated application database before test modules import app code.
 
-The default database is tracked clinical state and must not be used by tests.
+Runtime databases contain clinical state and must not be used by tests.
 Backend-only pytest roots may not load this file; backend fixtures supply their
 own isolation guard for that invocation.
 """

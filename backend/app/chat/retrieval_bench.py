@@ -28,6 +28,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 
 from backend.app.kb.graph_store import KBGraph, load_kb
+from backend.storage_paths import artifact_dir
 
 __all__ = [
     "PROD_NAME",
@@ -42,7 +43,7 @@ __all__ = [
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 RULES_PATH = _REPO_ROOT / "rules" / "rules.json"
 DISHES_PATH = _REPO_ROOT / "data" / "dishes.json"
-RESULTS_PATH = Path(__file__).resolve().parent / "retrieval_bench_results.json"
+RESULTS_PATH = artifact_dir("retrieval") / "retrieval_bench_results.json"
 
 # This row must match the deployed KBIndex configuration.
 PROD_NAME = "bm25_word_syn"
@@ -709,6 +710,7 @@ def evaluate(kb: KBGraph | None = None) -> dict[str, Any]:
 def write_results(results: dict[str, Any], path: Path | None = None) -> Path:
     """Write the results artifact (sorted keys, rounded floats => deterministic)."""
     target = Path(path) if path is not None else RESULTS_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         json.dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -718,6 +720,7 @@ def write_results(results: dict[str, Any], path: Path | None = None) -> Path:
 def run_bench(kb: KBGraph | None = None) -> tuple[dict[str, Any], Path]:
     """Write the Markdown report and JSON results; return results and the JSON path."""
     results = evaluate(kb)
+    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     RESULTS_PATH.with_name("RETRIEVAL_BENCH.md").write_text(render_report(results), encoding="utf-8")
     return results, write_results(results)
 
