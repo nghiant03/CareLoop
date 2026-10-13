@@ -78,7 +78,8 @@ def test_shared_guideline_revision_retains_all_sections_and_history(kb):
 
 
 def test_real_corpus_has_no_disconnected_current_sections():
-    graph = load_kb("rules/rules.json", "data/dishes.json", valid_from=T1)
+    from backend.datasets.paths import dataset_path
+    graph = load_kb(dataset_path("rules.json"), dataset_path("dishes.json"), valid_from=T1)
     try:
         sections = {node["id"] for node in graph.nodes(label="Section")}
         attached = {edge["dst"] for edge in graph.edges() if edge["rel_type"] == "HAS_SECTION"}

@@ -41,8 +41,10 @@ __all__ = [
 ]
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-RULES_PATH = _REPO_ROOT / "rules" / "rules.json"
-DISHES_PATH = _REPO_ROOT / "data" / "dishes.json"
+from backend.datasets.paths import dataset_path
+
+RULES_PATH = dataset_path("rules.json")
+DISHES_PATH = dataset_path("dishes.json")
 RESULTS_PATH = artifact_dir("retrieval") / "retrieval_bench_results.json"
 
 # This row must match the deployed KBIndex configuration.

@@ -7,6 +7,7 @@ Usage::
 """
 
 from __future__ import annotations
+from backend.datasets.paths import dataset_path
 
 import argparse
 import json
@@ -103,7 +104,7 @@ def run_suite(rerun_benchmark: bool = False,
             "source_revision": revision,
             "working_code_sha256": code_hash.hexdigest(),
             "knowledge_release_id": release.release_id if release else None,
-            "data_hashes": {**source_hashes(), "data/patients.json": hashlib.sha256((ROOT / "data/patients.json").read_bytes()).hexdigest()},
+            "data_hashes": {**source_hashes(), "data/patients.json": hashlib.sha256(dataset_path("patients.json").read_bytes()).hexdigest()},
             "runtime": {"python": platform.python_version(), "platform": platform.platform()},
         },
         "q1_traceability": q1,

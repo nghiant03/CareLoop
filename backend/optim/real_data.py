@@ -34,7 +34,9 @@ from .problem import (
 from .toy_data import Dish
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_DISHES_PATH = os.path.join(_ROOT, "data", "dishes.json")
+from backend.datasets.paths import dataset_path
+
+DEFAULT_DISHES_PATH = str(dataset_path("dishes.json"))
 
 # Derive vector weights in canonical objective order to match scalar_score.
 _SCALAR_WEIGHT_VEC = np.array(

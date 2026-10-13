@@ -253,7 +253,8 @@ def test_queue_hard_violation_day_item_is_deterministic(client) -> None:
 def test_queue_lab_trend_item_for_fixture_patient(client) -> None:
     """Patients from data/patients.json with a rising lab series get a
     ``lab_trend`` item keyed ``lab@<patient_id>:<analyte>``."""
-    raw = json.loads((_REPO_ROOT / "data" / "patients.json").read_text())
+    from backend.datasets.paths import dataset_path
+    raw = json.loads(dataset_path("patients.json").read_text())
     patients = raw["patients"] if isinstance(raw, dict) else raw
     flags = detect_trends(patients)
     assert flags, "dataset expected to contain at least one rising lab trend"

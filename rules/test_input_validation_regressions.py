@@ -121,7 +121,8 @@ def test_missing_and_null_labs_remain_unknown(client, labs):
 
 
 def test_fixture_lookup_and_all_rich_inline_records_keep_scope_decisions(client):
-    fixtures = json.loads((Path(__file__).resolve().parents[1] / "data/patients.json").read_text())
+    from backend.datasets.paths import dataset_path
+    fixtures = json.loads(dataset_path("patients.json").read_text())
     for record in fixtures:
         inline = client.post("/rules/run", json=record)
         lookup = client.post("/rules/run", json={"patient_id": record["patient_id"]})

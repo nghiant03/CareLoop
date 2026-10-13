@@ -29,7 +29,9 @@ except Exception:  # noqa: BLE001  # pragma: no cover - only when the venv lacks
 
 __all__ = ["CLIPS_AVAILABLE", "run_rules"]
 
-_RULES_PATH = Path(__file__).with_name("rules.json")
+from backend.datasets.paths import dataset_path
+
+_RULES_PATH = dataset_path("rules.json")
 
 # Fixed trace/proposal clock for deterministic engine output; storage stamps live proposals.
 _CLOCK = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)

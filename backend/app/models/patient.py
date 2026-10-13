@@ -1,6 +1,6 @@
 """API patient profiles and canonical envelope snapshots.
 
-The dataset generator's extended record lives in ``data.patient``.
+The dataset generator's extended record lives in ``backend.datasets.patient``.
 """
 
 from __future__ import annotations

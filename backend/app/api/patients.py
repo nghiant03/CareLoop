@@ -15,7 +15,9 @@ from backend.app.models.patient import Patient
 router = APIRouter(prefix="/patients", tags=["patients"])
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-PATIENTS_FILE = _REPO_ROOT / "data" / "patients.json"
+from backend.datasets.paths import dataset_path
+
+PATIENTS_FILE = dataset_path("patients.json")
 
 # Cache fixtures only so saved profiles and observations stay current.
 _SEED_PATIENTS: dict[str, dict[str, Any]] = {}

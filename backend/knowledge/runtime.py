@@ -9,6 +9,7 @@ from threading import RLock
 
 from backend.knowledge.store import KnowledgeRelease, load_release
 from backend.storage.postgres import database_url
+from backend.datasets.paths import dataset_path
 
 _LOCK = RLock()
 _CONFIG: tuple[str, str, str] | None = None
@@ -55,5 +56,5 @@ def source_hashes() -> dict[str, str]:
     release = selected_release()
     if release is not None:
         return release.source_hashes()
-    return {name: hashlib.sha256((_ROOT / name).read_bytes()).hexdigest()
+    return {name: hashlib.sha256(dataset_path(Path(name).name).read_bytes()).hexdigest()
             for name in ("rules/rules.json", "data/dishes.json")}

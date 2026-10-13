@@ -31,7 +31,9 @@ logger = logging.getLogger("careloop.mining")
 router = APIRouter(prefix="/mining", tags=["mining"])
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-PATIENTS_FILE = _REPO_ROOT / "data" / "patients.json"
+from backend.datasets.paths import dataset_path
+
+PATIENTS_FILE = dataset_path("patients.json")
 
 
 def _load_patients() -> list[dict]:

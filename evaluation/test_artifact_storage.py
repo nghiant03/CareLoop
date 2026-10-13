@@ -11,8 +11,9 @@ from evaluation import q_benchmark, run_eval
 def test_output_root_is_configurable_and_does_not_create_files(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("CARELOOP_ARTIFACT_DIR", raising=False)
-    assert artifact_dir("evaluation") == tmp_path / "artifacts/evaluation"
-    assert not (tmp_path / "artifacts").exists()
+    monkeypatch.setenv("CARELOOP_DATASET_DIR", str(tmp_path / "datasets"))
+    assert artifact_dir("evaluation") == tmp_path / "datasets/outputs/evaluation"
+    assert not (tmp_path / "datasets").exists()
     monkeypatch.setenv("CARELOOP_ARTIFACT_DIR", str(tmp_path / "external"))
     assert artifact_dir("retrieval") == tmp_path / "external/retrieval"
 
@@ -55,4 +56,4 @@ def test_q4_rerun_reads_generated_files_without_mutating_snapshots(monkeypatch, 
     assert q_benchmark._CSV_PATH.read_bytes() == published_csv
     assert q_benchmark._MD_PATH.read_bytes() == published_md
     assert os.environ["CARELOOP_BENCH_SMOKE"] == "1"
-    assert q_benchmark.evaluate_q4()["artefacts"]["csv"] == "backend/optim/benchmark_results.csv"
+    assert q_benchmark.evaluate_q4()["artefacts"]["csv"] == str(q_benchmark._CSV_PATH)

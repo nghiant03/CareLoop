@@ -15,7 +15,9 @@ import pytest
 from backend.app.explain import clinician_explanation, patient_explanation
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-TRACE_PATH = _REPO_ROOT / "rules" / "example_trace.json"
+from backend.datasets.paths import dataset_path
+
+TRACE_PATH = dataset_path("example_trace.json")
 
 
 @pytest.fixture(scope="module")

@@ -1,4 +1,4 @@
-"""Distribution resources and external-state smoke checks; never install packages.
+"""Code-only distributions and external-dataset smoke checks; never install packages.
 
 Building requires existing Hatchling tooling. CARELOOP_BUILD_PYTHONPATH can name
 available tool directories, including an unpacked local cache, without installation.
@@ -18,14 +18,13 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-RESOURCES = {"rules/rules.json",
-             "data/dishes.json", "data/patients.json"}
+RESOURCES = {"rules/engine.py", "shared/envelope_schema.py", "backend/datasets/paths.py"}
 
 
 def test_resource_selection_is_explicit_and_state_is_excluded():
     config = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["hatch"]["build"]
     assert set(config["targets"]["wheel"]["only-include"]) == {
-        "backend", "shared", "rules", "data/dishes.json", "data/patients.json",
+        "backend", "shared", "rules",
     }
     assert {"**/*.sqlite3", "**/*-wal", "**/*-shm"} <= set(config["exclude"])
 
@@ -64,13 +63,16 @@ def test_wheel_and_sdist_keep_resources_without_clinical_state(distributions):
     with zipfile.ZipFile(wheel) as archive:
         members = archive.namelist()
     assert RESOURCES <= set(members)
-    assert {name for name in members if name.startswith("data/")} == {
-        "data/dishes.json", "data/patients.json",
-    }
+    assert "shared/envelope_schema.json" not in members
+    assert not any(name.startswith(("data/", "dataset/", "datasets/")) for name in members)
+    assert not any(name.endswith((".json", ".jsonl", ".csv", ".xpt", ".pdf", ".parquet")) for name in members)
     assert_no_application_state(members)
     with tarfile.open(sdist) as archive:
         members = [member.name.split("/", 1)[-1] for member in archive.getmembers()]
     assert RESOURCES <= set(members)
+    assert "shared/envelope_schema.json" not in members
+    assert not any(name.startswith(("data/", "dataset/", "datasets/")) for name in members)
+    assert not any(name.endswith((".json", ".jsonl", ".csv", ".xpt", ".pdf", ".parquet")) for name in members)
     assert_no_application_state(members)
 
 
@@ -83,6 +85,8 @@ def test_out_of_checkout_wheel_loads_rules_patients_dishes_and_kb(distributions,
     work.mkdir()
     database = work / "clinical.sqlite3"
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", CARELOOP_APP_DB=str(database))
+    from backend.datasets.paths import dataset_dir
+    env["CARELOOP_DATASET_DIR"] = str(dataset_dir())
     env.pop("PYTHONPATH", None)
     script = """
 import json, sys
@@ -110,7 +114,7 @@ assert proposal.targets == []
 kb = get_kb()
 assert kb.stats()['node_counts']
 assert envelope_schema.NutrientEnvelope.model_json_schema(by_alias=True, mode='serialization')['$defs']
-assert not list((installed / 'data').glob('*.sqlite*'))
+assert not (installed / 'data').exists()
 print('CARELOOP_SMOKE=' + json.dumps({'dishes': len(dishes), 'proposal': proposal.envelope_id,
                                     'module_root': str(installed), 'kb_loaded': True}))
 """

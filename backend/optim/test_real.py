@@ -372,8 +372,9 @@ def test_benchmark_artifacts_regen_and_parse():
         assert "nsga3" in smoke_md_text and "sms" in smoke_md_text
 
     # Published snapshots stay separate from regenerated run outputs.
-    full_csv = os.path.join(_HERE_DIR, "benchmark_results.csv")
-    full_md = os.path.join(_HERE_DIR, "benchmark_results.md")
+    from backend.datasets.paths import dataset_dir
+    full_csv = str(dataset_dir() / "benchmarks/benchmark_results.csv")
+    full_md = str(dataset_dir() / "benchmarks/benchmark_results.md")
     assert os.path.exists(full_csv) and os.path.exists(full_md)
     with open(full_csv, newline="", encoding="utf-8") as fh:
         full_rows = list(csv.DictReader(fh))

@@ -64,7 +64,8 @@ def test_source_revision_unavailable_is_explicit(monkeypatch):
 
 
 def test_report_renders_actual_per_day_compliance_and_reads_old_metrics():
-    results = json.loads((Path(__file__).parent / "results.json").read_text())
+    from backend.datasets.paths import dataset_dir
+    results = json.loads((dataset_dir() / "benchmarks/evaluation_results.json").read_text())
     q3 = results["q3_constraint_satisfaction"]
     patient = next(row for row in q3["per_patient"] if row.get("attempted"))
     patient["per_day_hard_compliant"] = True

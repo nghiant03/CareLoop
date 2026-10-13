@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from data import usda_fill_gaps as usda
-from data.patient import Patient
-from data.patients_generator import ARCHETYPES, generate
+from backend.datasets import usda_fill_gaps as usda
+from backend.datasets.patient import Patient
+from backend.datasets.patients_generator import ARCHETYPES, generate
+from backend.datasets.paths import dataset_path
 
 
 def dish(**overrides):
@@ -80,7 +81,7 @@ def test_stage_five_generator_and_existing_fixtures_are_excluded():
     records = generate(n=9, seed=0)
     generated = [p for p in records if p.archetype == "CKD5_pre_dialysis_hyperPO4"]
     assert generated and all(p.exclude_from_careloop for p in generated)
-    fixtures = json.loads(Path("data/patients.json").read_text())
+    fixtures = json.loads(dataset_path("patients.json").read_text())
     assert all(p["exclude_from_careloop"] for p in fixtures
                if "CKD_stage_5_pre_dialysis" in p["diagnoses"])
     record = Patient.model_validate(fixtures[0])
@@ -91,7 +92,7 @@ def test_stage_five_generator_and_existing_fixtures_are_excluded():
 
 
 def test_curated_tags_are_recipe_roles_not_fat_thresholds():
-    dishes = {d["dish_id"]: d for d in json.loads(Path("data/dishes.json").read_text())}
+    dishes = {d["dish_id"]: d for d in json.loads(dataset_path("dishes.json").read_text())}
     for record in dishes.values():
         assert len(record["tags"]) == len(set(record["tags"]))
         if record["category"] in {"drink", "dessert"}:

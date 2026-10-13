@@ -13,7 +13,9 @@ from pathlib import Path
 from backend.knowledge.runtime import selected_release
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-DATA_PATH = _REPO_ROOT / "data" / "dishes.json"
+from backend.datasets.paths import dataset_path
+
+DATA_PATH = dataset_path("dishes.json")
 
 CORE_NUTRIENTS = (
     "energy_kcal",

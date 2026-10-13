@@ -11,8 +11,10 @@ import pytest
 from backend.app.kb.graph_store import KBGraph, load_kb
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-RULES_PATH = _REPO_ROOT / "rules" / "rules.json"
-DISHES_PATH = _REPO_ROOT / "data" / "dishes.json"
+from backend.datasets.paths import dataset_path
+
+RULES_PATH = dataset_path("rules.json")
+DISHES_PATH = dataset_path("dishes.json")
 
 # Timestamps pinned by the tests so point-in-time snapshots are deterministic.
 T1 = "2026-10-01T00:00:00+00:00"

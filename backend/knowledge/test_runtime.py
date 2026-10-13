@@ -11,14 +11,15 @@ import pytest
 from backend.knowledge.store import KnowledgeStore
 
 ROOT = Path(__file__).resolve().parents[2]
+from backend.datasets.paths import dataset_path
 
 
 @pytest.fixture
 def published(tmp_path):
     store = KnowledgeStore(tmp_path / "knowledge.sqlite3")
     store.initialize()
-    rules = json.loads((ROOT / "rules/rules.json").read_text())
-    dishes = json.loads((ROOT / "data/dishes.json").read_text())
+    rules = json.loads(dataset_path("rules.json").read_text())
+    dishes = json.loads(dataset_path("dishes.json").read_text())
     rules["rules"][0]["actions"][0]["value"] = 2222
     dishes[0]["name"] = "DATABASE CATALOGUE MARKER"
     store.create_draft("draft-1", rules, dishes, actor="Author")

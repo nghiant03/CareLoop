@@ -13,7 +13,8 @@ _ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.fixture(scope="module")
 def kb():
-    graph = load_kb(_ROOT / "rules" / "rules.json", _ROOT / "data" / "dishes.json")
+    from backend.datasets.paths import dataset_path
+    graph = load_kb(dataset_path("rules.json"), dataset_path("dishes.json"))
     yield graph
     graph.close()
 

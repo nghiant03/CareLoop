@@ -21,8 +21,10 @@ from backend.storage_paths import artifact_dir
 
 __all__ = ["evaluate_q4", "verdict_from_headline"]
 
-_CSV_PATH = ROOT / "backend" / "optim" / "benchmark_results.csv"
-_MD_PATH = ROOT / "backend" / "optim" / "benchmark_results.md"
+from backend.datasets.paths import dataset_dir
+
+_CSV_PATH = dataset_dir() / "benchmarks" / "benchmark_results.csv"
+_MD_PATH = dataset_dir() / "benchmarks" / "benchmark_results.md"
 
 
 def _read_rows(path: Path = _CSV_PATH) -> list[dict[str, str]]:

@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def documents():
-    return json.loads((ROOT / "rules/rules.json").read_text()), json.loads((ROOT / "data/dishes.json").read_text())
+    from backend.datasets.paths import dataset_path
+    return json.loads(dataset_path("rules.json").read_text()), json.loads(dataset_path("dishes.json").read_text())
 
 
 @pytest.fixture
@@ -189,8 +190,9 @@ def test_operator_cli_import_review_publish_export_clone_history(tmp_path, capsy
     database = tmp_path / "knowledge.sqlite3"
     prefix = ["--db", str(database)]
     assert main(prefix + ["init"]) == 0
-    assert main(prefix + ["import", "--draft-id", "initial", "--rules-file", str(ROOT / "rules/rules.json"),
-                          "--dishes-file", str(ROOT / "data/dishes.json"), "--actor", "Author"]) == 0
+    from backend.datasets.paths import dataset_path
+    assert main(prefix + ["import", "--draft-id", "initial", "--rules-file", str(dataset_path("rules.json")),
+                           "--dishes-file", str(dataset_path("dishes.json")), "--actor", "Author"]) == 0
     assert main(prefix + ["review", "--draft-id", "initial", "--expected-revision", "1", "--actor", "Reviewer",
                           "--decision", "approve", "--note", "Reviewed estimates"]) == 0
     assert main(prefix + ["publish", "--draft-id", "initial", "--expected-revision", "1", "--actor", "Publisher",

@@ -10,7 +10,9 @@ import pytest
 
 from backend.mining import clustering, substitutions, trends
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+from backend.datasets.paths import dataset_dir
+
+DATA_DIR = dataset_dir() / "fixtures"
 
 
 @pytest.fixture(scope="module")

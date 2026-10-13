@@ -9,7 +9,7 @@ Local request budgets do not replace server quotas. Rate limits stop imports,
 which retain completed dishes. Search failures and unknown values follow each
 helper's contract.
 
-Run: ``python -m data.usda_fill_gaps --dishes data/dishes.json --limit 10``.
+Run: ``python -m backend.datasets.usda_fill_gaps --dishes /external/dishes.json --limit 10``.
 """
 
 from __future__ import annotations

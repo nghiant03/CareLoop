@@ -1,7 +1,8 @@
 """Compare clustering, lab-trend estimators, and substitution rankings.
 
 Run with ``.venv/bin/python -m backend.mining.comparison`` to write
-``COMPARISON.md``. Fixed seeds and shared production input helpers make
+ignored ``artifacts/mining/COMPARISON.md`` and ``comparison_results.json``.
+Fixed seeds and shared production input helpers make
 comparisons repeatable within the same numerical environment.
 
 Historical scorers remain explicit alternatives, not replicas of production.
@@ -31,10 +32,13 @@ from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import StandardScaler
 
 from . import clustering, substitutions, trends
+from backend.storage_paths import artifact_dir
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-PATIENTS_PATH = _REPO_ROOT / "data" / "patients.json"
-COMPARISON_MD_PATH = Path(__file__).resolve().parent / "COMPARISON.md"
+from backend.datasets.paths import dataset_path
+
+PATIENTS_PATH = dataset_path("patients.json")
+COMPARISON_MD_PATH = artifact_dir("mining") / "COMPARISON.md"
 
 SEED = 42
 STABILITY_SEEDS = (0, 1, 2, 3, 4)
@@ -1006,11 +1010,16 @@ def build_markdown(r: dict) -> str:
 
 
 def main(output_path: Path | None = None) -> int:
-    """Run the study and write Markdown to the supplied path or default report."""
+    """Write new study artifacts without overwriting the published report by default."""
     results = run_comparison()
     markdown = build_markdown(results)
     destination = COMPARISON_MD_PATH if output_path is None else output_path
+    destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(markdown, encoding="utf-8")
+    destination.with_name("comparison_results.json").write_text(
+        json.dumps(comparison_json(results), indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
 
     print("Method-comparison study complete.")
     print(f"Report written to {destination}")
@@ -1020,6 +1029,19 @@ def main(output_path: Path | None = None) -> int:
     print(f"  trends        : {results['trends']['recommendation_method']}")
     print(f"  substitutions : {results['substitutions']['recommendation_metric']}")
     return 0
+
+
+def comparison_json(value):
+    """Encode numerical study results; undefined/nonfinite metrics are JSON null."""
+    if isinstance(value, dict):
+        return {str(key): comparison_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return [comparison_json(item) for item in value]
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    return value
 
 
 if __name__ == "__main__":

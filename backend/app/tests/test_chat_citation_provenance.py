@@ -12,8 +12,10 @@ from backend.app.kb.graph_store import load_kb
 from backend.app.main import app
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-RULES_PATH = _REPO_ROOT / "rules" / "rules.json"
-DISHES_PATH = _REPO_ROOT / "data" / "dishes.json"
+from backend.datasets.paths import dataset_path
+
+RULES_PATH = dataset_path("rules.json")
+DISHES_PATH = dataset_path("dishes.json")
 
 _SODIUM_QUESTION = "What is my daily sodium limit?"
 

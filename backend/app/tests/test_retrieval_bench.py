@@ -14,8 +14,10 @@ from backend.app.chat import retrieval, retrieval_bench
 from backend.app.kb.graph_store import load_kb
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-RULES_PATH = _REPO_ROOT / "rules" / "rules.json"
-DISHES_PATH = _REPO_ROOT / "data" / "dishes.json"
+from backend.datasets.paths import dataset_path
+
+RULES_PATH = dataset_path("rules.json")
+DISHES_PATH = dataset_path("dishes.json")
 
 
 @pytest.fixture(scope="module")

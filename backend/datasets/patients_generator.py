@@ -4,7 +4,7 @@ Cycle through ``ARCHETYPES`` and generate monthly potassium/phosphate histories.
 One seed drives every draw. NumPy is preferred, with a stdlib fallback for
 standalone use. Results depend on the RNG backend and Python/NumPy version.
 
-Run: ``python -m data.patients_generator --n 20 --seed 0 --out data/patients.json``.
+Run: ``python -m backend.datasets.patients_generator --n 20 --seed 0``.
 """
 
 from __future__ import annotations
@@ -16,7 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from data.patient import Patient
+from backend.datasets.patient import Patient
+from backend.datasets.paths import dataset_path
 
 
 
@@ -324,8 +325,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--out",
         type=Path,
-        default=Path("data/patients.json"),
-        help="output JSON path (default data/patients.json)",
+        default=dataset_path("patients.json"),
+        help="output JSON path (default external fixture dataset)",
     )
     return p
 

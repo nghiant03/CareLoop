@@ -3,7 +3,7 @@
 Nodes and relationships retain JSON payload versions with valid_from/valid_to
 intervals. Appending closes the current interval and inserts a new row; NetworkX
 materializes current state on demand. This is one time axis, not bitemporal
-storage. The default database is ``data/careloop_graph.sqlite3``.
+storage. The default database is ``~/.local/state/careloop/careloop_graph.sqlite3``.
 
 Demo: ``python -m backend.app.core.graph_versioning``.
 """
@@ -23,7 +23,7 @@ __all__ = ["DEFAULT_DB_PATH", "GraphStore"]
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_DB_PATH = Path(
-    os.environ.get("CARE_LOOP_GRAPH_DB", _REPO_ROOT / "data" / "careloop_graph.sqlite3")
+    os.environ.get("CARE_LOOP_GRAPH_DB", Path.home() / ".local/state/careloop/careloop_graph.sqlite3")
 )
 
 NodeRef = tuple[str, str] | str

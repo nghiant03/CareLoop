@@ -30,6 +30,26 @@ htmlcov/
 # Neo4j / data dumps
 data/neo4j/
 data/cache/
+data/external/
+# Raw datasets must never be tracked, even in a legacy checkout location.
+/data/
+/dataset/
+/datasets/
+# Dataset formats are ignored globally; only frontend code configuration is allowed.
+*.json
+*.jsonl
+*.csv
+*.xpt
+*.parquet
+*.xlsx
+*.pdf
+*.zip
+!/frontend/package.json
+!/frontend/package-lock.json
+!/frontend/tsconfig.json
+!/frontend/tsconfig.app.json
+!/frontend/tsconfig.node.json
+!/frontend/.oxlintrc.json
 *.dump
 
 # Env / secrets
@@ -57,7 +77,7 @@ Thumbs.db
 *.db
 *.db-*
 artifacts/
-
-# Generated schema and retrieval snapshots are not source inputs.
+# Redundant generated exports/reports must not re-enter source control.
 /shared/envelope_schema.json
+/evaluation/results.json
 /backend/app/chat/retrieval_bench_results.json

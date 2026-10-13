@@ -54,7 +54,9 @@ except Exception as exc:  # noqa: BLE001
     HAS_PYMOO = False
     PYMOO_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
-CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spike_pymoo.csv")
+from backend.storage_paths import artifact_dir
+
+CSV_PATH = str(artifact_dir("optim") / "spike_pymoo.csv")
 
 
 def build_sample_envelope() -> NutrientEnvelope:

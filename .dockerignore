@@ -8,9 +8,6 @@
 !shared/**
 !rules/
 !rules/**
-!data/
-!data/dishes.json
-!data/patients.json
 !frontend/
 !frontend/**
 !deploy/
@@ -33,3 +30,16 @@
 **/*.dump
 **/*-wal
 **/*-shm
+data/**
+dataset/**
+datasets/**
+**/*.csv
+**/*.jsonl
+**/*.xpt
+**/*.pdf
+**/*.parquet
+**/*.xlsx
+**/*.zip
+backend/**/*.json
+shared/**/*.json
+rules/**/*.json

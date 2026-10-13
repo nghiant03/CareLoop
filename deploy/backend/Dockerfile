@@ -4,7 +4,6 @@ COPY pyproject.toml README.md ./
 COPY backend/ backend/
 COPY shared/ shared/
 COPY rules/ rules/
-COPY data/dishes.json data/patients.json data/
 RUN python -m pip wheel --no-cache-dir --wheel-dir /wheels .
 
 FROM python:3.13-slim-bookworm AS runtime

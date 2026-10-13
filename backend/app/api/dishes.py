@@ -12,7 +12,9 @@ from backend.knowledge.runtime import selected_release
 router = APIRouter(prefix="/dishes", tags=["dishes"])
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-DISHES_FILE = _REPO_ROOT / "data" / "dishes.json"
+from backend.datasets.paths import dataset_path
+
+DISHES_FILE = dataset_path("dishes.json")
 
 _LIST_FIELDS = (
     "dish_id",

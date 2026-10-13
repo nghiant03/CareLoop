@@ -11,8 +11,10 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-PATIENTS_PATH = ROOT / "data" / "patients.json"
-RULES_PATH = ROOT / "rules" / "rules.json"
+from backend.datasets.paths import dataset_path
+
+PATIENTS_PATH = dataset_path("patients.json")
+RULES_PATH = dataset_path("rules.json")
 
 # Per-kg nutrients are scaled by weight during assembly (see rules/engine.py).
 PER_KG_NUTRIENTS = {"energy_kcal", "protein_g"}

@@ -12,8 +12,10 @@ from rules.engine import CLIPS_AVAILABLE, run_rules
 from shared.envelope_schema import NutrientEnvelope, RuleFire
 
 REPO = Path(__file__).resolve().parents[1]
-PATIENTS = json.loads((REPO / "data" / "patients.json").read_text())
-EXAMPLE = json.loads((REPO / "rules" / "example_trace.json").read_text())
+from backend.datasets.paths import dataset_path
+
+PATIENTS = json.loads(dataset_path("patients.json").read_text())
+EXAMPLE = json.loads(dataset_path("example_trace.json").read_text())
 
 
 def _ckd4_htn(k: float = 5.4) -> dict:
@@ -419,4 +421,4 @@ def test_example_trace_regression_includes_new_med_rules():
 
     Its expected firing list must include the medication cautions.
     """
-    assert len(json.loads((REPO / "rules" / "example_trace.json").read_text(encoding="utf-8"))["all_fired_rule_ids"]) == 32
+    assert len(json.loads(dataset_path("example_trace.json").read_text(encoding="utf-8"))["all_fired_rule_ids"]) == 32
