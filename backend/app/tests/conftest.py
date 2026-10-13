@@ -13,6 +13,8 @@ import os
 import tempfile
 from pathlib import Path
 
+for _name in ("CARELOOP_APP_DATABASE_URL", "CARELOOP_APP_DATABASE_URL_FILE"):
+    os.environ.pop(_name, None)
 if not os.environ.get("CARELOOP_APP_DB"):
     _TMP_DB_DIR = tempfile.mkdtemp(prefix="careloop-backend-tests-")
     os.environ["CARELOOP_APP_DB"] = str(Path(_TMP_DB_DIR) / "careloop_app.sqlite3")

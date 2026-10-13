@@ -21,6 +21,7 @@ dependencies = [
   "rank-bm25>=0.2.2",
   "clipspy>=1.0.6",
   "pymoo>=0.6.1,<0.7",
+  "psycopg[binary,pool]>=3.2,<4",
 ]
 
 [project.optional-dependencies]

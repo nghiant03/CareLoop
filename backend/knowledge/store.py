@@ -1,4 +1,4 @@
-"""Separate SQLite authoring journal; runtime readers never create or modify it."""
+"""Separate knowledge journal in PostgreSQL; SQLite remains a legacy source/test backend."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from backend.knowledge.validation import NUTRIENTS, canonical_json, content_hash, validate_documents
+from backend.storage.postgres import PostgresConnection, is_postgres
 
 _TABLES = {"knowledge_drafts", "knowledge_revisions", "knowledge_reviews", "knowledge_releases", "knowledge_events"}
 _DISH_SEMANTIC_FIELDS = (*NUTRIENTS, "portion_g", "category", "ingredients", "tags")
@@ -77,13 +78,10 @@ class KnowledgeRelease:
         return {"rules/rules.json": self.rules_hash, "data/dishes.json": self.dishes_hash}
 
 
-def load_release(database: Path, release_id: str) -> KnowledgeRelease:
+def load_release(database: str | Path, release_id: str) -> KnowledgeRelease:
     """Read only a published, reviewed snapshot and verify its canonical hashes."""
     _identity(release_id)
-    with closing(sqlite3.connect(database.expanduser().resolve().as_uri() + "?mode=ro", uri=True)) as conn:
-        conn.row_factory = sqlite3.Row
-        if conn.execute("PRAGMA user_version").fetchone()[0] != 1:
-            raise ValueError("unsupported knowledge database schema")
+    with KnowledgeStore(database)._connection() as conn:
         row = conn.execute("""
             SELECT p.release_id, p.published_at, r.*, v.decision
             FROM knowledge_releases p JOIN knowledge_revisions r USING(draft_id,revision)
@@ -101,15 +99,21 @@ def load_release(database: Path, release_id: str) -> KnowledgeRelease:
 class KnowledgeStore:
     """Append-only draft revisions, revision-bound review, and immutable publication.
 
-    Actor names are operator attestations, not authenticated identities. Filesystem
-    access is the security boundary. SQL triggers prevent ordinary UPDATE/DELETE,
-    not tampering by a privileged user who can replace the file or drop triggers.
+    Actor names are operator attestations, not authenticated identities. Database
+    roles (or legacy filesystem access) are the operator security boundary.
+    Immutability does not protect against privileged database administrators.
     """
 
-    def __init__(self, database: Path):
-        self.database = database.expanduser().resolve()
+    def __init__(self, database: str | Path):
+        self.postgres = is_postgres(database)
+        self.database = str(database) if self.postgres else Path(database).expanduser().resolve()
 
     def initialize(self) -> None:
+        if self.postgres:
+            # Explicit admin migration is deliberately separate from the operator role.
+            with PostgresConnection(self.database, "knowledge", readonly=True):
+                pass
+            return
         self.database.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         try:
             fd = os.open(self.database, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -135,6 +139,12 @@ class KnowledgeStore:
 
     @contextmanager
     def _connection(self, *, write: bool = False):
+        if self.postgres:
+            with PostgresConnection(self.database, "knowledge", readonly=not write) as conn:
+                if write:
+                    conn.reserve_write()
+                yield conn
+            return
         mode = "rw" if write else "ro"
         with closing(sqlite3.connect(self.database.as_uri() + f"?mode={mode}", uri=True, timeout=30)) as conn:
             conn.row_factory = sqlite3.Row

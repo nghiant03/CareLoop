@@ -7,10 +7,12 @@ import hashlib
 import json
 import os
 import sqlite3
+import psycopg
 from pathlib import Path
 
 from backend.knowledge.store import KnowledgeStore, load_release
 from backend.storage_paths import default_app_db_path
+from backend.storage.postgres import database_url, is_postgres
 
 
 def _read(path: Path):
@@ -20,7 +22,7 @@ def _read(path: Path):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", type=Path, help="knowledge database (or CARELOOP_KNOWLEDGE_DB)")
+    parser.add_argument("--db", type=Path, help="legacy SQLite source/test database")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("init", help="initialize a separate private knowledge database")
     commands.add_parser("list", help="show drafts, current reviews, release IDs and validation disclosures")
@@ -57,12 +59,15 @@ def main(argv: list[str] | None = None) -> int:
     export.add_argument("--revision", type=int, help="historical draft revision; only with --draft-id")
     args = parser.parse_args(argv)
     try:
-        database = args.db or Path(os.environ.get("CARELOOP_KNOWLEDGE_DB") or
+        url = database_url("knowledge")
+        if url and (args.db or os.environ.get("CARELOOP_KNOWLEDGE_DB")):
+            raise ValueError("PostgreSQL URL and SQLite path cannot both be selected")
+        database = url or args.db or Path(os.environ.get("CARELOOP_KNOWLEDGE_DB") or
                                    default_app_db_path().with_name("careloop_knowledge.sqlite3"))
         store = KnowledgeStore(database)
         if args.command == "init":
             store.initialize()
-            result = {"database": str(store.database), "schema_version": 1}
+            result = {"database": "PostgreSQL knowledge" if is_postgres(store.database) else str(store.database), "schema_version": 1}
         elif args.command in {"import", "edit"}:
             rules, rules_hash = _read(args.rules_file)
             dishes, dishes_hash = _read(args.dishes_file)
@@ -104,6 +109,8 @@ def main(argv: list[str] | None = None) -> int:
             result = store.history(args.draft_id)
         else:
             result = store.show(args.draft_id)
+    except psycopg.Error:
+        parser.exit(1, "Knowledge PostgreSQL operation failed; inspect database access/schema without sharing credentials.\n")
     except (OSError, ValueError, TypeError, sqlite3.Error, RuntimeError) as exc:
         parser.exit(1, f"Knowledge operation failed: {exc}\n")
     print(json.dumps(result, indent=2, ensure_ascii=False))

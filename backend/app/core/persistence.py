@@ -1,12 +1,12 @@
-"""Durable SQLite storage for clinical workflows.
+"""Durable PostgreSQL clinical storage, with legacy SQLite migration/test support.
 
-Each operation owns a fresh connection and transaction. ``CARELOOP_APP_DB``
-is resolved at call time; the default lives in the user's state directory.
-Legacy checkout databases require explicit migration or a path override.
-Tests must use an isolated path. Schema initialization is cached per path.
+PostgreSQL uses CARELOOP_APP_DATABASE_URL or its _FILE secret and pooled
+transactions. Its schema is migrated explicitly, never during runtime startup.
+Without a URL, CARELOOP_APP_DB retains the SQLite source/test path contract.
 
-SQLite write reservations protect migrations, ID allocation, and lifecycle
-revision checks across workers. IDs can be reused only after minted rows are
+Database write reservations protect ID allocation and lifecycle checks across
+workers. PostgreSQL uses transaction advisory locks; SQLite uses BEGIN IMMEDIATE.
+IDs can be reused only after minted rows are
 removed. Use ``store_envelope`` for live writes. ``journal_envelope`` seeds
 history without revision checks.
 """
@@ -17,6 +17,7 @@ import json
 import os
 import re
 import sqlite3
+import psycopg
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -26,6 +27,7 @@ from typing import Any
 
 from backend.app.models.envelope import NutrientEnvelope
 from backend.storage_paths import default_app_db_path
+from backend.storage.postgres import PostgresConnection, database_url
 
 __all__ = [
     "acknowledge_review_item",
@@ -183,8 +185,13 @@ def _today() -> str:
     return datetime.now(UTC).date().isoformat()
 
 
-def _connect() -> sqlite3.Connection:
-    """Open a connection, initializing the schema once per database path."""
+def _connect() -> sqlite3.Connection | PostgresConnection:
+    """Open a schema-checked PostgreSQL transaction or legacy SQLite connection."""
+    url = database_url("clinical")
+    if url is not None:
+        if os.environ.get("CARELOOP_APP_DB"):
+            raise ValueError("Set only CARELOOP_APP_DATABASE_URL[_FILE] or CARELOOP_APP_DB")
+        return PostgresConnection(url, "clinical")
     path = db_path()
     parent = Path(path).parent
     if str(parent):
@@ -226,7 +233,7 @@ class _Connection(sqlite3.Connection):
 
 
 def init_db() -> None:
-    """Initialize the selected database unless its path was initialized this process."""
+    """Verify PostgreSQL's migrated schema; initialize only legacy SQLite storage."""
     conn = _connect()
     conn.close()
 
@@ -644,7 +651,7 @@ def insert_patient(record: dict[str, Any]) -> bool:
                 (record["patient_id"], json.dumps(record)),
             )
         return True
-    except sqlite3.IntegrityError:
+    except (sqlite3.IntegrityError, psycopg.errors.UniqueViolation):
         return False
 
 
@@ -684,7 +691,7 @@ def journal_envelope(
             INSERT INTO envelope_journal
                 (event, envelope_id, patient_id, version, status,
                  snapshot_json, effective_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id
             """,
             (
                 event or status,
@@ -696,9 +703,9 @@ def journal_envelope(
                 effective_at,
             ),
         )
+        row_id = cur.fetchone()[0]
         conn.commit()
-        assert cur.lastrowid is not None  # INSERT into an INTEGER PRIMARY KEY table.
-        return cur.lastrowid
+        return row_id
 
 
 def envelope_effective_at(

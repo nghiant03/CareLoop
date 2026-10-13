@@ -14,5 +14,9 @@ import tempfile
 from pathlib import Path
 
 _TMP_DB_DIR = tempfile.mkdtemp(prefix="careloop-pytest-")
+# Live deployment URLs must not bypass the test-only SQLite isolation guard.
+for _prefix in ("CARELOOP_APP", "CARELOOP_KNOWLEDGE"):
+    os.environ.pop(_prefix + "_DATABASE_URL", None)
+    os.environ.pop(_prefix + "_DATABASE_URL_FILE", None)
 os.environ["CARELOOP_APP_DB"] = str(Path(_TMP_DB_DIR) / "careloop_app.sqlite3")
 atexit.register(shutil.rmtree, _TMP_DB_DIR, ignore_errors=True)
