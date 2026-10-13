@@ -85,6 +85,12 @@ inputs lacking an embedded trace, never to override a durable snapshot.
 into a graph on an **in-memory SQLite** database (the recorded prototype
 decision; `rules/SCHEMA_DECISION.md`) with NetworkX for graph queries.
 
+In database mode, those inputs instead come from a pinned published snapshot in
+the separate `backend/knowledge/` authoring journal. The graph/retrieval index
+remains a derived in-memory read model. Drafts, reviews and releases are durable,
+append-only records; runtime never writes or auto-imports the authoring database.
+See [KNOWLEDGE.md](KNOWLEDGE.md) for operator security, compatibility and rollout.
+
 - Node/edge kinds: `Guideline → Section → Rule → NutrientConstraint`,
   `Diagnosis`, `ExclusionFlag`, `Dish → NutrientProfile` (~61 rules, 214 dishes,
   ~630 edges; see `GET /kb/stats`).

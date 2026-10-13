@@ -7,6 +7,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
+from backend.knowledge.runtime import selected_release
+
 router = APIRouter(prefix="/dishes", tags=["dishes"])
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -37,7 +39,7 @@ _DISH_CACHE: tuple[dict, ...] | None = None
 
 
 def _load_dishes() -> tuple[dict, ...]:
-    """Load ``DISHES_FILE`` once successfully, then return the cached records.
+    """Load the pinned release or ``DISHES_FILE`` once, then return cached records.
 
     Accept a list or an object containing a ``dishes`` list. Each entry must be
     an object with a nonblank string ``dish_id``. Other fields are not validated.
@@ -47,7 +49,11 @@ def _load_dishes() -> tuple[dict, ...]:
     Records are shared with the cache. Callers must not mutate them.
     """
     global _DISH_CACHE
+    release = selected_release()
     if _DISH_CACHE is not None:
+        return _DISH_CACHE
+    if release is not None:
+        _DISH_CACHE = tuple(release.dishes())
         return _DISH_CACHE
     if not DISHES_FILE.exists():
         raise DishCatalogueUnavailable(f"{DISHES_FILE} is missing")

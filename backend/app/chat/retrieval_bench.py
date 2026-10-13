@@ -521,7 +521,9 @@ def diagnose_fusion_gate(
     reports how the frozen gate separates held-out data.
     """
     if kb is None:
-        kb = load_kb(RULES_PATH, DISHES_PATH)
+        from backend.app.core.kb_loader import get_kb
+
+        kb = get_kb()
     if method is None:
         candidate = build_methods(kb)["bm25_rrf_char"]
         assert isinstance(candidate, RRFMethod)

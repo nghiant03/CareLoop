@@ -16,6 +16,8 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
+from backend.knowledge.runtime import selected_release
+
 # CLIPS is required when running rules; keep module import available without it.
 try:
     import clips  # type: ignore
@@ -130,9 +132,13 @@ def _num(value: Any) -> float:
 
 def _ruleset() -> list[dict]:
     global _RULESET
+    release = selected_release()
     if _RULESET is None:
-        with open(_RULES_PATH, "r", encoding="utf-8") as fh:
-            _RULESET = json.load(fh)["rules"]
+        if release is not None:
+            _RULESET = release.rules_document()["rules"]
+        else:
+            with open(_RULES_PATH, "r", encoding="utf-8") as fh:
+                _RULESET = json.load(fh)["rules"]
     return _RULESET
 
 
@@ -461,6 +467,45 @@ def _action_summary(rule: dict, prep: dict) -> str:
 _ENV_LOCK = RLock()
 
 
+def validate_rulebook(rules: list[dict]) -> None:
+    """Compile an isolated candidate and check representative scope/suppression cases.
+
+    Does not change the live environment or establish clinical correctness. Call
+    after structural DSL validation; this guards publication against removing
+    existing scope exclusions, not every possible patient/rule interaction.
+    """
+    if clips is None or not CLIPS_AVAILABLE:
+        raise RuntimeError("clipspy is required to validate knowledge publication")
+    candidate = clips.Environment()
+    try:
+        for template in _TEMPLATES:
+            candidate.build(template)
+        for rule in rules:
+            candidate.build(_rule_to_defrule(rule))
+        base = {"patient_id": "KNOWLEDGE-VALIDATION", "age": 60, "sex": "M", "weight_kg": 70,
+                "diagnoses": ["T2D", "HTN", "CKD_stage_4"], "egfr": 22,
+                "serum_K_meq_L": 5.4, "serum_PO4_mg_dL": 4.0, "hba1c_pct": 7.0}
+        cases = [("pregnancy", {"pregnant": True}), ("pregnancy diagnosis", {"diagnoses": ["pregnancy", "T2D"]}),
+                 ("paediatric", {"age": 17}), ("dialysis", {"diagnoses": ["dialysis"]}),
+                 ("CKD stage 5", {"diagnoses": ["CKD_stage_5"]}), ("eGFR below 15", {"egfr": 14.9}),
+                 ("ketoacid-risk", {"hba1c_pct": 10.0})]
+        for label, overrides in cases:
+            candidate.reset()
+            # Return a symbol, not a retained Python Fact wrapper tied to this temporary environment.
+            candidate.eval(f"(progn (assert {_patient_fact(_prepare({**base, **overrides}))}) TRUE)")
+            candidate.run()
+            blocked = candidate.eval(
+                '(any-factp ((?flag clinical-flag)) '
+                '(or (and (eq ?flag:key careloop_eligible) (eq ?flag:value "false")) '
+                '(and (eq ?flag:key auto_envelope_suppressed) (eq ?flag:value "true"))))'
+            )
+            if str(blocked) != "TRUE":
+                raise ValueError(f"candidate rulebook failed scope/suppression check: {label}")
+    finally:
+        candidate.reset()
+        candidate.clear()
+
+
 def run_rules(patient: dict) -> dict:
     """Return a PROPOSED or scope-rejected envelope and its complete firing trace.
 
@@ -625,6 +670,15 @@ def run_rules(patient: dict) -> dict:
         "approved_at": None,
         "notes": " | ".join(notes_parts),
     }
+    release = selected_release()
+    if release is not None:
+        envelope["knowledge_release_id"] = release.release_id
+        envelope["knowledge_source_hashes"] = release.source_hashes()
+        envelope["priority_basis"] = (
+            f"Published knowledge release {release.release_id}. Higher rule priority wins per nutrient/kind; "
+            "ties choose lower MAX, higher MIN, lower TARGET, then lowest rule_id. "
+            "MIN/TARGET are soft aims; losing rules retain SUPERSEDED traces."
+        )
     return {"envelope": envelope, "trace": trace}
 
 

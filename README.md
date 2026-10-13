@@ -16,6 +16,7 @@ and escalates out-of-scope questions to a clinician instead of answering.
 - Mining method comparison: [`backend/mining/COMPARISON.md`](backend/mining/COMPARISON.md)
 - Evaluation report (generated): [`evaluation/EVALUATION.md`](evaluation/EVALUATION.md)
 - User guides: [`docs/`](docs/) — clinician, patient, demo script, architecture
+- Knowledge authoring and publication: [`docs/KNOWLEDGE.md`](docs/KNOWLEDGE.md)
 
 ---
 
@@ -149,6 +150,10 @@ simulations and review actions persist in SQLite (`CARELOOP_APP_DB`, default
 require explicit migration; see [storage and deployment guidance](docs/STORAGE.md).
 New evaluation and benchmark runs write to ignored `artifacts/` directories,
 separate from reviewed, committed reports. Proposal IDs are allocated transactionally.
+For database-managed rules/catalogues, use the operator-only
+`python -m backend.knowledge` draft/review/publish workflow and configure an
+explicit `CARELOOP_KNOWLEDGE_RELEASE`; see [knowledge rollout](docs/KNOWLEDGE.md).
+Unconfigured development still uses the versioned JSON fixtures.
 Production plans use main-plus-optional-side meals and normalised adequacy-first
 selection. Hard feasibility and original-target adequacy are reported separately;
 nutrient values remain unverified and prices are synthetic estimates.

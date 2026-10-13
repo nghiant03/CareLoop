@@ -771,26 +771,40 @@ def load_kb(
     dishes_path: str | Path,
     db_path: str | Path = ":memory:",
     valid_from: str | None = None,
+    *,
+    rules_document: dict | None = None,
+    dishes_document: list[dict] | None = None,
+    source: str | None = None,
 ) -> KBGraph:
-    """Load ``rules.json`` + ``dishes.json`` into a versioned KBGraph."""
+    """Build a graph from explicit files or an already validated release snapshot.
+
+    Release documents bypass file reads; source identifies the published release
+    without replacing the catalogue's original nutrient provenance.
+    """
     ts = valid_from or _utcnow()
     kb = KBGraph(db_path)
 
-    with open(rules_path, "r", encoding="utf-8") as fh:
-        rules_doc = json.load(fh)
+    if rules_document is None:
+        with open(rules_path, "r", encoding="utf-8") as fh:
+            rules_doc = json.load(fh)
+    else:
+        rules_doc = rules_document
     for rule in rules_doc.get("rules", []):
-        kb.append_rule(rule, source="rules.json", valid_from=ts)
+        kb.append_rule(rule, source=source or "rules.json", valid_from=ts)
 
     kb.append_node(
         "Guideline",
         _DISH_DATASET_GUIDELINE,
         {"name": "CareLoop dish dataset", "url": None},
-        source="dishes.json",
+        source=source or "dishes.json",
         valid_from=ts,
     )
 
-    with open(dishes_path, "r", encoding="utf-8") as fh:
-        dishes = json.load(fh)
+    if dishes_document is None:
+        with open(dishes_path, "r", encoding="utf-8") as fh:
+            dishes = json.load(fh)
+    else:
+        dishes = dishes_document
     nutrients = [
         "energy_kcal", "protein_g", "sodium_mg", "potassium_mg", "phosphorus_mg",
         "carbs_g", "fat_g", "sat_fat_g", "fiber_g", "sugar_g",
@@ -811,7 +825,7 @@ def load_kb(
                 "tags": dish.get("tags", []),
                 "portion_g": dish.get("portion_g"),
             },
-            source=f"dishes.json#{dish_id}",
+            source=f"{source or 'dishes.json'}#{dish_id}",
             valid_from=ts,
         )
         profile_props = {key: dish.get(key) for key in nutrients}

@@ -202,6 +202,8 @@ class NutrientEnvelope(BaseModel):
     approved_by: str | None = None
     approved_at: datetime | None = None
     notes: str | None = None
+    knowledge_release_id: str | None = Field(default=None, description="Published rule/catalogue release; null on legacy or fixture proposals")
+    knowledge_source_hashes: dict[str, str] = Field(default_factory=dict, description="Canonical content hashes for the published knowledge snapshot")
 
     def is_ready_for_optimisation(self) -> bool:
         """Whether approval, scope eligibility, and nonempty targets permit live planning."""

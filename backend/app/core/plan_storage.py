@@ -1,18 +1,20 @@
 """Persist mapped plan documents with their approved inputs and source hashes."""
 
 import logging
-from hashlib import sha256
-from pathlib import Path
 from typing import Any
 
 from backend.app.core import persistence
 from backend.app.core.kb_loader import get_kb
 from shared.envelope_schema import NutrientEnvelope
+from backend.knowledge.runtime import selected_release, source_hashes
 
 logger = logging.getLogger("careloop.plans")
 
 
 def _kb_version() -> str:
+    release = selected_release()
+    if release is not None:
+        return release.release_id
     try:
         stats = get_kb().stats()
         return str(stats.get("current_version") or f"nodes:{sum(stats.get('node_counts', {}).values())}")
@@ -29,11 +31,10 @@ def try_save_plan_document(response: dict[str, Any], envelope: NutrientEnvelope)
     absent response ID does not prove that nothing was persisted.
     """
     try:
-        root = Path(__file__).resolve().parents[3]
-        response["source_hashes"] = {
-            name: sha256((root / name).read_bytes()).hexdigest()
-            for name in ("data/dishes.json", "rules/rules.json")
-        }
+        response["source_hashes"] = source_hashes()
+        release = selected_release()
+        if release is not None:
+            response["knowledge_release_id"] = release.release_id
         response["approved_envelope"] = envelope.model_dump(mode="json", by_alias=True)
         plan_id = persistence.save_plan(
             patient_id=str(response.get("patient_id") or envelope.patient_id),

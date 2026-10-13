@@ -23,7 +23,9 @@ flow is described in [ARCHITECTURE.md](ARCHITECTURE.md).
 | Complete meal | In the composition optimizer, one main dish with an optional side, using heuristic catalogue roles. Distinct from a complete day of meal logging. |
 | Complete logged day | Breakfast, lunch, and dinner have all been logged. This permits trend/soft-gap aggregation; partial-day hard violations remain visible. |
 | Effective envelope | Historical approved snapshot selected for a logged date. Distinct from the latest proposed envelope, which may be unapproved. Dates without approval coverage remain unattributed. |
-| Knowledge base (KB) | Versioned rule/dish graph and retrieval evidence, rebuilt in memory from repository data. Distinct from the durable application database containing clinical workflow state. |
+| Knowledge base (KB) | Versioned rule/dish graph and retrieval evidence, rebuilt in memory from the selected knowledge source. Distinct from both the authoring journal and the clinical workflow database. |
+| Knowledge release | An immutable, reviewed rule/catalogue snapshot in the separate knowledge journal. Runtime selects one release explicitly; publication does not approve patient envelopes. Repository JSON remains the development/bootstrap fixture source. |
+| Knowledge draft revision | An append-only authoring snapshot reviewed by revision number. Distinct from an envelope's content version or lifecycle revision, and from per-node versions in the derived KB graph. |
 
 External field names such as `serum_K_meq_L` and `serum_PO4_mg_dL` have established
 aliases in the shared model. Preserve them or use an explicit compatibility

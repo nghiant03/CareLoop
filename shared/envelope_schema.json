@@ -708,6 +708,27 @@
       ],
       "default": null,
       "title": "Notes"
+    },
+    "knowledge_release_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Published rule/catalogue release; null on legacy or fixture proposals",
+      "title": "Knowledge Release Id"
+    },
+    "knowledge_source_hashes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Canonical content hashes for the published knowledge snapshot",
+      "title": "Knowledge Source Hashes",
+      "type": "object"
     }
   },
   "required": [

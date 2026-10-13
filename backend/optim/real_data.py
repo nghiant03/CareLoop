@@ -18,6 +18,8 @@ from functools import lru_cache
 
 import numpy as np
 
+from backend.knowledge.runtime import selected_release
+
 from .problem import (
     DAYS,
     EPS,
@@ -52,9 +54,12 @@ def _synthetic_price(row: dict) -> float:
 
 
 @lru_cache(maxsize=8)
-def _load_cached(path: str) -> tuple[Dish, ...]:
-    with open(path, encoding="utf-8") as fh:
-        raw = json.load(fh)
+def _load_cached(path: str, release_json: str | None = None) -> tuple[Dish, ...]:
+    if release_json is None:
+        with open(path, encoding="utf-8") as fh:
+            raw = json.load(fh)
+    else:
+        raw = json.loads(release_json)
     dishes: list[Dish] = []
     for row in raw:
         nutrients = {k: float(row.get(k, 0.0) or 0.0) for k in NUTRIENT_KEYS}
@@ -75,7 +80,7 @@ def _load_cached(path: str) -> tuple[Dish, ...]:
 
 
 def load_dishes(path: str | None = None) -> list[Dish]:
-    """Load the real dish pool from ``data/dishes.json``.
+    """Load the pinned release catalogue, or development fixtures/explicit files.
 
     Returns a fresh list of cached Dish records keyed by absolute path. Records
     are frozen but their nested nutrient mappings must not be mutated. File edits
@@ -83,6 +88,9 @@ def load_dishes(path: str | None = None) -> list[Dish]:
     raise FileNotFoundError; use ``toy_data.load_dishes`` for a toy fallback.
     """
     if path is None:
+        release = selected_release()
+        if release is not None:
+            return list(_load_cached(f"release:{release.release_id}", release.dishes_json))
         path = DEFAULT_DISHES_PATH
     return list(_load_cached(os.path.abspath(path)))
 

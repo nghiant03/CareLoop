@@ -7,6 +7,7 @@ from pathlib import Path
 
 from backend.app.chat.retrieval import KBIndex, build_index
 from backend.app.kb.graph_store import KBGraph, load_kb
+from backend.knowledge.runtime import selected_release
 
 logger = logging.getLogger("careloop.kb")
 
@@ -22,8 +23,14 @@ _KB: KBGraph | None = None
 def get_kb() -> KBGraph:
     """Return the process KB, building it on first use."""
     global _KB
+    release = selected_release()
     if _KB is None:
-        kb = load_kb(RULES_PATH, DISHES_PATH)  # in-memory SQLite
+        if release is None:
+            kb = load_kb(RULES_PATH, DISHES_PATH)  # development fixtures
+        else:
+            kb = load_kb(RULES_PATH, DISHES_PATH, valid_from=release.published_at,
+                         rules_document=release.rules_document(), dishes_document=release.dishes(),
+                         source=f"knowledge-release:{release.release_id}")
         _KB = kb
         logger.info(
             "knowledge base loaded: %s",

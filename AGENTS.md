@@ -20,6 +20,11 @@ distinctions and [the architecture](docs/ARCHITECTURE.md) for documented contrac
   owns trends and substitutions. `backend/app/adherence/` analyzes logged meals.
 - `backend/app/chat/` retrieves evidence and composes answers;
   `backend/app/explain/` builds explanation views.
+- `backend/knowledge/` owns operator-only draft/review/publication and runtime
+  release selection. In database mode, rules, catalogue, optimizer, mining and
+  chat must use the same process-pinned published snapshot; never silently fall
+  back to fixture files. See `docs/KNOWLEDGE.md`. Keep clinical and knowledge
+  databases separate. Actor labels are attestations, not authenticated identities.
 - `frontend/src/api.ts` adapts HTTP responses for the frontend; view contracts
   live in `frontend/src/types.ts`. Check actual response shapes when changing
   either side. Regenerate the JSON Schema with
@@ -46,6 +51,9 @@ Current cross-router imports do not establish a required dependency direction.
 - Adherence uses approval coverage effective on the logged date. Uncovered dates
   remain unattributed; only complete logged days enter trend calculations.
 - Chat must retain grounding, citation, refusal, and escalation behavior.
+- Published catalogue IDs retain nutritional/portion/category/ingredient/tag
+  semantics and remain available for historical logs/plans; corrections use new
+  IDs. Release changes require a controlled restart, not ad-hoc cache resets.
 - Before renaming a field, inspect HTTP payloads, persisted JSON, schema mirrors,
   frontend consumers, and evaluation fixtures. Internal renames alone do not
   establish wire-format or stored-data compatibility.

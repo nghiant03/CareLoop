@@ -8,6 +8,7 @@ This is a storage baseline, not a claim of deployment or clinical readiness.
 | Rules, dish catalogue, synthetic patient fixtures, schema mirror | `rules/`, `data/*.json`, `shared/` | Keep versioned |
 | Reviewed benchmark/evaluation snapshots | Existing report and results files alongside modules | Keep versioned; publish deliberately |
 | Application database | `CARELOOP_APP_DB`; otherwise `$XDG_STATE_HOME/careloop/careloop_app.sqlite3` or `~/.local/state/careloop/careloop_app.sqlite3` | Never commit |
+| Knowledge authoring journal | Operator-selected `CARELOOP_KNOWLEDGE_DB`; separate draft/review/publish storage | Never commit; see [KNOWLEDGE.md](KNOWLEDGE.md) |
 | New evaluation, optimizer and retrieval runs | `./artifacts/{evaluation,optim,retrieval}/`; root override `CARELOOP_ARTIFACT_DIR` | Ignored; archive selected runs externally |
 
 Database paths resolve when used. Benchmark output constants resolve on module

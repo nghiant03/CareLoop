@@ -10,6 +10,8 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
+from backend.knowledge.runtime import selected_release
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_PATH = _REPO_ROOT / "data" / "dishes.json"
 
@@ -49,10 +51,17 @@ _COMPATIBLE_CATEGORIES: dict[str, frozenset[str]] = {
 }
 
 
-@lru_cache(maxsize=1)
 def load_dishes(path: str | None = None) -> list[dict]:
     """Return cached catalogue dicts; callers must not mutate the shared list or entries."""
-    with open(path or DATA_PATH, encoding="utf-8") as f:
+    release = selected_release() if path is None else None
+    return _load_catalogue(str(path or DATA_PATH), release.dishes_json if release else None)
+
+
+@lru_cache(maxsize=1)
+def _load_catalogue(path: str, release_json: str | None) -> list[dict]:
+    if release_json is not None:
+        return json.loads(release_json)
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 

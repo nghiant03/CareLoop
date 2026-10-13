@@ -27,6 +27,7 @@ from evaluation.q_satisfaction import evaluate_q3
 from evaluation.q_traceability import evaluate_q1
 from evaluation.report import render_report
 from backend.storage_paths import artifact_dir
+from backend.knowledge.runtime import selected_release, source_hashes
 
 __all__ = ["main", "run_suite"]
 
@@ -84,6 +85,7 @@ def run_suite(rerun_benchmark: bool = False,
     import platform
 
     revision = _source_revision()
+    release = selected_release()
     source_paths = sorted(p for directory in ("backend", "shared", "rules", "evaluation")
                           for p in (ROOT / directory).rglob("*.py"))
     code_hash = hashlib.sha256()
@@ -100,8 +102,8 @@ def run_suite(rerun_benchmark: bool = False,
             "dishes": len(dishes),
             "source_revision": revision,
             "working_code_sha256": code_hash.hexdigest(),
-            "data_hashes": {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
-                            for name in ("data/dishes.json", "data/patients.json", "rules/rules.json")},
+            "knowledge_release_id": release.release_id if release else None,
+            "data_hashes": {**source_hashes(), "data/patients.json": hashlib.sha256((ROOT / "data/patients.json").read_bytes()).hexdigest()},
             "runtime": {"python": platform.python_version(), "platform": platform.platform()},
         },
         "q1_traceability": q1,
