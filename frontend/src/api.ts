@@ -267,10 +267,6 @@ export async function getAdherenceDeviation(
   }));
 }
 
-// ---------------------------------------------------------------------------
-// Plans
-// ---------------------------------------------------------------------------
-
 export async function listPlans(patientId: string): Promise<{ count: number; plans: PlanSummary[] }> {
   return fetch(`${API_PREFIX}/plans?patient_id=${encodeURIComponent(patientId)}`).then((r) =>
     handleResponse<{ count: number; plans: PlanSummary[] }>(r)
@@ -282,10 +278,6 @@ export async function getPlan(planId: string): Promise<MealPlan> {
     handleResponse<MealPlan>(r)
   );
 }
-
-// ---------------------------------------------------------------------------
-// Mining / patient-aware swaps
-// ---------------------------------------------------------------------------
 
 /** Omitted planId uses the latest saved plan. Plan-specific UI must supply its saved ID. */
 export async function getSubstitutions(
@@ -299,8 +291,8 @@ export async function getSubstitutions(
   ).then((r) => handleResponse<SubstitutionResponse>(r));
 }
 
-/** Replace all occurrences in the saved source; omitted plan_id uses the latest saved plan.
- * Saving is best-effort. An absent response ID does not establish that no commit occurred.
+/** Replace every source occurrence. Omitted plan_id selects the latest saved plan.
+ * Saving is best-effort. A missing response ID does not prove that no commit occurred.
  */
 export async function applySwap(payload: SwapApplyRequest): Promise<MealPlan> {
   return fetch(`${API_PREFIX}/mining/swaps/apply`, {
@@ -309,10 +301,6 @@ export async function applySwap(payload: SwapApplyRequest): Promise<MealPlan> {
     body: JSON.stringify(payload),
   }).then((r) => handleResponse<MealPlan>(r));
 }
-
-// ---------------------------------------------------------------------------
-// Review queue
-// ---------------------------------------------------------------------------
 
 /** Derive and persist newly seen review conditions, then list by persisted status. */
 export async function getReviewQueue(
@@ -359,10 +347,6 @@ export async function createReviewProposal(reviewId: string): Promise<ReviewProp
   }).then((r) => handleResponse<ReviewProposalResponse>(r));
 }
 
-// ---------------------------------------------------------------------------
-// Observations
-// ---------------------------------------------------------------------------
-
 export async function createObservation(payload: ObservationRequest): Promise<Observation> {
   return fetch(`${API_PREFIX}/observations`, {
     method: 'POST',
@@ -376,10 +360,6 @@ export async function listObservations(patientId: string): Promise<ObservationLi
     handleResponse<ObservationListResponse>(r)
   );
 }
-
-// ---------------------------------------------------------------------------
-// What-if simulations
-// ---------------------------------------------------------------------------
 
 export async function createSimulation(payload: SimulationRequest): Promise<Simulation> {
   return fetch(`${API_PREFIX}/simulations`, {
