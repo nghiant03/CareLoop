@@ -35,6 +35,7 @@ data/cache/
 # Env / secrets
 .env
 .env.local
+.secrets/
 *.pem
 
 # Node / frontend

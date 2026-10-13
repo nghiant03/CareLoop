@@ -59,6 +59,10 @@ answers without a citation. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Repository layout
 
+For the local container stack (frontend, backend, persistent clinical storage),
+see [`deploy/README.md`](deploy/README.md). It runs the current SQLite application;
+the separate PostgreSQL preparation stack does not migrate or replace its storage.
+
 ```
 CareLoop/
 ├── shared/                      Cross-cutting contract (single source of truth)

@@ -1,0 +1,55 @@
+name: careloop-app
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/backend/Dockerfile
+    environment:
+      CARELOOP_APP_DB: /var/lib/careloop/careloop_app.sqlite3
+      CARELOOP_ARTIFACT_DIR: /var/lib/careloop/artifacts
+      CARELOOP_KNOWLEDGE_MODE: fixtures
+    volumes:
+      - clinical_data:/var/lib/careloop
+    read_only: true
+    tmpfs:
+      - /tmp
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5).read()"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/frontend/Dockerfile
+    ports:
+      - "127.0.0.1:${CARELOOP_HTTP_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  clinical_data:

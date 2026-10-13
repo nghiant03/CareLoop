@@ -1,0 +1,35 @@
+# Only application/build inputs may enter the image build context.
+**
+!pyproject.toml
+!README.md
+!backend/
+!backend/**
+!shared/
+!shared/**
+!rules/
+!rules/**
+!data/
+!data/dishes.json
+!data/patients.json
+!frontend/
+!frontend/**
+!deploy/
+!deploy/**
+
+# Exclusions also apply within the allowed source directories.
+**/__pycache__/**
+**/.pytest_cache/**
+**/node_modules/**
+**/dist/**
+**/.env
+**/.env.*
+**/*.pem
+**/*.sqlite3
+**/*.sqlite3-*
+**/*.sqlite
+**/*.sqlite-*
+**/*.db
+**/*.db-*
+**/*.dump
+**/*-wal
+**/*-shm

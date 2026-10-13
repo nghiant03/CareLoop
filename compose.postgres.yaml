@@ -1,0 +1,33 @@
+name: careloop-local
+
+services:
+  postgres:
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: careloop_admin
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      # PostgreSQL 18 stores PGDATA below this version-independent volume root.
+      - postgres_data:/var/lib/postgresql
+      - ./deploy/postgres/01-databases.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
+    secrets:
+      - postgres_admin_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U careloop_admin -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 60s
+
+secrets:
+  postgres_admin_password:
+    file: ./.secrets/postgres_admin_password
+
+volumes:
+  postgres_data:
