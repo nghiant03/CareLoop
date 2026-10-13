@@ -1,17 +1,9 @@
 """Compose cited nutrition answers from applicable KB rules and envelope context.
 
-Escalation runs before retrieval. Patient-role requests with a REJECTED envelope
-are refused; PROPOSED/EDITED envelope values are not quoted as personal targets.
-APPROVED values prefer exact constraint provenance, with legacy trace matching
-as a fallback — an approved value with no traceable citation is withheld rather
-than borrowing an independent anchor's citation. Guideline anchors and supporting
-rules are checked for patient applicability when context is available. Intake
-guidance needs a relevant constraint anchor or envelope context, independent
-of phrasing. Food-content questions may use dish facts alongside rule citations.
-
-An answered response requires a citation. The default path is deterministic;
-an injected LLM adapter receives the assembled text but its output is not
-revalidated here. See ``docs/ARCHITECTURE.md`` for grounding and scope policy.
+Every answered response is grounded and carries at least one citation. Only
+APPROVED envelope values are quoted as personal targets; patient-role requests
+with a REJECTED envelope are refused. The default path is deterministic; an
+optional LLM adapter may rephrase the assembled text. 
 """
 
 from __future__ import annotations
@@ -25,49 +17,43 @@ from backend.app.chat.llm import LLMAdapter
 from backend.app.kb.graph_store import KBGraph
 
 __all__ = [
-    "MAX_ANSWER_CHUNKS",
     "MAX_ANSWER_PROSE_PARTS",
     "answer",
     "detect_nutrients",
     "format_value",
 ]
 
-# Supporting prose stops once the answer has one primary part plus this budget.
-# A primary rule can itself contribute several sentences.
+# Cap on supporting sentences. The primary answer (envelope sentence or
+# anchor rule) is not counted and can span several sentences.
 MAX_ANSWER_PROSE_PARTS = 3
-# Retained exported alias for the historical (misleading) name.
-MAX_ANSWER_CHUNKS = MAX_ANSWER_PROSE_PARTS
 
-# Raw (unscaled) per-kg trace row: ``set <nutrient> <kind> = <coef> <unit>/kg/d``
-# with no ``-> <scaled>`` clause (weight was unknown at generation time).
+# Trace row format: ``set <nutrient> <kind> = <coef> <unit>/kg/d`` with no
+# ``-> <scaled>`` clause (weight was unknown at generation time).
 _UNSCALED_COEFFICIENT_ROW = re.compile(
     r"set (?P<nutrient>\w+) (?P<kind>\w+) = (?P<value>-?[\d.]+) (?P<unit>\w+)/kg/d"
 )
 
-# Rulebook nutrients whose constraint values are per-kg coefficients (see
-# rules/engine.py ``_PER_KG_NUTRIENTS``). They must never be rendered as
-# absolute daily doses.
+# Mirror of rules/engine.py ``_PER_KG_NUTRIENTS``. Per-kg values must never
+# render as absolute daily doses.
 _PER_KG_NUTRIENTS = {"energy_kcal", "protein_g"}
 
-# Internal rule families that must never anchor a patient-facing citation:
-# they encode conflict-resolution bookkeeping and internal safety policy, not
-# guideline content a patient should be pointed at.
+# Conflict/safety bookkeeping, not guideline content: never anchor a
+# patient-facing citation.
 _INTERNAL_RULE_PREFIXES = ("CONFLICT-", "SAFETY-")
 
-# Lifecycle edits use this source ID so clinician-authored values do not claim guideline authorship.
+# Prevents clinician-authored values from claiming guideline authorship.
 _CLINICIAN_EDIT_RULE_ID = "CLINICIAN-EDIT"
 
-# Condition fields from the rulebook (mirrors rules/engine.py).
+# Mirrors rules/engine.py condition-field sets.
 _MULTISLOT_CONDITION_FIELDS = {"diagnoses", "meds"}
 _NUMERIC_CONDITION_FIELDS = {
     "age", "weight_kg", "bmi", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL",
     "hba1c_pct",
 }
-# Numeric fields the engine guards against unknown values (a missing lab is
-# stored as a -1.0 sentinel and must never satisfy a numeric test).
+# Missing labs are -1.0 sentinels and must never satisfy a numeric test.
 _UNKNOWN_GUARDED_FIELDS = {"bmi", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL", "hba1c_pct"}
 
-# Fixed, number-free responses for non-approved / declined envelopes.
+# Number-free responses for non-approved / declined envelopes.
 _PENDING_REVIEW_SENTENCE = (
     "A nutrition plan has been drawn up for you, but it has not been approved "
     "by your clinician yet, so I can't quote your personal targets. Please "
@@ -79,7 +65,6 @@ _SCOPE_DECLINED_ANSWER = (
     "so please let your clinician or dietitian guide any dietary changes."
 )
 
-# Nutrient detection in the user's question -> canonical nutrient field.
 _NUTRIENT_PATTERNS: dict[str, list[str]] = {
     "sodium_mg": [r"sodium", r"\bsalt\b", r"\bna\b"],
     "potassium_mg": [r"potassium"],
@@ -120,8 +105,8 @@ _PLAIN_LABELS = {
 
 
 def detect_nutrients(question: str) -> list[str]:
-    """Canonical nutrients mentioned in ``question``, canonical order."""
-    lowered = str(question or "").lower()
+    """Canonical nutrients mentioned in ``question``, in ``_NUTRIENT_ORDER``."""
+    lowered = question.lower()
     found = []
     for nutrient in _NUTRIENT_ORDER:
         if any(p.search(lowered) for p in _COMPILED_NUTRIENTS[nutrient]):
@@ -130,14 +115,17 @@ def detect_nutrients(question: str) -> list[str]:
 
 
 def format_value(value: Any, unit: str) -> str:
-    """Human formatting without rounding constraint values in a safety direction."""
+    """Format a value for display without lossy rounding.
+
+    Milligram values convert to grams only when the conversion is exact, so a
+    MAX ceiling cannot round down and a MIN floor cannot round up.
+    """
     try:
         num = float(value)
     except (TypeError, ValueError):
         return str(value)
     if unit == "mg" and num >= 1000 and num % 10 == 0:
-        # Hundredths of a gram are exact at this boundary; otherwise retain
-        # milligrams so a MAX is never rounded down or a MIN rounded up.
+        # Multiples of 10 mg are exact in hundredths of a gram.
         grams = num / 1000.0
         text = f"{grams:.2f}".rstrip("0").rstrip(".")
         return f"{text} g"

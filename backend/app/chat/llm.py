@@ -36,7 +36,7 @@ class TemplateLLM:
     name = "template-llm"
 
     def generate(self, prompt: str, context: dict[str, Any] | None = None) -> str:
-        lines = [str(prompt)]
+        lines = [prompt]
         if context:
             for key, value in context.items():
                 lines.append(f"{key}: {value}")

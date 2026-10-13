@@ -12,14 +12,14 @@ from backend.optim.problem import exclusion_for
 from backend.optim.toy_data import NUTRIENT_KEYS
 from shared.envelope_schema import ConstraintKind, NutrientEnvelope, NutrientKind
 
-# Constraint classification tolerates deviation magnitudes at or below EPS.
+# Constraint classification tolerates deviation magnitudes.
 EPS = 1e-9
 
 # Minimum complete-day observations for trend estimation.
 _MIN_SERIES_LEN = 3
 # Slope magnitude required for a flag, in percentage points per elapsed day.
 _SLOPE_TRIGGER = 1.0
-# Alert threshold for worsening exposure, now or in the three-day projection.
+# Alert threshold for worsening exposure.
 _ALERT_EXPOSURE_PCT = 25.0
 
 _UNITS: dict[str, str] = {
@@ -393,8 +393,8 @@ def trend_flags(
     """Flag complete-day exposure trends exceeding the slope threshold.
 
     Each series must supply points in ascending date order, as returned by
-    ``deviation_series``. Points are not sorted here. The last complete point
-    supplies the latest exposure for severity and the three-day projection.
+    ``deviation_series``. The last complete point supplies the latest exposure 
+    for severity and the three-day projection.
 
     ``slope_trigger`` is a magnitude in percentage points per elapsed day.
     ``min_len`` counts only complete points. Missing completeness markers default

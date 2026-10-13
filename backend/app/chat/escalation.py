@@ -148,16 +148,15 @@ def check(question: str) -> dict[str, object]:
     Result keys are ``escalate``, ``reason``, and ``category``. With no match,
     return False and null reason/category; downstream grounding still applies.
     """
-    text = str(question or "")
     for category in CATEGORIES:
         for pattern in _COMPILED[category]:
-            if pattern.search(text):
+            if pattern.search(question):
                 return {
                     "escalate": True,
                     "reason": _REASONS[category],
                     "category": category,
                 }
-        if category == "emergency" and _extreme_glucose_reading(text):
+        if category == "emergency" and _extreme_glucose_reading(question):
             return {
                 "escalate": True,
                 "reason": _REASONS[category],

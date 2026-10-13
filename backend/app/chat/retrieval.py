@@ -79,7 +79,7 @@ def _rule_text(rule: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
         )
         parts.append(nutrient)
         parts.append(_NUTRIENT_SYNONYMS.get(nutrient, nutrient))
-        parts.append(str(kind))
+        parts.append(kind)
         parts.append(_KIND_SYNONYMS.get(kind, kind))
         parts.append(f"{value} {unit}")
     return " ".join(p for p in parts if p), nutrients
