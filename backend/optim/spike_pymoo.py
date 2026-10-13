@@ -1,21 +1,7 @@
-"""Standalone toy-pool demonstration of multi-objective meal search.
+"""Toy meal-search demo with a pure-Python fallback when pymoo is unavailable.
 
-Runs on a hard-coded toy pool (:mod:`backend.optim.toy_data`) and a sample
-APPROVED :class:`~shared.envelope_schema.NutrientEnvelope`.  ``pymoo`` is
-imported lazily; when it (and numpy) are unavailable the spike falls back to a
-pure-Python NSGA-II approximation in :mod:`backend.optim.baselines`, so the
-smoke test can run without those optional search dependencies.
-
-Outputs:
-* (a) Pareto front size
-* (b) best plan summary (per-day dishes + totals)
-* (c) hard-constraint violation count (must be 0)
-* (d) runtime in ms
-
-Also writes ``backend/optim/spike_pymoo.csv`` (objectives of the front).
-
-Run:
-    python -m backend.optim.spike_pymoo
+Run with ``python -m backend.optim.spike_pymoo``. Print plan metrics and write
+front objectives to ``backend/optim/spike_pymoo.csv``.
 """
 
 from __future__ import annotations
@@ -53,9 +39,6 @@ from shared.envelope_schema import (
     PatientSummary,
 )
 
-# ---------------------------------------------------------------------------
-# Lazy pymoo import
-# ---------------------------------------------------------------------------
 try:  # pragma: no cover - depends on environment
     import numpy as np
     from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -74,9 +57,6 @@ except Exception as exc:  # noqa: BLE001
 CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spike_pymoo.csv")
 
 
-# ---------------------------------------------------------------------------
-# Sample envelope (hard-coded for the spike)
-# ---------------------------------------------------------------------------
 def build_sample_envelope() -> NutrientEnvelope:
     """Toy APPROVED envelope: energy TARGET + sodium/protein MAX + protein MIN."""
     return NutrientEnvelope(
@@ -139,9 +119,6 @@ def build_sample_envelope() -> NutrientEnvelope:
     )
 
 
-# ---------------------------------------------------------------------------
-# pymoo problem definition (used only when pymoo is installed)
-# ---------------------------------------------------------------------------
 def _build_pymoo_problem(envelope, dishes, slots: int):
     pool = [d.dish_id for d in allowed_dishes(envelope, dishes)]
     if not pool:
@@ -237,9 +214,6 @@ def _solve_pymoo(envelope, dishes, pop_size: int, n_gen: int, seed: int, slots: 
     )
 
 
-# ---------------------------------------------------------------------------
-# CSV + formatting
-# ---------------------------------------------------------------------------
 def save_csv(result: dict, path: str = CSV_PATH) -> str:
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
@@ -281,9 +255,6 @@ def format_plan(plan: list[list[str]], dishes) -> str:
     return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 def run_spike(
     use_pymoo: bool | None = None,
     pop_size: int = 40,

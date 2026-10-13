@@ -25,23 +25,12 @@ from shared.envelope_schema import EnvelopeStatus, NutrientEnvelope
 def run(envelope: NutrientEnvelope, dishes=None, seed: int = 42,
         pop_size: int = 40, n_gen: int = 80,
         selection: Callable | None = None) -> dict:
-    """Run the optimiser with the given envelope.
+    """Solve an APPROVED envelope, using catalogue dishes unless supplied.
 
-    Accepts an injected envelope so the API can pass the clinician-approved
-    envelope end-to-end. The default pool is the
-    ``data/dishes.json`` dataset (``real_data.load_dishes``); the toy pool is
-    still available by passing ``dishes=TOY_DISHES`` explicitly.
-
-    ``selection`` is an optional front-selection strategy
-    (``(entries, envelope, dishes) -> entry``, see ``backend.optim.selection``)
-    passed through to ``solver.solve``; ``None`` keeps the default
-    scalar-score selection.
-
-    Successful plans pass the canonical hard-constraint evaluator. Failure
-    returns an empty plan with ``feasible=False`` and a reason. Exact one-day
-    enumeration distinguishes ``proven_infeasible`` from ``search_exhausted``
-    for this single-dish encoding. This helper checks APPROVED status; the
-    application layer additionally enforces scope and nonempty targets.
+    ``selection`` follows ``solver.solve``'s callback contract. None uses
+    scalar scoring. Success passes canonical hard checks. Failure returns an
+    empty plan with a reason and single-dish infeasibility diagnosis.
+    Application callers must also enforce scope eligibility and target readiness.
     """
 
     if envelope.status != EnvelopeStatus.APPROVED:

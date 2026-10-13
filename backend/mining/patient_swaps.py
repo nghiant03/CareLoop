@@ -1,15 +1,11 @@
 """Validate ranked dish swaps against an envelope and saved-plan context.
 
-Generic rankings from ``backend.mining.substitutions`` do not enforce patient
-constraints. Suggestions replace every source occurrence in the supplied saved
-plan and validate the whole result with ``problem.evaluate``. Main/optional-side
-plans must also retain meal roles. Deltas describe saved-plan changes, not intake.
+Validate every replacement across the whole plan, including meal roles. Deltas
+describe saved-plan changes, not logged intake. Suggestions may use unapproved
+inputs for local evaluation, but do not authorize applying a swap.
 
-Envelopes: suggestion helpers may evaluate any lifecycle status; the API labels
-unapproved suggestions ``informational_only``. Applying a swap requires a ready
-approved envelope. For local evaluation, unapproved inputs receive an APPROVED
-deep copy; already-approved inputs are reused. These helpers do not persist
-envelopes or approvals. The apply endpoint separately saves a derived plan.
+Helpers do not persist plans or approvals. The API gates application and saves
+the derived plan. ``_approval_safe_copy`` owns evaluation-copy behavior.
 """
 
 from __future__ import annotations
@@ -44,18 +40,12 @@ class DishNotInPlanError(Exception):
     """The dish to swap does not occur anywhere in the patient's plan."""
 
 
-# ---------------------------------------------------------------------------
-# Plan reconstruction (stored UI contract -> solver Plan)
-# ---------------------------------------------------------------------------
-
-
 def plan_from_document(document: dict[str, Any]) -> Plan:
     """Reconstruct the day-major solver ``Plan`` from a stored plan document.
 
     Sort ``days[]`` by day number and group their slots as breakfast, lunch,
     dinner. Missing meals remain empty; unknown meal labels go into dinner.
     Skip slots without a dish ID, but do not validate catalogue membership.
-    The response mapper already omits unknown dishes from generated documents.
     Leave the document unchanged.
     """
     days = document.get("days") or []
@@ -158,11 +148,6 @@ def _worst_aim_deviation_pct(
     return round(worst, 3)
 
 
-# ---------------------------------------------------------------------------
-# Patient-aware suggestions
-# ---------------------------------------------------------------------------
-
-
 def patient_substitutions(
     dish_id: str,
     k: int,
@@ -244,11 +229,6 @@ def patient_substitutions(
         "substitutions": validated,
         "candidates_evaluated": len(candidates),
     }
-
-
-# ---------------------------------------------------------------------------
-# Applying a swap
-# ---------------------------------------------------------------------------
 
 
 @dataclass

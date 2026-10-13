@@ -40,9 +40,6 @@ from .real_data import (
     repair_plan,
 )
 
-# ---------------------------------------------------------------------------
-# Lazy pymoo import (same pattern as spike_pymoo.py)
-# ---------------------------------------------------------------------------
 try:  # pragma: no cover - depends on environment
     from pymoo.algorithms.moo.nsga2 import NSGA2
     from pymoo.core.problem import Problem
@@ -84,9 +81,6 @@ except Exception as exc:  # noqa: BLE001
 PYMOO_METHODS = ("nsga2", "nsga3", "moead", "age", "sms")
 
 
-# ---------------------------------------------------------------------------
-# pymoo problem wrapper over FastEvaluator
-# ---------------------------------------------------------------------------
 def _build_pymoo_problem(ev: FastEvaluator, with_constraints: bool = True):
     class _FastMealPlanProblem(Problem):  # type: ignore[misc, valid-type]
         def __init__(self):
@@ -113,20 +107,10 @@ def _build_pymoo_problem(ev: FastEvaluator, with_constraints: bool = True):
 def _build_pymoo_algorithm(method: str, pop_size: int):
     """Instantiate the pymoo algorithm for ``method``.
 
-    All genetic operators are shared with the production NSGA-II config
-    (IntegerRandomSampling + SBX + PM) so the comparison isolates the
-    *selection/survival* mechanism, not the variation operators.
-
-    Parameter choices for the 4-objective problem:
-
-    * ``nsga3`` — das-dennis p=4 reference directions (35 dirs, pop_size 40
-      covers them); NSGA-III survival niches onto the directions.
-    * ``moead`` — same 35 weight vectors, T=15 neighbours, PBI decomposition
-      (theta default 5), neighbourhood mating prob 0.9.  Its population size
-      is tied to the weight-vector count (35), noted in the benchmark.
-    * ``age`` — AGE-MOEA survival (geometry-adaptive crowding); numba-backed.
-    * ``sms`` — SMSEMOA, exact hypervolume contribution survival in 4-D;
-      pop_size kept at 40 to bound the HV-contribution cost.
+    Shared sampling, crossover, and mutation isolate survival differences.
+    NSGA-III and MOEA/D use 35 Das-Dennis directions. MOEA/D's population
+    follows that count, not ``pop_size``. SMSEMOA uses the supplied population
+    budget to bound hypervolume-contribution cost.
     """
     sampling = IntegerRandomSampling()
     crossover = SBX(prob=0.9, eta=15)
@@ -207,9 +191,6 @@ def _pymoo_front(
     return _SearchFront([X[i] for i in range(len(X))], evaluations)
 
 
-# ---------------------------------------------------------------------------
-# Hand-rolled GA baseline (single-objective, roulette + crossover + mutation)
-# ---------------------------------------------------------------------------
 def ga_search(envelope, dishes, seed: int = 42, pop_size: int = 40, n_gen: int = 80) -> dict:
     """Simple generational GA: roulette selection, uniform crossover, flip mutation.
 
@@ -281,9 +262,6 @@ def ga_search(envelope, dishes, seed: int = 42, pop_size: int = 40, n_gen: int =
     )
 
 
-# ---------------------------------------------------------------------------
-# Greedy / random wrappers (raw baselines — no guarantee applied)
-# ---------------------------------------------------------------------------
 def greedy_search(envelope, dishes, seed: int = 0) -> dict:
     """Feasibility-aware greedy construction with cross-day variety pressure."""
     t0 = time.perf_counter()
@@ -303,9 +281,6 @@ def random_search(envelope, dishes, seed: int = 0, n_iter: int = 300) -> dict:
     return baselines.random_search(envelope, dishes, n_iter=n_iter, seed=seed)
 
 
-# ---------------------------------------------------------------------------
-# solve(): production pipeline with the hard feasibility guarantee
-# ---------------------------------------------------------------------------
 def _entry(ev: FastEvaluator, idx: np.ndarray) -> dict:
     """Canonical evaluation of a pool plan (source of truth for reporting)."""
     plan = ev.idx_to_plan(idx)
@@ -360,24 +335,12 @@ def _exact_reference_summary(exact: dict) -> dict:
 def _diagnose_with_exact(
     envelope, dishes, reason: str, runtime_ms: float, allowed_count: int
 ) -> dict:
-    """Diagnosis enriched with the exact one-day enumeration verdict.
+    """Attach an exact single-dish diagnosis to search failure.
 
-    ``infeasibility_status`` semantics:
-
-    * ``"proven_infeasible"`` — exhaustive one-day enumeration
-      (:func:`exact_reference.one_day_exact`) found NO feasible dish multiset.
-      Each slot holds exactly one dish, and a feasible horizon requires each
-      day to pass the daily hard checks. No feasible day therefore proves that
-      no 7-day plan exists in this encoding.
-    * ``"search_exhausted"`` — a feasible day exists, but search, repair, and
-      greedy construction failed to deliver a canonically feasible plan.
-      This is not an infeasibility proof. A feasible day is necessary, not
-      strictly sufficient: repeating a day within the daily ``problem.EPS``
-      tolerance can exceed the horizon tolerance. The canonical evaluator
-      validates the delivered plan.
-
-    Greedy construction and single-slot repair are incomplete; successful exact
-    enumeration does not imply that either heuristic will find a feasible day.
+    ``proven_infeasible`` means no feasible day exists. ``search_exhausted``
+    means one exists but heuristics delivered no canonical-feasible plan.
+    Daily EPS excess may accumulate beyond horizon EPS. Proof assumptions and
+    composition limits belong to ``exact_reference``.
     """
     exact = one_day_exact(envelope, dishes)
     diag = _diagnosis(envelope, dishes, reason, runtime_ms, allowed_count)
@@ -486,10 +449,7 @@ def solve(
     ok, reason = feasibility_precheck(envelope, dishes)
     if not ok:
         assert reason is not None  # Failed prechecks always supply a diagnosis.
-        # Confirm a failed precheck with exhaustive one-day enumeration.
-        # No feasible day proves infeasibility for this single-dish encoding.
-        # A feasible day lets search continue, but does not prove horizon
-        # feasibility: repeated daily EPS excess can exceed horizon EPS.
+        # Confirm precheck failure exactly before reporting infeasibility.
         exact = one_day_exact(envelope, dishes)
         if not exact["feasible_day"]:
             diag = _diagnosis(
@@ -498,16 +458,12 @@ def solve(
             diag["infeasibility_status"] = "proven_infeasible"
             diag["exact_reference"] = _exact_reference_summary(exact)
             return diag
-        # exact enumeration found a feasible day: fall through and keep solving.
 
     ev = FastEvaluator(envelope, dishes)
 
     if method in PYMOO_METHODS:
         if method != "nsga2" and not HAS_PYMOO_EXTRAS:
-            # Actionable diagnostic when the optional comparison algorithms
-            # failed to import (e.g. AGEMOEA needs numba): a NameError from
-            # _build_pymoo_algorithm would say nothing actionable. NSGA-II is
-            # exempt so the production fallback below stays reachable.
+            # Preserve NSGA-II's fallback while surfacing optional-method import errors.
             reason = PYMOO_EXTRAS_IMPORT_ERROR or PYMOO_IMPORT_ERROR
             raise RuntimeError(
                 f"method {method!r} requires the pymoo comparison algorithms "

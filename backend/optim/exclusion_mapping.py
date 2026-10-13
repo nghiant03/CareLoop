@@ -1,40 +1,11 @@
-"""Semantic exclusion mapping: rulebook exclusion values -> dish predicates.
+"""Map rulebook exclusions that do not literally match catalogue vocabulary.
 
-The clinical rulebook (``rules/rules.json``) emits *semantic* exclusion values
-(``high_potassium_foods``, ``phosphate_additive_processed``,
-``sugar_sweetened_beverage``, ``high_glycaemic_load``, ...) that do not
-literally match the dish dataset's tag/category vocabulary (``data/dishes.json``
-tags use e.g. ``high_potassium`` and have no ``sugar_sweetened_beverage``
-category). Literal matching alone would miss these semantic categories.
+``SEMANTIC_EXCLUSIONS`` uses per-serving catalogue heuristics, not verified
+recipe annotations. Phosphorus density is only a proxy for phosphate additives.
+Scope flags such as pregnancy describe patients, not dishes.
 
-This module is the documented bridge: each rulebook value maps to a
-deterministic predicate over the dish's per-serving nutrients / category.
-These are catalogue heuristics, not verified ingredient or recipe annotations.
-Thresholds are set from the dataset's own distribution
-so that "high-X" dishes (the top of the distribution) are excluded while the
-bulk of the pool stays usable:
-
-===============================  =============================================
-Rulebook exclusion               Dish predicate (per serving)
-===============================  =============================================
-``dish_category=                 ``potassium_mg > 500`` (dataset p75 = 480 mg;
-high_potassium_foods``           patient-education "high-K per serving" cutoff)
-``dish_category=                 ``phosphorus_mg > 300`` (dataset p75 = 260 mg;
-phosphate_additive_processed``   per-serving phosphorus density is the available
-                                 proxy for additive-heavy processed food)
-``dish_category=                 ``category == "drink"`` AND ``sugar_g > 5``
-sugar_sweetened_beverage``
-``diet_pattern=high_glycaemic_   ``carbs_g > 75`` (dataset p75 = 60 g; very large
-load``                           refined-carb portions)
-``ingredient=potassium_chloride`` literal ingredient match (unchanged; no dish in
-                                 the dataset carries it, correctly a no-op)
-``diet_pattern=pregnancy``       no dish predicate (a scope flag about the
-                                 person, not a food property) — no-op
-===============================  =============================================
-
-Values not listed here have only literal tag/category/ingredient matching.
-An unknown semantic value may therefore match no dishes; adding a rulebook
-exclusion requires checking its catalogue coverage.
+Unknown values receive literal matching only and may exclude nothing. Check
+catalogue coverage whenever adding a rulebook exclusion.
 """
 
 from __future__ import annotations

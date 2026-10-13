@@ -1,38 +1,12 @@
-"""Method-comparison study for the CareLoop knowledge-discovery modules.
+"""Compare clustering, lab-trend estimators, and substitution rankings.
 
-Run from the repo root::
+Run with ``.venv/bin/python -m backend.mining.comparison`` to write
+``COMPARISON.md``. Fixed seeds and shared production input helpers make
+comparisons repeatable within the same numerical environment.
 
-    .venv/bin/python -m backend.mining.comparison
-
-The study compares, per module:
-
-1. **Clustering** — k-means (current, ``clustering.py``) vs HDBSCAN vs GMM on
-   the same standardised patient features (feature extraction is reused from
-   ``clustering``). Metrics: silhouette, Davies-Bouldin, Calinski-Harabasz,
-   seed stability (mean pairwise ARI across seeds) and bootstrap-subsample
-   stability (ARI), plus cluster-count behaviour (HDBSCAN noise points, GMM
-   BIC). A small grid is searched per method.
-2. **Trend detection** — Theil-Sen (current, ``trends.py``) vs OLS vs an
-   EWMA-weighted slope, on synthetic 6-month lab series with known ground
-   truth (flat, subtle rise, clear rise, plateau, step change, fall). We
-   measure detection correctness, detection latency (months of lead), and
-   false-positive rate on flat series; then behaviour on the real 20 patients
-   (orientation handling reused from ``trends``).
-3. **Substitution metrics** — v1 euclidean (nutrient-only, current v1 mode)
-    vs a renal-weighted nutrient distance (Na/K/P weighted heavier) vs the
-    historical unweighted composite (nutrient + category + cuisine +
-    lower-mineral-load prior). Rank
-   agreement via Kendall tau, plus a qualitative top-3 table for three
-   example dishes.
-
-Everything is deterministic (fixed seeds). Results are returned as a
-structured dict by :func:`run_comparison` and rendered to
-``backend/mining/COMPARISON.md`` by :func:`main`.
-
-Private helpers of the sibling modules (``_feature_matrix``,
-``_theil_sen_slope``, ``_oldest_first``, ``_candidates``, ...) are reused
-deliberately for shared input handling. Some comparisons preserve historical
-scorers as explicit alternatives; they do not all reproduce current production.
+Historical scorers remain explicit alternatives, not replicas of production.
+Synthetic trend scenarios test detection and false alarms. Fixture patient
+series illustrate behavior but do not establish clinical validity.
 """
 
 from __future__ import annotations
@@ -72,9 +46,6 @@ K_RANGE = (2, 6)
 HDBSCAN_MIN_CLUSTER_SIZES = (3, 4, 5, 6)
 GMM_COVARIANCE_TYPES = ("diag", "full")
 
-# ---------------------------------------------------------------------------
-# small helpers
-# ---------------------------------------------------------------------------
 
 
 def _f(value: float | None, nd: int = 3) -> str:
@@ -91,9 +62,7 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
     return f"{head}\n{sep}\n{body}"
 
 
-# ---------------------------------------------------------------------------
-# 1. clustering
-# ---------------------------------------------------------------------------
+# Clustering comparison
 
 
 def _standardised_features(patients: list[dict]) -> tuple[np.ndarray, list[str]]:
@@ -348,9 +317,7 @@ def _clustering_verdict(results: dict) -> tuple[str, str]:
     return best, rationale[best]
 
 
-# ---------------------------------------------------------------------------
-# 2. trend detection
-# ---------------------------------------------------------------------------
+# Trend-estimator comparison
 
 
 def _ols_slope(y: list[float]) -> float:
@@ -426,7 +393,7 @@ def _first_detection_month(
 def compare_trends(patients: list[dict]) -> dict:
     cfg = trends._THRESHOLDS["K"]  # synthetic scenarios use K-like levels
 
-    # --- synthetic scenarios -------------------------------------------------
+    # Synthetic scenarios
     # stable per-scenario RNG seeds (never hash(): string hashing is
     # randomised per process)
     scenario_seeds = {
@@ -485,7 +452,7 @@ def compare_trends(patients: list[dict]) -> dict:
             ),
         }
 
-    # --- real patients -------------------------------------------------------
+    # Fixture patient series
     real: dict[str, dict] = {}
     slope_deltas: dict[str, list[float]] = {name: [] for name in ESTIMATORS}
     flag_sets: dict[str, set] = {}
@@ -584,9 +551,7 @@ def _trends_verdict(results: dict) -> tuple[str, str]:
     return best, text
 
 
-# ---------------------------------------------------------------------------
-# 3. substitution metrics
-# ---------------------------------------------------------------------------
+# Substitution comparison
 
 # Renal weights over substitutions.CORE_NUTRIENTS order:
 # (energy_kcal, protein_g, sodium_mg, potassium_mg, phosphorus_mg, carbs_g)
@@ -734,11 +699,6 @@ def _substitutions_verdict(results: dict) -> tuple[str, str]:
     return text, "v2_composite"
 
 
-# ---------------------------------------------------------------------------
-# orchestration + markdown report
-# ---------------------------------------------------------------------------
-
-
 def load_patients() -> list[dict]:
     with open(PATIENTS_PATH, encoding="utf-8") as f:
         return json.load(f)
@@ -771,7 +731,7 @@ def build_markdown(r: dict) -> str:
     )
     out.append("")
 
-    # ---- clustering ---------------------------------------------------------
+    # Clustering
     c = r["clustering"]
     out.append("## 1. Clustering: k-means vs HDBSCAN vs GMM")
     out.append("")
@@ -866,7 +826,7 @@ def build_markdown(r: dict) -> str:
     out.append(f"**Verdict — {c['recommendation_method']}.** {c['recommendation']}")
     out.append("")
 
-    # ---- trends -------------------------------------------------------------
+    # Trends
     t = r["trends"]
     out.append("## 2. Trend detection: Theil-Sen vs OLS vs EWMA")
     out.append("")
@@ -958,7 +918,7 @@ def build_markdown(r: dict) -> str:
     out.append(f"**Verdict — {t['recommendation_method']}.** {t['recommendation']}")
     out.append("")
 
-    # ---- substitutions ------------------------------------------------------
+    # Substitutions
     s = r["substitutions"]
     out.append("## 3. Substitution metrics: v1 euclidean vs renal-weighted vs historical composite")
     out.append("")

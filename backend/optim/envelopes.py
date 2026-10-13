@@ -1,16 +1,4 @@
-"""Hand-built APPROVED envelopes for the real-data benchmark and tests.
-
-These validate against :mod:`shared.envelope_schema` without running rules or
-recording clinical approval. Values exercise catalogue-scale daily limits;
-they are benchmark fixtures, not patient-specific clinical recommendations.
-
-Four representative profiles:
-
-* ``ckd_strict``        — CKD stage 3-4: Na/K/P ceilings + protein window.
-* ``ckd_hyperkalemia``  — CKD with K+ 5.4: tighter potassium ceiling + K-tag ban.
-* ``t2d_htn``           — T2D + hypertension: carbs/sugar ceilings + Na ceiling.
-* ``t2d_only``          — T2D only: carbs/sugar ceilings, milder exclusions.
-"""
+"""Hand-built APPROVED benchmark fixtures, not clinical approvals or advice."""
 
 from __future__ import annotations
 

@@ -5,21 +5,10 @@ Dated observations take precedence per analyte and use elapsed months of
 orientation from offsets, then serum-value matching; default to newest-first.
 Returned series are oldest-first. Theil-Sen uses median pairwise slopes.
 
-Flagging rules
---------------
-* Potassium (mmol/L/month): slope > 0.05 OR 3-month projection crossing 5.5.
-* Phosphate (mg/dL/month): slope > 0.05 OR 3-month projection crossing 5.0.
-* Dated observations also flag an urgent latest value, even in a sparse series.
-* Flag reasons name the actual trigger — slope, projected crossing, or the
-  alert-level value — instead of assuming a rise.
-* initial severity: "urgent" if the latest value reaches the clinical alert
-  level (K+ >= 5.0, PO4 >= 4.6) or the 3-month projection crosses the flag
-  threshold; otherwise "review".
-
-EWMA-weighted least squares gives recent readings more weight with a two-month
-half-life. Downgrade an urgent trend to review when EWMA no longer satisfies
-the flag rule, since the full-window rise may have plateaued. An urgent latest
-dated observation remains urgent regardless of slope support.
+``_THRESHOLDS`` defines analyte-specific projection and urgent-value limits.
+``_would_flag`` owns the slope/projection rule. Sparse dated series can flag
+an urgent latest value without a measured rise. Two-month-half-life EWMA may
+de-escalate an older rise, but never an urgent latest dated observation.
 """
 
 from __future__ import annotations
@@ -140,9 +129,7 @@ def detect_trends(patients: list[dict]) -> list[dict]:
             if not _would_flag(slope, latest, cfg) and (not dates or latest < cfg["urgent_now"]):
                 continue
 
-            # Hybrid de-escalation: the EWMA slope tracks the recent regime,
-            # so a Theil-Sen flag without EWMA support may reflect an older rise.
-            # An urgent dated value remains urgent.
+            # EWMA distinguishes an older rise from an ongoing one.
             ewma = _ewma_slope(series, times=times)
             ewma_rising = _would_flag(ewma, latest, cfg)
 
@@ -158,16 +145,13 @@ def detect_trends(patients: list[dict]) -> list[dict]:
                     f"threshold {cfg['flag']})"
                 )
             elif _would_flag(slope, latest, cfg):
-                # Slope below the trigger but the 3-month projection crosses
-                # the flag threshold while the latest value has not.
                 reason = (
                     f"{analyte} projected {projected:.2f} crosses the "
                     f"{cfg['flag']} {cfg['unit']} threshold within 3 months "
                     f"(slope {slope:+.3f} {cfg['unit']}/month, latest {latest:.2f})"
                 )
             else:
-                # Flagged by the urgent latest value, not by a measured rise:
-                # never explain a threshold trigger as a zero "rise".
+                # An urgent value is not evidence of a measured rise.
                 reason = (
                     f"{analyte} {latest:.2f} {cfg['unit']} is at or above the "
                     f"clinical alert level {cfg['urgent_now']} "

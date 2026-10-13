@@ -1,58 +1,16 @@
-"""Benchmark harness: multi-algorithm comparison on the real dish dataset.
+"""Compare guaranteed search, raw search, and baselines on catalogue dishes.
 
-Run::
+Run with ``.venv/bin/python -m backend.optim.benchmark``. Write per-run CSV
+and Markdown summaries to ``benchmark_results.{csv,md}``. Set
+``CARELOOP_BENCH_SMOKE=1`` for reduced budgets and separate smoke artifacts.
 
-    .venv/bin/python -m backend.optim.benchmark
+Hypervolume uses per-envelope bounds pooled across all feasible main-phase
+fronts, shared with the tuning sweep. The reference point is 1.1 in each
+normalized objective. Runs without feasible plans score zero.
 
-Design
-------
-* 4 representative APPROVED envelopes (``backend.optim.envelopes``):
-  ``ckd_strict``, ``ckd_hyperkalemia``, ``t2d_htn``, ``t2d_only``.
-* Main comparison — 5 seeds each.  Method families:
-
-  - Guaranteed pymoo methods (through ``solver.solve`` and therefore the
-    hard feasibility guarantee / repair / greedy fallback): NSGA-II
-    (production), NSGA-III, MOEA/D, AGE-MOEA, SMSEMOA.
-  - Raw pymoo methods (``solve(..., guarantee=False)``): the same five
-    algorithms on the untouched search front, so honest hard-constraint
-    violation rates are measurable (labelled ``<method>-raw``).
-  - Raw baselines (never guaranteed): hand-rolled GA, greedy construction,
-    random search.
-
-  Hard constraints are MAX ceilings + exclusions; MIN
-  floors / TARGETs are soft objective terms for all methods alike.
-
-* Algorithm configuration (4 objectives, pop=40, gen=80 unless noted):
-  NSGA-III  — das-dennis reference directions p=4 (35 directions),
-              IntegerRandomSampling + SBX + PM (same operators as NSGA-II so
-              the comparison isolates the survival mechanism).
-  MOEA/D    — the same 35 das-dennis weight vectors, T=15 neighbours, PBI
-              decomposition (theta=5), neighbourhood mating p=0.9.  pymoo's
-              MOEA/D cannot encode inequality constraints, so it optimises the
-              unconstrained view (objectives unchanged); population is tied to
-              the weight-vector count (35).
-  AGE-MOEA  — geometry-adaptive survival (numba-backed), default alpha
-              estimation; same operators as NSGA-II.
-  SMSEMOA   — exact hypervolume-contribution survival in 4-D, pop=40 to bound
-              the per-generation HV cost.
-  RNSGA-II was considered and skipped: its reference point must be calibrated
-  in raw objective units per envelope (preference-driven method); SMSEMOA
-  covers the "indicator-based" corner at far lower setup risk.
-
-* Hypervolume: pymoo's exact HV indicator on min-max normalised objectives.
-  Bounds are computed per envelope across ALL feasible fronts from the main
-  phase (all methods/seeds, guaranteed and raw) and reused for the sweep;
-  reference point is 1.1^4.  A run with no feasible plan scores HV = 0.
-* NSGA-II population/generation sweep: pop {20,40,80} x gen {40,80,160},
-  1 seed, scored against the main-phase bounds (unchanged from the original
-  harness; the production default stays NSGA-II).
-
-Outputs: ``backend/optim/benchmark_results.csv`` (per-run rows) and
-``backend/optim/benchmark_results.md`` (summary tables + recommendation).
-
-Set ``CARELOOP_BENCH_SMOKE=1`` for a fast smoke run (1 seed, 1 envelope,
-tiny budgets) written to ``benchmark_results_smoke.{csv,md}`` — used by the
-test-suite to verify artifact regeneration without clobbering full results.
+Raw runs expose violations before repair. Algorithm configuration and MOEA/D's
+constraint limitation are documented in ``solver._build_pymoo_algorithm`` and
+``solver._run_pymoo``.
 """
 
 from __future__ import annotations
@@ -172,9 +130,7 @@ def main() -> int:
     # rows: list of (row_dict, F_matrix)
     entries: list[tuple[dict, np.ndarray]] = []
 
-    # ------------------------------------------------------------------
-    # Phase 1: main comparison (envelopes x seeds x all methods)
-    # ------------------------------------------------------------------
+    # Compare all methods over the same envelope/seed pairs.
     n_envs = len(envelopes)
     n_runs = n_envs * len(SEEDS) * (len(PYMOO_METHODS) * 2 + 3)
     print("=" * 78)
@@ -227,9 +183,7 @@ def main() -> int:
             np.zeros(len(OBJECTIVE_NAMES)), np.ones(len(OBJECTIVE_NAMES))
         )
 
-    # ------------------------------------------------------------------
-    # Phase 2: NSGA-II population/generation sweep (production tuning)
-    # ------------------------------------------------------------------
+    # Sweep NSGA-II budgets against the main comparison's normalization bounds.
     if not SMOKE:
         print("=" * 78)
         print("Phase 2: NSGA-II pop x gen sweep — 4 envelopes x 1 seed x 9 configs")
@@ -268,27 +222,18 @@ def main() -> int:
                         f"  runtime={result['runtime_ms']:>8.1f} ms"
                     )
 
-    # ------------------------------------------------------------------
-    # Score hypervolumes (sweep reuses the envelope's main-phase bounds)
-    # ------------------------------------------------------------------
     for row, F in entries:
         lo, hi = bounds[row["envelope"]]
         row["hypervolume"] = f"{_hypervolume(F, lo, hi):.6f}"
 
     runtime_total = time.perf_counter() - t_start
 
-    # ------------------------------------------------------------------
-    # CSV
-    # ------------------------------------------------------------------
     with open(CSV_PATH, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(entries[0][0].keys()))
         writer.writeheader()
         for row, _F in entries:
             writer.writerow(row)
 
-    # ------------------------------------------------------------------
-    # Markdown report
-    # ------------------------------------------------------------------
     _write_report(entries, bounds, runtime_total)
 
     print(f"\nTotal wall time: {runtime_total:.1f}s")
@@ -400,9 +345,6 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
                 )
         lines.append("")
 
-    # ------------------------------------------------------------------
-    # Recommendation
-    # ------------------------------------------------------------------
     lines.append("## Recommendation")
     lines.append("")
 
@@ -476,10 +418,8 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
                 "that they report honest hard-constraint violation rates and "
                 "skip the repair step that guarantees the delivered plan."
             )
-        # Report the measured HV ranking. A deployment switch would need an
-        # agreed comparable-runtime criterion, which this benchmark does not
-        # establish (the runtime ratio is measured, not gated), so the
-        # production recommendation stays NSGA-II.
+    # Report HV ranking without changing production: runtime is measured, but
+    # no deployment-switch criterion has been agreed.
         if nsga2_stat and best_guar["method"] != "nsga2" and best_guar["hv"] > nsga2_stat["hv"]:
             ratio = best_guar["ms"] / max(nsga2_stat["ms"], 1e-9) if nsga2_stat else float("inf")
             lines.append(

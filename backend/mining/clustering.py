@@ -1,15 +1,7 @@
 """Cohort clustering for synthetic CKD/T2D patients.
 
-`cluster_patients` standardises the available numeric features, runs k-means
-over a small range of k, and selects the k with the best mean silhouette.
-Fixed ``random_state`` makes repeated fits reproducible for the same inputs
-and numerical environment.
-
-Candidate features are retained when present in at least one patient. Missing
-entries are median-imputed; wholly absent columns are dropped:
-
-    age, bmi, hba1c_pct, egfr, serum_K_meq_L, serum_PO4_mg_dL,
-    systolic_bp, diastolic_bp
+Median-impute available features, drop absent columns, and standardize before
+k-means. Fixed ``random_state`` is repeatable within the same numerical environment.
 """
 
 from __future__ import annotations
@@ -59,28 +51,12 @@ def cluster_patients(
     patients: list[dict],
     k_range: tuple[int, int] = (2, 6),
 ) -> dict:
-    """Cluster patients into cohorts with k-means.
+    """Choose k-means cohorts by highest mean silhouette, preferring smaller k.
 
-    Parameters
-    ----------
-    patients:
-        List of patient dicts (as in ``data/patients.json``).
-    k_range:
-        Inclusive ``(min_k, max_k)``; each k is tried and scored by mean
-        silhouette on the standardised features. Only 2 <= k < len(patients)
-        is eligible. Equal scores retain the smaller k.
-
-    Raises ValueError for empty input, no usable features, no eligible k, or
-    a fitted labeling with too few distinct clusters for silhouette scoring.
-
-    Returns
-    -------
-    dict with keys:
-        ``k``            chosen number of clusters
-        ``labels``       cluster index per patient (input order)
-        ``silhouette``   mean silhouette score of the chosen k
-        ``profiles``     per-cluster {size, means, dominant_diagnoses}
-        ``feature_names`` features actually used for clustering
+    ``patients`` are profile dicts. ``k_range`` is inclusive, restricted to
+    2 <= k < patient count. Return k, input-order labels, silhouette, cluster
+    profiles, and feature names. Raise ValueError for empty input, no usable
+    features or k, or a labeling with too few clusters to score.
     """
     if not patients:
         raise ValueError("cluster_patients requires at least one patient")

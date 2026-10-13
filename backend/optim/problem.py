@@ -1,47 +1,17 @@
 """Canonical meal-plan objectives and hard-constraint evaluation.
 
-Decision variables
-------------------
-A plan is a flat list of ``n_days * MEALS_PER_DAY`` meal slots (day-major):
-``plan[day * MEALS_PER_DAY + meal_index]`` is a list of dish ids served in that
-meal.  The toy spike uses one dish per meal, but the formulation and every
-objective/constraint below supports multi-dish meals.
+Plans are day-major meal lists, with one or more dish IDs per meal. All four
+objectives are minimized: daily nutrient deviation, negative mean tag preference,
+negative horizon variety, and total SGD cost. Variety equally weights normalized
+Shannon entropy and the distinct-dish ratio. Tag preferences are placeholders.
 
-Objectives (all minimised)
---------------------------
-1. ``nutrient_target_deviation`` : mean over days of the deviation from the
-   envelope's nutrient band — ``|total - target|`` for ``TARGET`` values,
-   shortfall ``max(0, min - total)`` for ``MIN`` floors, and excess
-   ``max(0, total - max)`` for ``MAX`` ceilings (zero for hard-feasible plans,
-   kept as a smooth penalty that helps the search).
-2. ``preference_fit``            : negative mean tag-preference score
-   (fixed placeholder weighting, not learned patient preferences).
-3. ``variety``                   : negative equally weighted mean of normalised
-   Shannon entropy and distinct-dish ratio across the whole horizon.
-4. ``cost``                      : sum of ``Dish.price_sgd`` across the plan.
+Hard constraints are daily/horizon MAX ceilings, exclusions, and dish membership.
+MIN shortfalls and TARGET distances are soft aims. MAX excess also contributes
+to the deviation objective to guide infeasible search candidates.
 
-Hard constraints
-----------------
-The evaluator checks:
-
-* ``ConstraintKind.MAX`` : daily total <= value for every day, and horizon total
-  <= ``value * n_days``.
-* ``ExclusionFlag``      : a dish is unusable if any ingredient / category / tag
-  matches literally, or if a documented semantic mapping applies
-  (``exclusion_mapping.py`` bridges rulebook values like
-  ``high_potassium_foods`` to per-serving nutrient thresholds).
-* membership            : every dish id must exist in the supplied dish pool.
-* gate                  : only ``EnvelopeStatus.APPROVED`` envelopes may be used.
-
-MIN floors and ``ConstraintKind.TARGET`` values are **soft**: they steer
-``nutrient_target_deviation`` but never count as violations and never cause
-infeasibility, so guideline floors (fibre, potassium, energy) guide the search
-instead of making envelopes unsolvable.
-
-Nutrient violations at or below EPS are tolerated. ``evaluate`` reports invalid
-candidates rather than rejecting them; search wrappers decide whether to repair
-or discard them. It checks status, not application scope eligibility or target
-presence; application approval gates own those additional readiness checks.
+``evaluate`` tolerates nutrient excess <= EPS and reports hard violations.
+It requires APPROVED status but leaves scope and target-readiness checks to the
+application gate. ``exclusion_mapping.py`` defines catalogue exclusion heuristics.
 """
 
 from __future__ import annotations
@@ -60,9 +30,6 @@ from shared.envelope_schema import (
 from .exclusion_mapping import semantic_exclusion_hit
 from .toy_data import NUTRIENT_KEYS, Dish
 
-# ---------------------------------------------------------------------------
-# Problem geometry
-# ---------------------------------------------------------------------------
 DAYS = 7
 MEALS_PER_DAY = 3
 SLOTS = DAYS * MEALS_PER_DAY
@@ -70,8 +37,7 @@ MEAL_LABELS = ("breakfast", "lunch", "dinner")
 
 EPS = 1e-9
 
-# Objective order is stable: objective vectors, CSV columns and pymoo F columns
-# all follow this list.
+# Shared ordering for objective vectors, CSV columns, and pymoo F columns.
 OBJECTIVE_NAMES: tuple[str, ...] = (
     "nutrient_target_deviation",
     "preference_fit",
@@ -79,8 +45,7 @@ OBJECTIVE_NAMES: tuple[str, ...] = (
     "cost",
 )
 
-# Placeholder tag preferences (higher = more preferred). Used by
-# preference_fit and by the greedy baseline; these are not patient-specific.
+# Placeholder preferences, not patient-specific. Higher scores are preferred.
 TAG_PREFERENCE: dict[str, float] = {
     "lean_protein": 1.0,
     "high_protein": 1.0,
@@ -94,9 +59,8 @@ TAG_PREFERENCE: dict[str, float] = {
     "high_energy": -0.3,
 }
 
-# Placeholder front-selection and baseline tie-break weights. The 0.001 factor
-# scales raw nutrient deviation but does not normalise each nutrient's units;
-# backend.optim.selection provides relative-deviation alternatives.
+# Raw deviation mixes nutrient units despite scaling. See selection for
+# relative-deviation strategies.
 SCALAR_WEIGHTS: dict[str, float] = {
     "nutrient_target_deviation": 0.001,
     "preference_fit": 0.5,
@@ -109,9 +73,6 @@ class EnvelopeNotApprovedError(RuntimeError):
     """Raised when a non-APPROVED envelope is handed to the optimiser."""
 
 
-# ---------------------------------------------------------------------------
-# Plan helpers
-# ---------------------------------------------------------------------------
 Plan = list[list[str]]
 
 
@@ -160,9 +121,6 @@ def _validate_plan(plan: Plan) -> int:
     return len(plan) // MEALS_PER_DAY
 
 
-# ---------------------------------------------------------------------------
-# Exclusions
-# ---------------------------------------------------------------------------
 def _matches_exclusion(flag, dish: Dish) -> bool:
     value = flag.value.strip().lower()
     ingredients = {i.lower() for i in dish.ingredients}
@@ -197,9 +155,6 @@ def allowed_dishes(envelope: NutrientEnvelope, dishes: list[Dish]) -> list[Dish]
     return [d for d in dishes if exclusion_for(d, envelope) is None]
 
 
-# ---------------------------------------------------------------------------
-# Constraint vector (fixed length; used by pymoo and by evaluate)
-# ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class ConstraintSlot:
     kind: str  # "max"; MIN/TARGET aims do not enter the hard-constraint layout
@@ -258,9 +213,6 @@ def constraint_vector(
     return vec
 
 
-# ---------------------------------------------------------------------------
-# Objectives
-# ---------------------------------------------------------------------------
 def _obj_target_deviation(
     daily: list[dict[str, float]], envelope: NutrientEnvelope
 ) -> float:
@@ -322,9 +274,6 @@ def objective_vector(objectives: dict[str, float]) -> tuple[float, ...]:
     return tuple(objectives[k] for k in OBJECTIVE_NAMES)
 
 
-# ---------------------------------------------------------------------------
-# Public evaluation API
-# ---------------------------------------------------------------------------
 def evaluate(
     plan: Plan, envelope: NutrientEnvelope, dishes: list[Dish]
 ) -> tuple[dict[str, float], list[dict]]:
@@ -345,7 +294,6 @@ def evaluate(
 
     violations: list[dict] = []
 
-    # membership + exclusion (hard, structural)
     for meal_index, meal in enumerate(plan):
         for did in meal:
             dish = lookup.get(did)
@@ -374,7 +322,6 @@ def evaluate(
                     }
                 )
 
-    # nutrient hard constraints (MAX daily + horizon; MIN floors are soft)
     daily = [sum_nutrients(_day_dishes(plan, d), lookup) for d in range(n_days)]
     layout = constraint_layout(envelope, n_days)
     vector = constraint_vector(plan, envelope, dishes, n_days=n_days)

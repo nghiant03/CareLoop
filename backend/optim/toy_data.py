@@ -1,13 +1,8 @@
 """Dish data contract and self-contained toy pool for optimiser tests and demos.
 
-Eight plausible Singapore hawker/local dishes with per-serving nutrient values.
-Nutrient keys mirror :class:`shared.envelope_schema.NutrientKind` values exactly,
-so objective/constraint code can index them by ``constraint.nutrient.value``.
-
-Production catalogue loading uses ``real_data.load_dishes``. This module's
-``load_dishes`` returns the toy pool by default (or when the given file is
-missing) and only reads the nested nutrient JSON schema; flat catalogue rows
-are rejected with ``ValueError`` rather than read as zero nutrients.
+Nutrient keys match ``NutrientKind``. ``load_dishes`` expects nested nutrient
+JSON and falls back to the toy pool for missing files. Use ``real_data.load_dishes``
+for the flat production catalogue.
 """
 
 from __future__ import annotations
@@ -80,12 +75,7 @@ def _nut(
     }
 
 
-# ---------------------------------------------------------------------------
-# Toy dish pool
-# ---------------------------------------------------------------------------
-# Note: "char_kway_teow" contains ingredient "lard" and "fried_chicken_wing_set"
-# carries category "deep_fried" — both are hit by the sample envelope exclusions
-# in spike_pymoo.py, exercising the exclusion path.
+# Lard and deep-fried dishes exercise the spike envelope's exclusions.
 
 TOY_DISHES: list[Dish] = [
     Dish(

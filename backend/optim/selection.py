@@ -6,22 +6,6 @@ do not validate approval or feasibility. Empty entry lists raise ValueError.
 The selected entry is returned by identity; mutating it also changes the
 supplied front.
 
-Strategies
-----------
-* :func:`scalar_selection` — scalar baseline: minimise
-  ``problem.scalar_score`` of the entry's objective vector (placeholder
-  weights, raw nutrient units), with a dish-ID tie-break.
-* :func:`normalised_selection` — minimise the mean over days of the
-  per-nutrient RELATIVE deviation vs the original envelope aims
-  (``|total - aim| / aim`` for TARGET, ``shortfall / aim`` for MIN,
-  ``excess / aim`` for MAX), so kcal / mg / g units stop dominating the
-  raw-unit mixing in ``problem.SCALAR_WEIGHTS``.
-* :func:`adequacy_first_selection` — lexicographic:
-  1. minimise the largest relative deviation over all day/aim pairs: MIN
-     shortfall or absolute TARGET distance. Exclude hard MAX ceilings;
-  2. minimise the count of unmet day-aim pairs (relative shortfall > 1e-9);
-  3. minimise ``scalar_score``.
-
 All strategies break score ties on the plan's flattened dish-ID tuple. Relative
 deviations fall back to absolute gaps when an aim is nonpositive. Inputs are
 unchanged; entries with identical keys retain input order.
@@ -92,11 +76,12 @@ def normalised_selection(entries: list[dict], envelope, dishes: list[Dish]) -> d
 
 
 def adequacy_first_selection(entries: list[dict], envelope, dishes: list[Dish]) -> dict:
-    """Lexicographic adequacy-first selection (see module docstring).
+    """Minimise the worst MIN/TARGET gap before counting unmet day-aim pairs.
 
     Key: ``(worst relative aim deviation, unmet day-aim count,
     scalar_score, flattened dish IDs)``. MIN uses shortfall. TARGET uses
-    two-sided distance. See ``_relative`` for nonpositive aims.
+    two-sided distance. A relative gap > 1e-9 counts as unmet. Nonpositive
+    aims use absolute gaps. MAX ceilings are excluded.
     """
     def key(entry: dict) -> tuple:
         daily = daily_totals(entry["plan"], dishes)

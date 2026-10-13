@@ -1,27 +1,11 @@
 """Catalogue loading, vector evaluation, and single-dish feasibility heuristics.
 
-``load_dishes()`` reads ``data/dishes.json`` (flat per-dish nutrient keys) into
-the :class:`backend.optim.toy_data.Dish` contract the whole optimiser already
-speaks, so ``problem.py`` / ``baselines.py`` / pymoo code work unchanged.
+Load flat catalogue records into ``Dish`` objects. ``FastEvaluator`` mirrors
+canonical evaluation for single-dish plans drawn from the allowed pool.
 
-The file also provides the performance machinery needed at dish-pool scale:
-
-* :class:`FastEvaluator` — numpy-backed re-implementation of
-  ``problem.evaluate`` for plans drawn from the allowed pool.  Objectives and
-  the canonical constraint vector are computed identically (same ordering, same
-  EPS tolerance). It avoids repeated Python evaluation during population search.
-* :func:`feasibility_precheck` — cheap necessary-condition test for hard feasibility
-  (MAX ceilings only; MIN floors and TARGETs are soft).
-* :func:`greedy_feasible_plan` / :func:`repair_plan` — bounded construction and
-  repair. Failure returns None, not a proof that no feasible plan exists.
-
-Key structural insight used throughout: every hard constraint in the envelope
-formulation is *per-day* in intent (MAX daily + horizon ``7 x daily`` merely
-repeats the daily bound), so construction and repair decompose to 3-slot day
-problems. The decomposition is exact strictly inside the limits: a day within
-the daily ``problem.EPS`` tolerance, repeated for a week, can exceed the
-horizon tolerance, so ``FastEvaluator.g_vector`` keeps an explicit horizon
-entry and the canonical evaluator remains the authoritative delivery gate.
+Construction and repair work one day at a time. Daily excess within EPS can
+accumulate beyond horizon EPS, so callers must validate the full plan before
+delivery. Bounded heuristic failure is not an infeasibility proof.
 """
 
 from __future__ import annotations
@@ -50,17 +34,12 @@ from .toy_data import Dish
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_DISHES_PATH = os.path.join(_ROOT, "data", "dishes.json")
 
-# Canonical front-selection weights (problem.SCALAR_WEIGHTS) in
-# OBJECTIVE_NAMES order; the vector form avoids per-call dict lookups in the
-# population loop. Kept in sync with problem.scalar_score by derivation.
+# Derive vector weights in canonical objective order to match scalar_score.
 _SCALAR_WEIGHT_VEC = np.array(
     [SCALAR_WEIGHTS[name] for name in OBJECTIVE_NAMES], dtype=float
 )
 
 
-# ---------------------------------------------------------------------------
-# Dish loading
-# ---------------------------------------------------------------------------
 def _synthetic_price(row: dict) -> float:
     """Deterministic placeholder price.
 
@@ -108,9 +87,6 @@ def load_dishes(path: str | None = None) -> list[Dish]:
     return list(_load_cached(os.path.abspath(path)))
 
 
-# ---------------------------------------------------------------------------
-# FastEvaluator — numpy mirror of problem.evaluate for pool-drawn plans
-# ---------------------------------------------------------------------------
 class FastEvaluator:
     """Fast objective/constraint evaluation for plans over the allowed pool.
 
@@ -167,7 +143,6 @@ class FastEvaluator:
             self._price = np.zeros(0)
             self._col_max = np.zeros(len(NUTRIENT_KEYS))
 
-    # -- decoding ----------------------------------------------------------
     def plan_to_idx(self, plan: list[list[str]]) -> np.ndarray:
         pos = {did: i for i, did in enumerate(self.pool_ids)}
         flat = [d for meal in plan for d in meal]
@@ -181,7 +156,6 @@ class FastEvaluator:
     def idx_to_plan(self, idx) -> list[list[str]]:
         return [[self.pool_ids[int(i)]] for i in idx]
 
-    # -- objectives / constraints -----------------------------------------
     def daily_totals(self, idx: np.ndarray) -> np.ndarray:
         idx = np.asarray(idx, dtype=int)
         return self._nut[idx].reshape(self.n_days, MEALS_PER_DAY, -1).sum(axis=1)
@@ -260,7 +234,6 @@ class FastEvaluator:
     def scalar(self, f: np.ndarray) -> float:
         return float(_SCALAR_WEIGHT_VEC @ f)
 
-    # -- per-day feasibility primitives ------------------------------------
     def day_violation(self, totals: np.ndarray) -> tuple[int, float]:
         """(violation_count, violation_magnitude) for one day's nutrient totals.
 
@@ -279,9 +252,6 @@ class FastEvaluator:
         return count, mag
 
 
-# ---------------------------------------------------------------------------
-# Feasibility precheck
-# ---------------------------------------------------------------------------
 def feasibility_precheck(envelope, dishes: list[Dish], n_days: int = DAYS):
     """Reject obvious single-dish infeasibility without proving existence.
 
@@ -309,9 +279,6 @@ def feasibility_precheck(envelope, dishes: list[Dish], n_days: int = DAYS):
     return True, None
 
 
-# ---------------------------------------------------------------------------
-# Greedy constructive builder (the feasibility workhorse)
-# ---------------------------------------------------------------------------
 def _greedy_pick_day(
     ev: FastEvaluator,
     used: dict[int, int] | None = None,

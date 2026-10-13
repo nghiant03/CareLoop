@@ -1,59 +1,18 @@
 """Exact feasibility and additive-objective reference for single-dish days.
 
-Why one-day enumeration is exact for this encoding
---------------------------------------------------
-Every hard constraint in this single-dish encoding is per-day:
+Enumerate all allowed one-day dish multisets. Slot order does not affect hard
+constraints. No feasible day proves single-dish horizon infeasibility, not
+main/side infeasibility. A feasible day is only necessary: repeating an excess
+within daily EPS may exceed horizon EPS. ``problem.evaluate`` gates delivery.
 
-* ``ConstraintKind.MAX`` ceilings are daily MAX ceilings (the horizon slot
-  ``value * n_days`` is implied by holding the daily bound on every day);
-* exclusions and membership are per-dish, hence per-day;
-* each slot holds exactly one dish, so a day is fully described by the
-  multiset of ``MEALS_PER_DAY`` dishes served that day.
+``best`` minimizes each additive daily quantity: nutrient deviation, raw tag
+preference sum, and cost. The preference minimum is not the production optimum,
+which maximizes that sum through a negative-mean objective. ``best_scalar``
+optimizes the one-day objective vector, not the horizon vector. Neither result
+establishes a four-objective horizon optimum because variety spans the horizon.
 
-MIN floors and TARGET values are soft objective terms and never affect
-feasibility. When NO feasible day exists, no 7-day plan can exist either —
-exhausting all one-day dish multisets therefore PROVES infeasibility exactly
-for this encoding (no search heuristics involved). The converse is exact only
-strictly inside the limits: daily and horizon slots share the
-``problem.EPS`` tolerance. Repeating a day whose excess is within the daily
-tolerance can exceed the horizon tolerance: excess <= EPS but 7 x excess > EPS.
-``feasible_day`` is thus a necessary condition for a feasible week, and
-canonical ``problem.evaluate`` authoritatively fences delivery.
-
-What is computed
-----------------
-:func:`one_day_exact` enumerates every ``MEALS_PER_DAY``-dish multiset of the
-allowed pool (``combinations_with_replacement`` — slot order carries no
-constraint) and reports:
-
-* ``feasible_day`` / ``feasible_combo_count`` — exact feasibility verdict;
-* ``best`` — per ADDITIVE objective, the one-day optimum over feasible days:
-  - ``nutrient_target_deviation``: one-day semantics identical to
-    ``problem._obj_target_deviation`` for a single day (deviations summed over
-    the envelope's constraints; the daily mean over 1 day is the sum itself);
-  - ``preference_sum``: the raw sum of ``TAG_PREFERENCE`` over the dishes;
-  - ``cost``: the sum of ``price_sgd``.
-  All three are reported as MINIMISED raw quantities, i.e. ``best`` is the
-  per-day minimum, so it serves as an exact per-day lower bound. Production
-  ``preference_fit`` negates the mean tag-preference sum, so its optimum
-  maximises ``preference_sum``. The minimum reported here bounds the raw
-  additive quantity, not the negated objective.
-* ``best_scalar`` — the multiset minimising ``problem.SCALAR_WEIGHTS`` over
-  the ONE-DAY objective vector (deviation, ``-mean(pref_sum)``, variety of the
-  single day, cost). Preference uses the mean over the day's dishes, and
-  variety uses a single 3-dish day. The 7-day objectives instead use the mean
-  over 21 dishes and horizon-wide entropy. ``best_scalar`` is therefore a
-  per-day reference point, not a decomposed horizon optimum.
-
-Tie-breaks are lexicographic on the sorted dish-id tuple (the pool is sorted
-by ``dish_id``, so index tuples compare like id tuples), keeping every result
-deterministic.
-
-Implementation is vectorised: the per-nutrient matrix (pool x K) and the
-pair-sum matrix (upper triangle, pool x pool x needed-nutrients) are built
-once with numpy; the outer loop runs over the third dish index and the MAX
-filters are applied to ``pair_sums + N[k]`` in bulk. A chunked generic path handles
-``n_slots != 3`` for small analysis pools.
+Ties use sorted dish-ID tuples. The three-slot path precomputes pair sums and
+vectorizes the third-dish search. Other slot counts use chunked enumeration.
 """
 
 from __future__ import annotations

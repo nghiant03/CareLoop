@@ -1,14 +1,7 @@
-"""Food substitution engine.
+"""Rank category-compatible dish substitutes, without enforcing patient constraints.
 
-v1 — pure nutrient distance between two dishes over the 6 core nutrients
-     (min-max normalised across the dish database).
-v2 — ranked substitution suggestions: renal-weighted nutrient distance
-     (sodium/potassium/phosphorus weighted ×2), category/cuisine
-     similarity bonuses, a lower combined normalised mineral-load prior for
-      near-distance candidates, and hpb_id/verified score bonuses.
-
-Category compatibility keeps suggestions sensible: a drink never gets a soup.
-``hpb_id``/``verified`` bonuses affect ranking only when those fields are set.
+v1 uses normalized nutrient distance. v2 adds renal weighting and ranking bonuses.
+``suggest_substitutions`` defines score fields and compatibility behavior.
 """
 
 from __future__ import annotations
@@ -32,13 +25,10 @@ CORE_NUTRIENTS = (
 # Generic lower-mineral-load prior; patient-specific ceilings and exclusions are checked elsewhere.
 _MINERALS = ("sodium_mg", "potassium_mg", "phosphorus_mg")
 
-# Renal weights over CORE_NUTRIENTS order: Na/K/P count double when judging
-# how "similar" two dishes are. Energy, protein, and carbs keep weight 1.
+# CORE_NUTRIENTS order: Na/K/P count double.
 RENAL_WEIGHTS: tuple[float, ...] = (1.0, 1.0, 2.0, 2.0, 2.0, 1.0)
 
-# Weight of the lower-mineral-load prior, applied only to near-distance
-# candidates within _NEAR_TOLERANCE of the best raw distance. This adjusts
-# ranking only in that neighbourhood; it is not a strict tie-break.
+# Apply the mineral-load prior only within _NEAR_TOLERANCE of the best distance.
 _MINERAL_LOAD_WEIGHT = 0.20
 _NEAR_TOLERANCE = 0.25
 _CATEGORY_BONUS = 0.10
@@ -46,9 +36,7 @@ _CUISINE_BONUS = 0.03
 _HPB_BONUS = 0.01
 _VERIFIED_BONUS = 0.01
 
-# Which categories may substitute for which. Meals pair with rice-mixed-plate
-# style meals; kopitiam drinks/desserts stay within their beverage-and-snack
-# family. This is what stops "suggest a soup for a drink".
+# Limit substitutes to compatible meal or beverage/snack categories.
 _COMPATIBLE_CATEGORIES: dict[str, frozenset[str]] = {
     "hawker": frozenset({"hawker", "cai_png"}),
     "cai_png": frozenset({"cai_png", "hawker"}),
@@ -152,22 +140,17 @@ def suggest_substitutions(
 ) -> list[dict]:
     """Suggest up to ``k`` substitute dishes for ``dish_id``.
 
-    version=1: rank purely by nutrient distance.
-    version=2: use renal-weighted distance with Na/K/P weighted twice. Adjust
-    the score for category/cuisine matches and hpb_id/verified bonuses. Apply
-    the mineral-load prior only near the best raw distance. These adjustments
-    affect ranking, not just exact ties. ``nutrient_distance`` remains the raw
-    metric: renal-weighted for v2, plain Euclidean for v1.
+    v1 ranks by plain nutrient distance. v2 doubles Na/K/P weights and adds
+    category, cuisine, and verification bonuses. Its mineral-load prior applies
+    only near the best raw distance, not just on ties.
 
-    Candidates are restricted to compatible categories (never e.g. a soup for
-    a drink) and the query dish itself is always excluded. Results are sorted
-    by the returned ``ranking_score`` (ascending) and deduplicated by dish_id.
-    ``distance`` is a compatibility alias for that adjusted score, not a metric;
-    bonuses can make it negative. ``nutrient_distance`` remains the raw metric.
+    Exclude the source and incompatible categories. Deduplicate by dish ID and
+    sort by ascending ``ranking_score``. Legacy ``distance`` aliases that score,
+    which may be negative. ``nutrient_distance`` is the raw version-specific metric.
 
-    Supplied dishes replace candidate lookup, not the cached normalisation bounds.
-    Raises KeyError for an unknown dish. Unsupported versions raise ValueError
-    when candidates are scored; k <= 0 returns no suggestions.
+    Supplied dishes replace lookup, not cached normalization bounds. Unknown
+    sources raise KeyError. Unsupported versions raise ValueError when scored.
+    k <= 0 returns no suggestions.
     """
     dishes = dishes if dishes is not None else load_dishes()
     by_id = {d["dish_id"]: d for d in dishes}

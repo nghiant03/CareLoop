@@ -1,33 +1,11 @@
 """Baseline search strategies for the CareLoop meal optimiser.
 
-Three baselines support comparisons with pymoo NSGA-II:
+Search methods share ``_result``'s plan, objective, violation, front, and runtime
+fields. ``feasible`` requires both hard compliance and actual meal delivery.
+The pure-Python NSGA-II approximation uses constraint dominance.
 
-* :func:`random_search`     — uniform random plans.
-* :func:`greedy_search`     — myopic per-meal construction + local search.
-* :func:`exhaustive_search` — one-day enumeration capped by ``max_combos``.
-  ``search_complete`` reports whether the cap truncated enumeration. Exact
-  one-day verdicts come from :func:`backend.optim.exact_reference.one_day_exact`.
-
-Plus :func:`nsga2_fallback`, a pure-Python NSGA-II style approximation used by
-``spike_pymoo.py`` when ``pymoo``/``numpy`` are not installed.  It implements
-constraint-dominance (feasible beats infeasible; fewer violations beats more)
-so a hard-violating plan never dominates a feasible one.
-
-Every entry point returns a standard result dict::
-
-    {
-      "method": str,
-      "plan": list[list[str]],      # SLOTS meals, each a list of dish ids
-      "objectives": dict,           # keyed by OBJECTIVE_NAMES (all minimise)
-      "violations": list[dict],
-      "violation_count": int,
-      "feasible": bool,          # delivery success: no hard violations AND
-                                 # a nonempty plan (meals delivered)
-      "evaluations": int,
-      "runtime_ms": float,
-      "front": list[dict],          # Pareto front entries (may be empty)
-      "front_size": int,
-    }
+Bounded exhaustive search is a baseline, not the exact reference. Use
+``exact_reference.one_day_exact`` for exhaustive single-dish verdicts.
 """
 
 from __future__ import annotations
@@ -52,9 +30,6 @@ from .problem import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Result plumbing
-# ---------------------------------------------------------------------------
 def _make_result(
     method: str,
     plan: list[list[str]],
@@ -135,9 +110,6 @@ def _repair_plan(envelope, dishes, plan, pool, max_passes: int = 8) -> list[list
     return plan
 
 
-# ---------------------------------------------------------------------------
-# Random search
-# ---------------------------------------------------------------------------
 def random_search(
     envelope, dishes, n_iter: int = 500, seed: int = 0, slots: int = SLOTS
 ) -> dict:
@@ -160,9 +132,6 @@ def random_search(
     return _make_result("random", best_plan, envelope, dishes, n_iter, runtime)
 
 
-# ---------------------------------------------------------------------------
-# Greedy search
-# ---------------------------------------------------------------------------
 def _greedy_score(totals, meals_done, envelope, dish, pool_max) -> float:
     """Lower is better. Penalises MAX overruns, optimistic MIN shortfalls."""
     penalty = 0.0
@@ -242,22 +211,13 @@ def greedy_search(
     return _make_result("greedy", plan, envelope, dishes, evaluations, runtime)
 
 
-# ---------------------------------------------------------------------------
-# Small exhaustive
-# ---------------------------------------------------------------------------
 def exhaustive_search(
     envelope, dishes, max_combos: int = 100_000, seed: int = 0
 ) -> dict:
-    """Enumerate one-day meal combinations, then repeat the best day 7x.
+    """Score at most ``max_combos`` one-day combinations and repeat the best day.
 
-    Bounded by ``max_combos``: when the pool is large enough that
-    ``len(pool) ** MEALS_PER_DAY`` exceeds the cap, only the first
-    ``max_combos`` combinations are scored. The result exposes
-    ``search_complete`` (False when the cap truncated the enumeration) so a
-    bounded search is never mistaken for the exact one-day reference in
-    :func:`backend.optim.exact_reference.one_day_exact`, which is exhaustive
-    by construction. The 7-day horizon is filled by repeating the best day,
-    which is exactly why this is a *baseline* (no variety).
+    ``search_complete`` is False when the cap truncates enumeration. This
+    baseline does not optimize horizon variety or prove truncated-search failure.
     """
     t0 = time.perf_counter()
     pool = [d.dish_id for d in allowed_dishes(envelope, dishes)]
@@ -288,9 +248,6 @@ def exhaustive_search(
     return result
 
 
-# ---------------------------------------------------------------------------
-# Pure-Python NSGA-II fallback
-# ---------------------------------------------------------------------------
 def _dominates(a: tuple, b: tuple) -> bool:
     return all(x <= y + 1e-12 for x, y in zip(a, b)) and any(
         x < y - 1e-12 for x, y in zip(a, b)
