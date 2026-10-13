@@ -1,24 +1,39 @@
 # CareLoop deployment configuration
 
-This directory packages the **current** backend and frontend for a local,
-single-host deployment. It also contains an independent PostgreSQL preparation
-configuration. These are different stacks: the application still uses SQLite.
+The single root `compose.yaml` packages PostgreSQL, explicit schema migration,
+knowledge authoring tools, backend and frontend. Clinical and knowledge storage
+use separate PostgreSQL databases. SQLite remains a legacy import/test backend,
+not the deployed application store.
 
 | File | Purpose |
 | --- | --- |
-| `../compose.yaml` | Backend, frontend/reverse proxy and persistent clinical state |
+| `../compose.yaml` | Complete local service stack and persistent PostgreSQL state |
 | `backend/Dockerfile` | Install the Python distribution and run a non-root Uvicorn worker |
 | `frontend/Dockerfile` | Build with the npm lock file, then serve static files using non-root nginx |
 | `frontend/nginx.conf` | SPA routing, static asset caching, `/api` proxy and container health endpoint |
-| `../compose.postgres.yaml` | Independent, optional local PostgreSQL server |
 | `postgres/01-databases.sql` | Empty clinical/knowledge PostgreSQL databases and access roles |
+| `postgres/02-passwords.sh` | Initial role passwords from private Compose secrets |
+| `prepare_secrets.py` | Ignored credentials and internal/localhost connection URL files |
 
 ## Application stack
 
-From the repository root, when you are ready to build and start services:
+Follow [the migration/cutover guide](../docs/POSTGRES.md) before starting the app.
+From the repository root, prepare secrets, start only the database, and initialize
+schemas first:
 
 ```sh
+.venv/bin/python deploy/prepare_secrets.py
 docker compose config --quiet
+docker compose up -d --wait postgres
+docker compose run --rm migrate
+```
+
+Import the selected clinical SQLite source, and import a real knowledge journal
+or bootstrap/review/publish a draft. These actions are explicit; schema migration
+alone does not import data or authorize a knowledge release. Then:
+
+```sh
+export CARELOOP_KNOWLEDGE_RELEASE=YOUR_REVIEWED_RELEASE_ID
 docker compose up --build -d
 docker compose ps
 curl --fail http://127.0.0.1:8080/healthz
@@ -32,34 +47,34 @@ through `/api`. The proxy strips `/api`, matching the frontend's existing HTTP
 contract. Its health endpoint checks nginx only; `/api/healthz` checks the backend.
 Neither endpoint establishes clinical readiness.
 
-The application stack does not require PostgreSQL secrets or credentials.
-Knowledge mode is explicitly `fixtures`, using the versioned synthetic patients,
-rules and catalogue bundled with the Python distribution. See
-[`docs/KNOWLEDGE.md`](../docs/KNOWLEDGE.md) before configuring a reviewed knowledge
-database/release; this stack does not import or publish one automatically.
+Backend knowledge mode is explicitly `database` and requires a published release.
+No fixture fallback is allowed. PostgreSQL runtime credentials are different from
+operator and migration credentials; only runtime secrets reach the backend.
+The `knowledge` service is an opt-in CLI under the `tools` profile, not an editing
+API. Its bind-mounted export workspace is external dataset `outputs/knowledge`; set
+`CARELOOP_OPERATOR_UID/GID` to the invoking user's IDs before exports.
 
 ## State and existing data
 
-`careloop-app_clinical_data` is a named volume mounted at `/var/lib/careloop`,
-owned by backend UID/GID **10001** on initial creation. Clinical state is written
-to `careloop_app.sqlite3`; run artifacts live under `artifacts/` in that volume.
-Application code is read-only and temporary files use `/tmp`.
+`careloop-app_postgres_data` holds both databases. The backend UID/GID **10001**
+writes only unpublished artifacts into `careloop-app_run_artifacts` under
+`/var/lib/careloop/artifacts`. Application code is read-only; temporary files use
+`/tmp`. Only the migration service can initialize schema.
 
-**The first run creates new, empty clinical storage.** It does not copy the
-checkout's database or your existing user-state database. Synthetic patient
-fixtures remain visible even before new clinical records are written. Container
-data therefore does not represent a migration of existing patient state.
+**The first database run creates empty storage.** It does not copy the checkout's
+database or your existing user-state database. Synthetic patient fixtures remain
+available through the existing patient API; they are not imported patient rows.
+Verify the explicitly imported clinical journal before accepting new writes.
 
 The build context excludes local databases, credentials, caches and generated
 frontend bundles. Only the two explicit fixture JSON files under `data/` are
 included. Never put real patient information into those versioned fixtures.
 
-Before importing existing state, stop all writers and follow the integrity-
-checked SQLite backup/migration procedure in
-[`docs/STORAGE.md`](../docs/STORAGE.md). Provision the destination volume with
-UID/GID 10001 ownership and private file permissions. Do not overwrite a populated
-volume or copy an active SQLite file without its WAL. Keep a verified source
-backup; this configuration deliberately performs no automatic import.
+Before importing existing state, stop all writers and use the verified
+`backend.storage.migrate import-sqlite` workflow in
+[`docs/POSTGRES.md`](../docs/POSTGRES.md). It reads committed WAL contents,
+refuses populated targets and compares all imported columns before committing.
+Keep a verified source backup. No automatic import runs on startup.
 
 Stop containers without deleting state:
 
@@ -73,18 +88,18 @@ docker compose down
 intentional. Named volumes are persistence, not backups. Store consistent
 backups outside Docker and rehearse restoration.
 
-## PostgreSQL preparation
+## PostgreSQL operations
 
-See [`docs/POSTGRES_LOCAL.md`](../docs/POSTGRES_LOCAL.md) for secret creation,
-startup and backup instructions for the separate PostgreSQL stack:
+See [`docs/POSTGRES.md`](../docs/POSTGRES.md) for credentials, schema migrations,
+data import, knowledge publication, backup and restore rehearsal.
 
 ```sh
-docker compose -f compose.postgres.yaml config --quiet
+docker compose logs postgres migrate backend frontend
 ```
 
-Starting that stack does not connect CareLoop to PostgreSQL. The required
-storage-layer/schema/data migration has not been implemented; do not replace
-SQLite path settings with PostgreSQL URLs.
+Changing knowledge releases requires a controlled backend restart. PostgreSQL
+URLs use `CARELOOP_APP_DATABASE_URL[_FILE]` and
+`CARELOOP_KNOWLEDGE_DATABASE_URL[_FILE]`, not legacy SQLite path settings.
 
 ## Deployment limits
 
@@ -92,11 +107,12 @@ This is a local demonstration/migration-development setup, **not a production
 clinical deployment**. The app still lacks authenticated actors and role-based
 authorization, uses permissive CORS, and exposes API documentation through the
 proxy. There is no TLS termination, automated backup schedule, HA/failover or
-multi-host database. Do not change the loopback binding to a public interface
+automated multi-host rollout. Do not change the loopback binding to a public interface
 without a separate security/deployment design.
 
 The backend uses one worker because plan generation is CPU-intensive and the
-current runtime caches/SQLite design are not a multi-server deployment solution.
+current runtime caches and conservative PostgreSQL write serialization are not
+evidence of measured multi-server throughput.
 The 300-second proxy timeout does not create background jobs or guarantee a plan
 finishes within that time. Revisit resource limits and worker/job architecture
 after workload measurement.

@@ -1,5 +1,5 @@
--- First initialization only. Application schemas arrive with the future migration.
--- LOGIN roles have no passwords until an operator sets them with psql \password.
+-- First initialization only. The separate migrate service owns application DDL.
+-- 02-passwords.sh provisions credentials from private Compose secrets.
 CREATE ROLE careloop_app LOGIN;
 CREATE ROLE careloop_knowledge_reader LOGIN;
 CREATE ROLE careloop_knowledge_operator LOGIN;

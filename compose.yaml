@@ -1,16 +1,101 @@
 name: careloop-app
 
 services:
+  postgres:
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: careloop_admin
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./deploy/postgres/01-databases.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
+      - ./deploy/postgres/02-passwords.sh:/docker-entrypoint-initdb.d/02-passwords.sh:ro
+    secrets:
+      - postgres_admin_password
+      - postgres_app_password
+      - postgres_knowledge_reader_password
+      - postgres_knowledge_operator_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U careloop_admin -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 60s
+
+  migrate:
+    build:
+      context: .
+      dockerfile: deploy/backend/Dockerfile
+    environment:
+      CARELOOP_APP_DATABASE_URL_FILE: /run/secrets/clinical_admin_url
+      CARELOOP_KNOWLEDGE_DATABASE_URL_FILE: /run/secrets/knowledge_admin_url
+    secrets:
+      - clinical_admin_url
+      - knowledge_admin_url
+    command: ["python", "-m", "backend.storage.migrate", "init", "--component", "both"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  knowledge:
+    profiles: ["tools"]
+    user: "${CARELOOP_OPERATOR_UID:-1000}:${CARELOOP_OPERATOR_GID:-1000}"
+    build:
+      context: .
+      dockerfile: deploy/backend/Dockerfile
+    environment:
+      CARELOOP_KNOWLEDGE_DATABASE_URL_FILE: /run/secrets/knowledge_operator_url
+    secrets:
+      - knowledge_operator_url
+    volumes:
+      - ${CARELOOP_DATASET_DIR:-${HOME}/.local/share/careloop/datasets}/outputs/knowledge:/work
+    working_dir: /work
+    entrypoint: ["python", "-m", "backend.knowledge"]
+    command: ["list"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
   backend:
     build:
       context: .
       dockerfile: deploy/backend/Dockerfile
     environment:
-      CARELOOP_APP_DB: /var/lib/careloop/careloop_app.sqlite3
+      CARELOOP_APP_DATABASE_URL_FILE: /run/secrets/clinical_app_url
+      CARELOOP_KNOWLEDGE_DATABASE_URL_FILE: /run/secrets/knowledge_reader_url
       CARELOOP_ARTIFACT_DIR: /var/lib/careloop/artifacts
-      CARELOOP_KNOWLEDGE_MODE: fixtures
+      CARELOOP_DATASET_DIR: /datasets
+      CARELOOP_KNOWLEDGE_MODE: database
+      CARELOOP_KNOWLEDGE_RELEASE: ${CARELOOP_KNOWLEDGE_RELEASE:-}
+    secrets:
+      - clinical_app_url
+      - knowledge_reader_url
     volumes:
-      - clinical_data:/var/lib/careloop
+      - run_artifacts:/var/lib/careloop
+      - ${CARELOOP_DATASET_DIR:-${HOME}/.local/share/careloop/datasets}:/datasets:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     read_only: true
     tmpfs:
       - /tmp
@@ -52,4 +137,25 @@ services:
       retries: 3
 
 volumes:
-  clinical_data:
+  postgres_data:
+  run_artifacts:
+
+secrets:
+  postgres_admin_password:
+    file: ./.secrets/postgres_admin_password
+  postgres_app_password:
+    file: ./.secrets/postgres_app_password
+  postgres_knowledge_reader_password:
+    file: ./.secrets/postgres_knowledge_reader_password
+  postgres_knowledge_operator_password:
+    file: ./.secrets/postgres_knowledge_operator_password
+  clinical_admin_url:
+    file: ./.secrets/clinical_admin_url
+  knowledge_admin_url:
+    file: ./.secrets/knowledge_admin_url
+  clinical_app_url:
+    file: ./.secrets/clinical_app_url
+  knowledge_reader_url:
+    file: ./.secrets/knowledge_reader_url
+  knowledge_operator_url:
+    file: ./.secrets/knowledge_operator_url
