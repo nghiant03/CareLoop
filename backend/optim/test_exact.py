@@ -1,21 +1,7 @@
-"""Exact single-dish feasibility and additive-objective reference tests.
+"""Cross-check exact single-dish enumeration against independent brute force.
 
-Covers:
-* ``one_day_exact`` vs a plain-Python brute force over all dish multisets
-  (values, winners, feasibility, combo counts) on a tiny toy pool, for the
-  3-slot production geometry and a generic ``n_slots=2`` run;
-* determinism (repeated calls return identical results);
-* ``prove_infeasible`` for a MAX below every possible day total and for an
-  empty (fully excluded) pool, and the solver surfacing
-  ``infeasibility_status == "proven_infeasible"``;
-* solver success-path shape unchanged (no new keys on feasible results);
-* ``plan_vs_exact`` gaps >= 0, the 7 x per-day-min lower bounds, and the
-  explicit ``excluded_objectives: ["variety"]`` disclosure;
-* performance smoke: a 200+ dish real pool completes in well under 2 s.
-
-Run with pytest so fixture-dependent tests receive their arguments::
-
-    .venv/bin/python -m pytest backend/optim/test_exact.py
+Use pytest for fixture injection. Also check diagnosis boundaries and the
+explicit exclusion of horizon variety from additive bounds.
 """
 
 from __future__ import annotations
@@ -63,9 +49,6 @@ from shared.envelope_schema import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Fixtures: tiny pool + envelopes (Dish contract reused from toy_data)
-# ---------------------------------------------------------------------------
 def _dish(did: str, energy: float, protein: float, sodium: float, price: float) -> Dish:
     return Dish(
         dish_id=did,
@@ -146,9 +129,6 @@ def _empty_pool_envelope():
     )
 
 
-# ---------------------------------------------------------------------------
-# Plain-Python brute force (independent reference implementation)
-# ---------------------------------------------------------------------------
 def _one_day_dev(totals: dict[str, float], env) -> float:
     dev = 0.0
     for c in env.targets:
@@ -241,9 +221,6 @@ def _assert_matches_bruteforce(env, pool: list[Dish], n_slots: int = 3):
     return exact
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 def test_one_day_exact_matches_bruteforce_on_tiny_pool():
     env = _feasible_envelope()
     pool = sorted(allowed_dishes(env, TINY_POOL), key=lambda d: d.dish_id)

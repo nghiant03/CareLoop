@@ -1,25 +1,7 @@
-"""Deterministic front selection and original-aim scoring tests.
+"""Check selection strategies on feasible fronts with hand-checkable trade-offs.
 
-Builds three feasible front entries over a tiny pool where the strategies
-PROVABLY disagree:
-
-* entry ``adequate`` — exceeds the protein MIN and meets the energy TARGET
-  exactly, but is expensive;
-* entry ``cheap``     — well under cost, but misses the protein MIN on every
-  day (shortfall 32/60 g);
-* entry ``middle``    — meets protein but deviates from the energy TARGET.
-
-Expected winners (hand-checkable):
-
-* ``scalar_selection``  -> ``cheap``   (cost dominates the raw-unit scalar);
-* ``normalised_selection``   -> ``adequate`` (zero relative deviation);
-* ``adequacy_first_selection`` -> ``adequate`` (zero worst-day shortfall).
-
-Also asserts determinism (repeated calls and reversed entry order agree).
-
-Run with pytest so fixture-dependent tests receive their arguments::
-
-    .venv/bin/python -m pytest backend/optim/test_selection.py
+Raw scalar scoring favors the cheap plan. Relative and adequacy-first scoring
+favor the adequate plan. Use pytest for fixture injection.
 """
 
 from __future__ import annotations
@@ -125,9 +107,6 @@ def _by_name(entry: dict) -> str:
     return entry["name"]
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 def test_scalar_selection_prefers_the_cheap_entry():
     entries = _entries()
     picked = scalar_selection(entries, _envelope(), SELECTION_POOL)

@@ -1,24 +1,7 @@
-"""Tests for the real-dish optimiser pipeline (no pytest required).
+"""Check catalogue search, canonical/vector agreement, and solver guarantees.
 
-Run either way::
-
-    .venv/bin/python backend/optim/test_real.py
-    pytest backend/optim/test_real.py
-
-Covers:
-* the real dish pool loads 214 dishes (190 manual + 24 curated renal
-  replenishment dishes);
-* hand-built envelopes validate against ``shared.envelope_schema``;
-* FastEvaluator agrees with the canonical ``problem.evaluate``;
-* ``api.run`` returns feasible plans (violation_count == 0) with all contract
-  keys and sane runtimes for every test envelope;
-* determinism under a fixed seed;
-* the feasibility guarantee holds even with a tiny compute budget;
-* infeasible pools produce an explicit diagnosis instead of a broken plan;
-* the benchmark comparison methods (nsga3 / moead / age / sms) stay feasible,
-  finite and deterministic through ``solve()``, the raw mode reports the
-  untouched front, and ``api.run`` keeps the NSGA-II + guarantee default;
-* benchmark artifact regeneration works (smoke-mode subprocess run).
+Run with pytest or ``.venv/bin/python backend/optim/test_real.py``. Benchmark
+regeneration uses smoke outputs so full artifacts remain untouched.
 """
 
 from __future__ import annotations
@@ -73,9 +56,6 @@ _ENVELOPES = build_benchmark_envelopes()
 _DISHES = load_dishes()
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 DISH_COUNT = 214  # 190 manual_curation + 24 curated_renal_replenishment
 
 
@@ -303,9 +283,6 @@ def test_semantic_exclusion_mapping_filters_real_pool():
     assert pool_with_single_exclusion(cat, "nonexistent_category_xyz") == total
 
 
-# ---------------------------------------------------------------------------
-# Benchmark algorithm-comparison tests (nsga3 / moead / age / sms)
-# ---------------------------------------------------------------------------
 NEW_METHODS = ("nsga3", "moead", "age", "sms")
 _HERE_DIR = os.path.dirname(os.path.abspath(__file__))
 

@@ -1,22 +1,4 @@
-"""Durable application-store operations and restart behavior.
-
-Covers the durable SQLite app store (``backend.app.core.persistence``) and its
-API integration:
-
-* plans: save and read back through a fresh SQLite handle and through
-  ``GET /plans/{id}`` on a new TestClient in the same process. Check summaries
-  via ``GET /plans`` and 404 responses for unknown ids.
-* meal logs: upsert per (patient, date, meal), persistence across handles,
-  chronological ordering (date, then breakfast/lunch/dinner), inclusive bounds;
-* envelope journal: rules run + clinician approval journaled through the API.
-  ``envelope_effective_at`` reconstructs the APPROVED envelope effective on a
-  date. A date before the first proposal yields ``None``. Check ordering and
-  same-date tie-breaking, including ordered ``list_envelope_history`` results.
-* observations: store round-trip, chronological listing, and the API contract
-  (metric whitelist, extra="forbid", invalid/unknown patient errors);
-* simulations and review items: full round-trips including acknowledgement and
-  recorded actions.
-"""
+"""Check durable workflow records through fresh SQLite handles and HTTP clients."""
 
 from __future__ import annotations
 
@@ -39,9 +21,6 @@ from shared.envelope_schema import (
     PatientSummary,
 )
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _run_rules(client, patient_id: str) -> dict:
@@ -77,11 +56,6 @@ def _hand_envelope(
 
 def _today(offset_days: int = 0) -> str:
     return (datetime.now(UTC).date() + timedelta(days=offset_days)).isoformat()
-
-
-# ---------------------------------------------------------------------------
-# Plans: store round-trip + restart survival
-# ---------------------------------------------------------------------------
 
 
 def test_plan_save_and_fresh_handle_roundtrip() -> None:
@@ -192,11 +166,6 @@ def test_plans_api_list_get_and_restart(client) -> None:
     assert missing.json()["detail"]["error"] == "plan_not_found"
 
 
-# ---------------------------------------------------------------------------
-# Meal logs
-# ---------------------------------------------------------------------------
-
-
 def test_meal_log_upsert_persistence_and_ordering() -> None:
     patient_id = "P9998"
     persistence.delete_logs_for_patient(patient_id)
@@ -245,11 +214,6 @@ def test_meal_log_upsert_persistence_and_ordering() -> None:
     assert store.delete_logs_for_patient(patient_id) == 3
     assert store.count_logs(patient_id) == 0
     assert store.get_log(patient_id, _today(0), "lunch") is None
-
-
-# ---------------------------------------------------------------------------
-# Envelope journal
-# ---------------------------------------------------------------------------
 
 
 def test_journal_via_api_effective_envelope(client) -> None:
@@ -327,11 +291,6 @@ def test_journal_ordering_and_tie_break() -> None:
         "ENV-JTEST-003",
     ]
     assert history[2]["snapshot"]["targets"][0]["value"] == 1500.0
-
-
-# ---------------------------------------------------------------------------
-# Observations
-# ---------------------------------------------------------------------------
 
 
 def test_observation_store_roundtrip_chronological() -> None:
@@ -438,11 +397,6 @@ def test_observations_api(client) -> None:
     assert bad_date.json()["detail"]["error"] == "invalid_observed_date"
 
 
-# ---------------------------------------------------------------------------
-# Simulations
-# ---------------------------------------------------------------------------
-
-
 def test_simulation_roundtrip() -> None:
     patient_id = "P9996"
     sim_id = persistence.save_simulation(
@@ -462,11 +416,6 @@ def test_simulation_roundtrip() -> None:
     assert row["proposed_targets"][0]["value"] == 1800.0
     assert row["comparison"]["delta"]["sodium_mg"] == pytest.approx(-200.0)
     assert row["created_at"]
-
-
-# ---------------------------------------------------------------------------
-# Review queue
-# ---------------------------------------------------------------------------
 
 
 def test_review_item_roundtrip() -> None:
@@ -513,11 +462,6 @@ def test_review_item_roundtrip() -> None:
     assert persistence.get_review_item("REV-NOPE-999") is None
     assert persistence.acknowledge_review_item("REV-NOPE-999") is None
     assert persistence.record_review_action("REV-NOPE-999", action="x") is None
-
-
-# ---------------------------------------------------------------------------
-# Adherence store compatibility
-# ---------------------------------------------------------------------------
 
 
 def test_adherence_store_delegates_to_persistence() -> None:

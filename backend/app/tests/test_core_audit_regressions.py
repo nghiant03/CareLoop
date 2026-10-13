@@ -1,4 +1,4 @@
-"""Failure, retry identity, and quantity boundaries from audit findings 3–12."""
+"""Failure, retry-identity, and quantity-boundary regressions."""
 
 from __future__ import annotations
 

@@ -1,13 +1,4 @@
-"""Smoke tests for the CareLoop optimiser (no pytest required).
-
-Run either way::
-
-    python backend/optim/test_smoke.py
-    pytest backend/optim/test_smoke.py     # if pytest is installed
-
-Each check is a ``test_*`` function using plain ``assert`` so pytest can collect
-them; :func:`main` runs them all and prints a summary.
-"""
+"""Toy optimizer smoke checks, runnable with pytest or directly as a script."""
 
 from __future__ import annotations
 
@@ -43,9 +34,6 @@ def _feasible_day() -> list[list[str]]:
     ]  # day totals: P70 (60..80), Na1650 (<=2000)
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 def test_feasible_plan_returns_true():
     plan = _feasible_day() * 7
     assert is_feasible(plan, _envelope(), TOY_DISHES) is True

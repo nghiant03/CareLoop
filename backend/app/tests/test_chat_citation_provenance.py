@@ -1,16 +1,4 @@
-"""Chat citation provenance: the first citation must match the answered number.
-
-Covers the grounded chat pipeline (``backend.app.chat.answers``) plus the
-``/chat`` endpoint:
-
-* a clinician-edited constraint (CLINICIAN-EDIT trace row) must cite the
-  clinician-edit provenance first — the guideline rule that originally fired
-  is context at most, never the source of the clinician-authored number, and
-  guideline rules that do not apply to the patient's diagnoses must not be
-  cited at all;
-* a guideline-sourced (unedited) constraint keeps citing the guideline rule
-  that produced it.
-"""
+"""Check exact-value citation authorship and patient-rule applicability in chat."""
 
 from __future__ import annotations
 
@@ -84,11 +72,6 @@ def _kdigo_sodium_row() -> dict:
             "verbatim_quote": "recommend sodium intake less than 2 g per day",
         },
     }
-
-
-# ---------------------------------------------------------------------------
-# Regression: edited value must cite the clinician edit, not the guideline
-# ---------------------------------------------------------------------------
 
 
 def test_edited_sodium_cites_clinician_edit_first(kb) -> None:
@@ -166,11 +149,6 @@ def test_edited_sodium_via_api_cites_clinician_edit_first() -> None:
         assert "CKD-2024-SODIUM-2000" not in rule_ids
 
 
-# ---------------------------------------------------------------------------
-# Guideline-sourced (unedited) constraints keep their guideline citation
-# ---------------------------------------------------------------------------
-
-
 def test_unedited_constraint_still_cites_guideline_rule(kb) -> None:
     """Without a clinician edit the constraint's provenance is the guideline
     rule that fired: the first citation stays the guideline rule."""
@@ -199,11 +177,6 @@ def test_unedited_constraint_still_cites_guideline_rule(kb) -> None:
     assert "CLINICIAN-EDIT" not in rule_ids
 
 
-# ---------------------------------------------------------------------------
-# Regression: numeric rule conditions must actually be evaluated
-# ---------------------------------------------------------------------------
-
-
 def _numeric_rule(field: str, op: str, value) -> dict:
     return {"rule_id": "TEST-RULE", "conditions": [{"field": field, "op": op, "value": value}]}
 
@@ -230,12 +203,7 @@ def _numeric_rule(field: str, op: str, value) -> dict:
     ],
 )
 def test_rule_applies_to_patient_numeric_ops(op, value, num, expected) -> None:
-    """Each known numeric op must be its own branch: a satisfied comparison
-    keeps the rule applicable, a failed one rejects it, and the unknown
-    sentinel (-1.0) / missing value never satisfies the test.
-
-    Regression: only ``between`` could ever return True — a passing ge/gt/
-    le/lt/eq fell through to the ``else: return False``."""
+    """Every numeric operator accepts matches and rejects unknown labs."""
     patient = {"patient_id": "PX", "serum_K_meq_L": num}
     assert answers._rule_applies_to_patient(_numeric_rule("serum_K_meq_L", op, value), patient) is expected
 
@@ -262,11 +230,7 @@ def _hyperk_potassium_row() -> dict:
 
 
 def test_hyperkalaemia_potassium_rule_cited_for_high_serum_k(kb) -> None:
-    """P0006-style case: serum K 5.45 mEq/L fires HYPERK-2024-POTASSIUM-2400
-    (potassium MAX 2400 mg/d). The hyperkalaemia rule must stay applicable and
-    be cited — regression: the applicability filter rejected every satisfied
-    numeric comparison except ``between``, dropping the rule (and with it the
-    KB anchor) even though the rule engine had fired it for this patient."""
+    """A matching 5.45 mEq/L lab keeps the hyperkalaemia rule citable."""
     envelope = {
         "envelope_id": "ENV-P0006-001",
         "patient_id": "P0006",

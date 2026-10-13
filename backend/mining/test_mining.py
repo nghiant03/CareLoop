@@ -24,11 +24,6 @@ def dishes() -> list[dict]:
     return substitutions.load_dishes()
 
 
-# ---------------------------------------------------------------------------
-# clustering
-# ---------------------------------------------------------------------------
-
-
 class TestClustering:
     def test_deterministic(self, patients):
         first = clustering.cluster_patients(patients)
@@ -54,11 +49,6 @@ class TestClustering:
     def test_custom_k_range(self, patients):
         result = clustering.cluster_patients(patients, k_range=(2, 3))
         assert 2 <= result["k"] <= 3
-
-
-# ---------------------------------------------------------------------------
-# substitutions
-# ---------------------------------------------------------------------------
 
 
 class TestSubstitutions:
@@ -170,11 +160,6 @@ class TestSubstitutions:
         results = substitutions.suggest_substitutions(dessert["dish_id"], k=10, version=2, dishes=dishes)
         # The compatible category pool bounds the number returned, even for large k.
         assert 0 < len(results) <= 10
-
-
-# ---------------------------------------------------------------------------
-# trends
-# ---------------------------------------------------------------------------
 
 
 def _synthetic_patient(pid: str, values_newest_first: list[float], analyte: str = "K") -> dict:

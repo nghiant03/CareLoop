@@ -33,11 +33,6 @@ def _request(method: str, path: str, **kwargs) -> httpx.Response:
     return asyncio.run(_run())
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
-
-
 def test_imports() -> None:
     from backend.app.core import approval_gate, graph_versioning, llm_choice
     from backend.app.models import NutrientEnvelope, Patient

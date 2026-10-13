@@ -1,21 +1,6 @@
-"""Plan adequacy tests.
+"""Check plan adequacy against original aims, not solver-relaxed floors.
 
-Covers the top-level ``adequacy[]`` array on the plan response, scored against
-the ORIGINAL clinician-approved envelope (not the relaxed copy the optimiser
-solved):
-
-* a relaxed MIN floor (fibre 25 g/d lowered to 24 g/d) with low actuals ->
-  ``aim`` keeps the approved value, ``relaxed_aim`` exposes the solved floor,
-  shortfall/shortfall_pct are positive, met_days/total_days are correct;
-* a fully-met MIN -> zero shortfall, ``met_days == total_days``,
-  ``relaxed_aim`` is null;
-* an infeasible plan -> ``adequacy`` is empty;
-* MAX ceilings are excluded and entries keep envelope order;
-* the API response (``POST /plans``) carries the field through.
-
-Unit tests use hand-built envelopes + a small dish pool (same ``Dish``
-contract as ``backend.optim.toy_data``); the API test follows the
-``test_e2e.py`` flow (rules -> approve -> plans).
+Use small dish fixtures for exact gaps and the HTTP workflow for response coverage.
 """
 
 from __future__ import annotations
@@ -86,11 +71,6 @@ def _fiber_entry(adequacy: list[dict]) -> dict:
     return next(a for a in adequacy if a["nutrient"] == "fiber_g")
 
 
-# ---------------------------------------------------------------------------
-# (a) relaxed-fibre case
-# ---------------------------------------------------------------------------
-
-
 def test_relaxed_min_reports_original_aim_and_relaxed_floor() -> None:
     """Fibre MIN 25 g/d relaxed to 24 g/d (pool tops out at 8 g/dish):
     adequacy keeps aim 25, discloses relaxed_aim 24, and reports the
@@ -128,11 +108,6 @@ def test_relaxed_min_reports_original_aim_and_relaxed_floor() -> None:
     # The solved envelope is met every day, yet the approved aim is not:
     # exactly the blind spot adequacy closes.
     assert entry["met_days"] == 0 and entry["total_days"] == 7
-
-
-# ---------------------------------------------------------------------------
-# (b) fully-met MIN
-# ---------------------------------------------------------------------------
 
 
 def test_fully_met_min_has_zero_shortfall_and_no_relaxed_aim() -> None:
@@ -174,11 +149,6 @@ def test_fully_met_min_has_zero_shortfall_and_no_relaxed_aim() -> None:
     assert entry["relaxed_aim"] is None
 
 
-# ---------------------------------------------------------------------------
-# (c) infeasible plan -> empty adequacy
-# ---------------------------------------------------------------------------
-
-
 def test_infeasible_plan_has_empty_adequacy() -> None:
     dishes = [_dish("whatever", fiber_g=1.0)]
     envelope = _envelope(
@@ -191,11 +161,6 @@ def test_infeasible_plan_has_empty_adequacy() -> None:
     assert out["feasible"] is False
     assert out["days"] == []
     assert out["adequacy"] == []
-
-
-# ---------------------------------------------------------------------------
-# Ordering + MAX exclusion + per-day worst tracking
-# ---------------------------------------------------------------------------
 
 
 def test_adequacy_excludes_max_and_keeps_envelope_order() -> None:
@@ -229,11 +194,6 @@ def test_adequacy_excludes_max_and_keeps_envelope_order() -> None:
     assert protein["mean_daily"] == 17.5
     assert protein["shortfall"] == 5.0 and protein["met_days"] == 1
     assert protein["total_days"] == 2
-
-
-# ---------------------------------------------------------------------------
-# API passthrough
-# ---------------------------------------------------------------------------
 
 
 def _run_rules(client, patient_id: str) -> dict:

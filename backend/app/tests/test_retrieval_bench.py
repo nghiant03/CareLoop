@@ -1,19 +1,6 @@
-"""Deterministic tests for the retrieval benchmark (backend/app/chat).
+"""Check retrieval rankings, frozen gates, state restoration, and repeatability.
 
-Obligations, grouped:
-
-* **Labeled set**: the query set loads with expected size/categories and its
-  expected chunk ids resolve to real production chunks.
-* **Ranking/fusion**: benchmark metrics are sane and consistently ranked.
-  The fusion row fuses the union of its components' candidates. The production
-  row matches production retrieval while as-is TF-IDF stays a comparator.
-* **Fusion gate**: the held-out diagnostic runs standalone with an unset gate
-  and is recorded in the results; irrelevant questions are refused end to end.
-* **State/determinism**: a bench run leaves ``retrieval.build_index`` and
-  ``retrieval.MIN_SCORE`` module state untouched and is deterministic across
-  two evaluations.
-* **Artifacts**: benchmark and CLI runs write real artifacts (JSON + Markdown)
-  to redirected temporary paths, never into the repository.
+Artifact tests redirect both JSON and Markdown outputs to temporary paths.
 """
 
 from __future__ import annotations
@@ -43,11 +30,6 @@ def results(kb):
     return retrieval_bench.evaluate(kb)
 
 
-# ---------------------------------------------------------------------------
-# Labeled set
-# ---------------------------------------------------------------------------
-
-
 def test_labeled_set_loads_with_expected_size_and_categories(kb):
     queries = retrieval_bench.labeled_queries(kb)
     assert len(queries) >= 40
@@ -69,11 +51,6 @@ def test_expected_chunk_ids_resolve_to_real_chunks(kb):
     for q in queries:
         missing = set(q["relevant"]) - chunk_ids
         assert not missing, f"{q['id']}: unknown chunk ids {missing}"
-
-
-# ---------------------------------------------------------------------------
-# Bench run + metrics sanity
-# ---------------------------------------------------------------------------
 
 
 def test_bench_metrics_are_sane(results):
@@ -117,9 +94,7 @@ def test_ranking_is_consistent_with_metrics(results):
 def test_production_method_matches_production_retrieval(kb):
     methods = retrieval_bench.build_methods(kb)
     prod_index = retrieval.build_index(kb)
-    # Production switched to BM25: the production row is ``bm25_word_syn``
-    # (the ``tfidf_word_asis_syn`` row is the previous TF-IDF scorer, kept
-    # for comparison — it no longer matches production).
+    # TF-IDF is a comparator; only the BM25 row must match production.
     production_method = methods[retrieval_bench.PROD_NAME]
     for query in (
         "How much sodium can I have per day?",
@@ -140,11 +115,6 @@ def test_end_to_end_spot_check_shape(results):
     # The production pipeline keeps answering the grounded nutrient questions
     # regardless of retriever (anchor-rule path) — sanity floor.
     assert e2e["summary"]["tfidf_word_asis_syn"]["citation_accuracy"] >= 0.7
-
-
-# ---------------------------------------------------------------------------
-# RRF fusion row (bm25_rrf_char)
-# ---------------------------------------------------------------------------
 
 
 def test_fusion_row_present_with_sane_metrics(results):
@@ -185,30 +155,19 @@ def test_fusion_retrieval_is_deterministic(kb):
         assert scores == sorted(scores, reverse=True)
 
 
-# ---------------------------------------------------------------------------
-# Fusion calibration + irrelevant refusal
-# ---------------------------------------------------------------------------
-
-
 def test_fusion_calibration_recorded(results):
     cal = results["fusion_calibration"]
     assert cal["threshold"] == results["threshold_calibration"]["bm25_rrf_char"]["threshold"]
     probes = retrieval_bench._irrelevant_probes()
     assert set(cal["irrelevant_probes"]) == set(probes)
     assert cal["irrelevant_best_score"] >= 0.0
-    # Documented outcome: the RRF-score distributions overlap — no threshold
-    # separates irrelevant from relevant queries (typo'd nonsense scores above
-    # the weakest labeled-relevant query). This is the recorded reason the
-    # fusion row is not the production default.
+    # Held-out RRF overlap explains why fusion is not the production default.
     assert cal["gap_ok"] is False
     assert cal["irrelevant_best_score"] >= cal["weakest_relevant"]["best_score"]
 
 
 def test_fusion_diagnostic_standalone_with_unset_gate(kb):
-    """Regression (unset threshold): ``min_score`` exists but is None before
-    ``calibrate_methods`` runs, so a standalone diagnostic must not raise
-    (TypeError on float < None) and must fall back to the documented default
-    without ever selecting a gate from the held-out data."""
+    """An unset gate uses the fallback without calibration on held-out data."""
     fusion = retrieval_bench.build_methods(kb)["bm25_rrf_char"]
     assert isinstance(fusion, retrieval_bench.RRFMethod)
     assert fusion.min_score is None
@@ -254,11 +213,6 @@ def test_bench_e2e_restores_retrieval_module_state(kb):
     finally:
         retrieval.build_index = original_build_index
         retrieval.MIN_SCORE = original_min_score
-
-
-# ---------------------------------------------------------------------------
-# Determinism + artifact
-# ---------------------------------------------------------------------------
 
 
 def test_bench_is_deterministic_across_runs(kb, results):

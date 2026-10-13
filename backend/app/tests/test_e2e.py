@@ -1,23 +1,8 @@
 """End-to-end API tests: patient -> rules/run -> approve -> plans -> chat.
 
-Exercises the full wired loop through the FastAPI app (TestClient, lifespan
-included so the knowledge base warms up):
-
-* happy path: PROPOSED envelope with per-constraint citations -> clinician
-  approval -> 7-day plan (21 slots, zero hard-constraint violations, totals vs
-  targets, plain-language explanation panel);
-* the approval gate still answers the documented 409 before approval;
-* chat: grounded answer with a guideline citation, escalation for
-  out-of-scope questions;
-* out-of-scope patient (pregnancy) -> REJECTED envelope with a clear reason;
-* mining + kb observability endpoints with deterministic shapes.
-
-NOTE on fibre aims: MIN floors are soft, not hard constraints. Single-dish
-search may lower floors to its pool bound and disclose the adjustment, but
-main/side composition scores the original approved aims. This fixture asserts
-that composition meets the original fibre aim on all seven days without a
-retained relaxation. Hard feasibility and nutritional adequacy are checked
-separately (see ``docs/ARCHITECTURE.md``).
+The client runs app lifespan to warm the KB. Check hard feasibility separately
+from original-aim adequacy: composition must meet the fixture's fibre aim on
+all seven days without a retained floor relaxation.
 """
 
 from __future__ import annotations
@@ -29,11 +14,6 @@ def _run_rules(client, patient_id: str) -> dict:
     resp = client.post("/rules/run", json={"patient_id": patient_id})
     assert resp.status_code == 200, resp.text
     return resp.json()
-
-
-# ---------------------------------------------------------------------------
-# Full happy path
-# ---------------------------------------------------------------------------
 
 
 def test_full_happy_path(client) -> None:
@@ -110,22 +90,12 @@ def test_full_happy_path(client) -> None:
                 pytest.fail(f"hard constraint violated: {total}")
 
 
-# ---------------------------------------------------------------------------
-# Approval gate
-# ---------------------------------------------------------------------------
-
-
 def test_gate_blocks_before_approval(client) -> None:
     _run_rules(client, "P0002")
     resp = client.post("/plans", json={"patient_id": "P0002"})
     assert resp.status_code == 409, resp.text
     assert resp.json()["error"] == "envelope_not_approved"
     assert resp.json()["status"] == "PROPOSED"
-
-
-# ---------------------------------------------------------------------------
-# Chat
-# ---------------------------------------------------------------------------
 
 
 def test_chat_grounded_answer_with_citation(client) -> None:
@@ -180,11 +150,6 @@ def test_chat_flags_unapproved_envelope(client) -> None:
     body = resp.json()
     assert body["status"] == "answered"
     assert "not been approved" in body["answer"]
-
-
-# ---------------------------------------------------------------------------
-# Out-of-scope patient path
-# ---------------------------------------------------------------------------
 
 
 def test_out_of_scope_patient_rejected_envelope(client) -> None:
@@ -286,11 +251,6 @@ def test_rerun_mints_new_envelope_and_preserves_approval(client) -> None:
     latest = client.post("/plans", json={"patient_id": "P0011"})
     assert latest.status_code == 409, latest.text
     assert latest.json()["status"] == "PROPOSED"
-
-
-# ---------------------------------------------------------------------------
-# Mining + KB observability
-# ---------------------------------------------------------------------------
 
 
 def test_mining_trends_deterministic(client) -> None:

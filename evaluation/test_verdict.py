@@ -1,10 +1,4 @@
-"""Tests for the Q4 verdict generation from benchmark artefact rows.
-
-The verdict must be derived from the data (every method row in the benchmark
-artefact) rather than hardcoded to a single algorithm, and the generated
-recommendation text must describe the real HV behaviour (infeasible front
-members are filtered out before the HV calculation).
-"""
+"""Check data-derived benchmark verdicts and feasible-front hypervolume reporting."""
 
 from __future__ import annotations
 
@@ -84,12 +78,7 @@ def test_verdict_fails_when_hv_winner_violates_constraints():
 
 
 def test_summary_table_violation_rate_is_exact_not_rounded():
-    """PASS decisions must use the exact violation fraction (finding 44).
-
-    One violation among 2001 runs is 0.0004997... — a rate rounded to three
-    decimals reads 0.0 and would flip the verdict to PASS. The stored rate
-    must stay unrounded; rounding belongs to presentation only.
-    """
+    """One violation in 2001 runs must fail even though its rounded rate is zero."""
     rows = [_row("tiny", 0.5, violations=0) for _ in range(2000)]
     rows.append(_row("tiny", 0.5, violations=1))
     table = _summary_table(rows)

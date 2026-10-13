@@ -1,9 +1,4 @@
-"""Tests for the retrieval-grounded chat pipeline (backend/app/chat).
-
-Covers: grounded answer with mandatory KDIGO citation, escalation filter,
-low-confidence refusal, and envelope-aware answers (APPROVED numbers served,
-PROPOSED flagged as not yet approved). Also the deterministic LLM adapter.
-"""
+"""Check chat grounding, safety escalation, approval handling, and adapters."""
 
 from __future__ import annotations
 
@@ -53,11 +48,6 @@ def _envelope(status: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Retrieval
-# ---------------------------------------------------------------------------
-
-
 def test_retrieve_ranks_sodium_rule_first(kb) -> None:
     hits = retrieval.retrieve(kb, "why is my sodium limit 2000?", k=5)
     assert hits, "expected at least one hit"
@@ -75,11 +65,6 @@ def test_retrieve_ranks_sodium_rule_first(kb) -> None:
 def test_retrieve_unknown_terms_returns_nothing(kb) -> None:
     hits = retrieval.retrieve(kb, "quantum flurbigibber zyx", k=5)
     assert hits == []
-
-
-# ---------------------------------------------------------------------------
-# Escalation filter
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -149,11 +134,6 @@ def test_escalation_in_scope(question: str) -> None:
     assert result["reason"] is None
 
 
-# ---------------------------------------------------------------------------
-# Grounded answers
-# ---------------------------------------------------------------------------
-
-
 def test_grounded_question_cites_kdigo(kb) -> None:
     result = answers.answer("why is my sodium limit 2000?", kb)
     assert result["status"] == "answered"
@@ -188,11 +168,6 @@ def test_answers_deterministic(kb) -> None:
     assert a1 == a2
 
 
-# ---------------------------------------------------------------------------
-# Refusal on low confidence
-# ---------------------------------------------------------------------------
-
-
 def test_irrelevant_question_refused(kb) -> None:
     result = answers.answer("What is the capital of France?", kb)
     assert result["status"] == "refused"
@@ -201,11 +176,7 @@ def test_irrelevant_question_refused(kb) -> None:
 
 
 def test_unsupported_intake_question_refused_independent_of_phrasing(kb) -> None:
-    """Regression (unsupported-intake policy): 'What should my sugar intake
-    be?' contains none of the legacy trigger phrases (how much/limit/target/
-    daily) and no rule produces a sugar_g constraint — it must refuse rather
-    than answer from off-topic retrieval support, with or without patient
-    context."""
+    """Refuse unsupported sugar targets even without legacy intake keywords."""
     result = answers.answer("What should my sugar intake be?", kb)
     assert result["status"] == "refused"
     assert result["citations"] == []
@@ -222,11 +193,6 @@ def test_escalation_wins_over_answer(kb) -> None:
     result = answers.answer("I have chest pain — what should I eat?", kb)
     assert result["status"] == "escalated"
     assert result["citations"] == []
-
-
-# ---------------------------------------------------------------------------
-# Envelope-aware answers
-# ---------------------------------------------------------------------------
 
 
 def test_approved_envelope_numbers_served(kb) -> None:
@@ -458,9 +424,7 @@ def test_patient_anchor_never_cites_internal_rules(kb) -> None:
 
 
 def test_no_citation_fallback_to_unrelated_rule(kb) -> None:
-    """Regression (clinician edit): an envelope whose fired rules do not
-    cover the quoted nutrient must NOT borrow citations[0] — the sodium rule
-    must not be cited for a protein number."""
+    """A sodium citation cannot support a clinician-authored protein value."""
     envelope = _envelope("APPROVED")
     envelope["targets"] = [
         {"nutrient": "protein_g", "kind": "max", "value": 56, "unit": "g"}
@@ -473,10 +437,7 @@ def test_no_citation_fallback_to_unrelated_rule(kb) -> None:
 
 
 def test_untraceable_personal_value_withheld_not_anchor_cited(kb) -> None:
-    """Regression (untraceable personal values): an approved 1800 mg target
-    whose provenance and trace do not resolve (the trace still says 2000)
-    must be withheld — the independent guideline anchor's citation never
-    backs the personal number."""
+    """Withhold the untraceable 1800 mg target without borrowing the 2000 mg source."""
     envelope = _envelope("APPROVED")
     envelope["targets"] = [
         {"nutrient": "sodium_mg", "kind": "max", "value": 1800, "unit": "mg"}
@@ -501,11 +462,6 @@ def test_approved_notice_follows_lifecycle_not_question_match(kb) -> None:
     assert result["status"] == "answered"
     assert result["envelope"]["approved"] is True
     assert result["envelope"]["notice"] is None
-
-
-# ---------------------------------------------------------------------------
-# LLM adapter boundary
-# ---------------------------------------------------------------------------
 
 
 def test_template_llm_deterministic() -> None:

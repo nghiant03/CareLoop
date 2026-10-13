@@ -33,7 +33,7 @@ def _subset():
     return [p for p in load_patients() if p["patient_id"] in wanted]
 
 
-# --------------------------------------------------------------------- Q1
+# Q1
 
 def test_q1_traceability_full_is_complete():
     results = evaluate_q1()  # cheap: rule engine only, all 20 patients
@@ -51,12 +51,7 @@ def test_q1_traceability_full_is_complete():
 
 
 def test_q1_definition_describes_the_matching_policy_honestly():
-    """The Q1 metric matches (nutrient, kind, final value); it is not provenance.
-
-    Regression (finding 43): the definition claimed "superseded losers never
-    get credited" while ``target_supported`` deliberately matches any
-    same-value cited action, superseded or not.
-    """
+    """Q1 credits matching cited values, even in superseded rows; it is not provenance."""
     results = evaluate_q1()
     assert "superseded losers never get credited" not in results["definition"]
     assert "weaker than provenance" in results["definition"]
@@ -77,7 +72,7 @@ def test_q1_definition_describes_the_matching_policy_honestly():
     ) is False
 
 
-# --------------------------------------------------------------------- Q2
+# Q2
 
 def test_q2_all_conflict_cases_pass():
     results = evaluate_q2()
@@ -95,7 +90,7 @@ def test_q2_all_conflict_cases_pass():
     assert not [t for t in c2["engine_targets"] if t["nutrient"] == "potassium_mg"]
 
 
-# --------------------------------------------------------------------- Q3
+# Q3
 
 def test_q3_subset_end_to_end():
     results = evaluate_q3(_subset(), pop_size=20, n_gen=40, diagnose_blockers=True)
@@ -136,7 +131,7 @@ def test_q3_subset_end_to_end():
     assert results["verdict"] == "PASS"
 
 
-# ---------------------------------------------------- per-day check semantics
+# Daily gap semantics
 
 def _pd_dishes():
     from backend.optim.toy_data import Dish
@@ -184,12 +179,7 @@ def _pd_targets(min_floor, fiber_target=30.0, energy_target=1800.0, sodium_max=7
 
 
 def test_per_day_check_preserves_aim_identity_and_daily_gap_aggregation():
-    """Soft summaries keep nutrient/kind identity and daily gaps (finding 42).
-
-    Keying only by nutrient let a TARGET overwrite a MIN summary for the
-    same nutrient; averaging day totals before taking the TARGET distance
-    cancelled opposite deviations (1500/2100 vs 1800 reported 0).
-    """
+    """Keep both MIN/TARGET summaries and prevent opposite-day gaps cancelling."""
     from evaluation.q_satisfaction import _per_day_check
 
     dishes = _pd_dishes()
@@ -217,7 +207,7 @@ def test_per_day_check_preserves_aim_identity_and_daily_gap_aggregation():
 
 
 def test_per_day_check_retains_original_aims_when_floors_are_relaxed():
-    """Relaxed fallback floors must not rewrite the reported aim (finding 42)."""
+    """Relaxed fallback floors must not rewrite the reported aim."""
     from evaluation.q_satisfaction import _per_day_check
 
     dishes = _pd_dishes()
@@ -274,7 +264,7 @@ def test_q4_consumes_benchmark_artefacts_without_rerunning():
     assert "pop=80, gen=80" in results["recommendation"]
 
 
-# --------------------------------------------------------------------- Q5
+# Q5
 
 def test_q5_groundedness_scores():
     results = evaluate_q5()
@@ -289,7 +279,7 @@ def test_q5_groundedness_scores():
     assert len(results["known_gaps"]) >= 3
 
 
-# ------------------------------------------------------------- end-to-end
+# End-to-end evaluation
 
 def test_run_suite_and_report(tmp_path):
     results = run_suite(optimiser_kwargs={"pop_size": 20, "n_gen": 40})

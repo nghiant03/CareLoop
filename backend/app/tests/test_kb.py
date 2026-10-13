@@ -1,10 +1,4 @@
-"""Tests for the versioned KB graph store (backend/app/kb).
-
-Loads the real ``rules/rules.json`` + ``data/dishes.json``, then exercises the
-query API, rule versioning (append-only, old versions stay queryable) and the
-append-only invariant (content columns cannot be updated — enforced by SQL
-triggers).
-"""
+"""Check catalogue queries, historical KB snapshots, and SQL immutability guards."""
 
 from __future__ import annotations
 
@@ -32,11 +26,6 @@ def kb() -> Iterator[KBGraph]:
     graph.close()
 
 
-# ---------------------------------------------------------------------------
-# Loading the real KB content
-# ---------------------------------------------------------------------------
-
-
 def test_load_real_content_counts(kb: KBGraph) -> None:
     stats = kb.stats()
     # Keep a minimum rule-coverage check without fixing the growing rule count;
@@ -59,11 +48,6 @@ def test_rule_nodes_carry_source_and_version(kb: KBGraph) -> None:
 
 def test_current_version(kb: KBGraph) -> None:
     assert kb.current_version() == T1
-
-
-# ---------------------------------------------------------------------------
-# Query API
-# ---------------------------------------------------------------------------
 
 
 def test_get_rule_current(kb: KBGraph) -> None:
@@ -129,11 +113,6 @@ def test_graph_snapshot(kb: KBGraph) -> None:
     cites = list(g.edges(("rule:CKD-2024-SODIUM-2000"), keys=True))
     assert any(key == "CITES" for _, _, key in cites)
     assert any(key == "PRODUCES" for _, _, key in cites)
-
-
-# ---------------------------------------------------------------------------
-# Versioning an edit (append-only)
-# ---------------------------------------------------------------------------
 
 
 def test_version_edit_and_point_in_time() -> None:

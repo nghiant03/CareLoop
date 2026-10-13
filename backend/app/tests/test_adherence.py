@@ -1,21 +1,6 @@
-"""Adherence-loop API tests.
+"""Exercise meal logging, adherence summaries, and trends through the HTTP app.
 
-Covers the full loop through the FastAPI app (TestClient, lifespan included):
-
-* ``POST /adherence/log`` — valid log, 404s (unknown patient / dish), 422
-  invalid date, upsert semantics per (patient, date, meal);
-* ``GET /adherence/{id}/summary`` — per-day totals math verified against the
-  real dish dataset, hard-vs-soft classification (MAX exceeded -> hard
-  violation; MIN shortfall / TARGET off-value -> soft aim gap), aggregate
-  stats, and the informational-only notice for a non-APPROVED envelope
-  (mirrors chat's any-status behaviour);
-* ``GET /adherence/{id}/deviation`` — deterministic time-series and a
-  worsening-sodium trend flag on a synthetic escalating series;
-* determinism of the read endpoints.
-
-Envelope fixtures follow ``test_e2e.py``: the real rules engine for the
-PROPOSED-status case, and hand-built envelopes placed directly in the
-approval-gate store for precise classification math.
+Use real rules for pending-review cases and tunable envelopes for exact totals.
 """
 
 from __future__ import annotations
@@ -85,11 +70,6 @@ def _dish(dish_id: str):
     raise AssertionError(f"dish {dish_id} missing from dataset")
 
 
-# ---------------------------------------------------------------------------
-# POST /adherence/log
-# ---------------------------------------------------------------------------
-
-
 def test_log_meal_returns_entry(client) -> None:
     resp = _log(client, "P0001", _today(), "lunch", "SG0001")
     assert resp.status_code == 201, resp.text
@@ -140,11 +120,6 @@ def test_upsert_replaces_same_slot(client) -> None:
     stored = store.get_log("P0001", day, "lunch")
     assert stored is not None
     assert stored["dish_id"] == "SG0002"
-
-
-# ---------------------------------------------------------------------------
-# GET .../summary — totals math + hard/soft classification
-# ---------------------------------------------------------------------------
 
 
 def test_summary_totals_match_dish_data(client) -> None:
@@ -251,11 +226,6 @@ def test_days_param_validated(client) -> None:
     assert resp.status_code == 422, resp.text
 
 
-# ---------------------------------------------------------------------------
-# Envelope-status handling (mirrors chat: any status, labelled)
-# ---------------------------------------------------------------------------
-
-
 def test_proposed_envelope_is_informational_only(client) -> None:
     """Real rules engine: PROPOSED envelope -> clear notice, informational flag."""
     run = client.post("/rules/run", json={"patient_id": "P0001"})
@@ -272,11 +242,6 @@ def test_proposed_envelope_is_informational_only(client) -> None:
     dev = client.get("/adherence/P0001/deviation")
     assert dev.status_code == 200, dev.text
     assert dev.json()["informational_only"] is True
-
-
-# ---------------------------------------------------------------------------
-# GET .../deviation — time-series + trend flags
-# ---------------------------------------------------------------------------
 
 
 def test_deviation_worsening_sodium_flag(client) -> None:
@@ -336,11 +301,6 @@ def test_deviation_unknown_patient_404(client) -> None:
     resp = client.get("/adherence/NOPE/deviation")
     assert resp.status_code == 404, resp.text
     assert resp.json()["detail"]["error"] == "patient_not_found"
-
-
-# ---------------------------------------------------------------------------
-# Determinism
-# ---------------------------------------------------------------------------
 
 
 def test_endpoints_deterministic(client) -> None:

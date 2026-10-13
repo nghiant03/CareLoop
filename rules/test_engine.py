@@ -1,4 +1,4 @@
-"""Tests for rules.engine.run_rules (run from repo root: .venv/bin/python -m pytest rules/ -q)."""
+"""Check clinical rule priorities, scope gates, citations, and deterministic traces."""
 
 from __future__ import annotations
 
@@ -33,11 +33,6 @@ def _trace(out: dict) -> dict:
     return {row["rule_id"]: row for row in out["trace"]}
 
 
-# ---------------------------------------------------------------------------
-# 1. CKD stage 4 + HTN: KDIGO sodium ceiling beats DASH/ADA, override visible
-# ---------------------------------------------------------------------------
-
-
 def test_ckd4_htn_sodium_kdigo_beats_dash_with_trace_override():
     assert CLIPS_AVAILABLE, "clipspy must be installed for the engine"
     out = run_rules(_ckd4_htn())
@@ -58,11 +53,6 @@ def test_ckd4_htn_sodium_kdigo_beats_dash_with_trace_override():
     assert "CONFLICT-SODIUM-CKD-WINS" in trace
 
 
-# ---------------------------------------------------------------------------
-# 2. CKD + normal serum K: no potassium ceiling despite DASH
-# ---------------------------------------------------------------------------
-
-
 def test_ckd_normal_k_no_potassium_max_despite_dash():
     out = run_rules(_ckd4_htn(k=4.2))
     env = out["envelope"]
@@ -76,11 +66,6 @@ def test_ckd_normal_k_no_potassium_max_despite_dash():
     assert "CKD-2024-POTASSIUM-INDIV" in trace
     assert "no blanket" in trace["CKD-2024-POTASSIUM-INDIV"]["action_summary"].lower() or \
         "potassium_restriction=false" in trace["CKD-2024-POTASSIUM-INDIV"]["action_summary"]
-
-
-# ---------------------------------------------------------------------------
-# 3. Hyperkalaemia: potassium max present (and severe tier tightens it)
-# ---------------------------------------------------------------------------
 
 
 def test_hyperkalemia_potassium_max_present():
@@ -100,11 +85,6 @@ def test_hyperkalemia_potassium_max_present():
     # DASH potassium target must be voided by the restriction
     assert _targets(env, "potassium_mg", "target") == []
     assert _targets(env, "potassium_mg", "min") == []
-
-
-# ---------------------------------------------------------------------------
-# 4. T2D-only: sensible defaults
-# ---------------------------------------------------------------------------
 
 
 def test_t2d_only_sensible_defaults():
@@ -142,11 +122,6 @@ def test_t2d_only_sensible_defaults():
     assert all("rule_id" in e["citation"] for e in env["exclusions"])
 
 
-# ---------------------------------------------------------------------------
-# 5. Pregnancy: out-of-scope exclusion, no envelope constraints
-# ---------------------------------------------------------------------------
-
-
 def test_pregnancy_excluded_no_constraints():
     patient = {
         "patient_id": "PREG-1",
@@ -168,11 +143,6 @@ def test_pregnancy_excluded_no_constraints():
     kinds = {(e["kind"], e["value"]) for e in env["exclusions"]}
     assert ("diet_pattern", "pregnancy") in kinds
     assert "careloop_eligible=false" in env["notes"]
-
-
-# ---------------------------------------------------------------------------
-# 6. Schema validation across all 20 synthetic patients
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("patient", PATIENTS, ids=lambda p: p["patient_id"])
@@ -210,11 +180,6 @@ def test_every_target_traceable_to_a_fired_rule():
         assert fired_ids <= cited_ids
 
 
-# ---------------------------------------------------------------------------
-# 7. Determinism
-# ---------------------------------------------------------------------------
-
-
 def test_determinism_same_patient_identical_output():
     patient = PATIENTS[5]  # CKD4_hyperK — rich conflict scenario
     first = run_rules(patient)
@@ -222,31 +187,18 @@ def test_determinism_same_patient_identical_output():
     assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
 
 
-# ---------------------------------------------------------------------------
-# Hand-worked example regression
-# ---------------------------------------------------------------------------
-
-
 def test_example_trace_patient_fires_the_documented_ruleset():
     out = run_rules(EXAMPLE["patient_input"])
     fired = {row["rule_id"] for row in out["trace"]}
     assert fired == set(EXAMPLE["all_fired_rule_ids"])
     env = out["envelope"]
-    # Every hand-worked target must be produced; the engine additionally emits
-    # the sodium target 1500 from DASH-2025-SODIUM-1500, which is listed in the
-    # example's own all_fired_rule_ids but whose set_constraint action was
-    # omitted from the hand-worked targets list (it is a soft target, not a
-    # hard ceiling). See rules/ENGINE.md, "Deviations".
+    # The hand-worked fixture omits DASH's soft sodium target. Require its
+    # listed targets as a subset, not exact equality. See ENGINE.md, "Deviations".
     expected = {(t["nutrient"], t["kind"], t["value"]) for t in EXAMPLE["expected_envelope"]["targets"]}
     actual = {(t["nutrient"], t["kind"], t["value"]) for t in env["targets"]}
     assert expected <= actual
     sodium_targets = [t for t in actual if t[0] == "sodium_mg" and t[1] == "target"]
     assert sodium_targets == [("sodium_mg", "target", 1500.0)]
-
-
-# ---------------------------------------------------------------------------
-# Dialysis / stage 5: out of scope even when eGFR is missing
-# ---------------------------------------------------------------------------
 
 
 def _dialysis_patient(**overrides) -> dict:
@@ -305,11 +257,6 @@ def test_unknown_egfr_alone_does_not_exclude():
     assert "SCOPE-EGFR-STAGE5-EXCLUDE" not in _trace(out)
 
 
-# ---------------------------------------------------------------------------
-# Ketoacid-risk presentation: clinician-review flag, no auto envelope
-# ---------------------------------------------------------------------------
-
-
 def test_severe_hyperglycemia_suppresses_auto_envelope():
     patient = {
         "patient_id": "DKA-RISK",
@@ -334,11 +281,6 @@ def test_severe_hyperglycemia_suppresses_auto_envelope():
     assert "AUTO ENVELOPE SUPPRESSED" in env["notes"]
 
 
-# ---------------------------------------------------------------------------
-# Module hygiene
-# ---------------------------------------------------------------------------
-
-
 def test_clipspy_facts_still_importable():
     assert clipspy_facts.CLIPS_AVAILABLE is True
     fact = clipspy_facts.patient_fact(
@@ -358,9 +300,6 @@ def test_result_contract_shape():
                             "priority", "citation"} for row in out["trace"])
 
 
-# ---------------------------------------------------------------------------
-# Medication-nutrient interaction rules
-# ---------------------------------------------------------------------------
 
 MED_RULES = {
     "MED-RASI-K-CAUTION": {"meds": ["lisinopril"], "priority": 85},

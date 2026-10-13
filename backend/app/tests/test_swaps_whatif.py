@@ -1,20 +1,4 @@
-"""Patient-aware swaps and isolated clinician what-if simulations.
-
-Covers:
-
-* ``GET /mining/substitutions?...&patient_id=`` — P0006 exclusion filtering,
-  hard-check validation and
-  day deltas; generic requests without patient_id omit validation metadata;
-  ``plan_context_required`` 409 when the patient has no saved plan.
-* ``POST /mining/swaps/apply`` — a valid swap saves a NEW plan row with
-  ``derived_from`` lineage and leaves the source plan untouched; a
-  MAX-ceiling-breaking swap and an excluded replacement both answer 422
-  ``swap_violates_constraints`` without persisting anything.
-* ``POST /simulations`` — the what-if comparison (base vs simulated), the
-  read-only guarantee (envelope store, journal and latest saved plan are
-  untouched), infeasible simulated targets, and a restart-style re-read of
-  the simulation store.
-"""
+"""Check patient-aware swaps, immutable source plans, and isolated simulations."""
 
 from __future__ import annotations
 
@@ -36,11 +20,6 @@ if not any(getattr(route, "path", None) == "/simulations" for route in _app.rout
     from backend.app.api import simulations as _simulations
 
     _app.include_router(_simulations.router)
-
-
-# ---------------------------------------------------------------------------
-# Shared setup (one solve per patient per module)
-# ---------------------------------------------------------------------------
 
 
 def _approve_and_plan(client, patient_id: str) -> dict:
@@ -69,11 +48,6 @@ def p0006(client):
 @pytest.fixture(scope="module")
 def p0001(client):
     return _approve_and_plan(client, "P0001")
-
-
-# ---------------------------------------------------------------------------
-# 1. Patient-aware substitutions
-# ---------------------------------------------------------------------------
 
 
 def test_p0006_regression_excluded_candidate_never_recommended(client, p0006) -> None:
@@ -144,11 +118,6 @@ def test_substitutions_patient_without_plan_409(client) -> None:
     detail = resp.json()["detail"]
     assert detail["error"] == "plan_context_required"
     assert "Generate a meal plan" in detail["message"]
-
-
-# ---------------------------------------------------------------------------
-# 2. Applying swaps
-# ---------------------------------------------------------------------------
 
 
 def _first_valid_swap(client, plan) -> tuple[str, str] | None:
@@ -293,11 +262,6 @@ def test_apply_swap_with_excluded_replacement_422(client, p0006) -> None:
     assert detail["error"] == "swap_violates_constraints"
     assert any(v.get("type") == "exclusion" for v in detail["violations"])
     assert persistence.list_plans("P0006") == plans_before
-
-
-# ---------------------------------------------------------------------------
-# 3. Clinician what-if simulations
-# ---------------------------------------------------------------------------
 
 
 def _targets_with_sodium_max(value: float) -> list[dict]:

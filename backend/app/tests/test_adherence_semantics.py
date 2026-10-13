@@ -1,29 +1,7 @@
-"""Adherence analysis semantics — regression coverage.
+"""Check adherence math, constraint identity, complete days, and attribution.
 
-Covers the contracts of :mod:`backend.app.adherence.analysis`
-beyond the endpoint-level tests in ``test_adherence.py``:
-
-* ``MIN`` exposure measures **shortfall below the floor** and grows as
-  intake falls further under the limit, so a shrinking-fibre week trends
-  ``worsening``;
-* a nutrient constrained on **both** sides (MIN + MAX band) gets one
-  deviation series per constraint — correct limit and direction each, one
-  point per date per series — while single-constraint nutrients keep the
-  plain nutrient key;
-* trend slopes are computed against **elapsed days** between observation
-  dates, not observation indices (three sodium readings 10 days apart
-  rising 5 -> 10 -> 15 % yield 0.5 pct-points/day, not 5);
-* the envelope's hard **exclusions** are enforced per logged dish in
-  ``analyse_day``: a dish hit by an exclusion flag is a hard violation even
-  when every nutrient ceiling is respected (reproduced end-to-end for the
-  real P0006 envelope and SG0002 Roasted Chicken Rice);
-* complete days require distinct breakfast, lunch, and dinner slots;
-* contributors use serving-adjusted amounts, deterministic ties, and the
-  attributing envelope's identity and version.
-
-Series/flags use the analysis layer directly with stub dishes for exact
-math; the exclusion case additionally goes through the FastAPI app with the
-real rules-engine envelope and dish dataset.
+Stub dishes make calculations exact. The exclusion regression also exercises
+the HTTP app with real rule and catalogue data.
 """
 
 from __future__ import annotations
@@ -46,9 +24,6 @@ from shared.envelope_schema import (
     PatientSummary,
 )
 
-# ---------------------------------------------------------------------------
-# Fixtures / helpers
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
@@ -119,17 +94,8 @@ _CITATION = CitationSource(
 )
 
 
-# ---------------------------------------------------------------------------
-# 1. MIN exposure = shortfall below the floor, and it trends
-# ---------------------------------------------------------------------------
-
-
 def test_min_shortfall_exposure_rises_and_flags_worsening() -> None:
-    """Fibre MIN 25 g with intake 20 -> 15 -> 10 g: exposure 20 -> 40 -> 60 %.
-
-    The exposure must measure the shortfall relative to the floor (and hence
-    grow as intake drops), and the rising series must be flagged worsening.
-    """
+    """Falling intake below a 25 g floor yields rising exposure: 20, 40, 60%."""
     patient = "P0001"
     envelope = _envelope(
         patient,
@@ -178,11 +144,6 @@ def test_min_satisfied_day_has_zero_exposure() -> None:
     assert result["series"]["fiber_g"]["points"][0]["pct"] == pytest.approx(20.0)
 
 
-# ---------------------------------------------------------------------------
-# 2. MIN + MAX band: one series per constraint, correct limit/direction each
-# ---------------------------------------------------------------------------
-
-
 def test_band_nutrient_gets_one_series_per_constraint() -> None:
     """Protein MIN 50 / MAX 60: two series, each with its own limit and
     direction, exactly one point per date per series. A single-constraint
@@ -225,8 +186,7 @@ def test_band_nutrient_gets_one_series_per_constraint() -> None:
     # day 1 (55 g): inside the band -> zero exposure on both sides
     assert min_series["points"][0]["exposure"] == 0.0
     assert max_series["points"][0]["exposure"] == 0.0
-    # day 2 (70 g): above the MAX -> excess exposure on the MAX side only;
-    # the MIN side stays satisfied (0 exposure, not nonsense reusing 60).
+    # Above MAX still satisfies MIN; each series must use its own bound.
     assert max_series["points"][1]["exposure"] == pytest.approx(
         (70.0 - 60.0) / 60.0 * 100.0, abs=1e-3
     )
@@ -258,15 +218,8 @@ def test_band_nutrient_soft_gap_rows_per_constraint() -> None:
     assert rows[("protein_g", "min")]["status"] == "ok"
 
 
-# ---------------------------------------------------------------------------
-# 3. Trend slopes use elapsed days, not observation indices
-# ---------------------------------------------------------------------------
-
-
 def test_slope_uses_elapsed_days_not_indices() -> None:
-    """Sodium readings 10 days apart rising 5 -> 10 -> 15 %: the per-day
-    slope is 0.5 pct-points/day. With the index-based slope this would have
-    been 5 pct-points/day and (wrongly) tripped the default trigger."""
+    """Ten-day intervals yield 0.5 percentage points/day, below the trigger."""
     envelope = _envelope(
         "P0001",
         [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=1000.0, unit="mg")],
@@ -315,11 +268,6 @@ def test_slope_uneven_spacing_is_a_true_per_day_rate() -> None:
     flags = analysis.trend_flags(result["series"], slope_trigger=0.1)
     # pairwise slopes: 5/1, 5/2, 10/3 -> median 10/3 (rounded to 4 dp)
     assert flags[0]["slope_pct_per_day"] == pytest.approx(10.0 / 3.0, abs=1e-3)
-
-
-# ---------------------------------------------------------------------------
-# 4. Envelope exclusions are hard constraints in the day analysis
-# ---------------------------------------------------------------------------
 
 
 def _category_exclusion(value: str) -> ExclusionFlag:
@@ -391,11 +339,6 @@ def test_exclusion_violations_count_in_aggregate_days() -> None:
     assert result["aggregate"]["days_logged"] == 2
 
 
-# ---------------------------------------------------------------------------
-# 5. Logging completeness
-# ---------------------------------------------------------------------------
-
-
 def test_day_completeness_counts_distinct_logged_meals() -> None:
     """``completeness`` counts the distinct meal slots with >= 1 log."""
     envelope = _envelope(
@@ -451,11 +394,6 @@ def test_range_aggregate_reports_complete_days() -> None:
     empty = analysis.analyse_range([], envelope, dishes)
     assert empty["aggregate"]["complete_days"] == 0
     assert empty["aggregate"]["fraction_complete"] == 0.0
-
-
-# ---------------------------------------------------------------------------
-# 6. Deviation-contributor explanations
-# ---------------------------------------------------------------------------
 
 
 def test_nutrient_rows_carry_ranked_contributors() -> None:
@@ -523,11 +461,6 @@ def test_day_rows_carry_envelope_identity() -> None:
     )
     assert day["envelope_id"] == envelope.envelope_id
     assert day["envelope_version"] == 1
-
-
-# ---------------------------------------------------------------------------
-# End-to-end: the real P0006 envelope excludes SG0002 Roasted Chicken Rice
-# ---------------------------------------------------------------------------
 
 
 def test_p0006_roasted_chicken_rice_excluded(client, _isolated_envelope_store) -> None:

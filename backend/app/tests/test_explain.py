@@ -26,11 +26,6 @@ def sample():
     return envelope, envelope["fired_rules"]
 
 
-# ---------------------------------------------------------------------------
-# Clinician view
-# ---------------------------------------------------------------------------
-
-
 def test_clinician_view_fired_rules(sample) -> None:
     envelope, trace = sample
     view = clinician_explanation(envelope, trace)
@@ -95,11 +90,6 @@ def test_clinician_view_deterministic(sample) -> None:
     assert clinician_explanation(envelope, trace) == clinician_explanation(
         envelope, trace
     )
-
-
-# ---------------------------------------------------------------------------
-# Patient view
-# ---------------------------------------------------------------------------
 
 
 def test_patient_view_plain_language_targets(sample) -> None:

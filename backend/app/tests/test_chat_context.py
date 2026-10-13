@@ -1,13 +1,4 @@
-"""Chat endpoint identity resolution (backend/app/api/chat.py).
-
-Regression coverage for explicitly requested patient/envelope identities:
-
-* Unknown IDs return 404 instead of degrading to anonymous guideline chat.
-* Patient/envelope identity conflicts return 409 instead of mixing one
-  patient's envelope with another patient's profile context.
-* Explicit envelopes derive applicability/weight context from their own patient.
-* Omitting both IDs keeps anonymous guideline chat.
-"""
+"""Check explicit chat identities without mixing patients or losing unknown IDs."""
 
 from __future__ import annotations
 

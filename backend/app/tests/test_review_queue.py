@@ -1,25 +1,7 @@
-"""Review-queue workflows and historical envelope-version attribution.
+"""Check review workflows and date-effective envelope attribution.
 
-Covers review workflows end to end:
-
-* **Envelope-version attribution**: history is scored against the envelope
-  effective on each consumption date. After approve → log day A → edit +
-  re-approve → log day B, day A is scored against the pre-edit limits and
-  day B against the post-edit limits. Assertions check each day's
-  ``envelope_id``/``version`` and differing sodium limits. A single-envelope
-  window retains plain series keys and legacy fields, with only additive
-  new fields.
-* **Closed loop**: a worsening sodium trend flag surfaces in
-  ``GET /review/queue``. After acknowledgement, recording an action removes the
-  item from the open queue. ``POST /review/{id}/proposal`` then mints a linked
-  PROPOSED envelope. A subsequent observation appears in ``GET /observations``.
-
-Also covers logging completeness, deterministic review ids (idempotent
-derivation), hard-violation-day items and lab-trend items.
-
-The envelope journal is the attribution source of truth; tests backdate
-approval rows explicitly via ``persistence.journal_envelope`` so historical
-dates resolve to the pre-edit version.
+Backdate fixture approvals with ``journal_envelope`` so historical logs resolve
+to the intended versions, independently of today's clock.
 """
 
 from __future__ import annotations
@@ -101,11 +83,6 @@ def _hand_built_envelope(patient_id: str, sodium_max: float) -> NutrientEnvelope
     put_envelope(envelope)
     persistence.journal_envelope(envelope, effective_at=_today(-90))
     return envelope
-
-
-# ---------------------------------------------------------------------------
-# Envelope-version attribution
-# ---------------------------------------------------------------------------
 
 
 def test_history_scores_each_day_against_its_envelope_version(client) -> None:
@@ -237,11 +214,6 @@ def test_single_envelope_response_keeps_legacy_shape(client) -> None:
     assert set(dev_body["series"]) == {"sodium_mg"}
     for flag in dev_body["flags"]:
         assert flag["envelope_id"] == envelope.envelope_id
-
-
-# ---------------------------------------------------------------------------
-# Review queue: derivation, deterministic ids, lifecycle
-# ---------------------------------------------------------------------------
 
 
 def _queue(client, **params):

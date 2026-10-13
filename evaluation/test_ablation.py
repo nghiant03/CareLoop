@@ -38,9 +38,6 @@ from shared.envelope_schema import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Stub data: a small pool with hand-checkable numbers
-# ---------------------------------------------------------------------------
 def _dish(did: str, energy: float, protein: float, sodium: float, potassium: float,
           price: float, category: str, tags: tuple) -> Dish:
     return Dish(
@@ -96,7 +93,7 @@ def _totals(*days: dict[str, float]) -> list[dict[str, float]]:
     return list(days)
 
 
-# ---------------------------------------------------------------- adequacy
+# Adequacy
 def test_adequacy_rows_mirrors_plan_service_semantics():
     env = _envelope()
     daily = _totals(
@@ -173,12 +170,7 @@ def test_plan_metrics_matches_problem_evaluate():
 
 
 def test_plan_metrics_pools_dimensionless_gaps_only():
-    """The pooled plan-level gap must be dimensionless, never a raw unit mix.
-
-    Regression for the pooled ``mean_daily_shortfall`` average that mixed
-    kcal/g/mg across aims: plan_metrics now pools only the per-aim relative
-    gap, while unit-bearing per-aim gaps stay inside ``adequacy`` rows.
-    """
+    """Pool relative gaps only; raw nutrient gaps have incompatible units."""
     env = _envelope()
     plan = [["m_protein", "s_veg"]] * 21
     metrics = plan_metrics(plan, env, ABLATION_POOL)
@@ -191,7 +183,7 @@ def test_plan_metrics_pools_dimensionless_gaps_only():
     assert energy["mean_daily_shortfall"] == pytest.approx(900.0)
 
 
-# ---------------------------------------------------------------- repair
+# Repair
 def _no_day_duplicates(ev: CompositionEvaluator, ind: np.ndarray) -> bool:
     plan = ev.to_plan(ind)
     for day in range(7):
@@ -202,12 +194,7 @@ def _no_day_duplicates(ev: CompositionEvaluator, ind: np.ndarray) -> bool:
 
 
 def test_repair_individual_fixes_day_duplicates():
-    """Repetition repair must stack per slot/role and make real progress.
-
-    Regression (finding 38): the duplicate branch concatenated 1-D gid arrays
-    on axis 1 (AxisError on every repetition-bearing individual) and could
-    re-select the duplicated dish itself, livelocking until max_iters.
-    """
+    """Repair duplicates without invalid array axes or reselecting the duplicate."""
     env = _envelope()
     ev = CompositionEvaluator(env, ABLATION_POOL)
     main_pos = {d.dish_id: i for i, d in enumerate(ev.main_pool)}
@@ -241,13 +228,7 @@ def test_repair_individual_fixes_day_duplicates():
 
 
 def test_repair_individual_selects_a_duplicate_bearing_day():
-    """The most-violated day may be repetition-free; duplicates elsewhere.
-
-    Regression (finding 38): with day 0 the most MAX-violated day but
-    repetition-free, a naive fix of the AxisError would look for duplicates
-    on day 0 and crash on the empty bincount result instead of selecting a
-    duplicate-bearing day.
-    """
+    """Repair duplicates on their own day, not a repetition-free MAX-worst day."""
     env = _envelope()
     ev = CompositionEvaluator(env, ABLATION_POOL)
     main_pos = {d.dish_id: i for i, d in enumerate(ev.main_pool)}
@@ -275,13 +256,7 @@ def test_repair_individual_selects_a_duplicate_bearing_day():
 
 
 def test_repair_individual_fixes_max_violation_by_dish_replacement():
-    """MAX repair addresses six dish positions, subtracting ONE dish.
-
-    Regression (finding 39): the replacement search indexed three meal rows
-    with six dish positions (IndexError for any position >= 3) and earlier
-    positions subtracted the combined main+side meal instead of the single
-    dish being replaced. Tested directly, independent of greedy success.
-    """
+    """Repair all six dish positions, subtracting the dish rather than its meal."""
     env = _envelope()
     ev = CompositionEvaluator(env, ABLATION_POOL)
     main_pos = {d.dish_id: i for i, d in enumerate(ev.main_pool)}
@@ -315,7 +290,7 @@ def test_repair_individual_fixes_max_violation_by_dish_replacement():
                               fixed[day * 3:(day + 1) * 3])
 
 
-# ------------------------------------------------------------------ verdict
+# Verdict
 def test_derive_selection_verdict_crafted_numbers():
     def pooled(sc_worst, adq_worst, sc_cost, adq_cost, feas=1.0):
         return {
@@ -347,7 +322,7 @@ def test_derive_selection_verdict_crafted_numbers():
     assert verdict == "FAIL" and note is not None and "no comparable" in note
 
 
-# ------------------------------------------- composition evaluator cross-check
+# Composition evaluator cross-check
 def test_composition_evaluator_cross_check_against_problem_evaluate():
     env = _envelope()
     ev = CompositionEvaluator(env, ABLATION_POOL)
@@ -431,7 +406,7 @@ def test_composition_ga_keeps_a_feasible_front():
         assert picked["feasible"] is True
 
 
-# ------------------------------------------------------------- real-data smoke
+# Real-data smoke
 def test_q6_smoke_real_data_two_patients():
     from backend.optim.real_data import load_dishes
     from evaluation.common import load_patients

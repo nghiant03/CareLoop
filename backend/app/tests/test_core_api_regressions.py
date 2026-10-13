@@ -1,19 +1,4 @@
-"""Core/API regression tests for the 2026-10-10 maintainability audit.
-
-Focused coverage for the remediated core/API contracts:
-
-* patient create is create-only (409 on existing fixture or durable ids);
-* reserved UI lab aliases mirror the canonical current values after
-  observations overlay them;
-* acknowledgement cannot regress a concurrently recorded action;
-* review proposal retries recover the partial success instead of minting a
-  duplicate envelope;
-* validation-error responses stay strict JSON (nonfinite raw inputs);
-* patient profiles reject nonfinite clinical numerics at the boundary;
-* envelope rejection retains reviewer attribution in the durable snapshot;
-* eGFR ``mL/min`` shorthand stores the already-indexed unit;
-* legacy meal-log schema migration is reserved and idempotent.
-"""
+"""Regressions for creation, review retries, validation, and durable attribution."""
 
 from __future__ import annotations
 
@@ -41,9 +26,6 @@ def _isolated_stores():
     ENVELOPE_STORE.update(snapshot)
 
 
-# ---------------------------------------------------------------------------
-# Patient creation cannot replace existing records
-# ---------------------------------------------------------------------------
 
 _NEW_PATIENT = {
     "patient_id": "p-fix4",
@@ -80,11 +62,6 @@ def test_create_patient_repeat_returns_conflict_without_replacing(client) -> Non
     assert fetched.json()["weight_kg"] == 70.0  # stored profile not replaced
 
 
-# ---------------------------------------------------------------------------
-# Reserved UI lab aliases follow the canonical current values
-# ---------------------------------------------------------------------------
-
-
 def test_ui_lab_alias_mirrors_overlaid_canonical_value(client) -> None:
     # A stored lowercase alias (extra key) must not mask later observations.
     payload = {
@@ -115,11 +92,6 @@ def test_ui_lab_alias_mirrors_overlaid_canonical_value(client) -> None:
     assert body["serum_k"] == 6.5  # alias derived from the canonical value
     assert body["archetype"] == "renal"  # unrelated extras preserved
     assert body["id"] == "p-alias"
-
-
-# ---------------------------------------------------------------------------
-# Acknowledgement cannot regress a recorded action
-# ---------------------------------------------------------------------------
 
 
 def _seed_review_item(review_id: str, patient_id: str = "P0002") -> str:
@@ -166,11 +138,6 @@ def test_acknowledge_still_advances_open_items(client) -> None:
     missing = client.post("/review/rev-ack-none/acknowledge")
     assert missing.status_code == 404
     assert missing.json()["detail"]["error"] == "review_item_not_found"
-
-
-# ---------------------------------------------------------------------------
-# Proposal retries recover partial success without duplicate envelopes
-# ---------------------------------------------------------------------------
 
 
 def _proposed_envelope_ids(patient_id: str) -> list[str]:
@@ -220,11 +187,6 @@ def test_review_proposal_retry_relinks_orphan_without_duplicate(lenient_client, 
     assert _proposed_envelope_ids("P0002") == orphan_ids
 
 
-# ---------------------------------------------------------------------------
-# Findings 8 + 9: JSON-safe validation errors; finite clinical numerics
-# ---------------------------------------------------------------------------
-
-
 def test_validation_error_response_is_json_safe(client) -> None:
     # JSON parsers accept the Infinity/NaN literals; the 422 body must not
     # carry them through into non-strict JSON (which would render as a 500).
@@ -263,11 +225,6 @@ def test_patient_model_rejects_nonfinite_clinical_numerics() -> None:
     assert Patient.model_validate(base).egfr is None
 
 
-# ---------------------------------------------------------------------------
-# Rejection retains reviewer attribution
-# ---------------------------------------------------------------------------
-
-
 def test_reject_retains_reviewer_attribution(client) -> None:
     run = client.post("/rules/run", json={"patient_id": "P0003"})
     assert run.status_code == 200, run.text
@@ -293,11 +250,6 @@ def test_reject_retains_reviewer_attribution(client) -> None:
     assert persisted and persisted[-1]["patient_summary"] == "rejected by dr-lim"
 
 
-# ---------------------------------------------------------------------------
-# eGFR mL/min shorthand denotes the already-indexed unit
-# ---------------------------------------------------------------------------
-
-
 def test_observation_egfr_ml_min_shorthand_stores_indexed_unit(client) -> None:
     resp = client.post(
         "/observations",
@@ -310,11 +262,6 @@ def test_observation_egfr_ml_min_shorthand_stores_indexed_unit(client) -> None:
     )
     assert resp.status_code == 201, resp.text
     assert resp.json()["unit"] == "mL/min/1.73m2"
-
-
-# ---------------------------------------------------------------------------
-# Malformed inline rule inputs return 422
-# ---------------------------------------------------------------------------
 
 
 def test_rules_run_malformed_inline_input_returns_422(client) -> None:
@@ -336,11 +283,6 @@ def test_rules_run_malformed_inline_input_returns_422(client) -> None:
 
     missing_weight = client.post("/rules/run", json={**inline, "age": 61})
     assert missing_weight.status_code == 422, missing_weight.text
-
-
-# ---------------------------------------------------------------------------
-# Legacy schema migration is reserved and idempotent
-# ---------------------------------------------------------------------------
 
 
 def test_legacy_meal_logs_schema_migration_is_idempotent(tmp_path, monkeypatch) -> None:
