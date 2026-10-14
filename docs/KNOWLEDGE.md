@@ -58,6 +58,66 @@ optional guideline quotes/URLs. Existing evidence is preserved without claiming
 new verification. Review knowledge changes and run the relevant clinical safety
 and evaluation checks before publishing or deploying them.
 
+## Automatically propose evidence-backed rules
+
+After downloading the KDIGO guideline, run:
+
+```sh
+.venv/bin/python -m backend.knowledge discover
+```
+
+Discovery verifies the PDF against `research/manifest.json`, extracts fresh text
+with `pdftotext`, and proposes candidates for KDIGO 2024 recommendations
+**3.3.1.1 (protein)** and **3.3.2.1 (sodium)**. It requires Poppler's `pdftotext`,
+but not pandas or research staging. It does not download files itself.
+
+Reports go to external `outputs/knowledge-discovery/<report-hash>/rule_candidates.json`.
+`CARELOOP_ARTIFACT_DIR` overrides the output root. Identical reruns reuse the report.
+Different input bytes produce a new report. Existing edited or incomplete report
+directories are never overwritten.
+
+Each candidate contains:
+
+- Source URL, verified PDF hash, one-based PDF pages and exact extracted quotes.
+- Numeric suggestion with source units, converted units and evidence grade.
+- Proposed adult CKD stage 3–4 scope, preserving existing scope exclusions.
+- Linked practice points for metabolic instability, frailty, sarcopenia,
+  paediatric considerations and sodium-wasting nephropathy.
+- Same-nutrient baseline rules for comparison, with their conditions and actions.
+- Review blockers and `NEEDS_REVIEW` status.
+
+Protein is proposed as a **soft TARGET** in g/kg/day, not an inferred minimum or
+maximum. Sodium retains the source's strict `<` operator while suggesting a
+daily mg MAX for review. CareLoop's MAX allows equality, and treating a guideline
+recommendation as a hard ceiling requires a clinical decision. Neither mapping
+is automatically executable.
+
+Unsupported wording retains its quote without an inferred value. Missing caveats
+are disclosed. Recognized repeated statements with contradictory values block
+numeric mapping. PDF layout extraction may mix columns, so compare quotes with
+the original PDF. Manifest verification detects changed bytes, not publisher
+authenticity or clinical validity.
+
+By default, discovery compares the external development rule fixture. To compare
+an exported published rulebook and choose an explicit output directory:
+
+```sh
+.venv/bin/python -m backend.knowledge discover \
+  --research-dir "$CARELOOP_DATASET_DIR/research" \
+  --rules-file /absolute/path/to/exported/rules.json \
+  --out-dir "$CARELOOP_DATASET_DIR/outputs/rule-review"
+```
+
+This command never opens a clinical or knowledge database. It does not change
+rules, approve envelopes, generate a release, or run on backend startup. The
+candidate report is not accepted by the executable-rulebook importer.
+
+Review the candidates, resolve the blockers, and author executable changes through
+the draft workflow below. Then run rule/scope tests, obtain independent review,
+and publish that exact revision. Observational NHANES/MIMIC associations and food
+composition records are not automatic prescribing-rule sources. Other guideline
+sections need explicit evidence adapters before numeric proposal generation.
+
 ## Bootstrap without switching the live app
 
 Provision a private directory owned by the operator. Substitute real identities

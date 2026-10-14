@@ -33,6 +33,9 @@ For NHANES, USDA, KDIGO and MIMIC demo downloads, follow
 [the research download instructions](docs/DATASETS.md#download-research-sources).
 Research data does not replace CareLoop fixtures or approved knowledge.
 
+Propose guideline-backed rules with `.venv/bin/python -m backend.knowledge discover`.
+Candidates need review. See [knowledge discovery](docs/KNOWLEDGE.md#automatically-propose-evidence-backed-rules).
+
 ### 2. Initialize the databases
 
 ```sh

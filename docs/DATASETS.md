@@ -123,6 +123,19 @@ These research downloads do **not** provide the four CareLoop fixtures in
 tests and draft imports. The relocated fixtures already exist on this machine.
 Do not replace them with NHANES participants or USDA records.
 
+## Propose guideline-backed rules
+
+```sh
+.venv/bin/python -m backend.knowledge discover
+```
+
+This verifies the downloaded KDIGO PDF and automatically proposes protein and
+sodium rule candidates with quotes, caveats and baseline-rule comparisons.
+It requires `pdftotext` but not research transformation. Reports stay outside
+the checkout. Candidates are unapproved and non-executable, with no database
+writes. See [knowledge discovery](KNOWLEDGE.md#automatically-propose-evidence-backed-rules)
+for supported recommendations, limitations and review steps.
+
 ## Transform research data
 
 Install the optional dataset dependencies and ensure `pdftotext` is available
