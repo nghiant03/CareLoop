@@ -86,6 +86,9 @@ services:
       CARELOOP_ARTIFACT_DIR: /var/lib/careloop/artifacts
       CARELOOP_DATASET_DIR: /datasets
       CARELOOP_KNOWLEDGE_MODE: database
+      CARELOOP_DEPLOYMENT_MODE: ${CARELOOP_DEPLOYMENT_MODE:-published}
+      CARELOOP_REVIEW_DRAFT: ${CARELOOP_REVIEW_DRAFT:-}
+      CARELOOP_REVIEW_REVISION: ${CARELOOP_REVIEW_REVISION:-}
       CARELOOP_KNOWLEDGE_RELEASE: ${CARELOOP_KNOWLEDGE_RELEASE:-}
     secrets:
       - clinical_app_url
@@ -117,6 +120,7 @@ services:
     build:
       context: .
       dockerfile: deploy/frontend/Dockerfile
+    command: ["-c", "/etc/nginx/${CARELOOP_DEPLOYMENT_MODE:-published}.conf", "-g", "daemon off;"]
     ports:
       - "127.0.0.1:${CARELOOP_HTTP_PORT:-8080}:8080"
     depends_on:

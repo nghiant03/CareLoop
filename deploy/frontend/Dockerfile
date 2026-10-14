@@ -7,6 +7,8 @@ RUN npm run build
 
 FROM nginx:stable-alpine AS runtime
 COPY deploy/frontend/nginx.conf /etc/nginx/nginx.conf
+COPY deploy/frontend/nginx.conf /etc/nginx/published.conf
+COPY deploy/frontend/review.conf /etc/nginx/review.conf
 COPY --from=builder /build/dist /usr/share/nginx/html
 USER nginx
 EXPOSE 8080

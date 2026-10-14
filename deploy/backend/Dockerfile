@@ -20,4 +20,4 @@ RUN python -m pip install --no-cache-dir --no-index --find-links=/wheels careloo
 WORKDIR /app
 USER 10001:10001
 EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-proxy-headers"]
+CMD ["python", "-m", "uvicorn", "backend.app.deployment:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-proxy-headers"]
