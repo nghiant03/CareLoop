@@ -26,6 +26,10 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("init", help="initialize a separate private knowledge database")
     commands.add_parser("list", help="show drafts, current reviews, release IDs and validation disclosures")
+    discovery = commands.add_parser("discover", help="propose unapproved guideline-backed rules without database writes")
+    discovery.add_argument("--research-dir", type=Path, help="external research directory containing manifest.json and raw sources")
+    discovery.add_argument("--rules-file", type=Path, help="baseline rulebook for comparison (default external rule fixture)")
+    discovery.add_argument("--out-dir", type=Path, help="external report directory (default content-addressed artifact directory)")
     for name in ("import", "edit"):
         cmd = commands.add_parser(name)
         cmd.add_argument("--draft-id", required=True)
@@ -59,6 +63,17 @@ def main(argv: list[str] | None = None) -> int:
     export.add_argument("--revision", type=int, help="historical draft revision; only with --draft-id")
     args = parser.parse_args(argv)
     try:
+        if args.command == "discover":
+            from backend.datasets.paths import dataset_dir, dataset_path
+            from backend.knowledge.discovery import discover_rules, write_discovery_report
+
+            rules, _ = _read(args.rules_file or dataset_path("rules.json"))
+            report = discover_rules(args.research_dir or dataset_dir() / "research", rules)
+            output = write_discovery_report(report, args.out_dir)
+            print(json.dumps({"report_path": str(output), "candidates": len(report["candidates"]),
+                              "status": "NEEDS_REVIEW", "database_writes": False,
+                              "missing_supported_sections": report["missing_supported_sections"]}, indent=2))
+            return 0
         url = database_url("knowledge")
         if url and (args.db or os.environ.get("CARELOOP_KNOWLEDGE_DB")):
             raise ValueError("PostgreSQL URL and SQLite path cannot both be selected")
