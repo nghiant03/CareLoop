@@ -1,254 +1,124 @@
-# CareLoop — Explainable Clinical Decision-Support
+# CareLoop
 
-CareLoop turns a clinician-approved **nutrient envelope** (targets, ceilings, hard
-exclusions) for T2D / hypertension / CKD stage 3–4 patients into a realistic
-7-day Singapore meal plan — with full traceability from clinical guideline →
-fired rule → approved constraint → plated meal. Patients then log what they
-actually ate, and the **adherence loop** measures logged meals against the
-envelope: per-day totals, hard-violation / soft-gap classifications and
-deviation trend flags. A grounded chatbot answers nutrition questions using
-only the versioned knowledge base, always citing the guideline it drew from,
-and escalates out-of-scope questions to a clinician instead of answering.
+CareLoop plans Singapore meals, tracks adherence, and answers nutrition questions
+with citations for T2D, hypertension and CKD stages 3–4. Planning and personal
+targets require clinician approval of a nutrient envelope.
 
-- Rule engine design: [`rules/ENGINE.md`](rules/ENGINE.md)
-- Optimiser benchmark: [`backend/optim/benchmark_results.md`](backend/optim/benchmark_results.md)
-- Retrieval benchmark: [`backend/app/chat/RETRIEVAL_BENCH.md`](backend/app/chat/RETRIEVAL_BENCH.md)
-- Mining method comparison: [`backend/mining/COMPARISON.md`](backend/mining/COMPARISON.md)
-- Evaluation report (generated): [`evaluation/EVALUATION.md`](evaluation/EVALUATION.md)
-- User guides: [`docs/`](docs/) — clinician, patient, demo script, architecture
-- Knowledge authoring and publication: [`docs/KNOWLEDGE.md`](docs/KNOWLEDGE.md)
+## Deploy locally
 
----
+The root `compose.yaml` runs PostgreSQL 18, migrations, FastAPI and React.
+Clinical and knowledge databases are separate. Knowledge releases require restart.
 
-## Architecture
+### 1. Prepare the environment
 
-```
- ┌──────────────┐        ┌───────────────────────────────────────────────┐
- │ React web UI │───────▶│  FastAPI backend  (backend/app, port 8000)    │
- │ Vite :5173   │  /api  │  /patients /rules/run /envelopes /plans       │
- │ clinician +  │        │  /chat /mining /kb /adherence /dishes         │
- │ patient views│        │  /healthz                                     │
- └──────────────┘        └───┬───────────────┬──────────────┬────────────┘
-                   ┌─────────▼──────┐ ┌──────▼───────┐ ┌────▼─────────┐
-                   │ Rule engine    │ │ Optimiser    │ │ Mining       │
-                   │ rules/ (CLIPS, │ │ backend/optim│ │ backend/min- │
-                   │ 61 rules,      │ │ (pymoo NSGA- │ │ ing (trends, │
-                   │ salience)      │ │ II + repair) │ │ clusters,    │
-                   └───────┬────────┘ └──────┬───────┘ │  subst.)     │
-                           │                 │         └──────────────┘
-                   ┌───────▼─────────────────▼──────────────────────┐
-                   │ Approval gate (APPROVED-only) + trace store    │
-                   │ + adherence meal-log store                     │
-                   └───────┬────────────────────────────────────────┘
-                   ┌───────▼────────────────────────────────────────┐
-                   │ Versioned KB (SQLite + NetworkX, in-memory):   │
-                   │ 61 rules + 214 SG dishes + citations; BM25     │
-                   │ retrieval index for the grounded chatbot       │
-                   └────────────────────────────────────────────────┘
+Requires Docker Compose, daemon access, Python 3.11+ and `uv`. From the repository root:
+
+```sh
+uv sync --extra dev
+
+export CARELOOP_DATASET_DIR="$HOME/.local/share/careloop/datasets"
+export CARELOOP_OPERATOR_UID=$(id -u)
+export CARELOOP_OPERATOR_GID=$(id -g)
+.venv/bin/python deploy/prepare_secrets.py
+docker compose config --quiet
 ```
 
-Data flow: patient → rule engine (PROPOSED envelope + `RuleFire` trace) →
-**approval gate** (clinician approve/edit/reject; only `APPROVED` passes) →
-optimiser (7-day × 3-meal plan, hard-constraint guarantee) → UI. Patients then
-log actual meals (`/adherence/log`) and the adherence summary / deviation
-endpoints measure logged reality against the latest envelope. The chatbot
-retrieves from the versioned KB + the patient's latest envelope and never
-answers without a citation. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Credentials in ignored `.secrets/` are preserved. Never print or commit them.
 
----
+Provision datasets **outside the checkout** using
+[the dataset guide](docs/DATASETS.md). None are bundled. Compose mounts them
+read-only at `/datasets`.
 
-## Repository layout
+For NHANES, USDA, KDIGO and MIMIC demo downloads, follow
+[the research download instructions](docs/DATASETS.md#download-research-sources).
+Research data does not replace CareLoop fixtures or approved knowledge.
 
-For the local container stack (frontend, backend, persistent clinical storage),
-see [`deploy/README.md`](deploy/README.md). One Compose stack runs PostgreSQL,
-schema migration, knowledge tooling, backend and frontend. Follow the
-[verified migration guide](docs/POSTGRES.md) before importing existing state.
+### 2. Initialize the databases
 
-```
-CareLoop/
-├── shared/                      Cross-cutting contract (single source of truth)
-│   ├── envelope_schema.py       Pydantic NutrientEnvelope + RuleFire + ...
-│   └── export_schema.py         On-demand JSON Schema export from Pydantic
-├── rules/                       Lane A — knowledge & rules
-│   ├── engine.py                CLIPS forward-chaining engine (run_rules)
-│   └── clipspy_facts.py          Patient fact mapping
-├── backend/
-│   ├── app/                     FastAPI service
-│   │   ├── main.py              uvicorn entry; CORS; 409 gate handler
-│   │   ├── api/                 patients / rules / envelopes / plans / chat /
-│   │   │                        mining / kb / adherence / dishes
-│   │   ├── adherence/           meal-log store + analysis (per-day totals,
-│   │   │                        hard/soft classification, Theil–Sen trends)
-│   │   ├── core/                approval_gate, envelope_lifecycle, persistence,
-│   │   │                        plan_service, plan_storage, trace_store, kb_loader
-│   │   ├── chat/                retrieval (BM25), answers, escalation, llm
-│   │   ├── kb/                  versioned graph store (SQLite + NetworkX)
-│   │   ├── explain/             clinician + patient explanation views
-│   │   └── tests/               API, gate, chat, explain, adherence, e2e tests
-│   ├── optim/                   Lane B — meal-plan optimiser
-│   ├── datasets/                Dataset tooling only; no raw data
-│   │   ├── problem.py / real_data.py / solver.py / api.py
-│   │   ├── baselines.py / benchmark.py / benchmark_results.md
-│   │   └── envelopes.py / spike_pymoo.py / toy_data.py
-│   └── mining/                  trends (Theil–Sen + EWMA), clustering,
-│                                renal-weighted substitutions, COMPARISON.md
-├── frontend/                    React 19 + Vite + Tailwind (6 screens)
-├── notebooks/                   Exploration notebooks
-├── docs/                        User guides, demo script, architecture
-└── evaluation/                  Generated evaluation report (EVALUATION.md)
+```sh
+docker compose up -d --wait postgres
+docker compose run --build --rm migrate
 ```
 
----
+PostgreSQL: `127.0.0.1:5433`. Migrations create schemas, **not clinical imports or
+knowledge releases**. The backend checks schemas but never creates tables.
 
-## How to run
+Before startup:
 
-Prereqs: Python 3.11+ and Node for the frontend. Set up the backend from the
-repository root with `uv venv .venv`, then
-`uv pip install --python .venv/bin/python -e '.[dev]'`.
+- **Existing clinical state:** stop source and target writers, then follow
+  [the verified SQLite import procedure](docs/POSTGRES.md#import-the-selected-sqlite-clinical-source).
+  Source: `$CARELOOP_DATASET_DIR/legacy/careloop_app.sqlite3`.
+  Populated targets and repeat imports are refused. Keep source and verification report.
+- **Knowledge:** import an existing authoring journal, or
+  [create, review and publish a draft](docs/POSTGRES.md#bootstrap-knowledge-when-no-authoring-journal-exists).
+  Publication requires independent approval of the exact draft revision.
 
-Provision external fixtures first; a fresh checkout intentionally contains no
-datasets. Set `CARELOOP_DATASET_DIR` to an absolute directory outside the checkout
-(default `~/.local/share/careloop/datasets`). See [DATASETS.md](docs/DATASETS.md).
+### 3. Start the application
 
-### 1. Backend (port 8000)
+Use your reviewed, published release ID:
 
-```bash
-# from the repo root
-.venv/bin/uvicorn backend.app.main:app --reload --port 8000
-# docs:   http://localhost:8000/docs
-# health: http://localhost:8000/healthz
+```sh
+export CARELOOP_KNOWLEDGE_RELEASE=YOUR_REVIEWED_RELEASE_ID
+docker compose up --build -d --wait
+docker compose ps
+
+curl --fail http://127.0.0.1:8080/api/healthz
+curl --fail http://127.0.0.1:8080/api/kb/stats
 ```
 
-### 2. Frontend (port 5173)
+Open **http://127.0.0.1:8080**. Backend proxy: `/api`. API docs: `/api/docs`.
+Override the HTTP port with `CARELOOP_HTTP_PORT`. Missing releases block startup
+without fixture fallback. Health checks do not establish clinical readiness.
 
-```bash
-cd frontend && npm install && npm run dev
-# http://localhost:5173 — Vite proxies /api to the backend on :8000
+If Docker requires sudo, use `sudo docker compose`. Preserve startup settings:
+
+```sh
+sudo env CARELOOP_DATASET_DIR="$CARELOOP_DATASET_DIR" \
+  CARELOOP_KNOWLEDGE_RELEASE="$CARELOOP_KNOWLEDGE_RELEASE" \
+  docker compose up --build -d --wait
 ```
 
-### 3. End-to-end in four calls
+## Operate and preserve state
 
-```bash
-P=http://127.0.0.1:8000
-
-# 1) Run the rule engine -> PROPOSED envelope + fired-rule trace
-EID=$(curl -sS -X POST $P/rules/run -H 'content-type: application/json' \
-  -d '{"patient_id":"P0005"}' | jq -r .envelope.envelope_id)
-
-# 2) /plans before approval -> 409 envelope_not_approved
-curl -sS -w '\nHTTP %{http_code}\n' -X POST $P/plans \
-  -H 'content-type: application/json' -d '{"patient_id":"P0005"}'
-
-# 3) Clinician approves
-curl -sS -X POST $P/envelopes/$EID/approve \
-  -H 'content-type: application/json' -d '{"approved_by":"Dr.Demo"}' | jq .status
-
-# 4) Generate the 7-day plan (or see the infeasibility diagnosis)
-curl -sS -X POST $P/plans -H 'content-type: application/json' \
-  -d '{"patient_id":"P0005"}' | jq '{feasible, engine, violation_count, infeasibility_reason, relaxed_constraints}'
+```sh
+docker compose logs --tail=100 postgres migrate backend frontend
+docker compose stop
 ```
 
-Approvals, embedded traces, created patients, saved plans, meal logs, observations,
-simulations and review actions use PostgreSQL in deployment through
-`CARELOOP_APP_DATABASE_URL` or its `_FILE` secret. Knowledge has a separate
-`CARELOOP_KNOWLEDGE_DATABASE_URL[_FILE]`. Runtime checks migrated schemas; it
-never performs PostgreSQL DDL or auto-imports legacy state.
-For legacy development/tests, approvals, plans, meal logs, observations,
-simulations and review actions persist in SQLite (`CARELOOP_APP_DB`, default
-`$XDG_STATE_HOME/careloop/careloop_app.sqlite3` or
-`~/.local/state/careloop/careloop_app.sqlite3`). Existing checkout databases
-require explicit migration; see [storage and deployment guidance](docs/STORAGE.md).
-New evaluation and benchmark runs write to ignored `artifacts/` directories,
-separate from reviewed, committed reports. Proposal IDs are allocated transactionally.
-For database-managed rules/catalogues, use the operator-only
-`python -m backend.knowledge` draft/review/publish workflow and configure an
-explicit `CARELOOP_KNOWLEDGE_RELEASE`; see [knowledge rollout](docs/KNOWLEDGE.md).
-Unconfigured development still uses the versioned JSON fixtures.
-Production plans use main-plus-optional-side meals and normalised adequacy-first
-selection. Hard feasibility and original-target adequacy are reported separately;
-nutrient values remain unverified and prices are synthetic estimates.
+`docker compose down` keeps volumes. **`down -v` deletes databases.**
+Back up both databases and test restoration before accepting writes.
+Restart the backend when changing knowledge releases.
 
----
+See [PostgreSQL operations](docs/POSTGRES.md) and
+[deployment configuration](deploy/README.md).
 
-## API surface
+## Code and documentation
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/healthz` | liveness probe (+ `GET /` service banner) |
-| GET | `/patients` | list external synthetic fixtures + durable patient records |
-| GET | `/patients/{patient_id}` | fetch one patient (404 if absent) |
-| POST | `/patients` | create a patient (durable SQLite profile) |
-| POST | `/rules/run` | patient id → PROPOSED `NutrientEnvelope` + `RuleFire` trace |
-| GET | `/envelopes/{id}` | fetch an envelope |
-| GET | `/envelopes/{id}/explanation` | clinician explanation (trace, conflicts, citations) |
-| POST | `/envelopes/{id}/approve` | PROPOSED/EDITED → APPROVED |
-| POST | `/envelopes/{id}/edit` | mutate targets → EDITED (re-approval required) |
-| POST | `/envelopes/{id}/reject` | → REJECTED |
-| POST | `/plans` | 7-day meal plan — **gated**: 409 unless APPROVED |
-| POST | `/chat` | grounded Q&A `{answer, citations, escalated, status}` |
-| POST | `/adherence/log` | log an actual meal `{patient_id, date, meal, dish_id}` (upsert per slot; 404 on unknown patient/dish) |
-| GET | `/adherence/{pid}/summary?days=14` | per-day totals vs the latest envelope — hard violations (MAX exceeded) vs soft gaps (MIN/TARGET shortfalls); `informational_only` when the envelope is not APPROVED |
-| GET | `/adherence/{pid}/deviation` | per-nutrient deviation-exposure series + Theil–Sen trend flags (`worsening`/`improving`, `alert`/`review`) |
-| GET | `/dishes?category=&search=` | dish catalogue for pickers (category filter + name search) |
-| GET | `/dishes/{dish_id}` | one full dish record (404 if absent) |
-| GET | `/mining/trends` | rising K⁺/PO₄ flags across the cohort (Theil–Sen + EWMA de-escalation) |
-| GET | `/mining/substitutions?dish_id=&k=` | healthier substitute dishes (renal-weighted distance) |
-| GET | `/kb/stats` | versioned-KB node/edge counts + retrieval-index size |
+| Location | Responsibility |
+| --- | --- |
+| `frontend/` | Web interface and HTTP adapters |
+| `backend/` | API, storage, knowledge, planning, adherence and dataset tooling |
+| `shared/`, `rules/` | Canonical envelope contract and rule engine |
+| `evaluation/` | Evaluation workflows and published report summaries |
+| External `CARELOOP_DATASET_DIR` | Fixtures, research data and generated outputs |
 
-Interactive docs: `http://localhost:8000/docs`.
+- [Architecture and contracts](docs/ARCHITECTURE.md)
+- [Knowledge authoring and publication](docs/KNOWLEDGE.md)
+- [External datasets](docs/DATASETS.md) and [storage](docs/STORAGE.md)
+- [Clinician guide](docs/user-guide-clinician.md) and [patient guide](docs/user-guide-patient.md)
 
----
+Development requires external fixtures. Backend:
+`.venv/bin/uvicorn backend.app.main:app --reload --port 8000`.
+Frontend: `npm ci`, then `npm run dev` in `frontend/` (port 5173).
 
-## Architectural invariants
+Verification commands:
 
-1. **The approval gate.** `NutrientEnvelope.status == APPROVED` is the single
-   gate to the optimiser, RAG chat and patient-facing views. Enforced in
-   `backend/app/core/approval_gate.py`; violations render as
-   `HTTP 409 {"error": "envelope_not_approved", "status": ...}`.
-2. **The contract lives in `shared/envelope_schema.py`.** Engine, optimiser and
-   API import it; language-agnostic JSON Schema is generated from it on demand.
-3. **Conflict priority `CKD > HTN > T2D` on sodium** (KDIGO 2000 mg overrides
-   DASH/ADA 2300 mg). Losing rules keep their trace rows with an explicit
-   `SUPERSEDED: superseded by <rule> ...` marker. Potassium and phosphorus are
-   individualised to serum labs.
-4. **Hard constraints are never silently broken.** Hard = approved MAX
-   ceilings + exclusions (PLAN.md module 4); MIN floors and targets are soft
-   objective terms. The optimiser guarantees `violation_count == 0` (repair →
-   greedy fallback); when the pool cannot satisfy a ceiling it returns an
-   explicit infeasibility diagnosis, and unreachable MIN floors are lowered
-   with a full `relaxed_constraints` disclosure in the plan response. Rulebook
-   exclusions map to per-serving dish nutrient thresholds via
-   `backend/optim/exclusion_mapping.py`.
-5. **Chat is grounded or silent.** Answers are composed only from retrieved KB
-   chunks (+ the patient's envelope numbers) and always cite
-   `rule_id + guideline + section`; low-confidence questions are refused;
-   emergencies, medication questions (including "should I stop taking X?",
-   "skip my insulin"), diagnosis/dosing requests and out-of-scope topics are
-   escalated. Envelope numbers are quoted only when the envelope is APPROVED
-   (PROPOSED → pending-review phrasing; REJECTED → a fixed declined response),
-   and internal `CONFLICT-*`/`SAFETY-*` rules never surface as patient-facing
-   citation anchors. Retrieval is Okapi BM25 with stopword filtering;
-   `MIN_SCORE = 2.0` keeps the refusal gate meaningful
-   (`backend/app/chat/RETRIEVAL_BENCH.md`).
-6. **Versioning is append-only.** Every KB node/edge carries `valid_from` /
-   `valid_to`; nothing is deleted.
-7. **Clinical safety.** Out-of-scope patients (pregnancy, paediatric, dialysis,
-   eGFR < 15) are `REJECTED` with `exclude_from_careloop=true` and never reach
-   the optimiser. Approving a REJECTED or empty-target envelope is refused with
-   `HTTP 422 {"error": "out_of_scope_envelope"}`; re-running the rule engine
-   mints a fresh envelope id (`ENV-<pid>-002`, ...) instead of overwriting a
-   prior one, so approvals survive; clinician edits append an explicit
-   `CLINICIAN-EDIT` trace row so edited numbers never claim rule provenance.
-
----
-
-## Tests
-
-```bash
-.venv/bin/python -m pytest rules/ -q           # rule engine suite
-.venv/bin/python -m pytest backend -q          # API, gate, chat, explain, adherence, e2e
-.venv/bin/python -m pytest backend/mining -q   # trends / clustering / substitutions
-.venv/bin/python backend/optim/test_real.py    # optimiser on the real dish pool
-.venv/bin/python -m pytest shared -q
-npm --prefix frontend test                   # frontend race and contract regressions
+```sh
+.venv/bin/python -m pytest rules backend evaluation shared -q
+npm --prefix frontend run lint
+npm --prefix frontend test
+npm --prefix frontend run build
 ```
+
+Python tests need external fixtures. PostgreSQL integration tests need a test URL.
+Skipped tests do not verify a live server.

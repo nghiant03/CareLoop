@@ -27,7 +27,7 @@ explicitly selected, reviewed, published release through read-only connections,
 then pins its contents for the process lifetime.
 
 External `fixtures/rules.json` and `fixtures/dishes.json` remain bootstrap and regression fixtures
-in Git. In database mode they are not the live source, fallback, or authoring
+outside Git. In database mode they are not the live source, fallback, or authoring
 authority. The in-memory graph/BM25 index remains a derived read model, not the
 authoring journal. The patient-workflow database remains separate.
 
