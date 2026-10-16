@@ -17,8 +17,8 @@ from shared.export_schema import schema_text
 
 
 @pytest.fixture
-def api(tmp_path, monkeypatch):
-    monkeypatch.setenv("CARELOOP_APP_DB", str(tmp_path / "clinical.sqlite3"))
+def api(pg_databases, monkeypatch):
+    monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", pg_databases["clinical"])
     with TestClient(app) as client:
         yield client
 

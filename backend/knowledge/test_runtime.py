@@ -15,8 +15,9 @@ from backend.datasets.paths import dataset_path
 
 
 @pytest.fixture
-def published(tmp_path):
-    store = KnowledgeStore(tmp_path / "knowledge.sqlite3")
+def published(pg_databases, monkeypatch):
+    monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", pg_databases["clinical"])
+    store = KnowledgeStore(pg_databases["knowledge"])
     store.initialize()
     rules = json.loads(dataset_path("rules.json").read_text())
     dishes = json.loads(dataset_path("dishes.json").read_text())
@@ -29,8 +30,8 @@ def published(tmp_path):
 
 
 def _run(script, database, release_id, tmp_path, *, mode="database"):
-    env = {**os.environ, "CARELOOP_APP_DB": str(tmp_path / "isolated-app.sqlite3"),
-           "CARELOOP_KNOWLEDGE_MODE": mode, "CARELOOP_KNOWLEDGE_DB": str(database),
+    env = {**os.environ,
+           "CARELOOP_KNOWLEDGE_MODE": mode, "CARELOOP_KNOWLEDGE_DATABASE_URL": str(database),
            "CARELOOP_KNOWLEDGE_RELEASE": release_id}
     return subprocess.run([sys.executable, "-c", script], cwd=ROOT, env=env,
                           capture_output=True, text=True, timeout=120, check=False)
@@ -143,4 +144,5 @@ def test_invalid_knowledge_does_not_create_clinical_storage(published, tmp_path)
     result = _run("from fastapi.testclient import TestClient; from backend.app.main import app; "
                   "\nwith TestClient(app):\n    pass", database, "draft-1", tmp_path)
     assert result.returncode != 0
-    assert not (tmp_path / "isolated-app.sqlite3").exists()
+    from backend.app.core import persistence
+    assert persistence.saved_patients() == {}

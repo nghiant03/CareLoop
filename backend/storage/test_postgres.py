@@ -1,28 +1,14 @@
-"""PostgreSQL contracts; integration tests use explicitly provisioned disposable databases.
+"""PostgreSQL contracts; integration uses disposable databases from root fixtures."""
 
-Set CARELOOP_TEST_POSTGRES_URL to an administrator URL for the chosen test server.
-The fixture creates/drops only uniquely named careloop_test_* databases; it never
-clears an existing application database. Without it, live-server tests are skipped.
-"""
-
-import hashlib
-import json
-import os
-import sqlite3
-import uuid
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
-from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 import pytest
-from psycopg import sql
 
 from backend.app.core import persistence
-from backend.knowledge.store import KnowledgeStore, load_release
+from backend.knowledge.store import KnowledgeStore
 from backend.storage import postgres
-from backend.storage.migrate import initialize_database, import_sqlite, row_digest, schema_sql, sqlite_snapshot
+from backend.storage.migrate import initialize_database, main, schema_sql
 
 
 def test_parameter_adapter_preserves_literals_comments_and_percent():
@@ -57,34 +43,34 @@ def test_schema_matches_snapshot_contract_and_has_meal_items():
     assert "rules_json TEXT" in schema_sql("knowledge")
 
 
-def test_snapshot_reads_committed_wal_without_changing_source(tmp_path):
-    source = tmp_path / "source.sqlite3"
-    with closing(sqlite3.connect(source)) as conn:
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA wal_autocheckpoint=0")
-        conn.execute("CREATE TABLE values_table (value TEXT)")
-        conn.execute("INSERT INTO values_table VALUES (?)", ('{"value": 1}',))
-        conn.commit()
-        before = source.read_bytes()
-        with closing(sqlite_snapshot(source)) as snapshot:
-            assert snapshot.execute("SELECT value FROM values_table").fetchone()[0] == '{"value": 1}'
-        assert source.read_bytes() == before
-    assert row_digest([{"value": "1"}, {"value": "2"}]) == row_digest([{"value": "2"}, {"value": "1"}])
-    assert row_digest([{"value": "1"}]) != row_digest([{"value": "1"}, {"value": "1"}])
-
-
-def test_import_requires_writer_shutdown_before_any_connection(tmp_path):
-    with pytest.raises(ValueError, match="stop all"):
-        import_sqlite(tmp_path / "absent.sqlite3", "postgresql://unused/db", "clinical")
-
-
-def test_url_selection_never_falls_back_to_sqlite(monkeypatch, tmp_path):
+@pytest.mark.parametrize("component,prefix", [("clinical", "CARELOOP_APP"), ("knowledge", "CARELOOP_KNOWLEDGE")])
+def test_retired_sqlite_settings_fail_without_touching_files(monkeypatch, tmp_path, component, prefix):
     source = tmp_path / "legacy.sqlite3"
-    monkeypatch.setenv("CARELOOP_APP_DB", str(source))
-    monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", "postgresql://unused/db")
-    with pytest.raises(ValueError, match="only"):
+    source.write_bytes(b"preserve existing state")
+    monkeypatch.setenv(prefix + "_DB", str(source))
+    with pytest.raises(ValueError, match="no longer supported"):
+        postgres.database_url(component)
+    assert source.read_bytes() == b"preserve existing state"
+
+
+def test_clinical_storage_requires_explicit_url(monkeypatch):
+    monkeypatch.delenv("CARELOOP_APP_DATABASE_URL", raising=False)
+    monkeypatch.delenv("CARELOOP_APP_DATABASE_URL_FILE", raising=False)
+    with pytest.raises(ValueError, match="Configure CARELOOP_APP_DATABASE_URL"):
         persistence.init_db()
-    assert not source.exists()
+
+
+def test_knowledge_rejects_paths_without_creating_files(tmp_path):
+    path = tmp_path / "absent.sqlite3"
+    with pytest.raises(ValueError, match="PostgreSQL URL"):
+        KnowledgeStore(path)
+    assert not path.exists()
+
+
+def test_import_command_is_removed():
+    with pytest.raises(SystemExit) as error:
+        main(["import-sqlite", "--component", "clinical"])
+    assert error.value.code == 2
 
 
 @pytest.mark.parametrize("rows", [[], [{"component":"knowledge","version":1}],
@@ -98,37 +84,9 @@ def test_schema_marker_must_match_one_domain_and_supported_version(rows):
         postgres.check_schema(connection, "clinical")
 
 
-@pytest.fixture
-def pg_databases():
-    base = os.environ.get("CARELOOP_TEST_POSTGRES_URL")
-    if not base:
-        pytest.skip("CARELOOP_TEST_POSTGRES_URL not set; PostgreSQL integration not exercised")
-    if not postgres.is_postgres(base):
-        pytest.fail("CARELOOP_TEST_POSTGRES_URL must be a PostgreSQL URL")
-    parts = urlsplit(base)
-    names = {component: "careloop_test_" + component + "_" + uuid.uuid4().hex for component in ("clinical", "knowledge")}
-    with psycopg.connect(base, autocommit=True, connect_timeout=5) as admin:
-        for name in names.values():
-            admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-        urls = {component: urlunsplit(parts._replace(path="/" + name)) for component, name in names.items()}
-        try:
-            for component, url in urls.items():
-                initialize_database(url, component)
-            yield urls
-        finally:
-            # Pools hold connections to fixture databases; close them before drop.
-            for url in urls.values():
-                pool = postgres._POOLS.pop(url, None)
-                if pool:
-                    pool.close()
-            for name in names.values():
-                admin.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))
-
-
 def test_postgres_clinical_roundtrip_history_ids_and_racing_edits(pg_databases, monkeypatch):
     from shared.envelope_schema import NutrientEnvelope
 
-    monkeypatch.delenv("CARELOOP_APP_DB", raising=False)
     monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", pg_databases["clinical"])
     persistence.init_db()
     record = {"patient_id": "PG-PATIENT", "name": "synthetic"}
@@ -140,6 +98,7 @@ def test_postgres_clinical_roundtrip_history_ids_and_racing_edits(pg_databases, 
         "targets": [], "priority_basis": "test"})
     persistence.store_envelope(original, new_proposal=True)
     assert original.lifecycle_revision == 1
+
     def update(_):
         proposed = original.model_copy(deep=True)
         try:
@@ -147,6 +106,7 @@ def test_postgres_clinical_roundtrip_history_ids_and_racing_edits(pg_databases, 
             return "saved"
         except persistence.EnvelopeConflictError:
             return "stale"
+
     with ThreadPoolExecutor(max_workers=2) as workers:
         assert sorted(workers.map(update, range(2))) == ["saved", "stale"]
     assert len(persistence.list_envelope_history("PG-PATIENT")) == 2
@@ -162,59 +122,19 @@ def test_postgres_clinical_roundtrip_history_ids_and_racing_edits(pg_databases, 
     assert persistence.get_review_item(review)["action"]["action"] == "reviewed"
 
 
-def test_postgres_import_is_verified_repeat_safe_and_sequence_safe(pg_databases, monkeypatch, tmp_path):
-    source = tmp_path / "clinical.sqlite3"
-    monkeypatch.delenv("CARELOOP_APP_DATABASE_URL", raising=False)
-    monkeypatch.setenv("CARELOOP_APP_DB", str(source))
-    persistence.init_db()
-    persistence.save_patient({"patient_id":"MIGRATE", "name":"Synthetic migration"})
-    persistence.create_review_item("MIGRATE", "test", {"citation": "preserved"})
-    before = hashlib.sha256(source.read_bytes()).hexdigest()
-    result = import_sqlite(source, pg_databases["clinical"], "clinical", writers_stopped=True)
-    assert result["verified"] and result["counts"]["review_items"] == 1
-    assert hashlib.sha256(source.read_bytes()).hexdigest() == before
-    with pytest.raises(ValueError, match="already has an import"):
-        import_sqlite(source, pg_databases["clinical"], "clinical", writers_stopped=True)
-    monkeypatch.delenv("CARELOOP_APP_DB")
+def test_postgres_initialization_is_idempotent_and_preserves_state(pg_databases, monkeypatch):
     monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", pg_databases["clinical"])
-    assert persistence.saved_patients()["MIGRATE"]["name"] == "Synthetic migration"
-    assert persistence.create_review_item("MIGRATE", "test", {}).endswith("002")
+    persistence.save_patient({"patient_id": "KEEP", "name": "Synthetic"})
+    assert not initialize_database(pg_databases["clinical"], "clinical")["initialized"]
+    assert persistence.saved_patients()["KEEP"]["name"] == "Synthetic"
 
 
-def test_postgres_import_refuses_unknown_columns_without_partial_copy(pg_databases, tmp_path):
-    source = tmp_path / "unknown.sqlite3"
-    with closing(sqlite3.connect(source)) as conn:
-        conn.execute("CREATE TABLE patients(patient_id TEXT, document_json TEXT, unsupported TEXT)")
-        conn.execute("INSERT INTO patients VALUES ('TEST','{}','must not be lost')")
-        conn.commit()
-    with pytest.raises(ValueError, match="unsupported source columns"):
-        import_sqlite(source, pg_databases["clinical"], "clinical", writers_stopped=True)
-    with psycopg.connect(pg_databases["clinical"]) as conn:
-        assert conn.execute("SELECT count(*) FROM patients").fetchone()[0] == 0
-        assert conn.execute("SELECT count(*) FROM careloop_imports").fetchone()[0] == 0
+def test_postgres_wrong_domain_is_rejected(pg_databases):
+    with pytest.raises(RuntimeError, match="Wrong"):
+        postgres.PostgresConnection(pg_databases["knowledge"], "clinical")
 
 
-def test_postgres_knowledge_import_preserves_payloads_and_immutability(pg_databases, tmp_path):
-    from backend.knowledge.validation import content_hash
-
-    source = tmp_path / "knowledge.sqlite3"
-    legacy = KnowledgeStore(source)
-    legacy.initialize()
-    # Journal-level synthetic rows test preservation, not fabricated clinical approval.
-    rules, dishes = {"synthetic":"rules"}, [{"synthetic":"dish"}]
-    with closing(sqlite3.connect(source)) as conn:
-        conn.execute("INSERT INTO knowledge_drafts VALUES ('D','Author','2026',NULL,'{}')")
-        conn.execute("INSERT INTO knowledge_revisions VALUES ('D',1,'Author','2026',?,?,?,?,?)",
-                     (json.dumps(rules),json.dumps(dishes),content_hash(rules),content_hash(dishes),'{}'))
-        conn.execute("INSERT INTO knowledge_reviews VALUES ('D',1,'Reviewer','approve','synthetic fixture','2026')")
-        conn.execute("INSERT INTO knowledge_releases VALUES ('R','D',1,'Publisher','synthetic fixture','2026')")
-        conn.execute("INSERT INTO knowledge_events VALUES (7,'D',1,'Author','create','{}','2026')")
-        conn.commit()
-    expected = load_release(source, "R")
-    assert import_sqlite(source, pg_databases["knowledge"], "knowledge", writers_stopped=True)["verified"]
-    assert load_release(pg_databases["knowledge"], "R") == expected
-    store = KnowledgeStore(pg_databases["knowledge"])
-    assert store.history("D")[0]["event_id"] == 7
+def test_postgres_knowledge_is_immutable_and_reader_cannot_write(pg_databases):
     for statement in ("DELETE FROM knowledge_releases", "UPDATE knowledge_drafts SET author='bad'", "TRUNCATE knowledge_events"):
         with pytest.raises(psycopg.errors.CheckViolation):
             with psycopg.connect(pg_databases["knowledge"]) as conn:
@@ -222,8 +142,3 @@ def test_postgres_knowledge_import_preserves_payloads_and_immutability(pg_databa
     with postgres.PostgresConnection(pg_databases["knowledge"], "knowledge", readonly=True) as conn:
         with pytest.raises(ValueError, match="read-only"):
             conn.execute("INSERT INTO knowledge_drafts VALUES ('bad','bad','bad',NULL,'{}')")
-
-
-def test_postgres_wrong_domain_is_rejected(pg_databases):
-    with pytest.raises(RuntimeError, match="Wrong"):
-        postgres.PostgresConnection(pg_databases["knowledge"], "clinical")

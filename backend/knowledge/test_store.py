@@ -2,10 +2,8 @@
 
 import copy
 import json
-import os
-import sqlite3
+import psycopg
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -24,8 +22,8 @@ def documents():
 
 
 @pytest.fixture
-def store(tmp_path):
-    store = KnowledgeStore(tmp_path / "private/knowledge.sqlite3")
+def store(pg_databases):
+    store = KnowledgeStore(pg_databases["knowledge"])
     store.initialize()
     return store
 
@@ -58,12 +56,10 @@ def test_publication_requires_review_and_journal_is_immutable(store, documents):
     assert len(release.dishes()) == 214
     with pytest.raises(ValueError, match="immutable"):
         store.edit_draft("initial", rules, dishes, actor="Author", expected_revision=1, note="Cannot edit")
-    with closing(sqlite3.connect(store.database)) as connection:
-        for table in ("knowledge_drafts", "knowledge_revisions", "knowledge_reviews", "knowledge_releases", "knowledge_events"):
-            with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+    for table in ("knowledge_drafts", "knowledge_revisions", "knowledge_reviews", "knowledge_releases", "knowledge_events"):
+        with pytest.raises(psycopg.errors.CheckViolation, match="immutable"):
+            with psycopg.connect(store.database) as connection:
                 connection.execute(f"DELETE FROM {table}")
-    if os.name == "posix":
-        assert store.database.stat().st_mode & 0o777 == 0o600
 
 
 def test_edit_invalidates_review_and_stale_updates_fail(store, documents):
@@ -84,7 +80,7 @@ def test_edit_invalidates_review_and_stale_updates_fail(store, documents):
     store.review("initial", actor="Reviewer", decision="reject", expected_revision=2, note="Not ready")
     with pytest.raises(ValueError, match="approving review"):
         store.publish("initial", "release-1", actor="Publisher", expected_revision=2, note="Rejected")
-    with closing(sqlite3.connect(store.database)) as connection:
+    with psycopg.connect(store.database) as connection:
         assert connection.execute("SELECT count(*) FROM knowledge_revisions").fetchone()[0] == 2
         assert connection.execute("SELECT count(*) FROM knowledge_releases").fetchone()[0] == 0
 
@@ -164,31 +160,29 @@ def test_runtime_reader_rejects_drafts_missing_files_and_corruption(store, docum
     with pytest.raises(ValueError, match="not found"):
         load_release(store.database, "initial")
     missing = tmp_path / "missing.sqlite3"
-    with pytest.raises(sqlite3.OperationalError):
+    with pytest.raises(ValueError, match="PostgreSQL URL"):
         load_release(missing, "release-1")
     assert not missing.exists()
     store.publish("initial", "release-1", actor="Publisher", expected_revision=1, note="Publish")
-    with closing(sqlite3.connect(store.database)) as connection:
-        connection.execute("DROP TRIGGER knowledge_revisions_no_update")
+    with psycopg.connect(store.database) as connection:
+        connection.execute("DROP TRIGGER knowledge_revisions_immutable ON knowledge_revisions")
         connection.execute("UPDATE knowledge_revisions SET rules_hash='tampered'")
         connection.commit()
     with pytest.raises(ValueError, match="checksum"):
         load_release(store.database, "release-1")
 
 
-def test_initialization_refuses_the_clinical_database(tmp_path):
-    database = tmp_path / "app.sqlite3"
-    with closing(sqlite3.connect(database)) as connection:
-        connection.execute("CREATE TABLE patients (patient_id TEXT)")
-    with pytest.raises(ValueError, match="different application database"):
+def test_initialization_refuses_the_clinical_database(pg_databases):
+    database = pg_databases["clinical"]
+    with pytest.raises(RuntimeError, match="Wrong"):
         KnowledgeStore(database).initialize()
-    with closing(sqlite3.connect(database)) as connection:
-        assert connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall() == [("patients",)]
+    with psycopg.connect(database) as connection:
+        assert connection.execute("SELECT count(*) FROM patients").fetchone()[0] == 0
 
 
-def test_operator_cli_import_review_publish_export_clone_history(tmp_path, capsys):
-    database = tmp_path / "knowledge.sqlite3"
-    prefix = ["--db", str(database)]
+def test_operator_cli_import_review_publish_export_clone_history(tmp_path, capsys, pg_databases, monkeypatch):
+    monkeypatch.setenv("CARELOOP_KNOWLEDGE_DATABASE_URL", pg_databases["knowledge"])
+    prefix = []
     assert main(prefix + ["init"]) == 0
     from backend.datasets.paths import dataset_path
     assert main(prefix + ["import", "--draft-id", "initial", "--rules-file", str(dataset_path("rules.json")),
@@ -222,13 +216,13 @@ def test_historical_revisions_and_release_name_collisions_preserve_content(store
     store.review("initial", actor="Reviewer", decision="approve", expected_revision=2, note="Review")
     original = store.publish("initial", "release-1", actor="Publisher", expected_revision=2, note="Publish")
     _approved(store, documents, "other")
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(psycopg.errors.UniqueViolation):
         store.publish("other", "release-1", actor="Publisher", expected_revision=1, note="Collision")
     assert store.show("other")["release_id"] is None
     assert [event["action"] for event in store.history("other")] == ["create", "review"]
-    before = store.database.read_bytes()
+    before = store.history("initial")
     assert load_release(store.database, "release-1") == original
-    assert store.database.read_bytes() == before
+    assert store.history("initial") == before
 
 
 def test_legacy_envelopes_do_not_gain_invented_knowledge_provenance():

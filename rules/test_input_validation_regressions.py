@@ -18,7 +18,7 @@ def patient(**overrides):
 
 
 @pytest.fixture
-def client():
+def client(clinical_test_database):
     with TestClient(app, raise_server_exceptions=False) as connection:
         yield connection
 

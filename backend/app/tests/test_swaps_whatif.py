@@ -355,7 +355,7 @@ def test_whatif_infeasible_targets_still_reported(client, p0001) -> None:
 
 
 def test_simulation_store_survives_fresh_handle(client, p0001) -> None:
-    """Restart-style read: a fresh sqlite handle (each persistence call opens
+    """Restart-style read: a fresh transaction (each persistence call opens
     its own connection) still lists the stored simulation."""
     persistence.init_db()
     rows = persistence.list_simulations("P0001")

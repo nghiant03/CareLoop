@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sqlite3
 
 import pytest
 from pydantic import ValidationError
@@ -285,28 +284,11 @@ def test_rules_run_malformed_inline_input_returns_422(client) -> None:
     assert missing_weight.status_code == 422, missing_weight.text
 
 
-def test_legacy_meal_logs_schema_migration_is_idempotent(tmp_path, monkeypatch) -> None:
-    db = tmp_path / "legacy-app.sqlite3"
-    monkeypatch.setenv("CARELOOP_APP_DB", str(db))
-
-    # Old-schema database: meal_logs without the items_json column.
-    conn = sqlite3.connect(db)
-    conn.execute(
-        "CREATE TABLE meal_logs ("
-        "patient_id TEXT NOT NULL, date TEXT NOT NULL, meal TEXT NOT NULL, "
-        "dish_id TEXT NOT NULL, logged_at TEXT NOT NULL, "
-        "PRIMARY KEY (patient_id, date, meal))"
-    )
-    conn.commit()
-    conn.close()
-
+def test_meal_logs_schema_is_explicit_and_startup_checks_are_idempotent() -> None:
     persistence.init_db()
-    conn = sqlite3.connect(db)
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(meal_logs)")}
-    conn.close()
+    persistence.init_db()
+    with persistence._connect() as conn:
+        columns = {row[0] for row in conn.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name='meal_logs'"
+        )}
     assert "items_json" in columns
-
-    # A later initializer (fresh process view of the same path) rechecks the
-    # column under the write reservation instead of ALTERing a second time.
-    persistence._INITIALIZED.discard(str(db))
-    persistence.init_db()  # must not raise "duplicate column name"

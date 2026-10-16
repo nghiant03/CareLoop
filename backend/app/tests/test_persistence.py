@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -93,9 +92,8 @@ def test_plan_save_and_fresh_handle_roundtrip() -> None:
     # identical document round-trip (plan_id/saved_at are the storage overlay)
     assert {k: v for k, v in stored.items() if k not in ("plan_id", "saved_at")} == document
 
-    # FRESH sqlite handle — a restart reads the same row from disk
-    with sqlite3.connect(persistence.db_path()) as conn:
-        conn.row_factory = sqlite3.Row
+    # A fresh transaction reads the same durable row.
+    with persistence._connect() as conn:
         row = conn.execute(
             "SELECT * FROM plans WHERE plan_id = ?", (plan_id,)
         ).fetchone()
@@ -154,7 +152,7 @@ def test_plans_api_list_get_and_restart(client) -> None:
     assert all(set(row) >= {"plan_id", "patient_id", "envelope_id", "created_at"}
                for row in payload["plans"])
 
-    # A new client lifespan in the same process reads the plan from SQLite.
+    # A new client lifespan reads the plan from PostgreSQL.
     with TestClient(app) as fresh_client:
         reread = fresh_client.get(f"/plans/{plan_id}")
     assert reread.status_code == 200, reread.text
@@ -205,7 +203,7 @@ def test_meal_log_upsert_persistence_and_ordering() -> None:
     assert store.count_logs() >= 3
 
     # persistence across a fresh handle
-    with sqlite3.connect(persistence.db_path()) as conn:
+    with persistence._connect() as conn:
         n = conn.execute(
             "SELECT COUNT(*) FROM meal_logs WHERE patient_id = ?", (patient_id,)
         ).fetchone()[0]

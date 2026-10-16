@@ -26,10 +26,7 @@ def selected_release() -> KnowledgeRelease | None:
     """
     global _CONFIG, _RELEASE
     url = database_url("knowledge")
-    legacy = os.environ.get("CARELOOP_KNOWLEDGE_DB", "")
-    if url and legacy:
-        raise ValueError("Set only CARELOOP_KNOWLEDGE_DATABASE_URL[_FILE] or CARELOOP_KNOWLEDGE_DB")
-    database = url or legacy
+    database = url or ""
     release_id = os.environ.get("CARELOOP_KNOWLEDGE_RELEASE", "")
     mode = os.environ.get("CARELOOP_KNOWLEDGE_MODE") or ("database" if database or release_id else "fixtures")
     config = (mode, database, release_id)
@@ -40,7 +37,7 @@ def selected_release() -> KnowledgeRelease | None:
             return _RELEASE
         if mode == "database":
             if not database or not release_id:
-                raise ValueError("database knowledge mode requires a knowledge PostgreSQL URL or legacy path, and CARELOOP_KNOWLEDGE_RELEASE")
+                raise ValueError("database knowledge mode requires a knowledge PostgreSQL URL and CARELOOP_KNOWLEDGE_RELEASE")
             candidate = load_release(database, release_id)
             from backend.knowledge.validation import validate_documents
 

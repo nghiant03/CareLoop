@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import sqlite3
+import psycopg
 import subprocess
 import sys
 from unittest.mock import Mock
@@ -179,16 +179,19 @@ def test_proposal_finalization_preserves_clinician_action(lenient_client, monkey
 def test_pending_snapshot_and_identity_rollback_together(lenient_client):
     review_id = _seed_review_item("core-atomic-pending")
     before = persistence.get_review_item(review_id)
-    with sqlite3.connect(persistence.db_path()) as conn:
+    with psycopg.connect(os.environ["CARELOOP_APP_DATABASE_URL"]) as conn:
+        conn.execute("CREATE FUNCTION fail_pending() RETURNS trigger LANGUAGE plpgsql AS $$ "
+                     "BEGIN RAISE EXCEPTION 'injected pending failure'; END; $$")
         conn.execute("CREATE TRIGGER fail_pending BEFORE UPDATE OF action_json ON review_items "
-                     "BEGIN SELECT RAISE(ABORT, 'injected pending failure'); END")
+                     "FOR EACH ROW EXECUTE FUNCTION fail_pending()")
     try:
         assert lenient_client.post(f"/review/{review_id}/proposal").status_code == 500
         assert persistence.list_envelope_history("P0002") == []
         assert persistence.get_review_item(review_id) == before
     finally:
-        with sqlite3.connect(persistence.db_path()) as conn:
-            conn.execute("DROP TRIGGER fail_pending")
+        with psycopg.connect(os.environ["CARELOOP_APP_DATABASE_URL"]) as conn:
+            conn.execute("DROP TRIGGER fail_pending ON review_items")
+            conn.execute("DROP FUNCTION fail_pending()")
     assert lenient_client.post(f"/review/{review_id}/proposal").status_code == 200
 
 
@@ -246,14 +249,9 @@ def test_patient_aliases_follow_both_observations_in_list(client):
     assert current["archetype"] == "preserve"
 
 
-def test_legacy_schema_initializes_across_processes(tmp_path):
-    database = tmp_path / "concurrent-legacy.sqlite3"
-    with sqlite3.connect(database) as conn:
-        conn.execute("CREATE TABLE meal_logs (patient_id TEXT NOT NULL, date TEXT NOT NULL, "
-                     "meal TEXT NOT NULL, dish_id TEXT NOT NULL, logged_at TEXT NOT NULL, "
-                     "PRIMARY KEY (patient_id, date, meal))")
-        conn.execute("INSERT INTO meal_logs VALUES ('legacy', '2026-10-10', 'lunch', 'dish', 'receipt')")
-    environment = {**os.environ, "CARELOOP_APP_DB": str(database)}
+def test_schema_verification_is_safe_across_processes():
+    persistence.put_log("concurrent", "2026-10-10", "lunch", "dish")
+    environment = dict(os.environ)
     code = "from backend.app.core import persistence; input(); persistence.init_db()"
     workers = [subprocess.Popen([sys.executable, "-c", code], env=environment,
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -271,9 +269,7 @@ def test_legacy_schema_initializes_across_processes(tmp_path):
             if worker.poll() is None:
                 worker.kill()
                 worker.wait()
-    with sqlite3.connect(database) as conn:
-        assert [column[1] for column in conn.execute("PRAGMA table_info(meal_logs)")].count("items_json") == 1
-        assert conn.execute("SELECT dish_id, items_json FROM meal_logs").fetchone() == ("dish", None)
+    assert persistence.get_log("concurrent", "2026-10-10", "lunch")["dish_id"] == "dish"
 
 
 @pytest.mark.parametrize("unit", ["mL/min", "mL/min/1.73m2", "mL/min/1.73m²"])

@@ -28,12 +28,14 @@ _SQL_TOKENS = re.compile(r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|--[^\n]*|/\*.*?\*/
 def database_url(component: str) -> str | None:
     """Read a URL or a Docker-secret file; reject ambiguous or malformed settings.
 
-    Credentials are never returned in diagnostics. A configured but unavailable
-    PostgreSQL database must not fall back to SQLite.
+    Credentials are never returned in diagnostics. Retired SQLite settings are
+    rejected, not ignored, so existing storage is never silently abandoned.
     """
     if component not in _WRITE_LOCKS:
         raise ValueError("database component must be clinical or knowledge")
     prefix = "CARELOOP_APP" if component == "clinical" else "CARELOOP_KNOWLEDGE"
+    if os.environ.get(prefix + "_DB") is not None:
+        raise ValueError(f"{prefix}_DB is no longer supported; configure {prefix}_DATABASE_URL[_FILE]. Existing files are untouched.")
     variable = f"{prefix}_DATABASE_URL"
     value, filename = os.environ.get(variable), os.environ.get(variable + "_FILE")
     if value is not None and filename is not None:
@@ -93,8 +95,8 @@ def check_schema(connection, component: str) -> None:
 class PostgresConnection:
     """Pooled transaction with explicit write reservations and optional read-only mode.
 
-    BEGIN IMMEDIATE in legacy callers requests a database-scoped transaction
-    advisory lock. All other mutations take the same lock before executing,
+    Write reservations take a database-scoped transaction advisory lock.
+    All mutations take the same lock before executing,
     including single-statement updates that might race a check-and-append.
     Nothing retries an ambiguous commit automatically.
     """
@@ -117,8 +119,7 @@ class PostgresConnection:
 
     @property
     def in_transaction(self) -> bool:
-        # Legacy callers ask this to determine whether a write reservation exists,
-        # not whether PostgreSQL has started a read-only transaction implicitly.
+        # Report the write reservation, not an implicit read transaction.
         return self._reserved
 
     def reserve_write(self):
@@ -130,9 +131,6 @@ class PostgresConnection:
 
     def execute(self, sql: str, params=None):
         operation = sql.lstrip().split(None, 1)[0].upper()
-        if sql.strip().upper() == "BEGIN IMMEDIATE":
-            self.reserve_write()
-            return self.raw.execute("SELECT 1")
         if operation in {"INSERT", "UPDATE", "DELETE"}:
             self.reserve_write()
         if params is None:

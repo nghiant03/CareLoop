@@ -2,7 +2,7 @@
 
 Path dependencies load by envelope ID. Body dependencies gate the patient's
 latest proposal. Failures become HTTP 409 ``envelope_not_approved`` responses.
-Live reads use the SQLite journal, not the compatibility cache.
+Live reads use the PostgreSQL journal, not the compatibility cache.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ class EnvelopeNotApprovedError(Exception):
         )
 
 
-# Compatibility mirror only. Live reads use SQLite.
+# Compatibility mirror only. Live reads use PostgreSQL.
 
 ENVELOPE_STORE: dict[str, NutrientEnvelope] = {}
 _STORE_LOCK = Lock()

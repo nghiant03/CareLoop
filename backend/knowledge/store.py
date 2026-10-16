@@ -1,12 +1,10 @@
-"""Separate knowledge journal in PostgreSQL; SQLite remains a legacy source/test backend."""
+"""Separate append-only knowledge journal in PostgreSQL."""
 
 from __future__ import annotations
 
 import json
-import os
 import re
-import sqlite3
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,34 +12,7 @@ from pathlib import Path
 from backend.knowledge.validation import NUTRIENTS, canonical_json, content_hash, validate_documents
 from backend.storage.postgres import PostgresConnection, is_postgres
 
-_TABLES = {"knowledge_drafts", "knowledge_revisions", "knowledge_reviews", "knowledge_releases", "knowledge_events"}
 _DISH_SEMANTIC_FIELDS = (*NUTRIENTS, "portion_g", "category", "ingredients", "tags")
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS knowledge_drafts (
-    draft_id TEXT PRIMARY KEY, author TEXT NOT NULL, created_at TEXT NOT NULL,
-    parent_release TEXT, provenance_json TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS knowledge_revisions (
-    draft_id TEXT NOT NULL REFERENCES knowledge_drafts(draft_id), revision INTEGER NOT NULL,
-    editor TEXT NOT NULL, created_at TEXT NOT NULL, rules_json TEXT NOT NULL, dishes_json TEXT NOT NULL,
-    rules_hash TEXT NOT NULL, dishes_hash TEXT NOT NULL, validation_json TEXT NOT NULL,
-    PRIMARY KEY(draft_id, revision)
-);
-CREATE TABLE IF NOT EXISTS knowledge_reviews (
-    draft_id TEXT NOT NULL, revision INTEGER NOT NULL, reviewer TEXT NOT NULL,
-    decision TEXT NOT NULL CHECK(decision IN ('approve','reject')), note TEXT NOT NULL, reviewed_at TEXT NOT NULL,
-    PRIMARY KEY(draft_id, revision), FOREIGN KEY(draft_id,revision) REFERENCES knowledge_revisions(draft_id,revision)
-);
-CREATE TABLE IF NOT EXISTS knowledge_releases (
-    release_id TEXT PRIMARY KEY, draft_id TEXT NOT NULL UNIQUE, revision INTEGER NOT NULL,
-    publisher TEXT NOT NULL, note TEXT NOT NULL, published_at TEXT NOT NULL,
-    FOREIGN KEY(draft_id,revision) REFERENCES knowledge_reviews(draft_id,revision)
-);
-CREATE TABLE IF NOT EXISTS knowledge_events (
-    event_id INTEGER PRIMARY KEY AUTOINCREMENT, draft_id TEXT NOT NULL REFERENCES knowledge_drafts(draft_id),
-    revision INTEGER NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, detail_json TEXT NOT NULL, created_at TEXT NOT NULL
-);
-"""
 
 
 def _now() -> str:
@@ -100,61 +71,26 @@ class KnowledgeStore:
     """Append-only draft revisions, revision-bound review, and immutable publication.
 
     Actor names are operator attestations, not authenticated identities. Database
-    roles (or legacy filesystem access) are the operator security boundary.
+    roles are the operator security boundary.
     Immutability does not protect against privileged database administrators.
     """
 
     def __init__(self, database: str | Path):
-        self.postgres = is_postgres(database)
-        self.database = str(database) if self.postgres else Path(database).expanduser().resolve()
+        if not is_postgres(database):
+            raise ValueError("Knowledge storage requires a PostgreSQL URL; SQLite is no longer supported")
+        self.database = str(database)
 
     def initialize(self) -> None:
-        if self.postgres:
-            # Explicit admin migration is deliberately separate from the operator role.
-            with PostgresConnection(self.database, "knowledge", readonly=True):
-                pass
-            return
-        self.database.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        try:
-            fd = os.open(self.database, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        except FileExistsError:
+        """Verify schema; only the separate admin migration may create it."""
+        with PostgresConnection(self.database, "knowledge", readonly=True):
             pass
-        else:
-            os.close(fd)
-        with closing(sqlite3.connect(self.database)) as conn:
-            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-                      if not row[0].startswith("sqlite_")}
-            if tables - _TABLES:
-                raise ValueError("refusing to initialize knowledge tables in a different application database")
-            version = conn.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1):
-                raise ValueError("unsupported knowledge database schema")
-            conn.executescript(_SCHEMA)
-            for table in sorted(_TABLES):
-                for operation in ("UPDATE", "DELETE"):
-                    conn.execute(f"CREATE TRIGGER IF NOT EXISTS {table}_no_{operation.lower()} "
-                                 f"BEFORE {operation} ON {table} BEGIN SELECT RAISE(ABORT, 'immutable knowledge journal'); END")
-            conn.execute("PRAGMA user_version=1")
-            conn.commit()
 
     @contextmanager
     def _connection(self, *, write: bool = False):
-        if self.postgres:
-            with PostgresConnection(self.database, "knowledge", readonly=not write) as conn:
-                if write:
-                    conn.reserve_write()
-                yield conn
-            return
-        mode = "rw" if write else "ro"
-        with closing(sqlite3.connect(self.database.as_uri() + f"?mode={mode}", uri=True, timeout=30)) as conn:
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA foreign_keys=ON")
-            if conn.execute("PRAGMA user_version").fetchone()[0] != 1:
-                raise ValueError("knowledge database is not initialized; run init first")
-            with conn:
-                if write:
-                    conn.execute("BEGIN IMMEDIATE")
-                yield conn
+        with PostgresConnection(self.database, "knowledge", readonly=not write) as conn:
+            if write:
+                conn.reserve_write()
+            yield conn
 
     def _latest(self, conn, draft_id: str, expected_revision: int | None = None):
         row = conn.execute("SELECT * FROM knowledge_revisions WHERE draft_id=? ORDER BY revision DESC LIMIT 1",

@@ -144,7 +144,7 @@ def test_reference_templates_load_and_accept_patient():
     env.reset()
 
 
-def test_http_lab_spellings_are_equivalent_and_keep_fresh_identity():
+def test_http_lab_spellings_are_equivalent_and_keep_fresh_identity(clinical_test_database):
     from backend.app.main import app
     wire = patient()
     python_names = dict(wire)
@@ -178,7 +178,7 @@ def test_alias_precedence_including_explicit_null():
 
 
 @pytest.mark.parametrize("weight", [None, 0, -1, "NaN", "Infinity"])
-def test_http_invalid_weight_is_validation_error(weight):
+def test_http_invalid_weight_is_validation_error(weight, clinical_test_database):
     from backend.app.main import app
     with TestClient(app) as client:
         response = client.post("/rules/run", json=patient(weight_kg=weight))

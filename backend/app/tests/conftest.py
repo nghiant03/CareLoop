@@ -1,23 +1,11 @@
 """Shared fixtures for the ``backend.app.tests`` suite.
 
-When ``CARELOOP_APP_DB`` is absent, select a temporary database before store
-calls. Repository-root fixtures normally select it first; backend-only pytest
-roots may not load those fixtures. An explicitly configured path is respected
-and must already be isolated: the session fixture deletes all its records.
-It also clears the compatibility envelope cache before backend tests begin.
+Repository-root fixtures create a disposable PostgreSQL database from the
+explicit test admin URL, never a deployment URL. The compatibility envelope
+cache is cleared before backend tests begin.
 """
 
 from __future__ import annotations
-
-import os
-import tempfile
-from pathlib import Path
-
-for _name in ("CARELOOP_APP_DATABASE_URL", "CARELOOP_APP_DATABASE_URL_FILE"):
-    os.environ.pop(_name, None)
-if not os.environ.get("CARELOOP_APP_DB"):
-    _TMP_DB_DIR = tempfile.mkdtemp(prefix="careloop-backend-tests-")
-    os.environ["CARELOOP_APP_DB"] = str(Path(_TMP_DB_DIR) / "careloop_app.sqlite3")
 
 import pytest
 
@@ -26,7 +14,7 @@ from backend.app.core.approval_gate import ENVELOPE_STORE
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _fresh_app_stores():
+def _fresh_app_stores(clinical_test_database):
     """Fresh persistence tables + in-memory stores at session start."""
     persistence.init_db()
     persistence.clear_all()

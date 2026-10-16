@@ -1,11 +1,10 @@
-"""Durable PostgreSQL clinical storage, with legacy SQLite migration/test support.
+"""Durable PostgreSQL clinical storage.
 
 PostgreSQL uses CARELOOP_APP_DATABASE_URL or its _FILE secret and pooled
 transactions. Its schema is migrated explicitly, never during runtime startup.
-Without a URL, CARELOOP_APP_DB retains the SQLite source/test path contract.
 
 Database write reservations protect ID allocation and lifecycle checks across
-workers. PostgreSQL uses transaction advisory locks; SQLite uses BEGIN IMMEDIATE.
+workers through transaction advisory locks.
 IDs can be reused only after minted rows are
 removed. Use ``store_envelope`` for live writes. ``journal_envelope`` seeds
 history without revision checks.
@@ -14,20 +13,16 @@ history without revision checks.
 from __future__ import annotations
 
 import json
-import os
 import re
-import sqlite3
 import psycopg
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
-from pathlib import Path
 from threading import Lock
 from typing import Any
 
 from backend.app.models.envelope import NutrientEnvelope
-from backend.storage_paths import default_app_db_path
-from backend.storage.postgres import PostgresConnection, database_url
+from backend.storage.postgres import PostgresConnection, StorageRow, database_url
 
 __all__ = [
     "acknowledge_review_item",
@@ -37,7 +32,6 @@ __all__ = [
     "clear_logs",
     "count_logs",
     "create_review_item",
-    "db_path",
     "delete_logs_for_patient",
     "envelope_effective_at",
     "finalize_review_proposal",
@@ -60,121 +54,12 @@ __all__ = [
     "save_simulation",
 ]
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_LEGACY_DB = _REPO_ROOT / "data" / "careloop_app.sqlite3"
 _REVIEW_PROPOSAL: ContextVar[tuple[str, str | None] | None] = ContextVar("review_proposal", default=None)
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS patients (
-    patient_id TEXT PRIMARY KEY,
-    document_json TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS plans (
-    plan_id          TEXT PRIMARY KEY,
-    patient_id       TEXT NOT NULL,
-    envelope_id      TEXT NOT NULL,
-    envelope_version INTEGER NOT NULL,
-    engine           TEXT,
-    feasible         INTEGER NOT NULL,
-    violation_count  INTEGER NOT NULL DEFAULT 0,
-    objectives_json  TEXT,
-    days_json        TEXT,
-    adequacy_json    TEXT,
-    kb_version       TEXT,
-    document_json    TEXT,
-    created_at       TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_plans_patient ON plans(patient_id, created_at);
-
-CREATE TABLE IF NOT EXISTS meal_logs (
-    patient_id TEXT NOT NULL,
-    date       TEXT NOT NULL,
-    meal       TEXT NOT NULL,
-    dish_id    TEXT NOT NULL,
-    logged_at  TEXT NOT NULL,
-    PRIMARY KEY (patient_id, date, meal)
-);
-CREATE INDEX IF NOT EXISTS idx_meal_logs_patient_date
-    ON meal_logs(patient_id, date);
-
-CREATE TABLE IF NOT EXISTS envelope_journal (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    event         TEXT,
-    envelope_id   TEXT NOT NULL,
-    patient_id    TEXT NOT NULL,
-    version       INTEGER NOT NULL,
-    status        TEXT NOT NULL,
-    snapshot_json TEXT NOT NULL,
-    effective_at  TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_journal_patient_effective
-    ON envelope_journal(patient_id, effective_at);
-CREATE INDEX IF NOT EXISTS idx_journal_envelope
-    ON envelope_journal(envelope_id);
-
-CREATE TABLE IF NOT EXISTS observations (
-    observation_id TEXT PRIMARY KEY,
-    patient_id     TEXT NOT NULL,
-    metric         TEXT NOT NULL,
-    value          REAL NOT NULL,
-    unit           TEXT,
-    source         TEXT,
-    observed_at    TEXT NOT NULL,
-    recorded_at    TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_observations_patient
-    ON observations(patient_id, observed_at);
-
-CREATE TABLE IF NOT EXISTS simulations (
-    simulation_id        TEXT PRIMARY KEY,
-    patient_id           TEXT NOT NULL,
-    base_envelope_id     TEXT NOT NULL,
-    proposed_targets_json TEXT NOT NULL,
-    comparison_json      TEXT,
-    status               TEXT NOT NULL DEFAULT 'OPEN',
-    created_at           TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_simulations_patient
-    ON simulations(patient_id, created_at);
-
-CREATE TABLE IF NOT EXISTS review_items (
-    review_id          TEXT PRIMARY KEY,
-    patient_id         TEXT NOT NULL,
-    source             TEXT NOT NULL,
-    payload_json       TEXT NOT NULL,
-    status             TEXT NOT NULL DEFAULT 'OPEN',
-    created_at         TEXT NOT NULL,
-    acknowledged_at    TEXT,
-    action_json        TEXT,
-    linked_envelope_id TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_review_status ON review_items(status, created_at);
-CREATE INDEX IF NOT EXISTS idx_review_patient ON review_items(patient_id);
-"""
-
-# Serialise local writes; SQLite write reservations protect ID/revision checks across workers.
+# Serialise local writes; advisory reservations protect checks across workers.
 _LOCK = Lock()
 
-# Cache schema initialization per path so isolated test databases initialize independently.
-_INIT_LOCK = Lock()
-_INITIALIZED: set[str] = set()
-
 _MEAL_ORDER = ("breakfast", "lunch", "dinner")
-
-
-def db_path() -> str:
-    """Resolve storage lazily; never silently abandon an unmigrated legacy DB."""
-    configured = os.environ.get("CARELOOP_APP_DB")
-    if configured:
-        return str(Path(configured).expanduser())
-    destination = default_app_db_path()
-    if _LEGACY_DB.exists() and not destination.exists():
-        raise RuntimeError(
-            "Legacy CareLoop database found. Run `python -m backend.app.core.migrate_storage "
-            "--source data/careloop_app.sqlite3`, or set CARELOOP_APP_DB explicitly. "
-            "See docs/STORAGE.md; the existing database has not been modified."
-        )
-    return str(destination)
 
 
 def _utcnow() -> str:
@@ -185,60 +70,21 @@ def _today() -> str:
     return datetime.now(UTC).date().isoformat()
 
 
-def _connect() -> sqlite3.Connection | PostgresConnection:
-    """Open a schema-checked PostgreSQL transaction or legacy SQLite connection."""
+def _connect() -> PostgresConnection:
+    """Open a schema-checked PostgreSQL transaction; never create runtime schema."""
     url = database_url("clinical")
-    if url is not None:
-        if os.environ.get("CARELOOP_APP_DB"):
-            raise ValueError("Set only CARELOOP_APP_DATABASE_URL[_FILE] or CARELOOP_APP_DB")
-        return PostgresConnection(url, "clinical")
-    path = db_path()
-    parent = Path(path).parent
-    if str(parent):
-        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if path != ":memory:":
-        try:
-            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        except FileExistsError:
-            pass  # Existing storage and its permissions remain operator-owned.
-        else:
-            os.close(fd)
-    if path not in _INITIALIZED:
-        with _INIT_LOCK:
-            if path not in _INITIALIZED:  # double-checked
-                conn = sqlite3.connect(path)
-                try:
-                    # IF NOT EXISTS keeps schema creation safe across workers.
-                    conn.executescript(_SCHEMA)
-                    # Reserve writes before checking columns: _INIT_LOCK cannot
-                    # prevent another process from attempting the same ALTER.
-                    conn.execute("BEGIN IMMEDIATE")
-                    if "items_json" not in {r[1] for r in conn.execute("PRAGMA table_info(meal_logs)")}:
-                        conn.execute("ALTER TABLE meal_logs ADD COLUMN items_json TEXT")
-                    conn.commit()
-                finally:
-                    conn.close()
-                _INITIALIZED.add(path)
-    conn = sqlite3.connect(path, factory=_Connection)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-class _Connection(sqlite3.Connection):
-    def __exit__(self, *args):
-        try:
-            return super().__exit__(*args)
-        finally:
-            self.close()
+    if url is None:
+        raise ValueError("Configure CARELOOP_APP_DATABASE_URL or CARELOOP_APP_DATABASE_URL_FILE")
+    return PostgresConnection(url, "clinical")
 
 
 def init_db() -> None:
-    """Verify PostgreSQL's migrated schema; initialize only legacy SQLite storage."""
+    """Verify the explicitly migrated PostgreSQL schema."""
     conn = _connect()
     conn.close()
 
 
-def _mint_id(conn: sqlite3.Connection, table: str, prefix: str, column: str) -> str:
+def _mint_id(conn: PostgresConnection, table: str, prefix: str, column: str) -> str:
     """Mint the next ``<prefix><NNN>`` ID under the caller's write transaction.
 
     Reserve writes before scanning existing numeric suffixes. Normal workflows
@@ -246,7 +92,7 @@ def _mint_id(conn: sqlite3.Connection, table: str, prefix: str, column: str) -> 
     """
     # Acquire the write reservation before reading ids, including across workers.
     if not conn.in_transaction:
-        conn.execute("BEGIN IMMEDIATE")
+        conn.reserve_write()
     seq = 0
     like = (
         prefix.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_") + "%"
@@ -320,7 +166,7 @@ def save_plan(
     return plan_id
 
 
-def _plan_summary(row: sqlite3.Row) -> dict[str, Any]:
+def _plan_summary(row: StorageRow) -> dict[str, Any]:
     return {
         "plan_id": row["plan_id"],
         "patient_id": row["patient_id"],
@@ -546,7 +392,7 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
     before a snapshot is appended.
     """
     with _LOCK, _connect() as conn:
-        conn.execute("BEGIN IMMEDIATE")
+        conn.reserve_write()
         proposal_attempt = _REVIEW_PROPOSAL.get() if new_proposal else None
         review_id = None
         if proposal_attempt is not None:
@@ -651,7 +497,7 @@ def insert_patient(record: dict[str, Any]) -> bool:
                 (record["patient_id"], json.dumps(record)),
             )
         return True
-    except (sqlite3.IntegrityError, psycopg.errors.UniqueViolation):
+    except psycopg.errors.UniqueViolation:
         return False
 
 
@@ -874,7 +720,7 @@ def list_simulations(patient_id: str) -> list[dict[str, Any]]:
 # Review queue
 
 
-def _review_row(row: sqlite3.Row) -> dict[str, Any]:
+def _review_row(row: StorageRow) -> dict[str, Any]:
     return {
         "review_id": row["review_id"],
         "patient_id": row["patient_id"],
@@ -905,7 +751,7 @@ def create_review_item(
     """
     created_at = created_at or _utcnow()
     with _LOCK, _connect() as conn:
-        conn.execute("BEGIN IMMEDIATE")
+        conn.reserve_write()
         if review_id is None:
             review_id = _mint_id(conn, "review_items", f"REV-{patient_id}-", "review_id")
         else:
@@ -1029,7 +875,7 @@ def finalize_review_proposal(
     clinician replacement, not asynchronous proposal completion.
     """
     with _LOCK, _connect() as conn:
-        conn.execute("BEGIN IMMEDIATE")
+        conn.reserve_write()
         row = conn.execute(
             "SELECT * FROM review_items WHERE review_id = ?", (review_id,)
         ).fetchone()

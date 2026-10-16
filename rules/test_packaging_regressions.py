@@ -76,15 +76,14 @@ def test_wheel_and_sdist_keep_resources_without_clinical_state(distributions):
     assert_no_application_state(members)
 
 
-def test_out_of_checkout_wheel_loads_rules_patients_dishes_and_kb(distributions, tmp_path):
+def test_out_of_checkout_wheel_loads_rules_patients_dishes_and_kb(distributions, tmp_path, pg_databases):
     wheel, _ = distributions
     installed = tmp_path / "wheel-root"
     with zipfile.ZipFile(wheel) as archive:
         archive.extractall(installed)
     work = tmp_path / "outside-checkout"
     work.mkdir()
-    database = work / "clinical.sqlite3"
-    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", CARELOOP_APP_DB=str(database))
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", CARELOOP_APP_DATABASE_URL=pg_databases["clinical"])
     from backend.datasets.paths import dataset_dir
     env["CARELOOP_DATASET_DIR"] = str(dataset_dir())
     env.pop("PYTHONPATH", None)
@@ -126,4 +125,6 @@ print('CARELOOP_SMOKE=' + json.dumps({'dishes': len(dishes), 'proposal': proposa
                if line.startswith("CARELOOP_SMOKE=")]
     assert len(results) == 1, result.stdout + result.stderr
     assert json.loads(results[0])["kb_loaded"] is True
-    assert database.exists()
+    from backend.storage.postgres import PostgresConnection
+    with PostgresConnection(pg_databases["clinical"], "clinical", readonly=True) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM envelope_journal").fetchone()[0] == 1

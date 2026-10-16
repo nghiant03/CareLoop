@@ -233,7 +233,7 @@ def test_cli_discovery_never_opens_or_creates_a_database(research, baseline, tmp
     def forbidden(*args, **kwargs):
         raise AssertionError("Discovery must not construct a knowledge store")
     monkeypatch.setattr("backend.knowledge.__main__.KnowledgeStore", forbidden)
-    arguments = ["--db", str(database), "discover", "--research-dir", str(research),
+    arguments = ["discover", "--research-dir", str(research),
                  "--rules-file", str(baseline_path), "--out-dir", str(tmp_path / "output")]
     assert main(arguments) == 0
     summary = json.loads(capsys.readouterr().out)

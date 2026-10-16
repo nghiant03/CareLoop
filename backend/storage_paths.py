@@ -7,15 +7,6 @@ from pathlib import Path
 from backend.datasets.paths import dataset_dir
 
 
-def default_app_db_path() -> Path:
-    """Use the user's state directory, independent of the installed source tree."""
-    configured = os.environ.get("XDG_STATE_HOME")
-    state_home = Path(configured).expanduser() if configured else Path.home() / ".local" / "state"
-    if not state_home.is_absolute():
-        raise ValueError("XDG_STATE_HOME must be an absolute path")
-    return state_home / "careloop" / "careloop_app.sqlite3"
-
-
 def artifact_dir(workflow: str) -> Path:
     """Resolve run outputs under CARELOOP_ARTIFACT_DIR or external datasets/outputs.
 

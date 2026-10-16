@@ -5,14 +5,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
-import sqlite3
 import psycopg
 from pathlib import Path
 
 from backend.knowledge.store import KnowledgeStore, load_release
-from backend.storage_paths import default_app_db_path
-from backend.storage.postgres import database_url, is_postgres
+from backend.storage.postgres import database_url
 
 
 def _read(path: Path):
@@ -22,9 +19,8 @@ def _read(path: Path):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", type=Path, help="legacy SQLite source/test database")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("init", help="initialize a separate private knowledge database")
+    commands.add_parser("init", help="verify the separately migrated PostgreSQL knowledge schema")
     commands.add_parser("list", help="show drafts, current reviews, release IDs and validation disclosures")
     discovery = commands.add_parser("discover", help="propose unapproved guideline-backed rules without database writes")
     discovery.add_argument("--research-dir", type=Path, help="external research directory containing manifest.json and raw sources")
@@ -75,14 +71,12 @@ def main(argv: list[str] | None = None) -> int:
                               "missing_supported_sections": report["missing_supported_sections"]}, indent=2))
             return 0
         url = database_url("knowledge")
-        if url and (args.db or os.environ.get("CARELOOP_KNOWLEDGE_DB")):
-            raise ValueError("PostgreSQL URL and SQLite path cannot both be selected")
-        database = url or args.db or Path(os.environ.get("CARELOOP_KNOWLEDGE_DB") or
-                                   default_app_db_path().with_name("careloop_knowledge.sqlite3"))
-        store = KnowledgeStore(database)
+        if url is None:
+            raise ValueError("configure CARELOOP_KNOWLEDGE_DATABASE_URL or its _FILE secret")
+        store = KnowledgeStore(url)
         if args.command == "init":
             store.initialize()
-            result = {"database": "PostgreSQL knowledge" if is_postgres(store.database) else str(store.database), "schema_version": 1}
+            result = {"database": "PostgreSQL knowledge", "schema_version": 1}
         elif args.command in {"import", "edit"}:
             rules, rules_hash = _read(args.rules_file)
             dishes, dishes_hash = _read(args.dishes_file)
@@ -126,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
             result = store.show(args.draft_id)
     except psycopg.Error:
         parser.exit(1, "Knowledge PostgreSQL operation failed; inspect database access/schema without sharing credentials.\n")
-    except (OSError, ValueError, TypeError, sqlite3.Error, RuntimeError) as exc:
+    except (OSError, ValueError, TypeError, RuntimeError) as exc:
         parser.exit(1, f"Knowledge operation failed: {exc}\n")
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0

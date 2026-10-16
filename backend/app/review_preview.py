@@ -29,12 +29,11 @@ def create_review_app() -> FastAPI:
         if not draft_id or not revision_text.isdecimal() or int(revision_text) < 1:
             raise ValueError("review deployment requires CARELOOP_REVIEW_DRAFT and a positive CARELOOP_REVIEW_REVISION")
         url = database_url("knowledge")
-        legacy = os.environ.get("CARELOOP_KNOWLEDGE_DB", "")
-        if bool(url) == bool(legacy):
-            raise ValueError("review deployment requires exactly one knowledge database")
+        if not url:
+            raise ValueError("review deployment requires a knowledge PostgreSQL URL")
         if os.environ.get("CARELOOP_KNOWLEDGE_RELEASE"):
             raise ValueError("review deployment cannot select a published release simultaneously")
-        store = KnowledgeStore(url or legacy)
+        store = KnowledgeStore(url)
         rules, dishes = store.documents(draft_id, int(revision_text))
         state = store.show(draft_id)
         if (state["revision"] != int(revision_text) or state["rules_hash"] != content_hash(rules)

@@ -12,8 +12,8 @@ from backend.knowledge.store import KnowledgeStore
 
 
 @pytest.fixture
-def review_store(tmp_path, monkeypatch):
-    database = tmp_path / "knowledge.sqlite3"
+def review_store(pg_databases, monkeypatch):
+    database = pg_databases["knowledge"]
     store = KnowledgeStore(database)
     store.initialize()
     rules = json.loads(dataset_path("rules.json").read_text())
@@ -22,7 +22,7 @@ def review_store(tmp_path, monkeypatch):
     store.create_draft("review-test", rules, dishes, actor="technical-author")
     for key in ("CARELOOP_KNOWLEDGE_DATABASE_URL", "CARELOOP_KNOWLEDGE_DATABASE_URL_FILE", "CARELOOP_KNOWLEDGE_RELEASE"):
         monkeypatch.delenv(key, raising=False)
-    monkeypatch.setenv("CARELOOP_KNOWLEDGE_DB", str(database))
+    monkeypatch.setenv("CARELOOP_KNOWLEDGE_DATABASE_URL", database)
     monkeypatch.setenv("CARELOOP_REVIEW_DRAFT", "review-test")
     monkeypatch.setenv("CARELOOP_REVIEW_REVISION", "1")
     monkeypatch.setenv("CARELOOP_DEPLOYMENT_MODE", "review")

@@ -19,8 +19,8 @@ from backend.optim.real_data import load_dishes
 
 
 @pytest.fixture
-def api(tmp_path, monkeypatch):
-    monkeypatch.setenv("CARELOOP_APP_DB", str(tmp_path / "app.sqlite3"))
+def api(pg_databases, monkeypatch):
+    monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", pg_databases["clinical"])
     with TestClient(app) as client:
         yield client
 

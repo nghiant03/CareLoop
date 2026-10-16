@@ -24,10 +24,10 @@ from shared.envelope_schema import (
 
 
 @pytest.fixture(autouse=True)
-def _isolated_clinical_state(tmp_path, monkeypatch):
+def _isolated_clinical_state(pg_databases, monkeypatch):
     # Each case owns its logs AND envelope journal. Reusing a fixture ID must
     # not overwrite a previous case's envelope through the live revision gate.
-    monkeypatch.setenv("CARELOOP_APP_DB", str(tmp_path / "adherence.sqlite3"))
+    monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", pg_databases["clinical"])
 
 
 def _today(offset_days: int = 0) -> str:

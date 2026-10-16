@@ -6,7 +6,7 @@ for a PROPOSED envelope and only passes the gate once APPROVED.
 
 Standalone runs must use an isolated database, not the tracked default::
 
-    CARELOOP_APP_DB=/tmp/opencode/careloop-smoke.sqlite3 python -m backend.app.tests.test_smoke
+    CARELOOP_APP_DATABASE_URL=<isolated-test-url> python -m backend.app.tests.test_smoke
 """
 
 from __future__ import annotations

@@ -22,8 +22,8 @@ T2 = "2026-10-08T00:00:00+00:00"
 
 
 @pytest.fixture(autouse=True)
-def isolated_database(tmp_path, monkeypatch):
-    monkeypatch.setenv("CARELOOP_APP_DB", str(tmp_path / "downstream.sqlite3"))
+def isolated_database(pg_databases, monkeypatch):
+    monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", pg_databases["clinical"])
 
 
 def envelope(version=1, envelope_id="ENV-P0001-test"):
