@@ -12,7 +12,7 @@ flow is described in [ARCHITECTURE.md](ARCHITECTURE.md).
 | Envelope version | Content revision within one envelope identity. An edit increments it; versions do not order separate proposals. Approval/rejection transitions do not increment it. |
 | Lifecycle revision | Concurrency token within an envelope identity, incremented on every durable lifecycle update. Clients submit it as `expected_revision`; stale writes return `envelope_conflict`. |
 | Scope eligibility | Proposal eligibility stored independently of status and notes. Clinician edits cannot clear scope exclusions or revive a rejected proposal. |
-| Approval gate | The contract authorizing live downstream use only for APPROVED envelopes. EDITED means re-approval is required. Simulation copies are local evaluation inputs, not live approvals. |
+| Approval gate | The contract authorizing live downstream use only for APPROVED envelopes. In default demo auto mode, approval is a labelled system transition, not human review; clinician mode requires manual approval. EDITED always requires manual re-approval. Simulation copies are local evaluation inputs, not live approvals. |
 | Hard constraint | A MAX daily ceiling or an exclusion. A violation makes a delivered plan infeasible. Nutrient names carry units, such as `sodium_mg` and `energy_kcal`. |
 | Soft aim | A MIN floor or TARGET value. MIN measures shortfall; TARGET measures distance on either side. Missing a soft aim does not itself make a plan infeasible. |
 | Feasibility | Satisfaction of hard constraints. A feasible plan can still miss nutritional aims. |

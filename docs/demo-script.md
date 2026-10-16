@@ -159,8 +159,11 @@ curl -sS "$P/adherence/P0005/deviation" | jq '.flags'
 
 ## Notes for the presenter
 
-- Backend clinical state persists in SQLite across restarts. Use a temporary
-  `CARELOOP_APP_DB` for an isolated demonstration.
+- Backend clinical state persists in PostgreSQL across restarts. Use a separately
+  provisioned demo database URL, never a real journal, for isolated demonstrations.
+- Auto approval is the demo default, with no clinical review. Set
+  `CARELOOP_APPROVAL_MODE=clinician` for the manual approve/edit/reject sequence;
+  edits require manual re-approval in either mode.
 - Rule content and trace are deterministic for unchanged patient facts; persisted
   proposals receive fresh identities/times. Observations and approval history can
   change the demo outcome. Adherence windows use the server's local date, not UTC.

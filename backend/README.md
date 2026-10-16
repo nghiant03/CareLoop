@@ -75,7 +75,7 @@ to lazy loading).
 | GET  | `/healthz` | liveness probe | no |
 | GET  | `/patients` | list patients (count + records, raw fields + UI aliases) | no |
 | GET  | `/patients/{patient_id}` | fetch one patient (404 if absent) | no |
-| POST | `/patients` | create a synthetic patient (durable SQLite profile) | no |
+| POST | `/patients` | create a synthetic patient (durable PostgreSQL profile) | no |
 | POST | `/rules/run` | patient id -> PROPOSED `NutrientEnvelope` + full `RuleFire` trace | no |
 | GET  | `/envelopes/{envelope_id}` | fetch an envelope | no |
 | GET  | `/envelopes/{envelope_id}/explanation` | clinician explanation: fired rules, conflict resolutions, citations | no |
@@ -123,7 +123,12 @@ HTTP 409
 - Editing an approved envelope moves it to `EDITED` and clears approval, so the
   gate blocks it again until a clinician re-confirms.
 
-Envelopes and their embedded rule traces live in the SQLite application journal
+`CARELOOP_APPROVAL_MODE=auto` is the academic demo default: new eligible proposals
+are approved by a labelled demo system actor, not a clinician. Set `clinician`
+for manual review. Both modes keep scope exclusions and require re-approval
+after edits. The envelope wire schema is unchanged.
+
+Envelopes and their embedded rule traces live in the PostgreSQL application journal
 (`core/persistence.py`). Lifecycle transitions are implemented in
 `core/envelope_lifecycle.py`. Proposal-owned scope eligibility cannot be edited
 away. Every transition checks and advances `lifecycle_revision` transactionally;

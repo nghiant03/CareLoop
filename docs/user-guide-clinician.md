@@ -5,8 +5,13 @@ generated meal plan, adherence summaries, trend flags and knowledge-base
 stats. Command examples use
 `curl` against `http://127.0.0.1:8000`; the same flows are available in the
 web UI (Clinician review and Adherence screens). Clinical state persists in
-SQLite across backend restarts. New observations update the profile and the next
-rule proposal; clinician approval is still required before planning.
+PostgreSQL across backend restarts.
+
+This is an academic showcase with simulated roles, not real clinical review.
+`CARELOOP_APPROVAL_MODE=auto` is the demo default: eligible new proposals pass
+through the approval lifecycle with a labelled system actor, not a clinician.
+Scope-rejected proposals stay excluded. Edits always require manual re-approval.
+Set `CARELOOP_APPROVAL_MODE=clinician` to follow the manual workflow below.
 
 ## 1. Pick a patient and generate the proposed envelope
 
@@ -21,7 +26,7 @@ jq '.envelope.status, [.envelope.targets[] | {nutrient:.nutrient, kind:.kind, va
 The response contains two things:
 
 - **`envelope`** — the proposed nutrient constraints, exclusions, citations and
-  status `PROPOSED`.
+  status `PROPOSED` in clinician mode, or `APPROVED` in auto demo mode.
 - **`trace`** — one `RuleFire` row per fired rule, sorted by descending
   priority: `rule_id`, `priority`, `patient_summary` (which conditions matched),
   `action_summary` (what the rule set, including per-kg → absolute expansion),

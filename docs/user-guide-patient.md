@@ -2,23 +2,23 @@
 
 What you will see in the CareLoop app, in plain language.
 
-> **Important:** CareLoop is decision *support* for your care team. It is not a
-> doctor, and nothing in it is medical advice. Your clinician approves every
-> nutrition target before it reaches you, and you should always confirm changes
-> to your diet or medication with them.
+> **Important:** CareLoop is an academic demo, not medical advice. Demo mode
+> auto-approves new eligible targets without clinical review and labels them as
+> such. The clinician role is simulated. Never use these targets to make real
+> changes to diet or medication.
 
 ## Reading your meal plan
 
 On the **Meal plan** screen, pick your name and press **Generate 7-day plan**.
 You get seven day cards, one per day. Each card shows three meals — breakfast,
 lunch and dinner — with a main dish and sometimes a side (for example, "Chicken
-Rice (Hainanese)"). The dishes are picked to fit the limits your clinician
-approved for you: salt, protein, potassium, phosphorus, calories and more.
+Rice (Hainanese)"). The dishes are picked to fit the approved demo limits:
+salt, protein, potassium, phosphorus, calories and more.
 
-Plans can only be generated **after** your clinician has approved your targets.
-If you see a message about an "envelope not approved", it means your clinician
-has not finished the review yet — nothing is wrong with you, the plan is simply
-waiting for their sign-off.
+Plans require targets in the **APPROVED** workflow state. Demo auto mode does
+this for new eligible proposals; clinician mode waits for simulated manual
+review. An edit clears approval in either mode. "Envelope not approved" means
+review or re-approval is still needed; rejected scope cases cannot be approved.
 
 ## The "why these meals" panel
 

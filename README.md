@@ -2,7 +2,30 @@
 
 CareLoop plans Singapore meals, tracks adherence, and answers nutrition questions
 with citations for T2D, hypertension and CKD stages 3–4. Planning and personal
-targets require clinician approval of a nutrient envelope.
+targets require an APPROVED nutrient envelope. This academic showcase defaults
+to `CARELOOP_APPROVAL_MODE=auto`: eligible new proposals are auto-approved and
+clearly marked **demo, not clinically reviewed**. Set `CARELOOP_APPROVAL_MODE=clinician`
+to demonstrate manual review. Edits always invalidate approval in both modes.
+Scope exclusions and hard planning limits apply in both modes.
+
+Persistent clinical and knowledge storage is PostgreSQL-only. SQLite runtime
+and import support have been removed; existing database files are not modified.
+
+## Development demo (fixture knowledge)
+
+Provision the external datasets, start PostgreSQL and run explicit migrations
+as below. To run the API on the host without publishing a knowledge release:
+
+```sh
+export CARELOOP_APP_DATABASE_URL_FILE="$PWD/.secrets/clinical_app_url_local"
+export CARELOOP_KNOWLEDGE_MODE=fixtures
+export CARELOOP_APPROVAL_MODE=auto
+.venv/bin/uvicorn backend.app.main:app --reload --port 8000
+```
+
+Leave knowledge database/release variables unset for fixture mode. Start the
+frontend with `npm ci` and `npm run dev` in `frontend/`. PostgreSQL is required
+even for this demo; there is no SQLite/no-database runtime.
 
 ## Deploy locally
 
@@ -43,16 +66,14 @@ docker compose up -d --wait postgres
 docker compose run --build --rm migrate
 ```
 
-PostgreSQL: `127.0.0.1:5433`. Migrations create schemas, **not clinical imports or
+PostgreSQL: `127.0.0.1:5433`. Migrations create schemas, **not clinical data or
 knowledge releases**. The backend checks schemas but never creates tables.
 
 Before startup:
 
-- **Existing clinical state:** stop source and target writers, then follow
-  [the verified SQLite import procedure](docs/POSTGRES.md#import-the-selected-sqlite-clinical-source).
-  Source: `$CARELOOP_DATASET_DIR/legacy/careloop_app.sqlite3`.
-  Populated targets and repeat imports are refused. Keep source and verification report.
-- **Knowledge:** import an existing authoring journal, or
+- **Existing state:** preserve PostgreSQL volumes/backups and any retired SQLite
+  files. This version cannot open or import SQLite journals.
+- **Knowledge:**
   [create, review and publish a draft](docs/POSTGRES.md#bootstrap-knowledge-when-no-authoring-journal-exists).
   Publication requires independent approval of the exact draft revision.
 
@@ -123,5 +144,7 @@ npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
-Python tests need external fixtures. PostgreSQL integration tests need a test URL.
+Python tests need external fixtures. Persistence/API/knowledge integration tests
+need `CARELOOP_TEST_POSTGRES_URL` (an admin URL); they create and drop only uniquely
+named disposable databases, never the configured deployment databases.
 Skipped tests do not verify a live server.

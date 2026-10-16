@@ -5,24 +5,19 @@
 The root Compose stack selects a PostgreSQL published release. Configure
 `CARELOOP_KNOWLEDGE_DATABASE_URL` or `CARELOOP_KNOWLEDGE_DATABASE_URL_FILE` for
 runtime readers and operator commands, with separate credentials. Never also
-set the legacy `CARELOOP_KNOWLEDGE_DB` path. Run schema migrations with the admin
+set the retired `CARELOOP_KNOWLEDGE_DB` path (it now fails explicitly). Run schema migrations with the admin
 role through `backend.storage.migrate init`, not the operator `init` command;
 on PostgreSQL the latter only verifies an existing schema.
 
-[POSTGRES.md](POSTGRES.md) is the deployment/bootstrap/import guide. Database
+[POSTGRES.md](POSTGRES.md) is the deployment/bootstrap guide. Database
 roles replace filesystem-only access controls on the journal. Runtime reads
 use read-only transactions and a reader role; operator writes are append-only.
 Privileged administrators can still bypass guards. Actor labels still do not
 authenticate people or establish clinical validity.
 
-The SQLite paths/commands below document legacy import sources and isolated
-fixture development. In PostgreSQL deployment, select a URL-file secret instead
-of a SQLite path, then use the same import/edit/review/publish commands. No
-published release is fabricated when migrating from fixture files.
-
 The operator CLI manages rules and the dish catalogue in a **separate PostgreSQL
-authoring database** in deployment; SQLite journals remain supported as legacy
-import sources and isolated fixture tests. Drafts never authorize runtime use. The service loads one
+authoring database**; SQLite journals and imports are no longer supported.
+Drafts never authorize runtime use. The service loads one
 explicitly selected, reviewed, published release through read-only connections,
 then pins its contents for the process lifetime.
 
@@ -40,7 +35,7 @@ approving reviewer label must differ from all authors/editors of the draft,
 including case/whitespace variants, but labels cannot prove independent people.
 Use your existing identity/change-approval procedures around this CLI. It does
 not supply role-based access control, electronic signatures, or tamper-proof
-audit storage. Privileged filesystem users can bypass SQL triggers.
+audit storage. Privileged database administrators can bypass SQL triggers.
 
 Every successful mutation appends an audit event in the same transaction as its
 content/review/publication record. Existing rows cannot be updated or deleted
@@ -120,12 +115,12 @@ sections need explicit evidence adapters before numeric proposal generation.
 
 ## Bootstrap without switching the live app
 
-Provision a private directory owned by the operator. Substitute real identities
+Provision PostgreSQL schemas with the migration admin. Substitute simulated identities
 and reviewed release names; the commands below describe the workflow, not a
 pre-approved release. Nothing runs automatically on application startup.
 
 ```sh
-export CARELOOP_KNOWLEDGE_DB=/absolute/private/path/careloop_knowledge.sqlite3
+export CARELOOP_KNOWLEDGE_DATABASE_URL_FILE="$PWD/.secrets/knowledge_operator_url_local"
 umask 077
 .venv/bin/python -m backend.knowledge init
 .venv/bin/python -m backend.knowledge import \
@@ -140,11 +135,9 @@ umask 077
   --actor PUBLISHER --note 'Reference the approved change record'
 ```
 
-`--db /absolute/path` before the subcommand overrides the environment variable.
-Without either, the CLI defaults to `careloop_knowledge.sqlite3` beside the
-default user-state application database. `init` creates private storage; other
-commands require an initialized database and never silently create a missing
-one. Initialization refuses an existing database containing application tables.
+The URL or URL-file setting is required; there is no default database path or
+`--db` option. Operator `init` only verifies the schema created by the separate
+admin migration. A clinical database is refused by its schema domain marker.
 Import captures raw source-file SHA-256 hashes and preserves the original JSON
 metadata, citations and dish provenance. Published hashes use canonical JSON,
 so they are independent of whitespace or key ordering.
@@ -156,9 +149,9 @@ settings in the service environment, not only the author's shell:
 
 ```sh
 export CARELOOP_KNOWLEDGE_MODE=database
-export CARELOOP_KNOWLEDGE_DB=/absolute/private/path/careloop_knowledge.sqlite3
+export CARELOOP_KNOWLEDGE_DATABASE_URL_FILE="$PWD/.secrets/knowledge_reader_url_local"
 export CARELOOP_KNOWLEDGE_RELEASE=knowledge-2026-10
-export CARELOOP_APP_DB=/absolute/private/path/careloop_app.sqlite3
+export CARELOOP_APP_DATABASE_URL_FILE="$PWD/.secrets/clinical_app_url_local"
 .venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -217,11 +210,10 @@ historical-log/saved-plan compatibility design.
 
 ## Backups, rollout and rollback
 
-Back up both the knowledge journal and patient journal using consistent SQLite
-snapshots (see [STORAGE.md](STORAGE.md)). Do not copy only an active database file
-and omit its WAL. Store backups privately outside Git; rehearse restoration.
-These snapshot instructions apply to SQLite sources. PostgreSQL logical
-backup/restore and deployment limits are documented in POSTGRES.md.
+Back up both PostgreSQL journals using consistent logical dumps. Store backups
+privately outside Git and rehearse restoration into new databases. See
+[POSTGRES.md](POSTGRES.md) for backup/restore commands and deployment limits.
+Keep any retired SQLite files and WAL files as archives, not runtime storage.
 
 First rehearse bootstrap and the chosen release against copies of application
 state, verifying scope exclusions, target approval gates, citations, plan

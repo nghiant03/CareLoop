@@ -14,11 +14,11 @@ distinctions and [the architecture](docs/ARCHITECTURE.md) for documented contrac
   that model on demand; no mirror is tracked.
 - `rules/engine.py` derives proposals and rule traces from the external rule fixture
   in development or the pinned knowledge release in database mode.
-  See `rules/ENGINE.md` for conflict resolution and scope rules.
+  See `rules/engine.py` and `docs/ARCHITECTURE.md` for conflict resolution and scope rules.
 - `backend/app/core/` owns approval-gate helpers, durable application storage,
   and plan preparation/mapping. `backend/app/api/` exposes HTTP workflows.
 - `backend/storage/` owns pooled PostgreSQL connections, explicit schema migrations,
-  and verified SQLite imports. Deployment uses separate clinical/knowledge databases
+  and PostgreSQL-only durable storage. Deployment uses separate clinical/knowledge databases
   and URL-file secrets; never initialize PostgreSQL schema from runtime startup.
 - `backend/datasets/` contains code only. `CARELOOP_DATASET_DIR` selects an absolute
   directory outside the checkout (default `~/.local/share/careloop/datasets`).
@@ -46,6 +46,10 @@ Current cross-router imports do not establish a required dependency direction.
 ## Contracts to preserve
 
 - Only APPROVED envelopes authorize live planning and personal target guidance.
+  `CARELOOP_APPROVAL_MODE=auto` (academic demo default) approves eligible new
+  proposals through the lifecycle with the reserved demo actor; `clinician`
+  requires manual approval. APPROVED does not imply human review. Demo UI/chat
+  must disclose auto-approval; edits require manual re-approval in both modes.
   Editing invalidates approval. Scope-rejected patients must remain excluded;
   `core/envelope_lifecycle.py` owns these transitions. `lifecycle_revision` guards
   every durable update; clients send `expected_revision` to detect stale reviews.
@@ -82,11 +86,12 @@ For focused iteration, select the relevant pytest files or directories. The
 frontend build includes TypeScript checking. Report the commands and scope run,
 including failures, warnings, or unavailable tools; do not weaken checks to pass.
 
-Pytest's root `conftest.py` isolates the application database. For standalone
-probes, set `CARELOOP_APP_DB` to a temporary database before importing application
-code; the default runtime database uses the user's state directory, never the
-checkout. Legacy `data/careloop_app.sqlite3` requires explicit migration or an
-override. See `docs/STORAGE.md`; preserve local databases and published evidence.
+Pytest's root `conftest.py` removes live storage settings and creates disposable
+PostgreSQL databases when `CARELOOP_TEST_POSTGRES_URL` is supplied. Persistence/API
+tests skip without it. Standalone probes must use an explicitly provisioned test
+PostgreSQL URL, never live storage. `CARELOOP_APP_DB`, `CARELOOP_KNOWLEDGE_DB` and
+SQLite import/relocation commands are retired; existing files must be preserved.
+See `docs/STORAGE.md`; preserve databases and published evidence.
 Main evaluation/optimizer/retrieval runs write to external dataset `outputs/` by
 default (`CARELOOP_ARTIFACT_DIR` overrides the external root). Publish report snapshots deliberately.
 Mining comparisons also write to external `outputs/mining/`, never the published report

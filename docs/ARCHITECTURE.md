@@ -43,6 +43,12 @@ convention:
 
 - `POST /rules/run` produces a `PROPOSED` or scope-rejected envelope and stores it in
   the clinical journal (transactionally allocated IDs; durable live authority).
+- `CARELOOP_APPROVAL_MODE=auto` (academic demo default) then approves eligible,
+  nonempty proposals through the existing lifecycle with actor
+  `system:auto-approval (demo, not clinical)`. `clinician` retains manual review.
+  APPROVED is a workflow state, not proof of human review. The UI discloses demo
+  mode and chat labels auto-approved snapshots from their persisted actor, even
+  after switching modes. Edits never auto-re-approve. Invalid modes fail startup.
 - `core/envelope_lifecycle.py` handles clinician transitions:
   `/approve → APPROVED`, `/edit → EDITED` (clears
   approval; re-approval required), `/reject → REJECTED`. Approving an
@@ -51,7 +57,7 @@ convention:
   overridable through edits or approval. Proposal-owned `scope_eligible` is
   independent of editable notes. Rejected proposals require a fresh rule run.
 - `lifecycle_revision` advances on every durable transition. PostgreSQL uses a
-  transaction advisory write reservation (legacy SQLite uses BEGIN IMMEDIATE)
+  transaction advisory write reservation
   to check the previous revision before appending a snapshot;
   stale updates return HTTP 409 `envelope_conflict`. Clients can also send
   `expected_revision` to detect changes since they viewed the envelope. This
@@ -75,7 +81,7 @@ convention:
 
 The durable envelope's embedded `RuleFire` trace is authoritative for explanations.
 Deployment uses `CARELOOP_APP_DATABASE_URL` or its `_FILE` secret for PostgreSQL.
-`CARELOOP_APP_DB` remains the legacy SQLite source/test override, not a URL.
+SQLite durable storage and imports are removed; legacy path settings fail closed.
 PostgreSQL schema migrations are explicit, outside runtime startup.
 See [STORAGE.md](STORAGE.md) for migration,
 backups, and the separation between run outputs and published evidence.
@@ -89,8 +95,7 @@ into a graph on an **in-memory SQLite** database (the recorded prototype
 decision; `rules/SCHEMA_DECISION.md`) with NetworkX for graph queries.
 
 In database mode, those inputs instead come from a pinned published snapshot in
-the separate PostgreSQL `backend/knowledge/` authoring journal (legacy SQLite
-journals remain importable). The graph/retrieval index
+the separate PostgreSQL `backend/knowledge/` authoring journal. The graph/retrieval index
 remains a derived in-memory read model. Drafts, reviews and releases are durable,
 append-only records; runtime never writes or auto-imports the authoring database.
 See [KNOWLEDGE.md](KNOWLEDGE.md) for operator security, compatibility and rollout.
@@ -118,7 +123,7 @@ patient ──▶ rules.run_rules ──▶ PROPOSED envelope + RuleFire trace
                 │ CLIPS forward-chaining, salience conflicts,
                 │ SUPERSEDED markers, scope gates (REJECTED)
                 ▼
-        clinician gate (approve / edit / reject)          409 ◀── /plans (not approved)
+        approval policy (demo auto / manual review)       409 ◀── /plans (not approved)
                 │ APPROVED, scope-eligible, nonempty targets
                 ▼
         plan_service.plan_meals
@@ -237,10 +242,10 @@ schema.
 |---|---|---|
 | `shared/` | — | envelope + trace contracts (Pydantic + JSON Schema) |
 | `rules/` | `shared/` | `run_rules(patient) → {envelope, trace}` (CLIPS) |
-| `data/` | `shared/` | 214 dishes, 20 patients, generator, USDA filler |
+| External `CARELOOP_DATASET_DIR/fixtures/` | `shared/` | dish/patient/rule fixtures; tooling in `backend/datasets/` |
 | `backend/optim/` | `shared/` | `run(envelope) → feasible plan` (pymoo + repair; `solve(method=, guarantee=)` for algorithm comparisons) |
-| `backend/mining/` | `data/` | trends (Theil–Sen + EWMA) / clustering / substitutions |
-| `backend/app/kb/` | `rules/`, `data/` | versioned KBGraph (+ stats) |
+| `backend/mining/` | external datasets | trends (Theil–Sen + EWMA) / clustering / substitutions |
+| `backend/app/kb/` | `rules/`, external datasets | versioned KBGraph (+ stats) |
 | `backend/app/chat/` | `kb/`, `approval_gate`, `llm_choice` | grounded, cited Q&A (BM25 retrieval) |
 | `backend/app/adherence/` | `optim.real_data` (dish pool), `approval_gate` | meal-log store + summary/deviation analysis |
 | `backend/app/core/` | `shared/`, `kb/`, `optim/`, `explain/` | gate, stores, plan service |
@@ -250,9 +255,11 @@ schema.
 
 ## 7. Known runtime boundaries
 
-- Clinical state survives restart in SQLite, selected by `CARELOOP_APP_DB`.
+- Clinical state survives restart in PostgreSQL, selected by
+  `CARELOOP_APP_DATABASE_URL` or its `_FILE` secret.
   Timestamped observations overlay profiles and feed rules and lab trends.
-  Observations never automatically approve a new envelope.
+  Observations alone do not approve envelopes; an ensuing rule run follows the
+  configured approval policy.
 - Adherence windows and journal effective dates use the server's local date.
   Logged dates have no timezone; UTC window boundaries are not enforced.
   `GET /calendar` exposes `{today: "YYYY-MM-DD", timezone: string,

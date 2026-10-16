@@ -2,8 +2,8 @@
 
 The single root `compose.yaml` packages PostgreSQL, explicit schema migration,
 knowledge authoring tools, backend and frontend. Clinical and knowledge storage
-use separate PostgreSQL databases. SQLite remains a legacy import/test backend,
-not the deployed application store.
+use separate PostgreSQL databases. SQLite durable runtime and import support
+have been removed; derived in-memory graphs remain unchanged.
 
 | File | Purpose |
 | --- | --- |
@@ -17,7 +17,7 @@ not the deployed application store.
 
 ## Application stack
 
-Follow [the migration/cutover guide](../docs/POSTGRES.md) before starting the app.
+Follow [the PostgreSQL guide](../docs/POSTGRES.md) before starting the app.
 From the repository root, prepare secrets, start only the database, and initialize
 schemas first:
 
@@ -28,9 +28,8 @@ docker compose up -d --wait postgres
 docker compose run --rm migrate
 ```
 
-Import the selected clinical SQLite source, and import a real knowledge journal
-or bootstrap/review/publish a draft. These actions are explicit; schema migration
-alone does not import data or authorize a knowledge release. Then:
+Bootstrap/review/publish a knowledge draft. These actions are explicit; schema
+migration alone does not add clinical data or authorize a knowledge release. Then:
 
 ```sh
 export CARELOOP_KNOWLEDGE_RELEASE=YOUR_REVIEWED_RELEASE_ID
@@ -64,17 +63,19 @@ writes only unpublished artifacts into `careloop-app_run_artifacts` under
 **The first database run creates empty storage.** It does not copy the checkout's
 database or your existing user-state database. Synthetic patient fixtures remain
 available through the existing patient API; they are not imported patient rows.
-Verify the explicitly imported clinical journal before accepting new writes.
+Verify the selected PostgreSQL clinical journal before accepting new writes.
 
 The build context excludes local databases, credentials, caches and generated
-frontend bundles. Only the two explicit fixture JSON files under `data/` are
-included. Never put real patient information into those versioned fixtures.
+frontend bundles. Datasets are mounted from outside the checkout, not included
+in images. Never put real patient information into demo fixtures.
 
-Before importing existing state, stop all writers and use the verified
-`backend.storage.migrate import-sqlite` workflow in
-[`docs/POSTGRES.md`](../docs/POSTGRES.md). It reads committed WAL contents,
-refuses populated targets and compares all imported columns before committing.
-Keep a verified source backup. No automatic import runs on startup.
+SQLite runtime and import support have been removed. Preserve existing files;
+this version cannot open or convert them. PostgreSQL backup/restore guidance is
+in [`docs/POSTGRES.md`](../docs/POSTGRES.md). No automatic import runs on startup.
+
+`CARELOOP_APPROVAL_MODE=auto` is the academic demo default. Eligible new targets
+are auto-approved, not clinically reviewed. Set it to `clinician` for a simulated
+manual-review workflow. Edits require manual re-approval in both modes.
 
 Stop containers without deleting state:
 

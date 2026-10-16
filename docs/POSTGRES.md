@@ -1,9 +1,9 @@
-# PostgreSQL deployment and verified migration
+# PostgreSQL deployment
 
 The root `compose.yaml` owns all services: PostgreSQL, schema migration,
 knowledge operator CLI, backend and frontend. There is no separate PostgreSQL
 Compose file. PostgreSQL stores clinical and knowledge state in separate
-databases; SQLite remains only the legacy import/test path. The derived
+databases; SQLite runtime and import support have been removed. The derived
 in-memory knowledge graph is unchanged.
 
 ## Prepare credentials and start the database
@@ -47,32 +47,11 @@ starts. The backend checks the recorded domain/version and never performs DDL.
 The migration role is intentionally powerful for this local setup; production
 should provision narrower schema-owner/migration privileges.
 
-## Import the selected SQLite clinical source
+## Existing storage
 
-Stop all source and target application writers first. Do not start the backend
-until the import is verified. Select the migration administrator credentials:
-
-```sh
-export CARELOOP_APP_DATABASE_URL_FILE="$PWD/.secrets/clinical_admin_url_local"
-.venv/bin/python -m backend.storage.migrate import-sqlite \
-  --component clinical --source "$CARELOOP_DATASET_DIR/legacy/careloop_app.sqlite3" --writers-stopped \
-  > "$CARELOOP_DATASET_DIR/outputs/clinical-import-verification.json"
-```
-
-Set `CARELOOP_DATASET_DIR` to the external directory and create a private `outputs/` directory before redirecting output and restrict
-verification report permissions. The report contains counts/digests, not patient
-payloads. The source is read through a WAL-aware snapshot and retained unchanged.
-An existing import record or any populated target table aborts the transaction.
-Unexpected source tables/columns are rejected, not dropped. Missing whole tables
-from legacy clinical schemas become empty target tables; missing meal items
-become null. Serialized historical JSON remains verbatim TEXT. Imported journal
-IDs are preserved and future generated IDs advance past them.
-
-Import an actual legacy knowledge journal similarly, using
-`CARELOOP_KNOWLEDGE_DATABASE_URL_FILE=.secrets/knowledge_admin_url_local`, a
-`--component knowledge` command and its real SQLite source. Knowledge hashes,
-reviews, publications and events are retained. Imports are atomic per database,
-not across both databases. Do not invent a knowledge journal if none exists.
+Existing PostgreSQL version-1 databases remain supported without rewriting data.
+SQLite runtime/import/relocation commands are removed. Preserve old database and
+WAL files; this version does not delete or convert them. See [STORAGE.md](STORAGE.md).
 
 ## Bootstrap knowledge when no authoring journal exists
 
@@ -103,7 +82,7 @@ Actor labels are still attestations, not authentication. Compilation and scope
 checks do not establish clinical validity; the existing unverified catalogue and
 missing source quotes remain disclosed. See [KNOWLEDGE.md](KNOWLEDGE.md).
 
-After verified clinical import and approved knowledge publication:
+After schema initialization and knowledge publication:
 
 ```sh
 export CARELOOP_KNOWLEDGE_RELEASE=knowledge-2026-10
@@ -148,7 +127,8 @@ adopt or overwrite another PostgreSQL data directory automatically.
 
 ## Verification and remaining limits
 
-Unit tests use isolated SQLite sources and PostgreSQL adapter tests. Live server
+Unit tests cover approval policy and the PostgreSQL adapter. Persistence/API and
+knowledge integration tests require PostgreSQL. Live server
 regressions require an explicit administrator test URL and create/drop only
 unique `careloop_test_*` databases:
 
