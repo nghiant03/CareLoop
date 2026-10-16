@@ -30,6 +30,7 @@ from backend.app.api import (
     simulations,
 )
 from backend.app.core.approval_gate import EnvelopeNotApprovedError
+from backend.app.core.approval_policy import approval_mode
 from backend.app.core.envelope_lifecycle import EnvelopeScopeError
 from backend.app.core.persistence import EnvelopeConflictError, init_db
 from backend.knowledge.runtime import selected_release
@@ -41,6 +42,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("CareLoop backend starting (version=%s)", __version__)
+    approval_mode()  # Invalid policy must fail startup before database access.
     # Storage failures must prevent serving, not masquerade as a healthy startup.
     release = selected_release()  # Configured knowledge failures must block startup too.
     init_db()
@@ -169,6 +171,11 @@ app.include_router(kb.router)
 @app.get("/healthz", tags=["meta"], summary="Liveness probe")
 def healthz() -> dict[str, str]:
     return {"status": "ok", "service": "careloop-backend", "version": __version__}
+
+
+@app.get("/config", tags=["meta"], summary="Public workflow configuration")
+def public_config() -> dict[str, str]:
+    return {"approval_mode": approval_mode()}
 
 
 class CalendarResponse(BaseModel):

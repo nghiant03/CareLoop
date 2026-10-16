@@ -360,7 +360,12 @@ def _envelope_context(
         core = f"a daily {label} minimum of {amount}"
     else:
         core = f"a daily {label} target of {amount}"
-    sentence = f"Your clinician-approved plan sets {core}."
+    from backend.app.core.approval_policy import AUTO_APPROVAL_ACTOR
+
+    if envelope.get("approved_by") == AUTO_APPROVAL_ACTOR:
+        sentence = f"Your auto-approved demo plan (not clinically reviewed) sets {core}."
+    else:
+        sentence = f"Your clinician-approved plan sets {core}."
 
     # A general envelope citation cannot establish who authored this value.
     citation = _target_citation(target, envelope.get("fired_rules") or [])

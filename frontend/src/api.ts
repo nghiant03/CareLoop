@@ -106,6 +106,15 @@ export async function healthz(): Promise<{ status: string }> {
   return fetch(`${API_PREFIX}/healthz`).then((r) => handleResponse<{ status: string }>(r));
 }
 
+export async function getApprovalMode(): Promise<'auto' | 'clinician'> {
+  const config = await fetch(`${API_PREFIX}/config`).then((r) =>
+    handleResponse<{ approval_mode: string }>(r));
+  if (config.approval_mode !== 'auto' && config.approval_mode !== 'clinician') {
+    throw new Error('Unknown approval mode');
+  }
+  return config.approval_mode;
+}
+
 export async function listPatients(): Promise<Patient[]> {
   return fetch(`${API_PREFIX}/patients`)
     .then((r) => handleResponse<Patient[] | { patients?: Patient[] }>(r))

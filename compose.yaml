@@ -82,6 +82,7 @@ services:
       dockerfile: deploy/backend/Dockerfile
     environment:
       CARELOOP_APP_DATABASE_URL_FILE: /run/secrets/clinical_app_url
+      CARELOOP_APPROVAL_MODE: ${CARELOOP_APPROVAL_MODE:-auto}
       CARELOOP_KNOWLEDGE_DATABASE_URL_FILE: /run/secrets/knowledge_reader_url
       CARELOOP_ARTIFACT_DIR: /var/lib/careloop/artifacts
       CARELOOP_DATASET_DIR: /datasets

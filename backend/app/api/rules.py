@@ -17,6 +17,8 @@ from pydantic import (
 
 from backend.app.api.patients import get_patient
 from backend.app.core.approval_gate import put_envelope
+from backend.app.core.approval_policy import AUTO_APPROVAL_ACTOR, approval_mode
+from backend.app.core.envelope_lifecycle import approve
 from backend.app.models.envelope import NutrientEnvelope
 from rules.engine import normalize_patient_labs
 from rules.engine import run_rules as engine_run_rules
@@ -110,10 +112,12 @@ def _resolve_patient(body: dict[str, Any]) -> dict[str, Any]:
 def run_rules_service(patient: dict[str, Any]) -> dict[str, Any]:
     """Validate rule inputs and save a fresh envelope with its decision trace.
 
-    Return ``envelope`` as a ``NutrientEnvelope`` and ``trace`` as a list. Saving
-    does not grant approval. Model validation errors return JSON-safe HTTP 422.
+    Return ``envelope`` as a ``NutrientEnvelope`` and ``trace`` as a list.
+    Auto-approve eligible new proposals in demo mode; edits still require review.
+    Model validation errors return JSON-safe HTTP 422.
     Other exceptions propagate rather than being classified as client errors.
     """
+    mode = approval_mode()
     try:
         validated = _RulePatientInput.model_validate(normalize_patient_labs(patient))
     except ValidationError as exc:
@@ -129,10 +133,16 @@ def run_rules_service(patient: dict[str, Any]) -> dict[str, Any]:
     trace = [row for row in result["trace"]]
 
     put_envelope(envelope, new_proposal=True)
+    if (mode == "auto" and envelope.scope_eligible and envelope.targets
+            and envelope.status.value == "PROPOSED"):
+        envelope = approve(
+            envelope, approved_by=AUTO_APPROVAL_ACTOR,
+            expected_revision=envelope.lifecycle_revision,
+        )
     return {"envelope": envelope, "trace": trace}
 
 
-@router.post("/run", summary="Run the rule engine -> PROPOSED envelope + trace")
+@router.post("/run", summary="Run rules and apply the configured approval policy")
 def run_rules(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
     """Create a fresh envelope and return it with the rule trace.
 
@@ -141,7 +151,7 @@ def run_rules(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
     lookup IDs return HTTP 404 ``patient_not_found``.
 
     Scope-rejected results return HTTP 200 with empty targets. Eligible results
-    are PROPOSED and require clinician approval before live planning.
+    are auto-approved in demo mode, or PROPOSED until review in clinician mode.
     """
     patient = _resolve_patient(body)
     result = run_rules_service(patient)
