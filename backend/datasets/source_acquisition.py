@@ -14,9 +14,15 @@ from backend.datasets.paths import dataset_dir
 
 ROOT = dataset_dir() / "research"
 SOURCES = {
+    # BPXO/BPQ/DIQ/KIQ_U/RXQ_RX provide the hypertension, diabetes, dialysis and
+    # medication inputs used by the external rule-engine evaluation.
     **{f"nhanes/{name}.{ext}": f"https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/{name}.{ext}"
-       for name in ("DEMO_L", "BMX_L", "DR1IFF_L", "DR2IFF_L", "DR1TOT_L", "DR2TOT_L", "BIOPRO_L", "ALB_CR_L", "GHB_L")
+       for name in ("DEMO_L", "BMX_L", "DR1IFF_L", "DR2IFF_L", "DR1TOT_L", "DR2TOT_L", "BIOPRO_L", "ALB_CR_L", "GHB_L",
+                    "BPXO_L", "BPQ_L", "DIQ_L", "KIQ_U_L", "RXQ_RX_L")
        for ext in ("xpt", "htm")},
+    # Physician-consensus HealthBench conversations (MIT licence), used only for
+    # escalation/refusal evaluation; rubric grading needs a separate grader.
+    "healthbench/consensus.jsonl": "https://openaipublic.blob.core.windows.net/simple-evals/healthbench/consensus_2025-05-09-20-00-46.jsonl",
     "guidelines/kdigo_2024_ckd.pdf": "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf",
     "guidelines/kdigo_index.html": "https://kdigo.org/guidelines/ckd-evaluation-and-management/",
     "singapore/meal_study.html": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8304763/",
@@ -48,6 +54,8 @@ def download(item):
                 raise ValueError("response is not PDF")
             if target.suffix == ".zip" and not signature.startswith(b"PK"):
                 raise ValueError("response is not ZIP")
+            if target.suffix == ".jsonl" and not signature.lstrip().startswith(b"{"):
+                raise ValueError("response is not JSON Lines")
             temporary.rename(target)
         digest = hashlib.sha256()
         with target.open("rb") as stream:

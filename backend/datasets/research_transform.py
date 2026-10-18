@@ -118,7 +118,7 @@ def main():
             for index, row in enumerate(rows)])
         summary["counts"][path.stem] = len(rows)
     by_subject = {name: {int(row["SEQN"]): row for row in rows} for name, rows in nhanes.items()
-                  if name not in {"DR1IFF_L", "DR2IFF_L"}}
+                  if name not in {"DR1IFF_L", "DR2IFF_L", "RXQ_RX_L"}}
     with (OUT / "patient_candidates.jsonl").open("w") as output:
         for demo in nhanes.get("DEMO_L", []):
             seqn = int(demo["SEQN"])
@@ -187,6 +187,15 @@ def main():
                      "MIMIC-IV-DEMO-" + row["subject_id"] if row.get("subject_id") else None, encode(row))
                     for index, row in enumerate(rows)])
                 summary["counts"][name] = len(rows)
+    hb = ROOT / "raw/healthbench/consensus.jsonl"
+    if str(hb.relative_to(ROOT)) in sources:
+        with hb.open("r", encoding="utf-8") as fh:
+            hb_rows = [json.loads(line) for line in fh if line.strip()]
+        conn.executemany("INSERT INTO research_records VALUES (?,?,?,?,?)", [
+            ("HEALTHBENCH_CONSENSUS", "consensus.jsonl", str(index),
+             row.get("prompt_id"), encode(row))
+            for index, row in enumerate(hb_rows)])
+        summary["counts"]["healthbench_consensus"] = len(hb_rows)
     study = ROOT / "raw/singapore/meal_study.html"
     if str(study.relative_to(ROOT)) in sources:
         parser = ArticleTables()
