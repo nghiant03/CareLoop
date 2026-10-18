@@ -112,8 +112,8 @@ See [KNOWLEDGE.md](KNOWLEDGE.md) for operator security, compatibility and rollou
   one per dish. Scoring is Okapi BM25 over stopword-filtered word tokens with
   synonym-expanded queries; scores below `MIN_SCORE = 2.0` count as no match
   (calibrated so stopword-only overlap can never look relevant — rationale and
-  the eight-configuration comparison in
-  `backend/app/chat/RETRIEVAL_BENCH.md`; the previous TF-IDF scorer remains
+  the eight-configuration comparison in external
+  `CARELOOP_DATASET_DIR/benchmarks/RETRIEVAL_BENCH.md`; the previous TF-IDF scorer remains
   documented there as the revert path).
 
 ## 4. End-to-end data flow
@@ -186,14 +186,14 @@ trend calculations and soft-gap aggregates; partial-day hard violations remain v
   MOEA/D, AGE-MOEA, SMSEMOA, plus GA/greedy/random baselines) keeps NSGA-II as
   the production default: SMSEMOA posts the best hypervolume (~+24% over
   NSGA-II) at ~2.5× the runtime, and all guaranteed rows hold 0% violations.
-  Benchmarks and engine choices: `backend/optim/benchmark_results.md`.
+  Benchmarks and engine choices live outside the checkout in `CARELOOP_DATASET_DIR/benchmarks/benchmark_results.md`.
 - **Mining** (`backend/mining/`): analysis over patient observations and fixture
   data, plus substitution validation — K⁺/PO₄ trend flags (Theil–Sen raises
   flags; an EWMA-weighted slope with a 2-month half-life can de-escalate an urgent
   trend when recent months flatten, but not an urgent latest dated observation, exposed
   as `ewma_slope_per_month`), k-means cohort clustering, renal-weighted
   substitution ranking (sodium/potassium/phosphorus count double). Method
-  choices and comparisons: `backend/mining/COMPARISON.md`.
+  choices and comparisons live in `CARELOOP_DATASET_DIR/benchmarks/COMPARISON.md`.
 - **Explanation views** (`backend/app/explain/views.py`): pure functions turning
   an envelope (+ optional day-1 totals) into the clinician explanation
   (trace, conflict resolutions) and the patient explanation (plain-language
@@ -251,7 +251,8 @@ schema.
 | `backend/app/core/` | `shared/`, `kb/`, `optim/`, `explain/` | gate, stores, plan service |
 | `backend/app/api/` | all of the above | the REST surface |
 | `frontend/` | REST API (`/api` proxy) | clinician / patient / chat / adherence screens |
-| `evaluation/` | everything | generated report (`EVALUATION.md`) |
+| `evaluation/` | everything | two-tier (`Q1–Q7`) evaluation suite writing external `EVALUATION.md` and `results.json` under `CARELOOP_DATASET_DIR/outputs/evaluation/` |
+
 
 ## 7. Known runtime boundaries
 

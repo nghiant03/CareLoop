@@ -9,8 +9,9 @@ creates tables. See [POSTGRES.md](POSTGRES.md) for setup, backups and restoratio
 | Rules, dishes, synthetic patients | External `CARELOOP_DATASET_DIR/fixtures/` | Provision separately; never bundle |
 | Clinical state | `CARELOOP_APP_DATABASE_URL` or `CARELOOP_APP_DATABASE_URL_FILE` | Never commit credentials or dumps |
 | Knowledge authoring journal | `CARELOOP_KNOWLEDGE_DATABASE_URL` or its `_FILE` secret | Separate PostgreSQL database; runtime reads only |
-| Reviewed benchmark/evaluation snapshots | Markdown in source; raw results in external `benchmarks/` | Publish summaries deliberately |
-| New run outputs | External dataset `outputs/{evaluation,optim,retrieval,mining}/`; override `CARELOOP_ARTIFACT_DIR` | Never commit raw outputs |
+| Reviewed benchmark/evaluation snapshots | External `CARELOOP_DATASET_DIR/benchmarks/` (`EVALUATION.md`, `benchmark_results.{csv,md}`, `benchmark_wall_time.{csv,md}`, `COMPARISON.md`, `RETRIEVAL_BENCH.md`) | Provision separately; never commit reports or raw results into source control |
+| New run outputs | External dataset `outputs/{evaluation,optim,retrieval,mining}/`; override `CARELOOP_ARTIFACT_DIR` | Never commit raw outputs or generated reports |
+
 
 ## Removed SQLite runtime and imports
 

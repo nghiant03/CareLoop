@@ -90,10 +90,11 @@ Check the manifest for `unavailable` entries before transforming data.
 
 | Source | Downloaded content | Use |
 | --- | --- | --- |
-| [NHANES August 2021–August 2023](https://wwwn.cdc.gov/nchs/nhanes/continuousnhanes/default.aspx?Cycle=2021-2023) | Nine SAS XPT files and HTML codebooks | Research demographics, measurements, dietary recalls and labs |
+| [NHANES August 2021–August 2023](https://wwwn.cdc.gov/nchs/nhanes/continuousnhanes/default.aspx?Cycle=2021-2023) | Fourteen SAS XPT files and HTML codebooks | Research demographics, measurements, blood pressure, clinical questionnaires, prescriptions, dietary recalls and labs |
 | [USDA FoodData Central](https://fdc.nal.usda.gov/download-datasets/) | Foundation Foods and FNDDS survey-food JSON ZIPs | Food composition candidates |
 | [KDIGO 2024 CKD guideline](https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf) | Guideline PDF and index page | Unreviewed nutrition evidence |
-| [MIMIC-IV demo 2.2](https://physionet.org/content/mimic-iv-demo/2.2/) | Public demo ZIP and index page | De-identified hospital research records |
+| [MIMIC-IV demo 2.2](https://physionet.org/content/mimic-iv-demo/2.2/) | Public demo ZIP and index page | De-identified hospital research records (longitudinal labs, admissions, prescriptions) |
+| [OpenAI HealthBench Consensus](https://openaipublic.blob.core.windows.net/simple-evals/healthbench/2025-05-07-06-14-12_oss_eval_1577.jsonl) | Physician-validated JSONL (3,671 clinical dialogues) | Grounded chat citation, refusal, and emergency escalation evaluation |
 | [Singapore meal study](https://pmc.ncbi.nlm.nih.gov/articles/PMC8304763/) | Article HTML | Published study tables, not participant-level data |
 | [SG FoodID](https://www.hpb.gov.sg/healthy-living/food-and-beverage/sgfoodid/) | Access page only | Check bulk access and reuse permission separately |
 
@@ -101,11 +102,15 @@ NHANES files:
 
 - `DEMO_L`: demographics.
 - `BMX_L`: body measurements.
+- `BPXO_L`: oscillometric blood pressure measurements.
+- `BPQ_L`, `DIQ_L`, `KIQ_U_L`: hypertension, diabetes, and kidney clinical questionnaires.
+- `RXQ_RX_L`: prescription medication records.
 - `DR1IFF_L`, `DR2IFF_L`: individual foods from two dietary recall days.
 - `DR1TOT_L`, `DR2TOT_L`: daily dietary totals.
 - `BIOPRO_L`: standard biochemistry.
 - `ALB_CR_L`: urine albumin and creatinine.
 - `GHB_L`: glycated haemoglobin.
+
 
 The downloader selects the latest matching USDA JSON links from its cached index.
 The current index selects Foundation Foods **2026-04-30** and survey foods
