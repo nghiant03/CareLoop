@@ -30,6 +30,27 @@ def test_evaluation_cli_default_and_explicit_output(monkeypatch, tmp_path):
     explicit = tmp_path / "selected"
     assert run_eval.main(["--out-dir", str(explicit)]) == 0
     assert (explicit / "results.json").exists()
+    # Reject any output directory inside the repository checkout
+    in_repo = run_eval.ROOT / "evaluation"
+    try:
+        run_eval.main(["--out-dir", str(in_repo)])
+    except ValueError as exc:
+        assert "outside the code checkout" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when writing inside repository checkout")
+
+
+def test_no_generated_reports_inside_repository():
+    forbidden = [
+        run_eval.ROOT / "evaluation/EVALUATION.md",
+        run_eval.ROOT / "evaluation/results.json",
+        run_eval.ROOT / "backend/optim/benchmark_results.md",
+        run_eval.ROOT / "backend/optim/benchmark_wall_time.md",
+        run_eval.ROOT / "backend/mining/COMPARISON.md",
+        run_eval.ROOT / "backend/app/chat/RETRIEVAL_BENCH.md",
+    ]
+    for path in forbidden:
+        assert not path.exists(), f"Generated report must not live inside repository: {path}"
 
 
 def test_q4_rerun_reads_generated_files_without_mutating_snapshots(monkeypatch, tmp_path):
@@ -57,3 +78,4 @@ def test_q4_rerun_reads_generated_files_without_mutating_snapshots(monkeypatch, 
     assert q_benchmark._MD_PATH.read_bytes() == published_md
     assert os.environ["CARELOOP_BENCH_SMOKE"] == "1"
     assert q_benchmark.evaluate_q4()["artefacts"]["csv"] == str(q_benchmark._CSV_PATH)
+

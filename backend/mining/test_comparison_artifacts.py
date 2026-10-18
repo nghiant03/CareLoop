@@ -1,4 +1,4 @@
-"""Comparison re-runs must preserve the committed report snapshot."""
+"""Comparison re-runs must preserve the external benchmark report snapshot."""
 
 import json
 from pathlib import Path
@@ -6,10 +6,12 @@ from pathlib import Path
 import numpy as np
 
 from backend.mining import comparison
+from backend.storage_paths import dataset_dir
 
 
 def test_comparison_output_uses_artifacts_and_preserves_published_report(monkeypatch, tmp_path):
-    published = Path(comparison.__file__).with_name("COMPARISON.md")
+    assert not Path(comparison.__file__).with_name("COMPARISON.md").exists()
+    published = dataset_dir() / "benchmarks/COMPARISON.md"
     before = published.read_bytes()
     results = {"clustering":{"recommendation_method":"synthetic"},
                "trends":{"recommendation_method":"synthetic"},
@@ -26,3 +28,4 @@ def test_comparison_output_uses_artifacts_and_preserves_published_report(monkeyp
     explicit = tmp_path / "explicit/selected.md"
     assert comparison.main(explicit) == 0
     assert explicit.is_file() and explicit.with_name("comparison_results.json").is_file()
+

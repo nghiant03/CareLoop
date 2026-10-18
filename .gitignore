@@ -80,4 +80,9 @@ artifacts/
 # Redundant generated exports/reports must not re-enter source control.
 /shared/envelope_schema.json
 /evaluation/results.json
+/evaluation/EVALUATION.md
+/backend/optim/benchmark_results.md
+/backend/optim/benchmark_wall_time.md
+/backend/mining/COMPARISON.md
 /backend/app/chat/retrieval_bench_results.json
+/backend/app/chat/RETRIEVAL_BENCH.md
