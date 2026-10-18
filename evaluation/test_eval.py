@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 from evaluation.common import load_patients, target_supported
 from evaluation.q_benchmark import evaluate_q4
 from evaluation.q_conflicts import evaluate_q2
+from evaluation.q_external import evaluate_q7
 from evaluation.q_groundedness import evaluate_q5
 from evaluation.q_satisfaction import evaluate_q3
 from evaluation.q_traceability import evaluate_q1
@@ -279,21 +280,49 @@ def test_q5_groundedness_scores():
     assert len(results["known_gaps"]) >= 3
 
 
+# Q7
+
+def test_q7_external_datasets():
+    results = evaluate_q7(max_nhanes_subjects=200)
+    assert results["verdict"] == "PASS"
+    nhanes = results["nhanes_cohort"]
+    assert nhanes["available"] is True
+    assert nhanes["evaluated_subjects"] > 100
+    assert nhanes["engine_errors"] == 0
+    assert nhanes["traceability"]["rate"] == 1.0
+    assert nhanes["traceability"]["provenance_rate"] == 1.0
+    assert nhanes["scope_gate"]["accuracy"] == 1.0
+    recall = nhanes["dietary_recall_adherence"]
+    assert recall["recalled_days_evaluated"] > 50
+    assert recall["baseline_hard_violation_day_rate"] > 0.5
+    mimic = results["mimic_longitudinal_trends"]
+    assert mimic["available"] is True
+    assert mimic["patients_total"] == 100
+    assert mimic["planted_regime_benchmark"]["rising_recall"] == 1.0
+    assert mimic["planted_regime_benchmark"]["stable_specificity"] == 1.0
+    hb = results["healthbench_chat"]
+    assert hb["available"] is True
+    assert hb["total_corpus_conversations"] > 3000
+    assert hb["nutrition_queries"]["citation_completeness_rate"] == 1.0
+    assert hb["nutrition_queries"]["claim_consistency_rate"] == 1.0
+
+
 # End-to-end evaluation
 
 def test_run_suite_and_report(tmp_path):
     results = run_suite(optimiser_kwargs={"pop_size": 20, "n_gen": 40})
-    # full 20-patient suite structure
+    # full 20-patient suite + external datasets structure
     assert set(results) == {
         "meta", "q1_traceability", "q2_conflicts",
         "q3_constraint_satisfaction", "q4_benchmark", "q5_groundedness",
-        "q6_ablation",
+        "q6_ablation", "q7_external",
     }
     report = render_report(results)
     for section in ("## Q1 — Traceability", "## Q2 — Conflict resolution",
                     "## Q3 — Constraint satisfaction",
                     "## Q4 — Quality/runtime", "## Q5 — Groundedness",
                     "## Q6 — Objective/selection & meal-composition ablation",
+                    "## Q7 — External dataset evaluation",
                     "## Limitations"):
         assert section in report
     assert "fibre MIN relaxation" in report or "Fibre MIN relaxation" in report
@@ -313,3 +342,4 @@ def test_run_suite_and_report(tmp_path):
 
     # serialisation is JSON-safe
     json.dumps(results)  # must not raise
+

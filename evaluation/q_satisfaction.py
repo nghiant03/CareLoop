@@ -173,8 +173,17 @@ def evaluate_q3(
             row["soft_aims"] = per_day["soft_aims"]
             row["soft_aims_by_constraint"] = per_day["soft_aims_by_constraint"]
             row["days_checked"] = per_day["days_checked"]
+            min_shortfalls_pct = [
+                (aim["worst_day_shortfall"] / aim["floor"] * 100.0)
+                for aim in per_day["soft_aims_by_constraint"].values()
+                if aim.get("kind") == "min" and aim.get("floor", 0) > 0
+            ]
+            row["worst_day_min_shortfall_pct"] = (
+                round(max(min_shortfalls_pct), 2) if min_shortfalls_pct else 0.0
+            )
         else:
             row["per_day_hard_compliant"] = None
+            row["worst_day_min_shortfall_pct"] = None
             if diagnose_blockers:
                 row["blocking_constraints_leave_one_out"] = _blocking_constraints(solved, dishes)
         rows.append(row)
@@ -184,6 +193,11 @@ def evaluate_q3(
     per_day_ok = [r for r in zero_violation if r["per_day_hard_compliant"]]
     infeasible = [r for r in attempted if not r["feasible"]]
     relaxed_rows = [r for r in attempted if r["relaxed_constraints"]]
+    shortfall_pcts = [
+        float(r["worst_day_min_shortfall_pct"])
+        for r in zero_violation
+        if r.get("worst_day_min_shortfall_pct") is not None
+    ]
 
     rate = (len(zero_violation) / len(attempted)) if attempted else None
     return {
@@ -208,6 +222,16 @@ def evaluate_q3(
         "infeasible_plans": len(infeasible),
         "relaxed_envelopes": len(relaxed_rows),
         "zero_violation_rate": rate,
+        "adequacy_summary": {
+            "mean_worst_day_min_shortfall_pct": (
+                round(sum(shortfall_pcts) / len(shortfall_pcts), 2)
+                if shortfall_pcts else None
+            ),
+            "max_worst_day_min_shortfall_pct": (
+                round(max(shortfall_pcts), 2) if shortfall_pcts else None
+            ),
+            "plans_meeting_all_min_floors": sum(1 for s in shortfall_pcts if s <= 0.0),
+        },
         "verdict": (
             "PASS" if rate == 1.0 and len(per_day_ok) == len(zero_violation) else "FAIL"
         ),

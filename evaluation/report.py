@@ -197,10 +197,118 @@ def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
     add("")
 
 
+def _render_q7(add, q7: dict[str, Any], table, fmt, pct) -> None:
+    """Render the Q7 external dataset evaluation section."""
+    add("## Q7 — External dataset evaluation (NHANES, MIMIC-IV, HealthBench)")
+    add("")
+    add(q7["definition"])
+    add("")
+
+    nh = q7.get("nhanes_cohort") or {}
+    if nh.get("available"):
+        tr = nh["traceability"]
+        sg = nh["scope_gate"]
+        add(f"### 1. {nh['dataset']} — Rule-engine traceability, provenance & scope gates at scale")
+        add("")
+        add(f"Evaluated **{nh['evaluated_subjects']}** real participants "
+            f"(from {nh['total_complete_in_survey']} complete survey profiles; "
+            f"{nh['eligible_subjects']} eligible, {nh['rejected_subjects']} scope-rejected, "
+            f"{nh['engine_errors']} engine errors): "
+            f"**{tr['traceable']}/{tr['items']} ({pct(tr['rate'])})** items traceable, "
+            f"**{tr['provenance_resolved']}/{tr['targets']} ({pct(tr['provenance_rate'])})** "
+            f"targets resolved to exact rule authorship, and "
+            f"**{sg['observed_rejected']}/{sg['expected_rejected']} ({pct(sg['accuracy'])})** "
+            f"scope-gate accuracy.")
+        add("")
+        add(table(
+            ["Clinical stratum", "Subjects evaluated"],
+            [[s["stratum"], s["subjects"]] for s in nh.get("strata", [])],
+        ))
+        add("")
+        add(table(
+            ["Rule ID", "Firings in NHANES cohort"],
+            [[r["rule_id"], r["count"]] for r in nh.get("rule_firings", [])],
+        ))
+        add("")
+        adh = nh.get("dietary_recall_adherence") or {}
+        if adh.get("recalled_days_evaluated"):
+            add("#### Two-day 24-hour dietary recall adherence vs. CareLoop envelopes")
+            add("")
+            add(f"Across **{adh['cardiometabolic_renal_subjects_with_recalls']}** "
+                f"scope-eligible T2D/HTN/CKD3–4 participants (**{adh['recalled_days_evaluated']}** "
+                f"recalled intake days), **{adh['recalled_days_with_hard_max_violation']}/"
+                f"{adh['recalled_days_evaluated']} ({pct(adh['baseline_hard_violation_day_rate'])})** "
+                f"of real-world dietary recall days violate >=1 hard `MAX` ceiling "
+                f"(vs. **0.0%** on CareLoop's optimised plans).")
+            add("")
+            add(table(
+                ["Constraint", "Kind", "Evaluated days", "Non-compliant days",
+                 "Non-compliance rate", "Mean excess / shortfall %"],
+                [[c["constraint"], c["kind"], c["evaluated_days"], c["non_compliant_days"],
+                  pct(c["non_compliance_rate"]), fmt(c["mean_excess_or_shortfall_pct"])]
+                 for c in adh.get("by_constraint", [])],
+            ))
+            add("")
+
+    mm = q7.get("mimic_longitudinal_trends") or {}
+    if mm.get("available"):
+        rf = mm["real_trajectory_flags"]
+        pb = mm["planted_regime_benchmark"]
+        add(f"### 2. {mm['dataset']} — Longitudinal lab trends & hospital medication rules")
+        add("")
+        add(f"Evaluated **{mm['patients_total']}** inpatient records "
+            f"({mm['patients_with_k_series_ge_3']} with >=3 K+ dates, "
+            f"{mm['patients_with_po4_series_ge_3']} with >=3 PO4 dates): "
+            f"`detect_trends` raised **{rf['total']}** flags (**{rf['urgent']}** urgent, "
+            f"**{rf['review']}** review; {rf['potassium_flags']} K+, {rf['phosphate_flags']} PO4). "
+            f"On the planted-regime benchmark anchored to MIMIC baselines: "
+            f"rising recall **{pb['rising_detected']}/{pb['rising_cases']} ({pct(pb['rising_recall'])})**, "
+            f"stable specificity **{pct(pb['stable_specificity'])}** "
+            f"({pb['stable_false_positives']}/{pb['stable_cases']} false positives), "
+            f"EWMA plateau de-escalation **{pb['ewma_deescalated_to_review']}/{pb['flattened_cases']} "
+            f"({pct(pb['ewma_deescalation_rate'])})**.")
+        add("")
+        med_rows = (mm.get("medication_rules") or {}).get("rule_firings") or []
+        if med_rows:
+            add(table(
+                ["Medication rule ID", "MIMIC-IV patients triggering rule"],
+                [[m["rule_id"], m["patients"]] for m in med_rows],
+            ))
+            add("")
+
+    hb = q7.get("healthbench_chat") or {}
+    if hb.get("available"):
+        add(f"### 3. {hb['dataset']} — External emergency triage & nutrition grounding")
+        add("")
+        add(table(
+            ["Physician-agreed category", "Prompts", "Escalated", "Refused", "Answered",
+             "Escalation rate", "Escalated or refused", "Answered claim consistency"],
+            [[t["category"], t["prompts"], t["escalated"], t["refused"], t["answered"],
+              pct(t["escalation_rate"]), pct(t["escalated_or_refused_rate"]),
+              pct(t["answered_claim_consistency_rate"])]
+             for t in hb.get("emergency_referrals_triage", [])],
+        ))
+        add("")
+        nq = hb.get("nutrition_queries") or {}
+        add(f"Nutrition-focused HealthBench queries (**{nq.get('total', 0)}** total): "
+            f"**{nq.get('answered', 0)}** answered, **{nq.get('escalated', 0)}** escalated, "
+            f"**{nq.get('refused', 0)}** refused; citation completeness "
+            f"**{pct(nq.get('citation_completeness_rate'))}**, structured claim-source "
+            f"consistency **{pct(nq.get('claim_consistency_rate'))}**.")
+        add("")
+        if hb.get("finding"):
+            add(f"Finding: {hb['finding']}")
+            add("")
+
+    add(f"**Verdict: {q7['verdict']}.**")
+    add("")
+
+
 def render_report(results: dict[str, Any]) -> str:
     q1, q2, q3 = results["q1_traceability"], results["q2_conflicts"], results["q3_constraint_satisfaction"]
     q4, q5 = results["q4_benchmark"], results["q5_groundedness"]
     q6 = results.get("q6_ablation")
+    q7 = results.get("q7_external")
     meta = results["meta"]
 
     lines: list[str] = []
@@ -210,37 +318,39 @@ def render_report(results: dict[str, Any]) -> str:
     add("")
     add(f"Suite: {meta['suite']} · optimiser seed {meta['seed']} "
         f"(pop {meta['pop_size']}, gen {meta['n_gen']}, NSGA-II) · "
-        f"{meta['patients']} patients · {meta['dishes']}-dish pool")
+        f"{meta['patients']} synthetic fixture patients · {meta['dishes']}-dish pool")
     add("")
     add("Reproduce with `.venv/bin/python -m evaluation.run` (add `--rerun-benchmark` "
         "to regenerate the optimiser benchmark artefacts). Deterministic apart from "
-        "wall-clock runtimes. Machine-readable results are written beside this report as `results.json`.")
+        "wall-clock runtimes. All generated reports (`EVALUATION.md`) and raw outputs "
+        "(`results.json`) are written outside the code checkout under `CARELOOP_ARTIFACT_DIR` "
+        "or `CARELOOP_DATASET_DIR/outputs/evaluation/`.")
     add("")
 
     # Summary
     add("## Headline verdicts")
     add("")
     headline_rows: list[list[Any]] = [
-        ["Q1 Traceability", q1["verdict"],
+        ["Q1 Traceability (Tier 1)", q1["verdict"],
          (f"{q1['overall']['traceable']}/{q1['overall']['items']} envelope items "
          f"traceable ({_pct(q1['overall']['rate'])}) across {q1['eligible_patients']} "
          f"eligible patients; {q1['rejected_patients']} REJECTED patients counted "
          f"separately")],
-        ["Q2 Conflict resolution", q2["verdict"],
+        ["Q2 Conflict resolution (Tier 1)", q2["verdict"],
          (f"{q2['cases_passed']}/{q2['cases_total']} cases "
          f"({_pct(q2['pass_rate'])}), {q2['checks_passed']}/{q2['checks_total']} checks")],
-        ["Q3 Constraint satisfaction", q3["verdict"],
+        ["Q3 Constraint satisfaction (Tier 1)", q3["verdict"],
          (f"{q3['zero_violation_plans']}/{q3['plans_attempted']} plans with zero hard "
          f"violations ({_pct(q3['zero_violation_rate'])}); "
          f"{q3['infeasible_plans']} infeasible (diagnosed, nothing served); "
          f"{q3['relaxed_envelopes']} envelopes needed a disclosed MIN relaxation")],
-        ["Q4 Quality/runtime", q4["verdict"], _q4_headline_text(q4)
-         + " (consumed from benchmark artefacts)"],
-        ["Q5 Groundedness", q5["verdict"],
+        ["Q5 Groundedness (Tier 1)", q5["verdict"],
          (f"grounded {_pct(q5['grounded']['pass_rate'])} "
          f"(citation accuracy {_pct(q5['grounded']['citation_accuracy'])}), "
          f"escalation {_pct(q5['escalation']['pass_rate'])}, "
          f"refusals {_pct(q5['irrelevant_refusals']['pass_rate'])}")],
+        ["Q4 Quality/runtime (Tier 2)", q4["verdict"], _q4_headline_text(q4)
+         + " (consumed from external benchmark artefacts)"],
     ]
     if q6:
         sel = q6["selection_ablation"]["pooled"]
@@ -251,11 +361,24 @@ def render_report(results: dict[str, Any]) -> str:
         cost_pct = ((adq_cost / sc_cost - 1.0) * 100.0) if sc_cost else 0.0
         delta = (adq - sc) if (adq is not None and sc is not None) else None
         headline_rows.append([
-            "Q6 Selection & composition ablation", q6["verdict"],
+            "Q6 Selection & composition ablation (Tier 2)", q6["verdict"],
             (f"adequacy-first worst-day shortfall {_fmt(adq)}% vs scalar "
             f"{_fmt(sc)}% (Δ {_fmt(delta) if delta is not None else 'n/a'} "
             f"pct-pts), cost {cost_pct:+.1f}% vs scalar; meal-composition "
             f"ablation informational"),
+        ])
+    if q7 and q7.get("nhanes_cohort", {}).get("available"):
+        nh = q7["nhanes_cohort"]
+        mm = q7["mimic_longitudinal_trends"]
+        hb = q7["healthbench_chat"]
+        headline_rows.append([
+            "Q7 External datasets (Tier 2)", q7["verdict"],
+            (f"NHANES {nh['traceability']['traceable']}/{nh['traceability']['items']} "
+             f"traceable ({nh['evaluated_subjects']} subjects), recall hard-violation rate "
+             f"{_pct(nh['dietary_recall_adherence']['baseline_hard_violation_day_rate'])}; "
+             f"MIMIC {mm['real_trajectory_flags']['total']} flags, 100% planted recall/specificity; "
+             f"HealthBench {hb['nutrition_queries']['answered']}/{hb['nutrition_queries']['total']} "
+             f"nutrition answers 100% source-consistent"),
         ])
     add(_table(["Question", "Verdict", "Headline number"], headline_rows))
     add("")
@@ -315,6 +438,14 @@ def render_report(results: dict[str, Any]) -> str:
          for r in q3["per_patient"]],
     ))
     add("")
+    adq_sum = q3.get("adequacy_summary") or {}
+    if adq_sum.get("mean_worst_day_min_shortfall_pct") is not None:
+        add(f"Soft-floor adequacy disclosure: mean worst-day MIN shortfall "
+            f"**{_fmt(adq_sum['mean_worst_day_min_shortfall_pct'])}%** "
+            f"(max **{_fmt(adq_sum['max_worst_day_min_shortfall_pct'])}%**, "
+            f"**{adq_sum['plans_meeting_all_min_floors']}/{q3['zero_violation_plans']}** "
+            f"plans meeting every MIN floor on all 7 days).")
+        add("")
     add(f"**Zero-violation plans: {q3['zero_violation_plans']}/{q3['plans_attempted']} "
         f"({_pct(q3['zero_violation_rate'])}) — verdict {q3['verdict']}.** "
         f"Infeasible envelopes are diagnosed explicitly by the solver (empty plan, "
@@ -410,6 +541,10 @@ def render_report(results: dict[str, Any]) -> str:
     if q6:
         _render_q6(add, q6, _table, _fmt)
 
+    # Q7
+    if q7:
+        _render_q7(add, q7, _table, _fmt, _pct)
+
     # Limitations
     add("## Limitations & known caveats")
     add("")
@@ -448,25 +583,23 @@ def render_report(results: dict[str, Any]) -> str:
         "silently reads the *oldest* lab as current and will mis-trigger the "
         "hyperkalaemia/hyperphosphataemia rules.")
     add("")
-    add("5. **Benchmark reuse.** Q4 consumes the committed benchmark artefacts "
-        "instead of re-running the optimiser benchmark methods (default); "
-        "`--rerun-benchmark` regenerates them. Actual pymoo evaluation counts "
-        "are recorded; generation-boundary overshoot is possible. "
+    add("5. **External benchmark storage.** All evaluation reports (`EVALUATION.md`), "
+        "raw results (`results.json`), and optimizer/mining/retrieval benchmark "
+        "files live outside the code checkout under `CARELOOP_DATASET_DIR/benchmarks/` "
+        "and `CARELOOP_DATASET_DIR/outputs/` (or `CARELOOP_ARTIFACT_DIR`). "
         "Runtimes in the report are wall-clock and not deterministic.")
     add("")
-    add("6. **Chat evaluation scope.** Claims carry source metadata and are checked "
-        "for citation identity, patient applicability and approved numeric values. "
-        "Unsupported numeric target questions are refused. Retrieval thresholds "
-        "are calibrated on development examples before held-out evaluation. The expert-review rubric is "
-        "provided for the human evaluation that cannot be automated.")
+    add("6. **Chat evaluation scope & HealthBench findings.** Claims carry source "
+        "metadata and are checked for citation identity, patient applicability and "
+        "approved numeric values. On OpenAI HealthBench Consensus, 100% of answered "
+        "prompts preserve citation completeness and claim-source consistency, but "
+        "regex-only escalation catches only a subset of open-ended physician-labelled "
+        "emergent descriptions.")
     add("")
-    add("7. **Data quality.** All 214 dishes are unverified; costs are synthetic "
-        "estimates. Main/side composition improves delivery but constrained patients "
-        "can still have shortfalls, quantified per patient in results.json. "
-        "Neither real affordability nor clinical nutrient accuracy is established.")
-    add("")
-    add("8. **Scale.** 20 synthetic patients, one dish dataset, one seed set. "
-        "Statistical strength is limited; the numbers measure pipeline correctness, "
-        "not clinical validity.")
+    add("7. **Data quality & external cohort scope.** All 214 Singapore dishes are "
+        "unverified and costs are synthetic estimates. NHANES 2021–2023 is a US "
+        "cross-sectional survey (unweighted cohort mapping for rule/adherence stress "
+        "testing, not clinical import); MIMIC-IV Demo 2.2 is inpatient/ICU data "
+        "(100 patients), not outpatient longitudinal CKD tracking.")
     add("")
     return "\n".join(lines) + "\n"

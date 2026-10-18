@@ -1,8 +1,14 @@
-"""Evaluation orchestrator: runs Q1-Q6, writes results.json + EVALUATION.md.
+"""Evaluation orchestrator: runs Tier-1 contract checks and Tier-2 benchmarks/external studies.
+
+All generated outputs (``results.json`` and ``EVALUATION.md``) are written
+outside the code checkout under ``artifact_dir("evaluation")`` (default
+``CARELOOP_DATASET_DIR/outputs/evaluation/``, override ``CARELOOP_ARTIFACT_DIR``).
+Never write reports or raw data inside the repository.
 
 Usage::
 
-    .venv/bin/python -m evaluation.run            # full suite
+    .venv/bin/python -m evaluation.run            # full two-tier suite
+    .venv/bin/python -m evaluation.run --quick    # reduced optimiser/NHANES budget
     .venv/bin/python -m evaluation.run --rerun-benchmark
 """
 
@@ -23,6 +29,7 @@ from evaluation.common import ROOT, load_patients
 from evaluation.q_ablation import evaluate_q6
 from evaluation.q_benchmark import evaluate_q4
 from evaluation.q_conflicts import evaluate_q2
+from evaluation.q_external import evaluate_q7
 from evaluation.q_groundedness import evaluate_q5
 from evaluation.q_satisfaction import evaluate_q3
 from evaluation.q_traceability import evaluate_q1
@@ -61,9 +68,12 @@ def _source_revision() -> str:
     return revision or "unavailable (no accessible VCS revision)"
 
 
-def run_suite(rerun_benchmark: bool = False,
-              optimiser_kwargs: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Run all six question modules and return the combined results dict."""
+def run_suite(
+    rerun_benchmark: bool = False,
+    optimiser_kwargs: dict[str, Any] | None = None,
+    max_nhanes_subjects: int | None = 600,
+) -> dict[str, Any]:
+    """Run Tier-1 contract gates (Q1, Q2, Q3, Q5) and Tier-2 empirical/external evaluations (Q4, Q6, Q7)."""
     from backend.optim.real_data import load_dishes
 
     optimiser_kwargs = optimiser_kwargs or {}
@@ -78,9 +88,11 @@ def run_suite(rerun_benchmark: bool = False,
     q4 = evaluate_q4(rerun_benchmark=rerun_benchmark)
 
     from backend.app.core.kb_loader import get_kb
-    q5 = evaluate_q5(get_kb())
+    kb = get_kb()
+    q5 = evaluate_q5(kb)
 
     q6 = evaluate_q6(patients, dishes=dishes, **q6_kwargs(optimiser_kwargs))
+    q7 = evaluate_q7(kb=kb, max_nhanes_subjects=max_nhanes_subjects)
 
     import hashlib
     import platform
@@ -93,9 +105,20 @@ def run_suite(rerun_benchmark: bool = False,
     for path in source_paths:
         code_hash.update(str(path.relative_to(ROOT)).encode() + b"\0" + path.read_bytes())
 
+    tier1_verdict = (
+        "PASS"
+        if all(x["verdict"] == "PASS" for x in (q1, q2, q3, q5))
+        else "FAIL"
+    )
+    tier2_verdict = (
+        "PASS"
+        if all(x["verdict"] == "PASS" for x in (q4, q6, q7))
+        else "FAIL"
+    )
+
     return {
         "meta": {
-            "suite": "CareLoop automated evaluation v1",
+            "suite": "CareLoop two-tier evaluation v2 (contract verification + external empirical benchmarks)",
             "seed": optimiser_kwargs.get("seed", 42),
             "pop_size": optimiser_kwargs.get("pop_size", 40),
             "n_gen": optimiser_kwargs.get("n_gen", 80),
@@ -106,6 +129,16 @@ def run_suite(rerun_benchmark: bool = False,
             "knowledge_release_id": release.release_id if release else None,
             "data_hashes": {**source_hashes(), "data/patients.json": hashlib.sha256(dataset_path("patients.json").read_bytes()).hexdigest()},
             "runtime": {"python": platform.python_version(), "platform": platform.platform()},
+            "tiers": {
+                "tier1_contracts": {
+                    "questions": ["q1_traceability", "q2_conflicts", "q3_constraint_satisfaction", "q5_groundedness"],
+                    "verdict": tier1_verdict,
+                },
+                "tier2_empirical_and_external": {
+                    "questions": ["q4_benchmark", "q6_ablation", "q7_external"],
+                    "verdict": tier2_verdict,
+                },
+            },
         },
         "q1_traceability": q1,
         "q2_conflicts": q2,
@@ -113,6 +146,7 @@ def run_suite(rerun_benchmark: bool = False,
         "q4_benchmark": q4,
         "q5_groundedness": q5,
         "q6_ablation": q6,
+        "q7_external": q7,
     }
 
 
@@ -134,11 +168,13 @@ def _print_headlines(results: dict[str, Any]) -> None:
     q1, q2, q3 = results["q1_traceability"], results["q2_conflicts"], results["q3_constraint_satisfaction"]
     q4, q5 = results["q4_benchmark"], results["q5_groundedness"]
     q6 = results.get("q6_ablation")
+    q7 = results.get("q7_external")
 
     def pct(x):
         return "n/a" if x is None else f"{x * 100:.1f}%"
 
     print("CareLoop evaluation — headline results")
+    print("  [Tier 1 — Deterministic contract & safety gates]")
     print(f"  Q1 traceability:          {q1['overall']['traceable']}/{q1['overall']['items']} "
           f"({pct(q1['overall']['rate'])}) [{q1['verdict']}] "
           f"(+{q1['rejected_patients']} REJECTED patients counted separately)")
@@ -148,13 +184,14 @@ def _print_headlines(results: dict[str, Any]) -> None:
           f"{q3['plans_attempted']} zero-violation plans ({pct(q3['zero_violation_rate'])}) "
           f"[{q3['verdict']}] ({q3['infeasible_plans']} infeasible, "
           f"{q3['relaxed_envelopes']} relaxed)")
-    print(f"  Q4 optimiser benchmark:   {q4['verdict']} (consumed from "
-          f"{q4['artefacts']['csv']}, {q4['artefacts']['main_runs']} main runs)")
     print(f"  Q5 groundedness:          grounded {q5['grounded']['passed']}/{q5['grounded']['total']} "
           f"({pct(q5['grounded']['citation_accuracy'])} citation accuracy), "
           f"escalation {q5['escalation']['passed']}/{q5['escalation']['total']}, "
           f"refusals {q5['irrelevant_refusals']['passed']}/{q5['irrelevant_refusals']['total']} "
           f"[{q5['verdict']}]")
+    print("  [Tier 2 — Empirical benchmarks & external dataset evaluations]")
+    print(f"  Q4 optimiser benchmark:   {q4['verdict']} (consumed from "
+          f"{q4['artefacts']['csv']}, {q4['artefacts']['main_runs']} main runs)")
     if q6:
         pooled = q6["selection_ablation"]["pooled"]
         sc = pooled["scalar"].get("mean_worst_day_rel_shortfall_pct")
@@ -169,12 +206,22 @@ def _print_headlines(results: dict[str, Any]) -> None:
               f"(Δ {'n/a' if delta is None else f'{delta:+.1f} pct-pts'}), "
               f"cost {cost_pct:+.1f}% [{q6['verdict']}] "
               f"(composition ablation informational)")
+    if q7 and q7.get("nhanes_cohort", {}).get("available"):
+        nh = q7["nhanes_cohort"]
+        mm = q7["mimic_longitudinal_trends"]
+        hb = q7["healthbench_chat"]
+        print(f"  Q7 external datasets:     NHANES {nh['traceability']['traceable']}/{nh['traceability']['items']} "
+              f"traceable across {nh['evaluated_subjects']} subjects, "
+              f"recall hard-violation rate {pct(nh['dietary_recall_adherence']['baseline_hard_violation_day_rate'])}; "
+              f"MIMIC {mm['real_trajectory_flags']['total']} flags ({mm['patients_total']} pts); "
+              f"HealthBench {hb['nutrition_queries']['answered']}/{hb['nutrition_queries']['total']} nutrition queries "
+              f"grounded [{q7['verdict']}]")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="evaluation.run",
-        description="CareLoop automated evaluation suite (Q1-Q6).",
+        description="CareLoop two-tier evaluation suite (Q1-Q7, external output only).",
     )
     parser.add_argument(
         "--rerun-benchmark", action="store_true",
@@ -182,19 +229,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--out-dir", default=str(artifact_dir("evaluation")),
-        help="directory for results.json / EVALUATION.md (default: artifacts/evaluation/)",
+        help="external directory for results.json / EVALUATION.md (default: CARELOOP_DATASET_DIR/outputs/evaluation/)",
     )
     parser.add_argument(
         "--quick", action="store_true",
-        help="reduced optimiser budget (pop=20, gen=40) for a fast smoke run",
+        help="reduced optimiser/NHANES budget (pop=20, gen=40) for a fast smoke run",
     )
     args = parser.parse_args(argv)
 
-    optimiser_kwargs = {"pop_size": 20, "n_gen": 40} if args.quick else None
-    results = run_suite(rerun_benchmark=args.rerun_benchmark,
-                        optimiser_kwargs=optimiser_kwargs)
+    out_dir = Path(args.out_dir).expanduser().resolve()
+    if out_dir == ROOT or ROOT in out_dir.parents:
+        raise ValueError("Evaluation output directory must be outside the code checkout")
 
-    out_dir = Path(args.out_dir)
+    optimiser_kwargs = {"pop_size": 20, "n_gen": 40} if args.quick else None
+    max_nhanes = 200 if args.quick else 600
+    results = run_suite(
+        rerun_benchmark=args.rerun_benchmark,
+        optimiser_kwargs=optimiser_kwargs,
+        max_nhanes_subjects=max_nhanes,
+    )
+
     out_dir.mkdir(parents=True, exist_ok=True)
     results_path = out_dir / "results.json"
     report_path = out_dir / "EVALUATION.md"
