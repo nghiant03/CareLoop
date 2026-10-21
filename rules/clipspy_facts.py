@@ -152,7 +152,7 @@ def nutrient_constraint_fact(nutrient: str, kind: str, value: float, unit: str,
         f"(value {float(value)}) "
         f"(unit {_sym(unit)}) "
         f'(rule_id "{rule_id}") '
-        f"(priority {int(priority)}))"
+        f"(priority {priority}))"
     )
 
 
@@ -162,14 +162,14 @@ def exclusion_fact(kind: str, value: str, reason: str, rule_id: str, priority: i
     Replace double quotes in the reason with apostrophes. Other quoted fields
     and backslashes are not escaped. This is not a general input serializer.
     """
-    safe_reason = str(reason).replace('"', "'")
+    safe_reason = reason.replace('"', "'")
     return (
         "(exclusion-flag "
         f"(kind {_sym(kind)}) "
         f'(value "{value}") '
         f'(reason "{safe_reason}") '
         f'(rule_id "{rule_id}") '
-        f"(priority {int(priority)}))"
+        f"(priority {priority}))"
     )
 
 

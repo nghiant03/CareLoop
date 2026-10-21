@@ -10,6 +10,7 @@ from pathlib import Path
 
 from shared.envelope_schema import NutrientEnvelope
 
+
 def schema_text() -> str:
     schema = NutrientEnvelope.model_json_schema(by_alias=True, mode="serialization")
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"

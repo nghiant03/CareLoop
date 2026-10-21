@@ -30,7 +30,7 @@ from backend.app.api import (
     simulations,
 )
 from backend.app.core.approval_gate import EnvelopeNotApprovedError
-from backend.app.core.approval_policy import approval_mode
+from backend.app.core.approval_policy import ApprovalMode, approval_mode, set_approval_mode
 from backend.app.core.envelope_lifecycle import EnvelopeScopeError
 from backend.app.core.persistence import EnvelopeConflictError, init_db
 from backend.knowledge.runtime import selected_release
@@ -176,6 +176,28 @@ def healthz() -> dict[str, str]:
 @app.get("/config", tags=["meta"], summary="Public workflow configuration")
 def public_config() -> dict[str, str]:
     return {"approval_mode": approval_mode()}
+
+
+class ApprovalModeUpdate(BaseModel):
+    """Demo request selecting the approval policy for subsequent rule runs."""
+
+    approval_mode: ApprovalMode
+
+
+@app.put("/config/approval-mode", tags=["meta"], summary="Switch the demo approval mode")
+def update_approval_mode(body: ApprovalModeUpdate) -> dict[str, str]:
+    """Select ``auto`` or ``clinician`` approval for subsequent rule runs.
+
+    This is an unauthenticated academic-demo control. The switch is
+    process-local and resets to ``CARELOOP_APPROVAL_MODE`` on restart. Existing
+    envelopes keep their status and actors; edits still require manual
+    re-approval and scope exclusions still apply in both modes.
+    """
+    previous = approval_mode()
+    selected = set_approval_mode(body.approval_mode)
+    if selected != previous:
+        logger.info("demo approval mode switched: %s -> %s", previous, selected)
+    return {"approval_mode": selected}
 
 
 class CalendarResponse(BaseModel):

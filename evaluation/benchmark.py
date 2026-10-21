@@ -16,8 +16,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from evaluation.common import ROOT
 from backend.storage_paths import artifact_dir
+from evaluation.common import ROOT
 
 __all__ = ["evaluate_benchmark", "verdict_from_headline"]
 
@@ -128,8 +128,6 @@ def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
             note += f", level with {runner_up['method']}"
         else:
             note += f", ahead of {runner_up['method']} at {runner_up['mean_hv']:.4f}"
-    # Presentation only: exact zero prints as 0%.
-    # Nonzero rates use three decimal places; the verdict uses the unrounded rate.
     rate = winner["violation_rate"]
     rate_text = "0%" if rate == 0 else f"{rate:.3%}"
     note += f") with a {rate_text} hard-constraint violation rate."
@@ -157,7 +155,7 @@ def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
 
 
 def evaluate_benchmark(rerun_benchmark: bool = False) -> dict[str, Any]:
-    """Headline optimiser benchmark table + recommendation (from artefacts)."""
+    """Headline optimiser benchmark table and recommendation."""
     csv_path, md_path = _CSV_PATH, _MD_PATH
     if rerun_benchmark:
         subprocess.run(

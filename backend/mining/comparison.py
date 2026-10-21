@@ -31,8 +31,9 @@ from sklearn.metrics import (
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import StandardScaler
 
-from . import clustering, substitutions, trends
 from backend.storage_paths import artifact_dir
+
+from . import clustering, substitutions, trends
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 from backend.datasets.paths import dataset_path

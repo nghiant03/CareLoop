@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import json
 import re
-import psycopg
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
+
+import psycopg
 
 from backend.app.models.envelope import NutrientEnvelope
 from backend.storage.postgres import PostgresConnection, StorageRow, database_url
@@ -151,10 +152,10 @@ def save_plan(
                 plan_id,
                 patient_id,
                 envelope_id,
-                int(envelope_version),
+                envelope_version,
                 engine,
-                int(bool(feasible)),
-                int(violation_count),
+                int(feasible),
+                violation_count,
                 json.dumps(objectives) if objectives is not None else None,
                 json.dumps(days) if days is not None else None,
                 json.dumps(adequacy) if adequacy is not None else None,
@@ -343,7 +344,7 @@ def delete_logs_for_patient(patient_id: str) -> int:
             "DELETE FROM meal_logs WHERE patient_id = ?", (patient_id,)
         )
         conn.commit()
-        return int(cur.rowcount)
+        return cur.rowcount
 
 
 def count_logs(patient_id: str | None = None) -> int:
@@ -355,7 +356,7 @@ def count_logs(patient_id: str | None = None) -> int:
         params = (patient_id,)
     with _connect() as conn:
         row = conn.execute(sql, params).fetchone()
-    return int(row["n"])
+    return int(row["n"]) if row is not None else 0
 
 
 def clear_logs() -> None:
@@ -543,13 +544,16 @@ def journal_envelope(
                 event or status,
                 envelope.envelope_id,
                 envelope.patient_id,
-                int(envelope.version),
+                envelope.version,
                 status,
                 json.dumps(snapshot),
                 effective_at,
             ),
         )
-        row_id = cur.fetchone()[0]
+        inserted = cur.fetchone()
+        if inserted is None:
+            raise RuntimeError("envelope journal insert returned no row")
+        row_id = inserted[0]
         conn.commit()
         return row_id
 
@@ -899,6 +903,8 @@ def finalize_review_proposal(
         updated = conn.execute(
             "SELECT * FROM review_items WHERE review_id = ?", (review_id,)
         ).fetchone()
+        if updated is None:
+            raise RuntimeError(f"review item {review_id} vanished after update")
     return _review_row(updated)
 
 
@@ -934,6 +940,8 @@ def record_review_action(
         row = conn.execute(
             "SELECT * FROM review_items WHERE review_id = ?", (review_id,)
         ).fetchone()
+        if row is None:
+            return None
     return _review_row(row)
 
 

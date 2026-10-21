@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import psycopg
 from pathlib import Path
+
+import psycopg
 
 from backend.knowledge.store import KnowledgeStore, load_release
 from backend.storage.postgres import database_url
@@ -61,7 +62,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "discover":
             from backend.datasets.paths import dataset_dir, dataset_path
-            from backend.knowledge.discovery import discover_rules, write_discovery_report
+            from backend.knowledge.discovery import (
+                discover_rules,
+                write_discovery_report,
+            )
 
             rules, _ = _read(args.rules_file or dataset_path("rules.json"))
             report = discover_rules(args.research_dir or dataset_dir() / "research", rules)

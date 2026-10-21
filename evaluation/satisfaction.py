@@ -231,6 +231,10 @@ def evaluate_satisfaction(
                 round(max(shortfall_pcts), 2) if shortfall_pcts else None
             ),
             "plans_meeting_all_min_floors": sum(1 for s in shortfall_pcts if s <= 0.0),
+            "all_min_floors_met_rate": (
+                round(sum(1 for s in shortfall_pcts if s <= 0.0) / len(shortfall_pcts), 4)
+                if shortfall_pcts else None
+            ),
         },
         "verdict": (
             "PASS" if rate == 1.0 and len(per_day_ok) == len(zero_violation) else "FAIL"

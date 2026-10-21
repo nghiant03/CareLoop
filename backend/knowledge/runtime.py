@@ -7,9 +7,9 @@ import os
 from pathlib import Path
 from threading import RLock
 
+from backend.datasets.paths import dataset_path
 from backend.knowledge.store import KnowledgeRelease, load_release
 from backend.storage.postgres import database_url
-from backend.datasets.paths import dataset_path
 
 _LOCK = RLock()
 _CONFIG: tuple[str, str, str] | None = None

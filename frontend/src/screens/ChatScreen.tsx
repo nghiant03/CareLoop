@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { listPatients, sendChat } from '../api';
-import type { Patient, ChatMessageResponse, Citation } from '../types';
+import { HttpApiError, getLatestEnvelope, listPatients, sendChat } from '../api';
+import type { Patient, ChatMessageResponse, Citation, Envelope } from '../types';
 import LoadingState from '../components/LoadingState';
 import PageHeader from '../components/PageHeader';
 import { useRequestScope } from '../hooks/useRequestScope';
+import { useDemo } from '../demo/context';
+import { useSharedPatient } from '../demo/useSharedPatient';
 
 interface Message {
   id: string;
@@ -13,11 +15,20 @@ interface Message {
   citations?: Citation[];
 }
 
+const EXAMPLE_QUESTIONS = [
+  'Why is my sodium limit 2000?',
+  'Which foods should I avoid?',
+  'Why is my protein target a range?',
+];
+
 export default function ChatScreen() {
+  const demo = useDemo();
+  const isPatientView = demo.view === 'patient';
   const requests = useRequestScope();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [envelopeStatus, setEnvelopeStatus] = useState<Envelope['status'] | 'NONE' | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -35,25 +46,47 @@ export default function ChatScreen() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedPatient || !input.trim() || sending) return;
+  const selectPatient = (patient: Patient | null) => {
+    requests.reset();
+    demo.setPatientId(patient?.id || null);
+    setSelectedPatient(patient);
+    setEnvelopeStatus(null);
+    setMessages([]);
+    setInput('');
+    setError(null);
+    setSending(false);
+    if (patient && getLatestEnvelope) {
+      const isCurrent = requests.start('envelope');
+      Promise.resolve(getLatestEnvelope(patient.id))
+        .then((env) => { if (isCurrent() && env) setEnvelopeStatus(env.status); })
+        .catch((err) => {
+          if (isCurrent() && err instanceof HttpApiError && err.code === 'envelope_not_found') {
+            setEnvelopeStatus('NONE');
+          }
+        });
+    }
+  };
+
+  useSharedPatient(patients, selectedPatient?.id, selectPatient);
+
+  const submitQuestion = async (question: string) => {
+    const trimmed = question.trim();
+    if (!selectedPatient || !trimmed || sending) return;
     const isCurrent = requests.start('chat');
 
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: 'user',
-      text: input.trim(),
+      text: trimmed,
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setSending(true);
     setError(null);
-    const sentText = input.trim();
     setInput('');
 
     try {
-      const result: ChatMessageResponse = await sendChat(selectedPatient.id, sentText);
+      const result: ChatMessageResponse = await sendChat(selectedPatient.id, trimmed);
       if (!isCurrent()) return;
       const assistantMsg: Message = {
         id: crypto.randomUUID(),
@@ -70,43 +103,62 @@ export default function ChatScreen() {
     }
   };
 
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    void submitQuestion(input);
+  };
+
   return (
     <main className="pb-12">
       <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-        <PageHeader code="CHT" title="Chat">
-          Ask questions about a patient’s diet plan. Citations link back to guidelines.
+        <PageHeader code="CHT" title={isPatientView ? 'Ask about your diet' : 'Chat'}>
+          {isPatientView
+            ? 'Ask questions about your nutrition targets. Answers cite the clinical guidelines behind your plan.'
+            : 'Ask questions about a patient’s diet plan (previewing the patient assistant). Citations link back to guidelines.'}
         </PageHeader>
 
-        <div className="panel mb-4 p-4">
-          <label htmlFor="chat-patient" className="micro-label mb-1 block">
-            Patient
-          </label>
-          {loadingPatients ? (
-            <LoadingState text="Loading patients…" />
-          ) : (
-            <select
-              id="chat-patient"
-              value={selectedPatient?.id || ''}
-              onChange={(e) => {
-                requests.reset();
-                const p = patients.find((pt) => pt.id === e.target.value) || null;
-                setSelectedPatient(p);
-                setMessages([]);
-                setInput('');
-                setError(null);
-                setSending(false);
-              }}
-              className="field"
-            >
-              <option value="">Select a patient</option>
-              {patients.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name || p.id} — {p.diagnoses?.join(', ')}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        {!isPatientView ? (
+          <div className="panel mb-4 p-4">
+            <label htmlFor="chat-patient" className="micro-label mb-1 block">
+              Patient
+            </label>
+            {loadingPatients ? (
+              <LoadingState text="Loading patients…" />
+            ) : (
+              <select
+                id="chat-patient"
+                value={selectedPatient?.id || ''}
+                onChange={(e) => {
+                  const p = patients.find((pt) => pt.id === e.target.value) || null;
+                  selectPatient(p);
+                }}
+                className="field"
+              >
+                <option value="">Select a patient</option>
+                {patients.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || p.id} — {p.diagnoses?.join(', ')}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        ) : (
+          <div className="panel mb-4 flex flex-wrap items-center justify-between gap-2 p-4 text-sm text-ink-2">
+            <span>
+              {selectedPatient
+                ? <>Asking as <span className="font-semibold text-ink">{selectedPatient.name || selectedPatient.id}</span>.</>
+                : 'Choose a patient in the Acting as bar above to ask a question.'}
+            </span>
+            {envelopeStatus && <EnvelopeContextBadge status={envelopeStatus} />}
+          </div>
+        )}
+
+        {!isPatientView && selectedPatient && envelopeStatus && (
+          <div className="mb-4">
+            <EnvelopeContextBadge status={envelopeStatus} />
+          </div>
+        )}
 
         {error && (
           <div className="notice notice-error mb-4">
@@ -121,8 +173,27 @@ export default function ChatScreen() {
           <div className="flex h-96 flex-col">
             <div className="flex-1 overflow-y-auto p-4">
               {messages.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center text-center">
-                  <p className="text-sm text-ink-3">Select a patient and type a message to begin.</p>
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                  <p className="text-sm text-ink-3">
+                    {selectedPatient
+                      ? 'Type a question below or pick an example to begin.'
+                      : 'Select a patient and type a message to begin.'}
+                  </p>
+                  {selectedPatient && (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {EXAMPLE_QUESTIONS.map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          disabled={sending}
+                          onClick={() => void submitQuestion(q)}
+                          className="btn-ghost min-h-0 px-3 py-1.5 text-xs"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -200,4 +271,17 @@ export default function ChatScreen() {
       </div>
     </main>
   );
+}
+
+function EnvelopeContextBadge({ status }: { status: Envelope['status'] | 'NONE' }) {
+  if (status === 'APPROVED') {
+    return <span className="flag flag-ok">Targets approved — personal numbers enabled</span>;
+  }
+  if (status === 'REJECTED') {
+    return <span className="flag flag-bad">Targets rejected — personal guidance unavailable</span>;
+  }
+  if (status === 'NONE') {
+    return <span className="flag flag-warn">No envelope yet — general guideline answers only</span>;
+  }
+  return <span className="flag flag-warn">Targets {status} — pending review, personal numbers withheld</span>;
 }

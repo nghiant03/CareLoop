@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { HttpApiError, listPatients, createPlan, listPlans, getPlan, getSubstitutions, applySwap } from '../api';
 import type {
   Patient,
@@ -16,10 +17,14 @@ import EmptyState from '../components/EmptyState';
 import PageHeader from '../components/PageHeader';
 import RangeBar from '../components/RangeBar';
 import { useRequestScope } from '../hooks/useRequestScope';
+import { useDemo } from '../demo/context';
+import { useSharedPatient } from '../demo/useSharedPatient';
 
 const SwapApplicationContext = createContext<{ pending: boolean; begin: () => boolean; end: () => void }>({ pending: false, begin: () => false, end: () => {} });
 
 export default function PatientMealPlanScreen() {
+  const demo = useDemo();
+  const isPatientView = demo.view === 'patient';
   const requests = useRequestScope();
   const planRequests = useRequestScope();
   const selectionIsCurrent = requests.capture();
@@ -53,6 +58,22 @@ export default function PatientMealPlanScreen() {
       if (isCurrent()) setSavedPlansLoading(false);
     }
   };
+
+  const selectPatient = (patient: Patient | null) => {
+    requests.reset();
+    planRequests.reset();
+    demo.setPatientId(patient?.id || null);
+    setSelectedPatient(patient);
+    setPlan(null);
+    setSavedPlans([]);
+    setError(null);
+    setNeedsApproval(false);
+    setPlanLoading(false);
+    setSavedPlansLoading(false);
+    if (patient) void loadSavedPlans(patient.id);
+  };
+
+  useSharedPatient(patients, selectedPatient?.id, selectPatient);
 
   const handleGeneratePlan = async () => {
     if (!selectedPatient) return;
@@ -103,13 +124,30 @@ export default function PatientMealPlanScreen() {
   return (
     <main className="pb-12">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <PageHeader code="PLN" title="Meal plan">
-          Choose a patient to generate a 7-day, 3-meal plan based on their approved nutrient envelope.
+        <PageHeader code="PLN" title={isPatientView ? 'Your meal plan' : 'Meal plan'}>
+          {isPatientView
+            ? 'Generate a 7-day, 3-meal plan based on your approved nutrient targets, or swap dishes within your limits.'
+            : 'Choose a patient to generate a 7-day, 3-meal plan based on their approved nutrient envelope.'}
         </PageHeader>
 
         {error && (
           <div className={`notice mb-4 ${needsApproval ? 'notice-warn' : 'notice-error'}`}>
-            {error}
+            <span>{error}</span>
+            {needsApproval && (
+              isPatientView ? (
+                <button
+                  type="button"
+                  onClick={() => demo.setView('clinician')}
+                  className="ml-2 font-semibold underline hover:opacity-80"
+                >
+                  Switch to Clinician view to approve →
+                </button>
+              ) : (
+                <Link to="/" className="ml-2 font-semibold underline hover:opacity-80">
+                  Go to Clinician review →
+                </Link>
+              )
+            )}
             <button
               onClick={() => setError(null)}
               className="ml-2 font-semibold underline hover:opacity-80"
@@ -121,12 +159,27 @@ export default function PatientMealPlanScreen() {
 
         <section className="panel mb-8 p-5">
           <h2 className="micro-label mb-3 border-b border-rule pb-2">
-            Select patient
+            {isPatientView ? 'Meal plan actions' : 'Select patient'}
           </h2>
           {loadingPatients ? (
             <LoadingState text="Loading patients…" />
           ) : patients.length === 0 ? (
             <EmptyState title="No patients found" description="Add patients or start the backend." />
+          ) : isPatientView ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-ink-2">
+                {selectedPatient
+                  ? <>Viewing meals for <span className="font-semibold text-ink">{selectedPatient.name || selectedPatient.id}</span>.</>
+                  : 'Choose a patient in the Acting as bar above to generate your 7-day plan.'}
+              </p>
+              <button
+                onClick={handleGeneratePlan}
+                disabled={planLoading || !selectedPatient}
+                className="btn-primary"
+              >
+                {planLoading ? 'Generating plan…' : 'Generate 7-day plan'}
+              </button>
+            </div>
           ) : (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
@@ -137,16 +190,8 @@ export default function PatientMealPlanScreen() {
                   id="patient"
                   value={selectedPatient?.id || ''}
                   onChange={(e) => {
-                    requests.reset();
-                    planRequests.reset();
                     const p = patients.find((pt) => pt.id === e.target.value) || null;
-                    setSelectedPatient(p);
-                    setPlan(null);
-                    setSavedPlans([]);
-                    setError(null);
-                    setPlanLoading(false);
-                    setSavedPlansLoading(false);
-                    if (p) loadSavedPlans(p.id);
+                    selectPatient(p);
                   }}
                   className="field"
                 >
@@ -182,6 +227,7 @@ export default function PatientMealPlanScreen() {
           <PlanView
             key={plan.plan_id || 'unsaved'}
             plan={plan}
+            patientView={isPatientView}
             onPlanUpdate={(newPlan) => {
               if (!selectionIsCurrent() || !planIsCurrent()) return;
               planRequests.reset();
@@ -258,10 +304,12 @@ function SavedPlansSection({
 
 function PlanView({
   plan,
+  patientView,
   onPlanUpdate,
   onError,
 }: {
   plan: MealPlan;
+  patientView?: boolean;
   onPlanUpdate: (plan: MealPlan) => void;
   onError: (msg: string) => void;
 }) {
@@ -284,7 +332,9 @@ function PlanView({
     <SwapApplicationContext.Provider value={swapApplications}>
     <div className="space-y-6">
       <div className="panel p-5">
-        <h2 className="text-lg font-bold tracking-tight text-ink">{plan.patient_id} — 7-day plan</h2>
+        <h2 className="text-lg font-bold tracking-tight text-ink">
+          {patientView ? 'Your 7-day plan' : `${plan.patient_id} — 7-day plan`}
+        </h2>
         <PlanStatus plan={plan} />
         <ExplanationView explanation={plan.explanation} />
       </div>

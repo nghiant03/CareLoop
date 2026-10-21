@@ -1109,9 +1109,7 @@ def evaluate_exact_reference(
             mean_gaps[name] = entry["mean_gap"]
             bounds[name] = entry["seven_day_lower_bound"]
             gaps = entry.get("gaps")
-            at_opt[name] = bool(
-                gaps is not None and all(g <= _OPTIMUM_GAP_TOL for g in gaps)
-            )
+            at_opt[name] = gaps is not None and all(g <= _OPTIMUM_GAP_TOL for g in gaps)
         rows.append({
             "patient_id": patient_id,
             "has_plan": True,

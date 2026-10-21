@@ -44,7 +44,7 @@ def _utcnow() -> str:
 
 
 def _slug(text: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
+    slug = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
     return slug or "x"
 
 

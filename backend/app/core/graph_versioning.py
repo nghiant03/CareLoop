@@ -37,7 +37,7 @@ def _split_ref(ref: NodeRef) -> tuple[str, str]:
     """Normalise ``(label, id)`` or ``"label:id"`` into a tuple."""
     if isinstance(ref, tuple):
         label, node_id = ref
-        return str(label), str(node_id)
+        return label, node_id
     if ":" not in ref:
         raise ValueError(f"node reference {ref!r} must be (label, id) or 'label:id'")
     label, node_id = ref.split(":", 1)

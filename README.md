@@ -11,22 +11,6 @@ Scope exclusions and hard planning limits apply in both modes.
 Persistent clinical and knowledge storage is PostgreSQL-only. SQLite runtime
 and import support have been removed; existing database files are not modified.
 
-## Development demo (fixture knowledge)
-
-Provision the external datasets, start PostgreSQL and run explicit migrations
-as below. To run the API on the host without publishing a knowledge release:
-
-```sh
-export CARELOOP_APP_DATABASE_URL_FILE="$PWD/.secrets/clinical_app_url_local"
-export CARELOOP_KNOWLEDGE_MODE=fixtures
-export CARELOOP_APPROVAL_MODE=auto
-.venv/bin/uvicorn backend.app.main:app --reload --port 8000
-```
-
-Leave knowledge database/release variables unset for fixture mode. Start the
-frontend with `npm ci` and `npm run dev` in `frontend/`. PostgreSQL is required
-even for this demo; there is no SQLite/no-database runtime.
-
 ## Deploy locally
 
 The root `compose.yaml` runs PostgreSQL 18, migrations, FastAPI and React.

@@ -1,221 +1,218 @@
 ---
 name: CareLoop
-description: Clinical nutrition reporting UI styled as a laboratory report — paper, ink, hairline rules, and state-only color.
+description: Clinical blue wayfinding for evidence-led nutrition review.
 colors:
-  paper: "#FBFAF6"
-  panel: "#F4F2EA"
-  card: "#FFFFFF"
-  ink: "#17140F"
-  ink-soft: "#453F35"
-  ink-mute: "#6F6759"
-  rule: "#E3E0D3"
-  rule-strong: "#C8C3B0"
-  flag: "#B3352B"
-  flag-bg: "#F9E9E5"
-  flag-rule: "#E3B8AE"
-  ok: "#1F6F4A"
-  ok-bg: "#E6F0E7"
-  ok-rule: "#B3D2BA"
-  warn: "#9A5B12"
-  warn-bg: "#F8EFDD"
-  warn-rule: "#E0C79B"
-  line: "#1D4ED8"
-  line-bg: "#E7EDFB"
-  line-rule: "#B9C8EF"
+  paper: "#f3f6fa"
+  panel: "#eaf0f6"
+  card: "#ffffff"
+  ink: "#172b40"
+  ink-2: "#354c63"
+  ink-3: "#52677d"
+  rule: "#d9e2ec"
+  rule-2: "#aabccc"
+  shell: "#153650"
+  flag: "#b3352b"
+  flag-bg: "#f9e9e5"
+  flag-rule: "#e3b8ae"
+  ok: "#1f6f4a"
+  ok-bg: "#e6f0e7"
+  ok-rule: "#b3d2ba"
+  warn: "#9a5b12"
+  warn-bg: "#f8efdd"
+  warn-rule: "#e0c79b"
+  line: "#175d99"
+  line-bg: "#e7f1fb"
+  line-rule: "#a6c7e7"
 typography:
-  display:
-    fontFamily: "Public Sans, ui-sans-serif, system-ui, sans-serif"
+  headline:
+    fontFamily: '"Public Sans", ui-sans-serif, system-ui, sans-serif'
     fontSize: "1.5rem"
     fontWeight: 700
-    lineHeight: 1.2
-    letterSpacing: "-0.02em"
+    lineHeight: "calc(2 / 1.5)"
+    letterSpacing: "-0.025em"
+  title:
+    fontFamily: '"Public Sans", ui-sans-serif, system-ui, sans-serif'
+    fontSize: "1.25rem"
+    fontWeight: 700
+    lineHeight: "calc(1.75 / 1.25)"
   body:
-    fontFamily: "Public Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "0.875rem"
+    fontFamily: '"Public Sans", ui-sans-serif, system-ui, sans-serif'
+    fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.5
-    letterSpacing: "normal"
-  label:
-    fontFamily: "Roboto Mono, ui-monospace, Menlo, monospace"
-    fontSize: "0.6875rem"
-    fontWeight: 500
-    lineHeight: 1.4
-    letterSpacing: "0.14em"
-  data:
-    fontFamily: "Roboto Mono, ui-monospace, Menlo, monospace"
+  body-small:
+    fontFamily: '"Public Sans", ui-sans-serif, system-ui, sans-serif'
     fontSize: "0.875rem"
-    fontWeight: 500
-    lineHeight: 1.4
-    letterSpacing: "normal"
+    fontWeight: 400
+    lineHeight: "calc(1.25 / 0.875)"
+  label:
+    fontFamily: '"Public Sans", ui-sans-serif, system-ui, sans-serif'
+    fontSize: "0.8125rem"
+    fontWeight: 600
+    letterSpacing: "0"
+  status:
+    fontFamily: '"Public Sans", ui-sans-serif, system-ui, sans-serif'
+    fontSize: "0.75rem"
+    fontWeight: 600
+    letterSpacing: "0"
+  data:
+    fontFamily: '"Roboto Mono", ui-monospace, "SFMono-Regular", Menlo, monospace'
 rounded:
-  report: "2px"
+  status: "4px"
+  control: "6px"
+  panel: "8px"
 spacing:
-  sm: "8px"
-  md: "16px"
-  lg: "24px"
+  unit: "0.25rem"
+  compact: "0.5rem"
+  control: "0.75rem"
+  standard: "1rem"
+  summary: "1.25rem"
+  section: "1.5rem"
+  wide: "2rem"
 components:
   button-primary:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.paper}"
-    rounded: "{rounded.report}"
-    padding: "8px 16px"
+    backgroundColor: "{colors.line}"
+    textColor: "{colors.card}"
+    rounded: "{rounded.control}"
+    padding: "0.5rem 1rem"
   button-approve:
     backgroundColor: "{colors.ok}"
-    textColor: "#FFFFFF"
-    rounded: "{rounded.report}"
-    padding: "8px 16px"
+    textColor: "{colors.card}"
+    rounded: "{rounded.control}"
+    padding: "0.5rem 1rem"
   button-danger:
     backgroundColor: "{colors.card}"
     textColor: "{colors.flag}"
-    rounded: "{rounded.report}"
-    padding: "8px 16px"
+    rounded: "{rounded.control}"
+    padding: "0.5rem 1rem"
+  button-danger-hover:
+    backgroundColor: "{colors.flag-bg}"
   button-ghost:
     backgroundColor: "{colors.card}"
-    textColor: "{colors.ink-soft}"
-    rounded: "{rounded.report}"
-    padding: "8px 16px"
+    textColor: "{colors.ink-2}"
+    rounded: "{rounded.control}"
+    padding: "0.5rem 1rem"
+  button-ghost-hover:
+    backgroundColor: "{colors.panel}"
   field:
     backgroundColor: "{colors.card}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.report}"
-    padding: "8px 12px"
-  flag-chip:
-    backgroundColor: "{colors.panel}"
-    textColor: "{colors.ink-soft}"
-    rounded: "{rounded.report}"
-    padding: "2px 8px"
-  panel-card:
+    rounded: "{rounded.control}"
+    padding: "0.5rem 0.75rem"
+    width: "100%"
+  flag-warn:
+    backgroundColor: "{colors.warn-bg}"
+    textColor: "{colors.warn}"
+    typography: "{typography.status}"
+    rounded: "{rounded.status}"
+    padding: "0.125rem 0.5rem"
+  panel:
     backgroundColor: "{colors.card}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.report}"
-    padding: "20px"
+    rounded: "{rounded.panel}"
+  workspace-nav:
+    textColor: "#d2e2f0"
+    padding: "0.5rem 0.875rem 0.75rem"
+  rule-selected:
+    backgroundColor: "{colors.line-bg}"
+    rounded: "{rounded.status}"
+    padding: "1rem 0.75rem"
 ---
 
 # Design System: CareLoop
 
 ## Overview
 
-**Creative North Star: "The Lab Report"**
+**Creative North Star: "Clinical wayfinding"**
 
-CareLoop's interface is the laboratory report for a clinical nutrition trial: paper-white ground, ink text, hairline rules, and squared corners. The reader is an evaluator or clinician scanning for values, limits, and provenance, so the system behaves like a printed analytical report — everything is ruled, aligned, and tabulated, and nothing decorates.
+CareLoop uses hospital wayfinding-inspired navigation above light clinical working surfaces. Deep blue identifies the workspace; readable evidence, explicit state text and familiar controls guide decisions. The character is clear, clinical and factual, with restrained density rather than report decoration.
 
-Color is rationed to meaning. Neutrals carry structure; four state hues (flag red, caution amber, verified green, interactive blue) carry status and nothing else. A screen that uses red for anything other than a hard limit or alert has broken the system.
-
-Depth comes from the rule, not the shadow. Hierarchy is weight, scale, and hairlines — patient rosters, analyte tables, and rule traces are all the same ruled paper at different densities.
+This records the user-approved replacement of the warm lab-report design. The implemented source is `frontend/src/index.css`, the shared workspace and page headers, and the Knowledge Review workspace; `PRODUCT.md` and `docs/UI-DIRECTION.md` establish the confirmed direction.
 
 **Key Characteristics:**
-- Paper ground (#FBFAF6) with white ruled panels and a warm panel tint for recessed areas
-- Hairline borders (1px, #E3E0D3) as the only container language; squared 2px corners
-- Roboto Mono uppercase microcopy for report codes, column heads, IDs, and flags
-- All measured values in tabular mono; every value is read against its reference range
-- State hues only: red = hard limit/alert, amber = soft gap/caution, green = verified/compliant, blue = interactive
+- Deep navy navigation, blue selection and cool neutral reading surfaces.
+- Public Sans for reading; Roboto Mono and tabular numerals for data.
+- Modest corners, fine borders and explicit state text.
+- Evidence-first review with a persistent list/detail selection.
 
 ## Colors
 
-The palette is paper and ink with four reserved state hues; every tinted background is the state hue's own wash with a matching rule color.
-
 ### Primary
-- **Report Ink** (#17140F): headings, primary buttons, active navigation, measured-value emphasis. The authority color of the report.
 
-### State hues
-- **Flag Red** (#B3352B): hard ceilings, hard violations, alerts, reject actions, the forbidden region of a range bar. Never decoration.
-- **Caution Amber** (#9A5B12): soft floors and gaps, relaxation notices, pending/proposed states, manual-entry warnings.
-- **Verified Green** (#1F6F4A): approved envelopes, compliant days, on-track readings, the approve action.
-- **Interaction Blue** (#1D4ED8): links, focus rings, selected-row tint. It marks interactivity, not status.
+Wayfinding blue (`line`) marks actions, links, selection and keyboard focus. Its light fill and border companions distinguish selected records and informational notices. Deep navy (`shell`) anchors the branded workspace header.
+
+### Secondary
+
+Clinical green (`ok`) identifies approval actions and successful states. Amber (`warn`) signals caution or incomplete review; red (`flag`) identifies errors, rejection and destructive actions. Each semantic family has its own light background and border. State words accompany color.
 
 ### Neutral
-- **Report Paper** (#FBFAF6): the application ground.
-- **Panel Tint** (#F4F2EA): recessed areas — range-bar tracks, empty states, recorded detail blocks.
-- **Card White** (#FFFFFF): working surfaces and tables.
-- **Soft Ink** (#453F35): secondary text and ghost-button labels.
-- **Muted Ink** (#6F6759): captions, units, placeholder text (5.4:1 on paper — the floor for all secondary text).
-- **Hairline** (#E3E0D3): row and container rules; **Strong Hairline** (#C8C3B0): header rules, field borders, table column separations.
 
-### Named Rules
-**The State-Only Hue Rule.** Hue answers "what state is this?" — never "what section is this?" Section identity is mono department codes and ink underlines; if a colored element does not encode status or interactivity, it must be ink or paper.
-**The Tinted-from-Hue Rule.** On a state-colored background, text and borders take that same hue (flag text on #F9E9E5, never gray on red).
+Cool ground (`paper`) sits beneath white working surfaces (`card`) and lightly tinted supporting regions (`panel`). Slate text steps from primary `ink` through `ink-2` to supporting `ink-3`. `rule` separates content; `rule-2` strengthens control outlines and table headings.
+
+**The Explicit State Rule.** Pair semantic color with visible state text; approval color must not imply human review or publication.
 
 ## Typography
 
-**Display / Body Font:** Public Sans (self-hosted via @fontsource, weights 400–700)
-**Label / Data Font:** Roboto Mono (self-hosted, weights 400–600)
+Public Sans carries headings, prose, controls and sentence-case labels. Roboto Mono distinguishes identifiers and measurements through the data treatment; tabular numerals also appear in the draft summary without changing its sans-serif family.
 
-**Character:** a workhorse grotesque for prose and a plain monospace for everything measured or coded — the pairing of a printed report's body and its tabulated data. Mono is reserved for data, IDs, codes, and labels, never as decoration.
+The frontmatter records the page headline, rule-detail title, body, compact body, label and status roles. Page headlines are compact and bold, not oversized display typography. Evidence quotations use body size with relaxed line-height (1.625) and a readable measure (65ch). Supporting page copy uses a maximum width of 42rem. The wordmark uses Public Sans (1.375rem, 700, -0.035em tracking).
 
-### Hierarchy
-- **Display** (700, 1.5rem, tight tracking): page titles in the report header, once per screen.
-- **Headline** (700, 1.125rem, tight tracking): panel and section titles ("Proposed envelope", "Review queue" history).
-- **Title** (600, 1rem): card and record titles (patient names, dish names).
-- **Body** (400, 0.875rem, 1.5): all reading text; descriptions capped near 65ch (max-w-2xl).
-- **Label** (mono 500, 0.6875rem, +0.14em, uppercase): report codes (CL·ENV), department codes (ENV/QUE/SIM), column heads, section labels.
-- **Data** (mono 500, tabular-nums): every numeric value, limit, revision, ID, and timestamp.
-
-### Named Rules
-**The Measured-in-Mono Rule.** Any number a clinician would compare against a limit is set in tabular Roboto Mono; prose never carries a measurement.
+**The Reading First Rule.** Keep prose and navigation in Public Sans; reserve the mono treatment for data and identifiers.
 
 ## Layout
 
-A centered report column (max-w-7xl, chat max-w-4xl) on the paper ground. The masthead is a ruled strip: wordmark and report tagline left, department-code navigation right, active section underlined in ink. Each screen opens with a ruled report header: display title, one-line description, mono report code (CL·ENV) at the right.
+The shared header and Knowledge Review content align within an 80rem maximum width. Header contents wrap with explicit spacing; the main review surface uses horizontal gutters of 1rem, increasing to 1.5rem at 40rem and 2rem at 64rem. The spacing vocabulary follows the built quarter-rem unit.
 
-Content organizes as ruled panels, not floating cards. The clinician review screen uses a two-column report sheet at lg: a fixed roster column (~340px) beside the working report. Dense data uses the data-table pattern: mono uppercase column heads, hairline row rules, and expressed column rules — the grid is visible, as on a printed form. Sections separate by whitespace and a single strong hairline; more space above a heading than below it.
+Knowledge Review places a bordered page header above disclosure, draft summary and section navigation. Rules use a two-column grid: a 240–300px browser and a flexible detail area, separated by 1.5rem. The browser scrolls within 65vh; the detail area uses 1.5rem padding. Source evidence precedes mappings and expandable provenance. Decision entry has its own section.
+
+At widths up to 767px, the review grid stacks, the rule list is capped at 18rem, detail padding becomes 1rem, section buttons wrap into approximately two columns, and page-context text hides. Workspace navigation wraps onto a full-width row. Long identifiers, source URLs and records wrap rather than forcing the detail column wider.
 
 ## Elevation & Depth
 
-The system is flat by doctrine: no drop shadows anywhere. Depth is conveyed by the rule and the tint — a panel is white paper bounded by a hairline; recessed content sits on the warm panel tint. Overlays (edit modal, swap dialog) dim the page with a flat ink wash (50%), never blur.
-
-### Named Rules
-**The Flat-By-Doctrine Rule.** No shadows, no gradients, no blur. If two surfaces need separating, the answer is a hairline or the panel tint, in that order.
+The documented shared surfaces are flat: borders, contrasting fills and spacing establish hierarchy without box shadows. Navy navigation creates the strongest tonal boundary. Selection combines a light blue fill and border in the rule browser; active navigation uses a contrasting fill and bottom marker.
 
 ## Shapes
 
-Everything is squared: a 2px "report" radius on buttons, fields, flags, and panels; tables and banners are fully square. No pills, no circles. The one recurring geometry is the range bar: a 12px-high ruled track with quartile ticks, a state-hued value fill, a solid red rule for hard ceilings, a hollow marker for soft aims, and a hatched region for the forbidden side of a limit.
+Panels use the panel radius; fields, notices and buttons use the control radius; flags and selectable rule rows use the status radius. Fine one-pixel borders define surfaces and fields. Navigation remains rectilinear, with a three-pixel active underline. Avoid turning these modest corners into pill-shaped primary controls.
 
 ## Components
 
 ### Buttons
-- **Shape:** squared (2px radius), 1px border, semibold 0.875rem label, 8px 16px padding.
-- **Primary:** Report Ink ground with paper text — the default action ("Generate proposed envelope", "Send").
-- **Approve:** Verified Green ground — reserved for approval and record actions that finalize ("Approve", "Record observation").
-- **Danger:** white ground, flag-red text and rule — destructive lifecycle actions ("Reject", "Remove").
-- **Ghost:** white ground, soft-ink text, strong-hairline border — neutral actions ("Edit", "Load plan").
-- **States:** hover shifts ground a step; disabled is 50% opacity with not-allowed cursor; keyboard focus is a 2px Interaction Blue outline offset 2px, shown only on focus-visible.
 
-### Flags (status chips)
-- **Style:** squared mono uppercase label (0.6875rem, +0.08em) on the state hue's wash with its matching rule border: flag/ok/warn/line/neutral variants.
-- **Use:** every status word in the system — envelope states (PROPOSED/APPROVED/REJECTED/EDITED), feasibility, compliance, severity. Status is never bare colored text.
-
-### Cards / Containers
-- **Corner Style:** squared (2px radius) panels; tables fully square.
-- **Background:** Card White with a Hairline border; recessed detail blocks on Panel Tint.
-- **Shadow Strategy:** none — see The Flat-By-Doctrine Rule.
-- **Internal Padding:** 20px panels, 12–16px records.
+Bordered, legible actions use compact body size and semibold weight. Primary blue and approval green brighten on hover; outlined danger actions gain a pale red fill, and neutral actions gain the panel fill. Controls have a minimum height of 42px, increasing to 48px for coarse pointers. Disabled buttons show a not-allowed cursor and half opacity.
 
 ### Inputs / Fields
-- **Style:** white ground, strong-hairline border, squared corners, 8px 12px padding; numeric fields in tabular mono.
-- **Focus:** border shifts to Interaction Blue plus the focus-visible outline; caret is Interaction Blue.
-- **Error / Disabled:** errors surface in a ruled flag-red notice strip beside the form; disabled fields take the panel tint.
+
+White fields have stronger neutral borders, the control radius and compact body text. Focus changes the border to blue; the shared keyboard-focus outline is two pixels with a two-pixel offset. Disabled fields use the panel fill. The review decision form explicitly enlarges its text fields to body size and at least 48px height.
+
+### Chips
+
+Small bordered status flags use semantic foreground, pale background and matching border. Labels state the condition: for example, awaiting review, quote missing or a recorded decision. They are status text, not substitute buttons.
+
+### Cards / Containers
+
+White panels and tinted panels share thin neutral borders and modest rounding. Padding belongs to the content context: draft summaries use the summary spacing, filters use standard spacing, and evidence detail uses section spacing. A bare panel does not impose a universal padding value.
 
 ### Navigation
-- Masthead tabs: mono department code + Public Sans label, active section underlined in ink, inactive in muted ink warming to ink on hover. Banners below the masthead are full-width ruled notice strips with a mono flag chip (NOTICE/OFFLINE) and state-tinted ground.
 
-### Range Bar (signature)
-The report's central mark: a measured value plotted on its reference range. Quartile ticks on the ruled track; the value fills from the left in its state hue; a hard ceiling is a solid Flag Red rule, soft floors and aims are hollow ink markers; overrun beyond a ceiling and the region below a floor hatch in their state hue (red for hard, amber for soft). In a constraint table the bar shows the limit alone, hatching the forbidden side.
+The branded header pairs the CareLoop wordmark with a workspace label. Main links have a 44px minimum height. Active links use a lighter navy fill, white text and a pale blue underline; focus uses a light blue outline against the dark shell. Review-section buttons have a 48px minimum height and a blue underline plus blue text when selected.
 
-### Data Table
-Mono uppercase column heads over a strong hairline; hairline row rules; column rules between cells; rows tint to Panel on hover; values right-aligned in tabular mono.
+### Evidence review
+
+The searchable rule browser exposes a persistent “Selected” label alongside its blue selected-row treatment. The detail heading repeats the rule ID. Source quotations and source links lead; mapping details and provenance follow. Draft status and warnings stay explicit, including unpublished knowledge and revision-bound decisions.
+
+### Tables and loading
+
+Tables use tinted headers, compact sans-serif labels, horizontal and vertical rules, and a tinted row hover. Data cells use tabular mono where requested by the data treatment. Loading uses a thin scanning line; reduced-motion preference replaces its animation with a static, full-width low-opacity line.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** set every measured value, limit, ID, revision, and timestamp in tabular Roboto Mono (the `num` class).
-- **Do** express status with a flag chip, never bare colored text.
-- **Do** keep disclosure and error copy in ruled notice strips tinted from their state hue.
-- **Do** separate surfaces with hairlines; recess detail blocks with the panel tint.
-- **Do** keep one authored motion: the loading scan bar (exponential ease-out, 1.2s), with the reduced-motion static fallback.
+- **Do** use the navy shell and cool light surfaces to orient clinical work.
+- **Do** pair selection and status colors with visible labels or markers.
+- **Do** keep evidence readable and let identifiers and URLs wrap.
+- **Do** retain visible keyboard focus and coarse-pointer control sizing.
 
 ### Don't:
-- **Don't** use shadows, gradients, backdrop blur, or rounded/pill shapes — the report is flat and squared.
-- **Don't** spend state hues on decoration, section identity, or navigation; hue answers "what state is this?"
-- **Don't** render a nutrient value without its reference context — no bare numbers where a range bar or limit column belongs.
-- **Don't** imply human review with language like "verified"; the approved state is labeled APPROVED, and auto-approval disclosure is mandatory.
-- **Don't** add kickers or eyebrows above headings; mono microcopy labels are column heads, codes, and IDs, not decoration.
+- **Don't** restore warm paper or lab-report decoration as the shared visual identity.
+- **Don't** use mono typography for general reading or navigation.
+- **Don't** make approval styling imply human review, publication or clinical readiness.

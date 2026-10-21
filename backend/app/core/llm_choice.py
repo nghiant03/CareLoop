@@ -9,8 +9,9 @@ overrides the model only. Embeddings resolve independently of API keys.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
-from typing import Literal, Mapping
+from typing import Literal
 
 __all__ = [
     "EmbeddingChoice",

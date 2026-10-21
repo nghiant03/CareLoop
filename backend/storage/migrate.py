@@ -9,7 +9,12 @@ from pathlib import Path
 import psycopg
 from psycopg import sql
 
-from backend.storage.postgres import _WRITE_LOCKS, check_schema, database_url, storage_row
+from backend.storage.postgres import (
+    _WRITE_LOCKS,
+    check_schema,
+    database_url,
+    storage_row,
+)
 
 CLINICAL_TABLES = ("patients", "plans", "meal_logs", "envelope_journal", "observations", "simulations", "review_items")
 KNOWLEDGE_TABLES = ("knowledge_drafts", "knowledge_revisions", "knowledge_reviews", "knowledge_releases", "knowledge_events")
@@ -40,7 +45,7 @@ def initialize_database(url: str, component: str) -> dict:
                 raise ValueError("refusing to initialize an unrelated or incomplete PostgreSQL database")
             check_schema(conn, component)
             return {"component": component, "schema_version": 1, "initialized": False}
-        conn.execute(schema_sql(component))
+        conn.execute(schema_sql(component))  # pyrefly: ignore[no-matching-overload]
         conn.execute("CREATE TABLE careloop_schema (component TEXT PRIMARY KEY, version INTEGER NOT NULL)")
         conn.execute("INSERT INTO careloop_schema VALUES (%s,1)", (component,))
         # Retain the v1 metadata table for compatibility with existing databases.

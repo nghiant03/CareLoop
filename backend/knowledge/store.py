@@ -9,7 +9,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from backend.knowledge.validation import NUTRIENTS, canonical_json, content_hash, validate_documents
+from backend.knowledge.validation import (
+    NUTRIENTS,
+    canonical_json,
+    content_hash,
+    validate_documents,
+)
 from backend.storage.postgres import PostgresConnection, is_postgres
 
 _DISH_SEMANTIC_FIELDS = (*NUTRIENTS, "portion_g", "category", "ingredients", "tags")
@@ -120,9 +125,10 @@ class KnowledgeStore:
         actor = _required(actor, "actor")
         validation = validate_documents(rules, dishes)
         with self._connection(write=True) as conn:
-            if parent_release is not None:
-                if not conn.execute("SELECT 1 FROM knowledge_releases WHERE release_id=?", (parent_release,)).fetchone():
-                    raise ValueError("parent release not found")
+            if parent_release is not None and not conn.execute(
+                "SELECT 1 FROM knowledge_releases WHERE release_id=?", (parent_release,)
+            ).fetchone():
+                raise ValueError("parent release not found")
             conn.execute("INSERT INTO knowledge_drafts VALUES (?,?,?,?,?)",
                          (draft_id, actor, _now(), parent_release, canonical_json(provenance or {})))
             self._revision(conn, draft_id, 1, actor, rules, dishes, validation)
@@ -188,7 +194,10 @@ class KnowledgeStore:
     def show(self, draft_id: str) -> dict:
         with self._connection() as conn:
             row = self._latest(conn, draft_id)
-            result = dict(conn.execute("SELECT * FROM knowledge_drafts WHERE draft_id=?", (draft_id,)).fetchone())
+            draft = conn.execute("SELECT * FROM knowledge_drafts WHERE draft_id=?", (draft_id,)).fetchone()
+            if draft is None:
+                raise ValueError(f"draft not found: {draft_id}")
+            result = dict(draft)
             result.update({"revision": row["revision"], "rules_hash": row["rules_hash"], "dishes_hash": row["dishes_hash"],
                            "validation": json.loads(row["validation_json"])})
             review = conn.execute("SELECT * FROM knowledge_reviews WHERE draft_id=? AND revision=?",

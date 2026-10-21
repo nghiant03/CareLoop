@@ -45,7 +45,7 @@ _NUTRIENT_SUMMARY_PATTERNS = {
 
 
 def _nutrients_in_text(text: str) -> list[str]:
-    lowered = str(text or "").lower()
+    lowered = (text or "").lower()
     found = [
         nutrient
         for nutrient in _NUTRIENT_ORDER

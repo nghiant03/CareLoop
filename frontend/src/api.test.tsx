@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { approveEnvelope, runRules, HttpApiError, getAdherenceDeviation, getCalendarMetadata } from './api';
+import { approveEnvelope, runRules, HttpApiError, getAdherenceDeviation, getCalendarMetadata, setApprovalMode } from './api';
 import RuleTrace from './components/RuleTrace';
 import type { EnvelopeResponse } from './types';
 
@@ -88,4 +88,16 @@ test('lifecycle conflicts retain the server reload instruction and status', asyn
   }), { status: 409 })));
   await expect(approveEnvelope('ENV-P1', { clinician_id: 'reviewer', expected_revision: 1 }))
     .rejects.toMatchObject({ status: 409, message: 'Envelope changed; reload before retrying.' });
+});
+
+test('approval mode switch sends PUT /api/config/approval-mode and validates response', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    approval_mode: 'clinician',
+  }), { status: 200 }));
+  vi.stubGlobal('fetch', fetchMock);
+  await expect(setApprovalMode('clinician')).resolves.toBe('clinician');
+  expect(fetchMock).toHaveBeenCalledWith('/api/config/approval-mode', expect.objectContaining({
+    method: 'PUT',
+    body: JSON.stringify({ approval_mode: 'clinician' }),
+  }));
 });

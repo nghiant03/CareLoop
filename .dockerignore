@@ -1,4 +1,3 @@
-# Only application/build inputs may enter the image build context.
 **
 !pyproject.toml
 !README.md
@@ -13,7 +12,6 @@
 !deploy/
 !deploy/**
 
-# Exclusions also apply within the allowed source directories.
 **/__pycache__/**
 **/.pytest_cache/**
 **/node_modules/**

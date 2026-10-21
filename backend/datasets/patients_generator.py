@@ -16,9 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from backend.datasets.patient import Patient
 from backend.datasets.paths import dataset_path
-
+from backend.datasets.patient import Patient
 
 
 class _StdlibRNG:

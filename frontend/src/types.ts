@@ -64,6 +64,7 @@ export interface EnvelopeResponse {
   citations: Citation[];
   fired_rules: RuleFire[];
   proposed_at: string;
+  approved_by?: string | null;
 }
 
 export interface Citation {
@@ -95,6 +96,7 @@ export interface Envelope {
   exclusions?: ExclusionFlag[];
   citations?: Citation[];
   trace?: TraceEntry[];
+  approved_by?: string | null;
   created_at?: string;
   updated_at?: string;
 }

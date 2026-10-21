@@ -188,7 +188,7 @@ class FastEvaluator:
         deviation = dev / self.n_days if self.n_days else 0.0
 
         # 2. preference_fit
-        n = int(idx.size)
+        n = idx.size
         preference = -float(self._pref[idx].mean()) if n else 0.0
 
         # 3. variety (identical formula to problem._obj_variety)

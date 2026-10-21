@@ -13,6 +13,8 @@ import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
 import PageHeader from '../components/PageHeader';
 import { useRequestScope } from '../hooks/useRequestScope';
+import { useDemo } from '../demo/context';
+import { useSharedPatient } from '../demo/useSharedPatient';
 
 type ReviewStatus = 'open' | 'acknowledged' | 'actioned' | 'all';
 
@@ -24,11 +26,12 @@ const STATUS_TABS: { key: ReviewStatus; label: string }[] = [
 ];
 
 export default function ReviewQueueScreen() {
+  const demo = useDemo();
   const requests = useRequestScope();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
+  const [selectedPatientId, setSelectedPatientId] = useState<string>(() => demo.patientId || '');
   const [status, setStatus] = useState<ReviewStatus>('open');
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [history, setHistory] = useState<ReviewItem[]>([]);
@@ -55,6 +58,11 @@ export default function ReviewQueueScreen() {
     setLoading(true);
     setHistoryLoading(true);
   };
+
+  useSharedPatient(patients, selectedPatientId || null, (p) => {
+    resetFilter();
+    setSelectedPatientId(p.id);
+  });
 
   const loadQueue = useCallback(() => {
     const isCurrent = requests.start('queue');
@@ -168,7 +176,12 @@ export default function ReviewQueueScreen() {
                 <select
                   id="review-patient"
                   value={selectedPatientId}
-                  onChange={(e) => { resetFilter(); setSelectedPatientId(e.target.value); }}
+                  onChange={(e) => {
+                    resetFilter();
+                    const next = e.target.value;
+                    setSelectedPatientId(next);
+                    demo.setPatientId(next || null);
+                  }}
                   className="field"
                 >
                   <option value="">All patients</option>

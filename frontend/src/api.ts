@@ -42,6 +42,7 @@ export function normalizeEnvelope(raw: EnvelopeResponse): Envelope {
     exclusions: raw.exclusions,
     citations: raw.citations,
     trace: raw.fired_rules.map(normalizeTrace),
+    approved_by: raw.approved_by,
     created_at: raw.proposed_at,
   };
 }
@@ -113,6 +114,19 @@ export async function getApprovalMode(): Promise<'auto' | 'clinician'> {
   return config.approval_mode;
 }
 
+/** Switch the demo approval policy for subsequent rule runs (unauthenticated demo control). */
+export async function setApprovalMode(mode: 'auto' | 'clinician'): Promise<'auto' | 'clinician'> {
+  const config = await fetch(`${API_PREFIX}/config/approval-mode`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ approval_mode: mode }),
+  }).then((r) => handleResponse<{ approval_mode: string }>(r));
+  if (config.approval_mode !== 'auto' && config.approval_mode !== 'clinician') {
+    throw new Error('Unknown approval mode');
+  }
+  return config.approval_mode;
+}
+
 export async function listPatients(): Promise<Patient[]> {
   return fetch(`${API_PREFIX}/patients`)
     .then((r) => handleResponse<Patient[] | { patients?: Patient[] }>(r))
@@ -178,7 +192,7 @@ export async function editEnvelope(
 
 export async function rejectEnvelope(
   id: string,
-  payload: { reason?: string; expected_revision?: number }
+  payload: { reason?: string; rejected_by?: string; expected_revision?: number }
 ): Promise<Envelope> {
   return fetch(`${API_PREFIX}/envelopes/${id}/reject`, {
     method: 'POST',

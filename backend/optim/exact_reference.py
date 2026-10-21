@@ -219,7 +219,7 @@ def _enumerate_three(nut, pref, price, tg, mn, mx, weight, lookup_size):
         idxs = np.flatnonzero(feas)
         if idxs.size == 0:
             continue
-        count += int(idxs.size)
+        count += idxs.size
 
         sel_n = pair_n[idxs] + nut[k, cols_needed]  # S x Cn day totals
         dev = None
@@ -286,7 +286,7 @@ def _enumerate_generic(nut, pref, price, tg, mn, mx, weight, lookup_size, n_slot
         idxs = np.flatnonzero(feas)
         if not idxs.size:
             return
-        state["count"] += int(idxs.size)
+        state["count"] += idxs.size
         sub = arr[idxs]
         totals_cols = {col: totals[idxs, col] for col in cols_needed}
         dev = None

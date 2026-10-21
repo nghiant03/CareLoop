@@ -5,7 +5,6 @@ are not clinical patients; recalls have no fabricated dates or approval coverage
 Missing nutrients remain null. Sources and native values accompany every record.
 """
 import csv
-import hashlib
 import io
 import json
 import math
@@ -25,6 +24,138 @@ OUT = ROOT / "staged"
 NUTRIENTS = {1008: "energy_kcal", 1003: "protein_g", 1093: "sodium_mg",
              1092: "potassium_mg", 1091: "phosphorus_mg", 1005: "carbs_g",
              1004: "fat_g", 1258: "sat_fat_g", 1079: "fiber_g", 2000: "sugar_g"}
+
+SGFOODID_NUTRIENT_COLS = {
+    "energy_kcal": ("Energy (kcal) - Per Serving", "Energy (kcal) - Per 100"),
+    "protein_g": ("Protein (g) - Per Serving", "Protein (g) - Per 100"),
+    "fat_g": ("Total Fat (g) - Per Serving", "Total Fat (g) - Per 100"),
+    "sat_fat_g": ("Saturated Fat (g) - Per Serving", "Saturated Fat (g) - Per 100"),
+    "carbs_g": ("Carbohydrate (g) - Per Serving", "Carbohydrate (g) - Per 100"),
+    "sugar_g": ("Sugar (g) - Per Serving", "Sugar (g) - Per 100"),
+    "fiber_g": ("Dietary Fibre (g) - Per Serving", "Dietary Fibre (g) - Per 100"),
+    "sodium_mg": ("Sodium (mg) - Per Serving", "Sodium (mg) - Per 100"),
+    "potassium_mg": ("Potassium (mg) - Per Serving", "Potassium (mg) - Per 100"),
+    "phosphorus_mg": ("Phosphorus (mg) - Per Serving", "Phosphorus (mg) - Per 100"),
+}
+
+SGFOODID_EXTENDED_COLS = {
+    "calcium_mg": ("Calcium (mg) - Per Serving", "Calcium (mg) - Per 100"),
+    "iron_mg": ("Iron (mg) - Per Serving", "Iron (mg) - Per 100"),
+    "water_g": ("Water (g) - Per Serving", "Water (g) - Per 100"),
+}
+
+
+def parse_sgfoodid_num(raw_val: object) -> float | None:
+    """Parse a numeric value from SG FoodID CSV.
+
+    CRITICAL: ``'-'`` or ``' - '`` denotes an unassayed/missing nutrient,
+    NEVER ``0.0``. Coercing ``'-'`` to ``0.0`` is strictly forbidden.
+    """
+    if raw_val is None:
+        return None
+    text = str(raw_val).strip()
+    if not text or text == "-":
+        return None
+    try:
+        val = float(text.replace(",", ""))
+    except ValueError:
+        return None
+    if not math.isfinite(val) or val < 0:
+        return None
+    return val
+
+
+def load_sgfoodid_candidates(raw_root: Path | None = None) -> dict:
+    """Load and audit Singapore HPB FoodID (`sgfoodid_202607.zip`) without coercing missing values."""
+    base = raw_root if raw_root is not None else (ROOT / "raw")
+    archive = base / "singapore/sgfoodid_202607.zip"
+    if not archive.exists():
+        return {"available": False, "reason": "singapore/sgfoodid_202607.zip not provisioned"}
+
+    all_records: list[dict] = []
+    complete_10_records: list[dict] = []
+    missing_counts = {k: 0 for k in SGFOODID_NUTRIENT_COLS}
+    extended_complete_in_527 = {k: 0 for k in SGFOODID_EXTENDED_COLS}
+
+    with zipfile.ZipFile(archive) as zf:
+        csv_members = [n for n in zf.namelist() if n.endswith(".csv")]
+        if not csv_members:
+            return {"available": False, "reason": "No CSV member inside sgfoodid_202607.zip"}
+        raw_csv = zf.read(csv_members[0]).decode("utf-8", errors="replace")
+
+    for idx, row in enumerate(csv.DictReader(io.StringIO(raw_csv))):
+        food_id_raw = (row.get("Food ID") or f"ROW-{idx}").strip()
+        food_id = f"SG-HPB-{food_id_raw}"
+        name = (row.get("Food Name") or "").strip()
+        group = (row.get("Food Group") or "").strip()
+        sub_group = (row.get("Food Sub Group") or "").strip()
+        per_serving: dict[str, float | None] = {}
+        per_100g: dict[str, float | None] = {}
+        missing_nutrients: list[str] = []
+
+        for nut_key, (col_srv, col_100) in SGFOODID_NUTRIENT_COLS.items():
+            v_srv = parse_sgfoodid_num(row.get(col_srv))
+            v_100 = parse_sgfoodid_num(row.get(col_100))
+            val = v_srv if v_srv is not None else v_100
+            per_serving[nut_key] = v_srv
+            per_100g[nut_key] = v_100
+            if val is None:
+                missing_nutrients.append(nut_key)
+                missing_counts[nut_key] += 1
+
+        ext_serving: dict[str, float | None] = {}
+        for ext_key, (col_srv, col_100) in SGFOODID_EXTENDED_COLS.items():
+            v_srv = parse_sgfoodid_num(row.get(col_srv))
+            v_100 = parse_sgfoodid_num(row.get(col_100))
+            ext_serving[ext_key] = v_srv if v_srv is not None else v_100
+
+        is_complete_10 = len(missing_nutrients) == 0
+        if is_complete_10:
+            for ext_key, ext_val in ext_serving.items():
+                if ext_val is not None:
+                    extended_complete_in_527[ext_key] += 1
+
+        rec = {
+            "food_id": food_id,
+            "name": name,
+            "food_group": group,
+            "food_subgroup": sub_group,
+            "source_path": "raw/singapore/sgfoodid_202607.zip",
+            "nutrient_basis": "per_serving_with_per_100g",
+            "nutrients": {
+                k: (per_serving[k] if per_serving[k] is not None else per_100g[k])
+                for k in SGFOODID_NUTRIENT_COLS
+            },
+            "nutrients_per_100g": per_100g,
+            "extended_nutrients": ext_serving,
+            "missing_nutrients": missing_nutrients,
+            "complete_10_careloop_nutrients": is_complete_10,
+            "clinical_catalogue_import_allowed": False,
+            "requires_review": True,
+        }
+        all_records.append(rec)
+        if is_complete_10:
+            complete_10_records.append(rec)
+
+    total = len(all_records)
+    comp = len(complete_10_records)
+    return {
+        "available": True,
+        "total_rows": total,
+        "complete_10_nutrient_rows": comp,
+        "incomplete_excluded_rows": total - comp,
+        "completeness_rate": round(comp / total, 4) if total else 0.0,
+        "missing_counts_by_nutrient": missing_counts,
+        "extended_nutrient_coverage_in_complete_subset": {
+            k: {
+                "present": v,
+                "rate": round(v / comp, 4) if comp else 0.0,
+            }
+            for k, v in extended_complete_in_527.items()
+        },
+        "complete_records": complete_10_records,
+        "all_records": all_records,
+    }
 
 
 def clean(value):
@@ -67,10 +198,10 @@ class ArticleTables(HTMLParser):
             self.cell.append(data)
 
     def handle_endtag(self, tag):
-        if tag in {"td", "th"} and self.cell is not None:
+        if tag in {"td", "th"} and self.cell is not None and self.row is not None:
             self.row.append(" ".join("".join(self.cell).split()))
             self.cell = None
-        elif tag == "tr" and self.row is not None:
+        elif tag == "tr" and self.row is not None and self.table is not None:
             self.table.append(self.row)
             self.row = None
         elif tag == "table" and self.table is not None:
@@ -203,6 +334,17 @@ def main():
         (OUT / "singapore_study_tables.json").write_text(encode({"source_path": str(study.relative_to(ROOT)),
             "requires_review": True, "tables": parser.tables}) + "\n")
         summary["counts"]["singapore_study_tables"] = len(parser.tables)
+    sgfood = ROOT / "raw/singapore/sgfoodid_202607.zip"
+    if str(sgfood.relative_to(ROOT)) in sources:
+        sg_loaded = load_sgfoodid_candidates(ROOT / "raw")
+        if sg_loaded.get("available"):
+            for candidate in sg_loaded["all_records"]:
+                conn.execute(
+                    "INSERT OR REPLACE INTO food_candidates VALUES (?,?)",
+                    (candidate["food_id"], encode(candidate)),
+                )
+            summary["counts"]["sgfoodid_total_rows"] = sg_loaded["total_rows"]
+            summary["counts"]["sgfoodid_complete_10_nutrient_rows"] = sg_loaded["complete_10_nutrient_rows"]
     pdf = ROOT / "raw/guidelines/kdigo_2024_ckd.pdf"
     if str(pdf.relative_to(ROOT)) in sources:
         text = subprocess.check_output(["pdftotext", "-layout", str(pdf), "-"]).decode()

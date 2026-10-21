@@ -11,8 +11,11 @@ import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
 import PageHeader from '../components/PageHeader';
 import { useRequestScope } from '../hooks/useRequestScope';
+import { useDemo } from '../demo/context';
+import { useSharedPatient } from '../demo/useSharedPatient';
 
 export default function SimulationScreen() {
+  const demo = useDemo();
   const requests = useRequestScope();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
@@ -51,6 +54,7 @@ export default function SimulationScreen() {
   const handleSelectPatient = async (patient: Patient | null) => {
     requests.reset();
     const isCurrent = requests.start('prefill');
+    demo.setPatientId(patient?.id || null);
     setSelectedPatient(patient);
     setTargets([]);
     setResult(null);
@@ -83,6 +87,8 @@ export default function SimulationScreen() {
       if (isCurrent()) await loadPast(patient.id);
     }
   };
+
+  useSharedPatient(patients, selectedPatient?.id, (p) => { void handleSelectPatient(p); });
 
   const handleRun = async () => {
     if (!selectedPatient) return;

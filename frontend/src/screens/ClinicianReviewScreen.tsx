@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
+  HttpApiError,
   listPatients,
   runRules,
   getEnvelope,
+  getLatestEnvelope,
   getPatient,
   approveEnvelope,
   rejectEnvelope,
@@ -20,10 +22,21 @@ import RuleTrace from '../components/RuleTrace';
 import EditEnvelopeModal from '../components/EditEnvelopeModal';
 import PageHeader from '../components/PageHeader';
 import { useRequestScope } from '../hooks/useRequestScope';
+import { DEFAULT_REVIEWER, useDemo } from '../demo/context';
+import { useSharedPatient } from '../demo/useSharedPatient';
+
+const ENVELOPE_HEADINGS: Record<Envelope['status'], string> = {
+  PROPOSED: 'Proposed envelope',
+  APPROVED: 'Approved envelope',
+  EDITED: 'Edited envelope (awaiting re-approval)',
+  REJECTED: 'Rejected envelope',
+};
 
 export default function ClinicianReviewScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const linkedEnvelopeId = searchParams.get('envelope');
+  const { setPatientId, reviewerName } = useDemo();
+  const reviewer = reviewerName.trim() || DEFAULT_REVIEWER;
   const requests = useRequestScope();
   const selectionIsCurrent = requests.capture();
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -31,10 +44,12 @@ export default function ClinicianReviewScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [envelope, setEnvelope] = useState<Envelope | null>(null);
-  const [envelopeLoading, setEnvelopeLoading] = useState(false);
+  const [envelopeLoading, setEnvelopeLoading] = useState(() => Boolean(linkedEnvelopeId));
   const [actionLoading, setActionLoading] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [isRejectOpen, setIsRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
   const [observations, setObservations] = useState<Observation[]>([]);
   const [observationsLoading, setObservationsLoading] = useState(false);
 
@@ -52,20 +67,13 @@ export default function ClinicianReviewScreen() {
     requests.reset();
     const isCurrent = requests.start('envelope');
     let active = true;
-    setEnvelope(null);
-    setSelectedPatient(null);
-    setObservations([]);
-    setIsEditOpen(false);
-    setActionLoading(false);
-    setSavingEdit(false);
-    setEnvelopeLoading(true);
-    setError(null);
     const loadLinkedProposal = async () => {
       try {
         const proposal = await getEnvelope(linkedEnvelopeId);
         const patient = await getPatient(proposal.patient_id);
         if (!active || !isCurrent()) return;
         setSelectedPatient(patient);
+        setPatientId(patient.id);
         setEnvelope(proposal);
         setObservationsLoading(true);
         try {
@@ -82,21 +90,7 @@ export default function ClinicianReviewScreen() {
     };
     void loadLinkedProposal();
     return () => { active = false; };
-  }, [linkedEnvelopeId, requests]);
-
-  const handleSelect = (patient: Patient) => {
-    setSearchParams({});
-    requests.reset();
-    setSelectedPatient(patient);
-    setEnvelope(null);
-    setObservations([]);
-    setError(null);
-    setIsEditOpen(false);
-    setEnvelopeLoading(false);
-    setActionLoading(false);
-    setSavingEdit(false);
-    loadObservations(patient.id);
-  };
+  }, [linkedEnvelopeId, requests, setPatientId]);
 
   const loadObservations = async (patientId: string) => {
     const isCurrent = requests.start('observations');
@@ -111,12 +105,48 @@ export default function ClinicianReviewScreen() {
     }
   };
 
+  const loadLatestForPatient = async (patientId: string) => {
+    if (!getLatestEnvelope) return;
+    const isCurrent = requests.start('latest');
+    try {
+      const latest = await getLatestEnvelope(patientId);
+      if (isCurrent() && latest) setEnvelope(latest);
+    } catch (err: any) {
+      if (!isCurrent()) return;
+      if (!(err instanceof HttpApiError && err.code === 'envelope_not_found')) {
+        setError(err.message || 'Failed to load latest envelope');
+      }
+    }
+  };
+
+  const handleSelect = (patient: Patient) => {
+    setSearchParams({});
+    requests.reset();
+    setPatientId(patient.id);
+    setSelectedPatient(patient);
+    setEnvelope(null);
+    setObservations([]);
+    setError(null);
+    setIsEditOpen(false);
+    setIsRejectOpen(false);
+    setRejectReason('');
+    setEnvelopeLoading(false);
+    setActionLoading(false);
+    setSavingEdit(false);
+    void loadLatestForPatient(patient.id);
+    void loadObservations(patient.id);
+  };
+
+  useSharedPatient(patients, selectedPatient?.id, handleSelect, Boolean(linkedEnvelopeId));
+
   const handleGenerate = async () => {
     if (!selectedPatient || envelopeLoading || actionLoading || savingEdit || isEditOpen) return;
+    requests.start('latest'); // Invalidate any in-flight latest lookup.
     const isCurrent = requests.start('envelope');
     setEnvelopeLoading(true);
     setActionLoading(false);
     setSavingEdit(false);
+    setIsRejectOpen(false);
     setError(null);
     try {
       const result = await runRules(selectedPatient.id);
@@ -134,7 +164,7 @@ export default function ClinicianReviewScreen() {
     setActionLoading(true);
     try {
       const updated = await approveEnvelope(envelope.id, {
-        clinician_id: 'clinician-1', expected_revision: envelope.lifecycle_revision,
+        clinician_id: reviewer, expected_revision: envelope.lifecycle_revision,
       });
       if (isCurrent()) setEnvelope(updated);
     } catch (err: any) {
@@ -150,9 +180,15 @@ export default function ClinicianReviewScreen() {
     setActionLoading(true);
     try {
       const updated = await rejectEnvelope(envelope.id, {
-        reason: 'Rejected by clinician', expected_revision: envelope.lifecycle_revision,
+        reason: rejectReason.trim() || 'Rejected by clinician',
+        rejected_by: reviewer,
+        expected_revision: envelope.lifecycle_revision,
       });
-      if (isCurrent()) setEnvelope(updated);
+      if (isCurrent()) {
+        setEnvelope(updated);
+        setIsRejectOpen(false);
+        setRejectReason('');
+      }
     } catch (err: any) {
       if (isCurrent()) setError(err.message || 'Failed to reject envelope');
     } finally {
@@ -170,6 +206,7 @@ export default function ClinicianReviewScreen() {
     const isCurrent = requests.start('envelope');
     setActionLoading(true);
     setIsEditOpen(false);
+    setIsRejectOpen(false);
     try {
       const current = await getEnvelope(envelope.id);
       if (!isCurrent()) return;
@@ -190,7 +227,7 @@ export default function ClinicianReviewScreen() {
       const updated = await editEnvelope(envelope.id, {
         targets,
         notes,
-        edited_by: 'clinician-1',
+        edited_by: reviewer,
         expected_revision: envelope.lifecycle_revision,
       });
       if (!isCurrent()) return;
@@ -201,11 +238,13 @@ export default function ClinicianReviewScreen() {
     }
   };
 
+  const isAutoApproved = envelope?.status === 'APPROVED' && Boolean(envelope.approved_by?.startsWith('system:auto-approval'));
+
   return (
     <main className="pb-12">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <PageHeader code="ENV" title="Clinician review">
-          Select a patient, generate a proposed nutrient envelope, then approve or adjust it.
+          Select a patient to inspect their current nutrient envelope, or generate a new proposal and approve or adjust it.
         </PageHeader>
 
         {error && (
@@ -245,7 +284,7 @@ export default function ClinicianReviewScreen() {
         {!selectedPatient && !envelopeLoading && (
           <EmptyState
             title="No patient selected"
-            description="Choose a patient from the roster to generate and review a proposed nutrient envelope."
+            description="Choose a patient from the roster to inspect or generate a nutrient envelope."
           />
         )}
         {selectedPatient && (
@@ -277,7 +316,9 @@ export default function ClinicianReviewScreen() {
             <div className="panel">
               <div className="flex flex-col gap-3 border-b border-rule p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-bold tracking-tight text-ink">Proposed envelope</h2>
+                  <h2 className="text-lg font-bold tracking-tight text-ink">
+                    {ENVELOPE_HEADINGS[envelope.status] || 'Proposed envelope'}
+                  </h2>
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-3">
                     <span className="num">{envelope.id}</span>
                     <span className="num">v{envelope.version}</span>
@@ -288,6 +329,9 @@ export default function ClinicianReviewScreen() {
                       </span>
                     ) : (
                       <StatusFlag status={envelope.status} />
+                    )}
+                    {envelope.approved_by && (
+                      <span>by <span className="font-medium text-ink-2">{envelope.approved_by}</span></span>
                     )}
                   </p>
                 </div>
@@ -308,7 +352,7 @@ export default function ClinicianReviewScreen() {
                     Edit
                   </button>
                   <button
-                    onClick={handleReject}
+                    onClick={() => setIsRejectOpen((open) => !open)}
                     disabled={envelopeLoading || savingEdit || actionLoading || envelope.status === 'REJECTED'}
                     className="btn-danger"
                   >
@@ -320,6 +364,52 @@ export default function ClinicianReviewScreen() {
                   </button>
                 </div>
               </div>
+
+              {envelope.status === 'APPROVED' && (
+                <div className={`border-b border-rule px-5 py-3 text-sm ${isAutoApproved ? 'bg-warn-bg text-warn' : 'bg-ok-bg text-ok'}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      {isAutoApproved
+                        ? 'Auto-approved in demo mode (not clinically reviewed). Edit a constraint or switch Approval to Manual review to step through clinician approval.'
+                        : 'Approved for meal planning and personal target guidance.'}
+                    </span>
+                    <Link to="/plan" className="font-semibold underline">
+                      Open meal plan →
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {isRejectOpen && (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); void handleReject(); }}
+                  className="border-b border-rule bg-flag-bg/60 p-5"
+                >
+                  <label htmlFor="reject-reason" className="micro-label mb-1 block">
+                    Reason for rejection
+                  </label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id="reject-reason"
+                      type="text"
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="e.g. Lab values pending confirmation"
+                      className="field flex-1"
+                    />
+                    <button type="submit" disabled={actionLoading} className="btn-danger">
+                      {actionLoading ? 'Rejecting…' : 'Confirm reject'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setIsRejectOpen(false); setRejectReason(''); }}
+                      className="btn-ghost"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
 
               <div className="p-5">
                 <h3 className="micro-label mb-3">Nutrient constraints</h3>

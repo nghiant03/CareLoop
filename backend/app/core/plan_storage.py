@@ -5,8 +5,8 @@ from typing import Any
 
 from backend.app.core import persistence
 from backend.app.core.kb_loader import get_kb
-from shared.envelope_schema import NutrientEnvelope
 from backend.knowledge.runtime import selected_release, source_hashes
+from shared.envelope_schema import NutrientEnvelope
 
 logger = logging.getLogger("careloop.plans")
 

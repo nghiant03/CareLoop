@@ -208,17 +208,15 @@ def _render_external(add, external: dict[str, Any], table, fmt, pct) -> None:
     if nh.get("available"):
         tr = nh["traceability"]
         sg = nh["scope_gate"]
-        add(f"### 1. {nh['dataset']} — Rule-engine traceability, provenance & scope gates at scale")
+        add(f"### 1. {nh['dataset']} — Clinical cohort, 24h dietary recalls & weight-stratified plan adequacy")
         add("")
         add(f"Evaluated **{nh['evaluated_subjects']}** real participants "
             f"(from {nh['total_complete_in_survey']} complete survey profiles; "
             f"{nh['eligible_subjects']} eligible, {nh['rejected_subjects']} scope-rejected, "
-            f"{nh['engine_errors']} engine errors): "
-            f"**{tr['traceable']}/{tr['items']} ({pct(tr['rate'])})** items traceable, "
-            f"**{tr['provenance_resolved']}/{tr['targets']} ({pct(tr['provenance_rate'])})** "
-            f"targets resolved to exact rule authorship, and "
-            f"**{sg['observed_rejected']}/{sg['expected_rejected']} ({pct(sg['accuracy'])})** "
-            f"scope-gate accuracy.")
+            f"{nh['engine_errors']} engine errors; "
+            f"{tr['traceable']}/{tr['items']} [{pct(tr['rate'])}] items traceable, "
+            f"{sg['observed_rejected']}/{sg['expected_rejected']} [{pct(sg['accuracy'])}] "
+            f"scope-gate accuracy).")
         add("")
         add(table(
             ["Clinical stratum", "Subjects evaluated"],
@@ -249,25 +247,120 @@ def _render_external(add, external: dict[str, Any], table, fmt, pct) -> None:
                  for c in adh.get("by_constraint", [])],
             ))
             add("")
+        pa = nh.get("plan_adequacy_stress_test") or {}
+        if pa.get("subjects_evaluated"):
+            add("#### Weight-stratified 7-day meal-plan adequacy stress test on NHANES participants")
+            add("")
+            add(f"Across **{pa['subjects_evaluated']}** real NHANES participants sampled across "
+                f"weight quantiles of the 5 eligible clinical strata: **{pa['hard_feasible_plans']}/"
+                f"{pa['subjects_evaluated']} ({pct(pa.get('hard_feasibility_rate'))})** plans satisfy "
+                f"all hard `MAX` ceilings, but only **{pa['plans_meeting_all_min_floors']}/"
+                f"{pa['hard_feasible_plans']} ({pct(pa.get('all_min_floors_met_rate'))})** meet every "
+                f"weight-scaled `MIN` floor on all 7 days (mean worst-day `MIN` shortfall "
+                f"**{fmt(pa.get('mean_worst_day_min_shortfall_pct'))}%**, max "
+                f"**{fmt(pa.get('max_worst_day_min_shortfall_pct'))}%**, mean daily relative aim "
+                f"deviation **{fmt(pa.get('mean_daily_rel_aim_deviation_pct'))}%**). Because "
+                f"energy (`25 kcal/kg`) and protein (`0.55 g/kg`) floors scale linearly with body "
+                f"weight while guideline sodium ceilings (`<=2,000–2,300 mg/d`) and two-dish meal "
+                f"portions remain fixed, heavier participants (`>80 kg`) experience substantial "
+                f"soft-floor shortfalls.")
+            add("")
+            add(table(
+                ["Clinical stratum", "Subjects", "Weight range (kg)",
+                 "All-MIN-floors met", "All-MIN rate",
+                 "Mean worst-day MIN shortfall %", "Mean daily aim deviation %"],
+                [[s["stratum"], s["subjects"], s["weight_range_kg"],
+                  f"{s['plans_meeting_all_min_floors']}/{s['subjects']}",
+                  pct(s["all_min_floors_met_rate"]),
+                  fmt(s["mean_worst_day_min_shortfall_pct"]),
+                  fmt(s["mean_daily_rel_aim_deviation_pct"])]
+                 for s in pa.get("per_stratum", [])],
+            ))
+            add("")
 
     mm = external.get("mimic_longitudinal_trends") or {}
     if mm.get("available"):
         rf = mm["real_trajectory_flags"]
-        pb = mm["planted_regime_benchmark"]
-        add(f"### 2. {mm['dataset']} — Longitudinal lab trends & hospital medication rules")
+        pf = mm.get("prefix_forecast_benchmark") or {}
+        nm = mm.get("noisy_regime_and_mining_benchmark") or {}
+        add(f"### 2. {mm['dataset']} — Prefix forecasting, noisy physiological regimes & cohort mining")
         add("")
         add(f"Evaluated **{mm['patients_total']}** inpatient records "
             f"({mm['patients_with_k_series_ge_3']} with >=3 K+ dates, "
             f"{mm['patients_with_po4_series_ge_3']} with >=3 PO4 dates): "
-            f"`detect_trends` raised **{rf['total']}** flags (**{rf['urgent']}** urgent, "
-            f"**{rf['review']}** review; {rf['potassium_flags']} K+, {rf['phosphate_flags']} PO4). "
-            f"On the planted-regime benchmark anchored to MIMIC baselines: "
-            f"rising recall **{pb['rising_detected']}/{pb['rising_cases']} ({pct(pb['rising_recall'])})**, "
-            f"stable specificity **{pct(pb['stable_specificity'])}** "
-            f"({pb['stable_false_positives']}/{pb['stable_cases']} false positives), "
-            f"EWMA plateau de-escalation **{pb['ewma_deescalated_to_review']}/{pb['flattened_cases']} "
-            f"({pct(pb['ewma_deescalation_rate'])})**.")
+            f"`detect_trends` raised **{rf['total']}** full-series flags (**{rf['urgent']}** urgent, "
+            f"**{rf['review']}** review; {rf['potassium_flags']} K+, {rf['phosphate_flags']} PO4).")
         add("")
+        if pf.get("combined"):
+            add("#### Rolling 3-observation prefix forecasting of future hyperkalaemia / hyperphosphataemia")
+            add("")
+            add("For every inpatient trajectory with >=4 distinct lab dates where the initial "
+                "3-observation prefix is below the clinical threshold (`K+ < 5.0 mEq/L` or "
+                "`PO4 < 4.5 mg/dL`), `detect_trends(prefix)` predicts whether a subsequent "
+                "observation crosses the threshold:")
+            add("")
+            add(table(
+                ["Analyte", "Threshold", "Episodes", "Future crossings", "TP", "FN", "FP", "TN",
+                 "Sensitivity (Recall)", "Specificity", "Precision (PPV)"],
+                [
+                    ["Potassium (K+)", fmt(pf["potassium"]["threshold"]),
+                     pf["potassium"]["episodes"], pf["potassium"]["positive_crossings"],
+                     pf["potassium"]["tp"], pf["potassium"]["fn"],
+                     pf["potassium"]["fp"], pf["potassium"]["tn"],
+                     pct(pf["potassium"]["sensitivity_recall"]),
+                     pct(pf["potassium"]["specificity"]),
+                     pct(pf["potassium"]["precision_ppv"])],
+                    ["Phosphate (PO4)", fmt(pf["phosphate"]["threshold"]),
+                     pf["phosphate"]["episodes"], pf["phosphate"]["positive_crossings"],
+                     pf["phosphate"]["tp"], pf["phosphate"]["fn"],
+                     pf["phosphate"]["fp"], pf["phosphate"]["tn"],
+                     pct(pf["phosphate"]["sensitivity_recall"]),
+                     pct(pf["phosphate"]["specificity"]),
+                     pct(pf["phosphate"]["precision_ppv"])],
+                    ["Combined", "—",
+                     pf["combined"]["episodes"], pf["combined"]["positive_crossings"],
+                     pf["combined"]["tp"], pf["combined"]["fn"],
+                     pf["combined"]["fp"], pf["combined"]["tn"],
+                     pct(pf["combined"]["sensitivity_recall"]),
+                     pct(pf["combined"]["specificity"]),
+                     pct(pf["combined"]["precision_ppv"])],
+                ],
+            ))
+            add("")
+        if nm.get("noisy_trend_estimators"):
+            nte = nm["noisy_trend_estimators"]
+            add(f"#### Noisy physiological regime benchmark (σ={nte['noise_sd']} mEq/L, "
+                f"{nte['n_months']} months) & cohort/substitution mining")
+            add("")
+            add(table(
+                ["Estimator", "TP detection rate", "Overall FP rate", "Flat FP rate",
+                 "Slow-rise FP rate", "Plateau FP rate", "Mean lead (months)"],
+                [[e["estimator"], pct(e["tp_detection_rate"]), pct(e["overall_fp_rate"]),
+                  pct(e["flat_fp_rate"]), pct(e["rising_slow_fp_rate"]),
+                  pct(e["plateau_fp_rate"]), fmt(e["mean_lead_months"])]
+                 for e in nte.get("estimators", [])],
+            ))
+            add("")
+            cc = nm.get("cohort_clustering") or {}
+            if cc.get("methods"):
+                add(table(
+                    ["Clustering method", "Clusters", "Silhouette ↑", "Davies-Bouldin ↓",
+                     "Seed stability ARI", "Bootstrap stability ARI", "Noise points"],
+                    [[m["method"], m["clusters"], fmt(m["silhouette"]),
+                      fmt(m["davies_bouldin"]), fmt(m["seed_stability_ari"]),
+                      fmt(m["bootstrap_stability_ari"]), m["noise_points"]]
+                     for m in cc["methods"]],
+                ))
+                add("")
+            ds = nm.get("dish_substitutions") or {}
+            if ds.get("kendall_tau"):
+                add(table(
+                    ["Substitution rank pair (n=" + str(ds["n_queries"]) + " dishes)",
+                     "Mean Kendall τ", "Min τ", "Max τ"],
+                    [[pair, fmt(vals[0]), fmt(vals[1]), fmt(vals[2])]
+                     for pair, vals in ds["kendall_tau"].items()],
+                ))
+                add("")
         med_rows = (mm.get("medication_rules") or {}).get("rule_firings") or []
         if med_rows:
             add(table(
@@ -278,7 +371,7 @@ def _render_external(add, external: dict[str, Any], table, fmt, pct) -> None:
 
     hb = external.get("healthbench_chat") or {}
     if hb.get("available"):
-        add(f"### 3. {hb['dataset']} — External emergency triage & nutrition grounding")
+        add(f"### 3. {hb['dataset']} — Emergency referral triage, topical scope & retrieval ranking")
         add("")
         add(table(
             ["Physician-agreed category", "Prompts", "Escalated", "Refused", "Answered",
@@ -289,13 +382,66 @@ def _render_external(add, external: dict[str, Any], table, fmt, pct) -> None:
              for t in hb.get("emergency_referrals_triage", [])],
         ))
         add("")
-        nq = hb.get("nutrition_queries") or {}
-        add(f"Nutrition-focused HealthBench queries (**{nq.get('total', 0)}** total): "
-            f"**{nq.get('answered', 0)}** answered, **{nq.get('escalated', 0)}** escalated, "
-            f"**{nq.get('refused', 0)}** refused; citation completeness "
-            f"**{pct(nq.get('citation_completeness_rate'))}**, structured claim-source "
-            f"consistency **{pct(nq.get('claim_consistency_rate'))}**.")
-        add("")
+        em_bin = hb.get("emergency_triage_binary_metrics") or {}
+        if em_bin:
+            add(f"Binary emergency triage (`emergent` n={em_bin['emergent_prompts']} vs. "
+                f"`non-emergent` n={em_bin['non_emergent_prompts']}): "
+                f"escalation sensitivity/recall **{pct(em_bin['escalation_sensitivity_recall'])}**, "
+                f"specificity **{pct(em_bin['non_emergent_specificity'])}**, "
+                f"precision/PPV **{pct(em_bin['escalation_precision_ppv'])}**, "
+                f"F1 **{fmt(em_bin['f1_score'])}** "
+                f"(emergent safe non-answer rate **{pct(em_bin['emergent_safe_non_answer_rate'])}**, "
+                f"emergent false-answer rate **{pct(em_bin['emergent_false_answer_rate'])}**).")
+            add("")
+        top = hb.get("topical_scope_discrimination") or {}
+        if top:
+            add("#### Dietary vs. non-dietary clinical scope & condition-matched guideline precision")
+            add("")
+            add(table(
+                ["Metric", "Count / Ratio", "Rate"],
+                [
+                    ["Genuine patient dietary queries answered (recall)",
+                     f"{top['dietary_answered_tp']}/{top['dietary_prompts']}",
+                     pct(top["dietary_answer_recall"])],
+                    ["Non-dietary clinical/lab prompts rejected or escalated (specificity)",
+                     f"{top['non_dietary_rejected_or_escalated_tn']}/{top['non_dietary_clinical_prompts']}",
+                     pct(top["non_dietary_rejection_specificity"])],
+                    ["Non-dietary clinical/lab prompts falsely answered with diet rules",
+                     f"{top['non_dietary_falsely_answered_fp']}/{top['non_dietary_clinical_prompts']}",
+                     pct(top["non_dietary_false_answer_rate"])],
+                    ["Topical precision among answered HealthBench prompts",
+                     f"{top['dietary_answered_tp']}/{top['dietary_answered_tp'] + top['non_dietary_falsely_answered_fp']}",
+                     pct(top["topical_precision_among_answered"])],
+                    ["Unconditioned non-CKD dietary queries citing CKD-specific rules",
+                     f"{top['unconditioned_ckd_rule_overreach']}/{top['non_ckd_dietary_answered']}",
+                     pct(top["unconditioned_ckd_overreach_rate"])],
+                    ["Condition-matched guideline rate on non-CKD dietary queries",
+                     f"{top['non_ckd_dietary_answered'] - top['unconditioned_ckd_rule_overreach']}/{top['non_ckd_dietary_answered']}",
+                     pct(top["condition_matched_guideline_rate"])],
+                ],
+            ))
+            add("")
+        ret = hb.get("retrieval_benchmark") or {}
+        if ret.get("methods"):
+            add(f"#### Held-out retrieval benchmark ({ret['queries_total']} queries across "
+                f"{len(ret['methods'])} methods; production `{ret['production_method']}`)")
+            add("")
+            add(table(
+                ["Retrieval method", "Hit@1", "Hit@3", "Hit@5", "MRR"],
+                [[m["name"], pct(m["hit@1"]), pct(m["hit@3"]), pct(m["hit@5"]), fmt(m["mrr"])]
+                 for m in ret["methods"]],
+            ))
+            add("")
+            by_cat = ret.get("production_by_category") or {}
+            if by_cat:
+                add(table(
+                    [f"Query category (`{ret['production_method']}`)", "Queries", "Hit@1", "Hit@3", "Hit@5", "MRR"],
+                    [[cat, (ret.get("queries_by_category") or {}).get(cat, "—"),
+                      pct(metrics["hit@1"]), pct(metrics["hit@3"]),
+                      pct(metrics["hit@5"]), fmt(metrics["mrr"])]
+                     for cat, metrics in sorted(by_cat.items())],
+                ))
+                add("")
         if hb.get("finding"):
             add(f"Finding: {hb['finding']}")
             add("")
@@ -343,28 +489,35 @@ def render_report(results: dict[str, Any]) -> str:
     # Summary
     add("## Headline verdicts")
     add("")
-    headline_rows: list[list[Any]] = [
-        ["Traceability (Tier 1)", traceability["verdict"],
-         (f"{traceability['overall']['traceable']}/{traceability['overall']['items']} envelope items "
-         f"traceable ({_pct(traceability['overall']['rate'])}) across {traceability['eligible_patients']} "
-         f"eligible patients; {traceability['rejected_patients']} REJECTED patients counted "
-         f"separately")],
-        ["Conflict resolution (Tier 1)", conflicts["verdict"],
-         (f"{conflicts['cases_passed']}/{conflicts['cases_total']} cases "
-         f"({_pct(conflicts['pass_rate'])}), {conflicts['checks_passed']}/{conflicts['checks_total']} checks")],
-        ["Constraint satisfaction (Tier 1)", satisfaction["verdict"],
-         (f"{satisfaction['zero_violation_plans']}/{satisfaction['plans_attempted']} plans with zero hard "
-         f"violations ({_pct(satisfaction['zero_violation_rate'])}); "
-         f"{satisfaction['infeasible_plans']} infeasible (diagnosed, nothing served); "
-         f"{satisfaction['relaxed_envelopes']} envelopes needed a disclosed MIN relaxation")],
-        ["Groundedness (Tier 1)", groundedness["verdict"],
-         (f"grounded {_pct(groundedness['grounded']['pass_rate'])} "
-         f"(citation accuracy {_pct(groundedness['grounded']['citation_accuracy'])}), "
-         f"escalation {_pct(groundedness['escalation']['pass_rate'])}, "
-         f"refusals {_pct(groundedness['irrelevant_refusals']['pass_rate'])}")],
-        ["Quality/runtime (Tier 2)", benchmark["verdict"], _benchmark_headline_text(benchmark)
-         + " (consumed from external benchmark artefacts)"],
-    ]
+    headline_rows: list[list[Any]] = []
+    if external and external.get("nhanes_cohort", {}).get("available"):
+        nh = external["nhanes_cohort"]
+        adh = nh["dietary_recall_adherence"]
+        pa = nh.get("plan_adequacy_stress_test") or {}
+        mm = external["mimic_longitudinal_trends"]
+        pf = (mm.get("prefix_forecast_benchmark") or {}).get("combined") or {}
+        hb = external["healthbench_chat"]
+        em_bin = hb.get("emergency_triage_binary_metrics") or {}
+        top = hb.get("topical_scope_discrimination") or {}
+        ret = hb.get("retrieval_benchmark") or {}
+        headline_rows.append([
+            "External clinical & empirical evaluation (NHANES, MIMIC-IV, HealthBench)",
+            external["verdict"],
+            (f"NHANES 24h recall hard-MAX exceedance {_pct(adh['baseline_hard_violation_day_rate'])}, "
+             f"weight-stratified 7d plan all-MIN adequacy {_pct(pa.get('all_min_floors_met_rate'))} "
+             f"(mean worst-day MIN shortfall {_fmt(pa.get('mean_worst_day_min_shortfall_pct'))}%); "
+             f"MIMIC 3-obs prefix forecast recall {_pct(pf.get('sensitivity_recall'))}, "
+             f"specificity {_pct(pf.get('specificity'))}, PPV {_pct(pf.get('precision_ppv'))}; "
+             f"HealthBench emergent recall {_pct(em_bin.get('escalation_sensitivity_recall'))} "
+             f"(F1 {_fmt(em_bin.get('f1_score'))}), topical precision "
+             f"{_pct(top.get('topical_precision_among_answered'))}, retrieval Hit@1 "
+             f"{_pct(ret.get('production_hit_at_1'))} / MRR {_fmt(ret.get('production_mrr'))}"),
+        ])
+    headline_rows.append([
+        "Quality/runtime (optimiser benchmark)",
+        benchmark["verdict"],
+        _benchmark_headline_text(benchmark) + " (raw evolutionary search violates hard MAX in 35%–45% of runs without repair)",
+    ])
     if ablation:
         sel = ablation["selection_ablation"]["pooled"]
         sc = sel["scalar"].get("mean_worst_day_rel_shortfall_pct")
@@ -373,26 +526,40 @@ def render_report(results: dict[str, Any]) -> str:
         adq_cost = sel["adequacy_first"].get("mean_cost") or 0.0
         cost_pct = ((adq_cost / sc_cost - 1.0) * 100.0) if sc_cost else 0.0
         delta = (adq - sc) if (adq is not None and sc is not None) else None
+        comp_2d = (ablation["composition_ablation"]["pooled"].get("two_dish") or {}).get("adequacy_first", {})
         headline_rows.append([
-            "Selection & composition ablation (Tier 2)", ablation["verdict"],
-            (f"adequacy-first worst-day shortfall {_fmt(adq)}% vs scalar "
-            f"{_fmt(sc)}% (Δ {_fmt(delta) if delta is not None else 'n/a'} "
-            f"pct-pts), cost {cost_pct:+.1f}% vs scalar; meal-composition "
-            f"ablation informational"),
+            "Selection, composition & exact-reference ablation",
+            ablation["verdict"],
+            (f"1-dish adequacy-first worst-day shortfall {_fmt(adq)}% vs scalar "
+             f"{_fmt(sc)}% (Δ {_fmt(delta) if delta is not None else 'n/a'} "
+             f"pct-pts, cost {cost_pct:+.1f}%); 2-dish main+side reduces worst-day shortfall to "
+             f"{_fmt(comp_2d.get('mean_worst_day_rel_shortfall_pct'))}%; 0/16 scalar plans hit "
+             f"single-objective per-day additive lower bound"),
         ])
-    if external and external.get("nhanes_cohort", {}).get("available"):
-        nh = external["nhanes_cohort"]
-        mm = external["mimic_longitudinal_trends"]
-        hb = external["healthbench_chat"]
-        headline_rows.append([
-            "External datasets (Tier 2)", external["verdict"],
-            (f"NHANES {nh['traceability']['traceable']}/{nh['traceability']['items']} "
-             f"traceable ({nh['evaluated_subjects']} subjects), recall hard-violation rate "
-             f"{_pct(nh['dietary_recall_adherence']['baseline_hard_violation_day_rate'])}; "
-             f"MIMIC {mm['real_trajectory_flags']['total']} flags, 100% planted recall/specificity; "
-             f"HealthBench {hb['nutrition_queries']['answered']}/{hb['nutrition_queries']['total']} "
-             f"nutrition answers 100% source-consistent"),
-        ])
+    adq_sum = satisfaction.get("adequacy_summary") or {}
+    headline_rows.extend([
+        ["Constraint satisfaction & 7-day soft-floor adequacy", satisfaction["verdict"],
+         (f"{satisfaction['zero_violation_plans']}/{satisfaction['plans_attempted']} plans with zero hard "
+          f"MAX violations ({_pct(satisfaction['zero_violation_rate'])}); "
+          f"all-MIN-floors met on {adq_sum.get('plans_meeting_all_min_floors')}/"
+          f"{satisfaction['zero_violation_plans']} plans "
+          f"({_pct(adq_sum.get('all_min_floors_met_rate'))}, mean worst-day MIN shortfall "
+          f"{_fmt(adq_sum.get('mean_worst_day_min_shortfall_pct'))}%, max "
+          f"{_fmt(adq_sum.get('max_worst_day_min_shortfall_pct'))}%)")],
+        ["Groundedness (regression gate)", groundedness["verdict"],
+         (f"fixture grounded {_pct(groundedness['grounded']['pass_rate'])} "
+          f"(citation accuracy {_pct(groundedness['grounded']['citation_accuracy'])}), "
+          f"escalation {_pct(groundedness['escalation']['pass_rate'])}, "
+          f"refusals {_pct(groundedness['irrelevant_refusals']['pass_rate'])}")],
+        ["Traceability (regression gate)", traceability["verdict"],
+         (f"{traceability['overall']['traceable']}/{traceability['overall']['items']} envelope items "
+          f"traceable ({_pct(traceability['overall']['rate'])}) across {traceability['eligible_patients']} "
+          f"eligible fixture patients; {traceability['rejected_patients']} REJECTED patients counted "
+          f"separately")],
+        ["Conflict resolution (regression gate)", conflicts["verdict"],
+         (f"{conflicts['cases_passed']}/{conflicts['cases_total']} deterministic priority/boundary cases "
+          f"({_pct(conflicts['pass_rate'])}), {conflicts['checks_passed']}/{conflicts['checks_total']} checks")],
+    ])
     add(_table(["Criterion", "Verdict", "Headline number"], headline_rows))
     add("")
 

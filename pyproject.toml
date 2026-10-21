@@ -30,6 +30,11 @@ dev = [
   "pytest>=8.0",
   "jsonschema>=4.18",
   "numba>=0.59",
+  "ruff>=0.8",
+  "pyrefly>=1.0",
+  "types-jsonschema>=4.23",
+  "types-networkx>=3.4",
+  "scipy-stubs>=1.15",
 ]
 
 [build-system]
@@ -48,7 +53,7 @@ only-include = ["backend", "shared", "rules"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["rules", "backend", "evaluation"]
+testpaths = ["tests"]
 addopts = "-q"
 
 [tool.ruff]

@@ -6,6 +6,8 @@ import EmptyState from '../components/EmptyState';
 import PageHeader from '../components/PageHeader';
 import RangeBar from '../components/RangeBar';
 import { useRequestScope } from '../hooks/useRequestScope';
+import { useDemo } from '../demo/context';
+import { useSharedPatient } from '../demo/useSharedPatient';
 
 const NUTRIENT_LABELS: Record<string, string> = {
   energy_kcal: 'Energy',
@@ -23,13 +25,17 @@ const NUTRIENT_LABELS: Record<string, string> = {
 const MEAL_OPTIONS = ['breakfast', 'lunch', 'dinner'] as const;
 
 export default function AdherenceScreen() {
+  const demo = useDemo();
+  const isPatientView = demo.view === 'patient';
   const requests = useRequestScope();
   const selectionIsCurrent = requests.capture();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [patientsError, setPatientsError] = useState<string | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [activeTab, setActiveTab] = useState<'log' | 'summary' | 'trends'>('summary');
+  const [activeTab, setActiveTab] = useState<'log' | 'summary' | 'trends'>(
+    () => (demo.view === 'patient' ? 'log' : 'summary'),
+  );
 
   const [summary, setSummary] = useState<AdherenceSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -62,72 +68,105 @@ export default function AdherenceScreen() {
       .finally(() => { if (isCurrent()) setDeviationLoading(false); });
   };
 
+  const selectPatient = (patient: Patient | null) => {
+    requests.reset();
+    demo.setPatientId(patient?.id || null);
+    setSummary(null);
+    setDeviation(null);
+    setSummaryError(null);
+    setDeviationError(null);
+    setSummaryLoading(false);
+    setDeviationLoading(false);
+    setSelectedPatient(patient);
+    if (patient) loadData(patient.id);
+  };
+
+  useSharedPatient(patients, selectedPatient?.id, selectPatient);
+
+  const tabs = isPatientView
+    ? [
+        { key: 'log', label: 'Log a meal' },
+        { key: 'summary', label: 'Summary' },
+        { key: 'trends', label: 'Trends' },
+      ]
+    : [
+        { key: 'summary', label: 'Summary' },
+        { key: 'log', label: 'Log a meal' },
+        { key: 'trends', label: 'Trends' },
+      ];
+
   return (
     <main className="pb-12">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <PageHeader code="ADH" title="Adherence">
-          Log the meals a patient actually eats and see how they compare to their nutrient
-          envelope.
+        <PageHeader code="ADH" title={isPatientView ? 'Log your meals' : 'Adherence'}>
+          {isPatientView
+            ? 'Record what you ate and see how each day compares to the nutrient targets effective on that date.'
+            : 'Log the meals a patient actually eats and see how they compare to their nutrient envelope.'}
         </PageHeader>
 
-        <section className="panel mb-6 p-5">
-          <h2 className="micro-label mb-3 border-b border-rule pb-2">
-            Select patient
-          </h2>
-          {patientsError && (
-            <div className="notice notice-error mb-4">
-              {patientsError}
-              <button onClick={() => setPatientsError(null)} className="ml-2 font-semibold underline">
-                Dismiss
-              </button>
-            </div>
-          )}
-          {loadingPatients ? (
-            <LoadingState text="Loading patients…" />
-          ) : patients.length === 0 ? (
-            <EmptyState title="No patients found" description="Add patients or start the backend." />
-          ) : (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="flex-1">
-                <label htmlFor="adherence-patient" className="micro-label mb-1 block">
-                  Patient
-                </label>
-                <select
-                  id="adherence-patient"
-                  value={selectedPatient?.id || ''}
-                  onChange={(e) => {
-                    requests.reset();
-                    setSummary(null);
-                    setDeviation(null);
-                    setSummaryError(null);
-                    setDeviationError(null);
-                    setSummaryLoading(false);
-                    setDeviationLoading(false);
-                    const p = patients.find((pt) => pt.id === e.target.value) || null;
-                    setSelectedPatient(p);
-                    if (p) loadData(p.id);
-                  }}
-                  className="field"
-                >
-                  <option value="">Select a patient</option>
-                  {patients.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name || p.id} — {p.diagnoses?.join(', ')}
-                    </option>
-                  ))}
-                </select>
+        {!isPatientView ? (
+          <section className="panel mb-6 p-5">
+            <h2 className="micro-label mb-3 border-b border-rule pb-2">
+              Select patient
+            </h2>
+            {patientsError && (
+              <div className="notice notice-error mb-4">
+                {patientsError}
+                <button onClick={() => setPatientsError(null)} className="ml-2 font-semibold underline">
+                  Dismiss
+                </button>
               </div>
-            </div>
-          )}
-        </section>
+            )}
+            {loadingPatients ? (
+              <LoadingState text="Loading patients…" />
+            ) : patients.length === 0 ? (
+              <EmptyState title="No patients found" description="Add patients or start the backend." />
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <label htmlFor="adherence-patient" className="micro-label mb-1 block">
+                    Patient
+                  </label>
+                  <select
+                    id="adherence-patient"
+                    value={selectedPatient?.id || ''}
+                    onChange={(e) => {
+                      const p = patients.find((pt) => pt.id === e.target.value) || null;
+                      selectPatient(p);
+                    }}
+                    className="field"
+                  >
+                    <option value="">Select a patient</option>
+                    {patients.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name || p.id} — {p.diagnoses?.join(', ')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </section>
+        ) : (
+          <section className="panel mb-6 p-4 text-sm text-ink-2">
+            {patientsError ? (
+              <div className="notice notice-error">
+                {patientsError}
+                <button onClick={() => setPatientsError(null)} className="ml-2 font-semibold underline">
+                  Dismiss
+                </button>
+              </div>
+            ) : selectedPatient ? (
+              <>Logging meals for <span className="font-semibold text-ink">{selectedPatient.name || selectedPatient.id}</span>.</>
+            ) : (
+              'Choose a patient in the Acting as bar above to log meals or view adherence.'
+            )}
+          </section>
+        )}
 
         {selectedPatient && (
           <div className="mb-6 flex border-b border-rule-2">
-            {[
-              { key: 'summary', label: 'Summary' },
-              { key: 'log', label: 'Log a meal' },
-              { key: 'trends', label: 'Trends' },
-            ].map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as typeof activeTab)}

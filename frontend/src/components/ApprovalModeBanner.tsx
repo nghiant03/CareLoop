@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 import { getApprovalMode } from '../api';
+import { useDemo, type ApprovalModeState } from '../demo/context';
 
 export default function ApprovalModeBanner() {
-  const [mode, setMode] = useState<'auto' | 'clinician' | 'loading' | 'unknown'>('loading');
+  const demo = useDemo();
+  const [fallbackMode, setFallbackMode] = useState<ApprovalModeState>('loading');
 
   useEffect(() => {
+    if (demo.managed) return;
     let mounted = true;
     const check = async () => {
       try {
         const selected = await getApprovalMode();
-        if (mounted) setMode(selected);
+        if (mounted) setFallbackMode(selected);
       } catch {
-        if (mounted) setMode('unknown');
+        if (mounted) setFallbackMode('unknown');
       }
     };
     void check();
@@ -20,7 +23,9 @@ export default function ApprovalModeBanner() {
       mounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [demo.managed]);
+
+  const mode = demo.managed ? demo.approvalMode : fallbackMode;
 
   if (mode === 'clinician') return null;
 

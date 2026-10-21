@@ -12,8 +12,10 @@ import re
 import sys
 from pathlib import Path
 from threading import Lock
+from typing import Any
 
 import psycopg
+from psycopg import Connection, Cursor
 from psycopg_pool import ConnectionPool
 
 _POOLS: dict[str, ConnectionPool] = {}
@@ -22,7 +24,7 @@ _POOL_LOCK = Lock()
 # This conservative first migration serializes writers per database domain,
 # not readers. Finer-grained locking needs its own contention/regression study.
 _WRITE_LOCKS = {"clinical": 1129070593, "knowledge": 1129070594}
-_SQL_TOKENS = re.compile(r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|--[^\n]*|/\*.*?\*/|\?", re.S)
+_SQL_TOKENS = re.compile(r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|--[^\n]*|/\*.*?\*/|\?", re.DOTALL)
 
 
 def database_url(component: str) -> str | None:
@@ -106,7 +108,8 @@ class PostgresConnection:
         self._reserved = False
         self._closed = False
         self._context = _pool(url).connection()
-        self.raw = self._context.__enter__()
+        # The pool's row_factory guarantees StorageRow; psycopg_pool types it as Connection.
+        self.raw: Connection[StorageRow] = self._context.__enter__()  # pyrefly: ignore[bad-assignment]
         try:
             check_schema(self.raw, component)
             self.raw.commit()
@@ -129,13 +132,14 @@ class PostgresConnection:
             self.raw.execute("SELECT pg_advisory_xact_lock(%s)", (_WRITE_LOCKS[self.component],))
             self._reserved = True
 
-    def execute(self, sql: str, params=None):
+    def execute(self, sql: str, params: Any = None) -> Cursor[StorageRow]:
         operation = sql.lstrip().split(None, 1)[0].upper()
         if operation in {"INSERT", "UPDATE", "DELETE"}:
             self.reserve_write()
+        # SQL text is built from internal constants; values always bind via params.
         if params is None:
-            return self.raw.execute(sql)
-        return self.raw.execute(bind_sql(sql), params)
+            return self.raw.execute(sql)  # pyrefly: ignore[no-matching-overload]
+        return self.raw.execute(bind_sql(sql), params)  # pyrefly: ignore[bad-argument-type]
 
     def commit(self):
         self.raw.commit()

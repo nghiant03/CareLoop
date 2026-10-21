@@ -58,7 +58,7 @@ def validate_documents(rules_document: dict, dishes: list[dict]) -> dict:
     ids = set()
     for rule in rules:
         if not isinstance(rule, dict):
-            raise ValueError("each rule must be an object")
+            raise ValueError("each rule must be an object")  # noqa: TRY004
         for field in ("rule_id", "guideline", "section"):
             _text(rule.get(field), field)
         rid = rule["rule_id"]
@@ -94,7 +94,7 @@ def validate_documents(rules_document: dict, dishes: list[dict]) -> dict:
                 raise ValueError(f"{rid}: unsupported condition {field!r}/{op!r}")
         for action in actions:
             if not isinstance(action, dict):
-                raise ValueError(f"{rid}: action must be an object")
+                raise ValueError(f"{rid}: action must be an object")  # noqa: TRY004
             kind = action.get("type")
             if kind == "set_constraint":
                 NutrientKind(action.get("nutrient"))
@@ -115,7 +115,7 @@ def validate_documents(rules_document: dict, dishes: list[dict]) -> dict:
     ids = set()
     for dish in dishes:
         if not isinstance(dish, dict):
-            raise ValueError("each dish must be an object")
+            raise ValueError("each dish must be an object")  # noqa: TRY004
         for field in ("dish_id", "name", "category", "provenance"):
             _text(dish.get(field), field)
         if dish["dish_id"] in ids:
