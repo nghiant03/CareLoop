@@ -36,12 +36,20 @@ flags when the backend is unreachable (`/api/healthz` probe).
 
 ## Supporting components
 
-- `ConstraintTable` — envelope constraints with citations.
+- `ConstraintTable` — envelope constraints with citations and a per-row
+  reference-range bar (the signature `RangeBar` in limit mode).
+- `RangeBar` — plots a measured value against its reference limit: solid red
+  rule for hard ceilings, hollow marker for soft aims, hatched forbidden region.
+- `PageHeader` — ruled report header with the screen's mono report code.
 - `RuleTrace` — fired rules sorted by priority with guideline links and
   "Overridden by" markers for superseded rules.
 - `EditEnvelopeModal` — adjust constraint values, save via `POST /envelopes/{id}/edit`
   (the envelope returns to EDITED and needs re-approval).
 - `PatientCard`, `LoadingState`, `EmptyState` — list/detail plumbing.
+
+The visual system ("The Lab Report": paper ground, ink, hairline rules,
+state-only hues, Public Sans + Roboto Mono) is documented in the repository
+root `DESIGN.md`; shared utility classes live in `src/index.css`.
 
 ## API client (`src/api.ts`)
 
