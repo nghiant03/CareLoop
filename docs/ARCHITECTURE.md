@@ -144,7 +144,7 @@ patient logs actual meals ──▶ adherence.analysis ──▶ per-day totals 
                                                      + deviation series + flags
 ```
 
-Plan generation, what-if simulations, and Q3 evaluation share `plan_meals`.
+Plan generation, what-if simulations, and constraint-satisfaction evaluation share `plan_meals`.
 It performs no persistence. `core/plan_storage.py` saves generated/swapped plan
 documents, while simulations save only their comparison records.
 
@@ -251,7 +251,7 @@ schema.
 | `backend/app/core/` | `shared/`, `kb/`, `optim/`, `explain/` | gate, stores, plan service |
 | `backend/app/api/` | all of the above | the REST surface |
 | `frontend/` | REST API (`/api` proxy) | clinician / patient / chat / adherence screens |
-| `evaluation/` | everything | two-tier (`Q1–Q7`) evaluation suite writing external `EVALUATION.md` and `results.json` under `CARELOOP_DATASET_DIR/outputs/evaluation/` |
+| `evaluation/` | everything | two-tier evaluation suite (`traceability`, `conflicts`, `satisfaction`, `benchmark`, `groundedness`, `ablation`, `external`) writing external `EVALUATION.md` and `results.json` under `CARELOOP_DATASET_DIR/outputs/evaluation/` |
 
 
 ## 7. Known runtime boundaries

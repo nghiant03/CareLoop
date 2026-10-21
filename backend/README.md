@@ -138,7 +138,7 @@ clients may send `expected_revision` to reject stale reviews with HTTP 409
 ## Plan generation (`core/plan_service.py`)
 
 `plan_meals` shares preparation, solver execution, and main/side composition
-between plan generation, simulations, and Q3 evaluation. It performs no storage
+between plan generation, simulations, and constraint-satisfaction evaluation. It performs no storage
 writes. `prepare_envelope_for_pool` calibrates soft MIN floors to the
 single-dish-per-meal search bound and discloses changes in `relaxed_constraints`.
 If main/side composition succeeds, original aims are restored. Hard MAX ceilings

@@ -60,7 +60,7 @@ before launch because some output constants resolve on import. Existing
 `--out-dir` and retrieval `write_results(path=...)` remain supported. Give each
 experiment a distinct artifact root outside the checkout.
 
-Q4 reads published optimizer snapshots by default. `evaluation.run
+The benchmark evaluation reads published optimizer snapshots by default. `evaluation.run
 --rerun-benchmark` generates and consumes a fresh full benchmark and records its
 paths. Review metadata and protocols before publishing a replacement; reduced
 smoke runs are not full evidence. Outputs may contain patient snapshots or traces
