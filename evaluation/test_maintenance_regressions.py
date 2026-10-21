@@ -8,9 +8,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from evaluation.q_ablation import CompositionEvaluator, composition_ga
-from evaluation.q_groundedness import _claim_sources_consistent, _claims_supported
-from evaluation.report import _q6_ablation_rows, render_report
+from evaluation.ablation import CompositionEvaluator, composition_ga
+from evaluation.groundedness import _claim_sources_consistent, _claims_supported
+from evaluation.report import _ablation_rows, _section, render_report
 from evaluation.run_eval import _source_revision
 from evaluation.test_ablation import ABLATION_POOL, _envelope
 from shared.envelope_schema import CitationSource, ExclusionFlag, ExclusionKind
@@ -66,22 +66,23 @@ def test_source_revision_unavailable_is_explicit(monkeypatch):
 def test_report_renders_actual_per_day_compliance_and_reads_old_metrics():
     from backend.datasets.paths import dataset_dir
     results = json.loads((dataset_dir() / "benchmarks/evaluation_results.json").read_text())
-    q3 = results["q3_constraint_satisfaction"]
-    patient = next(row for row in q3["per_patient"] if row.get("attempted"))
+    satisfaction = _section(results, "constraint_satisfaction")
+    assert satisfaction is not None
+    patient = next(row for row in satisfaction["per_patient"] if row.get("attempted"))
     patient["per_day_hard_compliant"] = True
-    q3["per_patient"] = [patient]
+    satisfaction["per_patient"] = [patient]
     report = render_report(results)
-    q3_report = report.split("## Q3 — Constraint satisfaction", 1)[1].split("## Q4", 1)[0]
-    table_row = next(line for line in q3_report.splitlines()
+    satisfaction_report = report.split("## Constraint satisfaction", 1)[1].split("## Quality/runtime", 1)[0]
+    table_row = next(line for line in satisfaction_report.splitlines()
                      if line.startswith(f"| {patient['patient_id']} |")
                      and len(line.split("|")) == 10)
     assert table_row.split("|")[6].strip() == "True"
     patient["per_day_hard_compliant"] = False
     assert table_row.replace("True", "False") in render_report(results)
     # Old pooled raw gaps have no recoverable common unit. Never relabel them.
-    old = _q6_ablation_rows({"scalar": {"mean_daily_shortfall": 123.0}})
+    old = _ablation_rows({"scalar": {"mean_daily_shortfall": 123.0}})
     assert old[0][4] == "n/a"
-    new = _q6_ablation_rows({"scalar": {"mean_daily_rel_shortfall_pct": 12.5}})
+    new = _ablation_rows({"scalar": {"mean_daily_rel_shortfall_pct": 12.5}})
     assert new[0][4] == "12.5"
 
 

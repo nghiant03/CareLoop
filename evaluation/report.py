@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from evaluation.q_ablation import per_patient_deltas
+from evaluation.ablation import per_patient_deltas
 
 __all__ = ["render_report"]
 
@@ -23,9 +23,9 @@ def _pct(rate: float | None) -> str:
     return "n/a" if rate is None else f"{rate * 100:.1f}%"
 
 
-def _q4_headline_text(q4: dict[str, Any]) -> str:
-    """One-line Q4 summary naming the actual mean-HV winner from the data."""
-    headline = q4.get("headline") or []
+def _benchmark_headline_text(benchmark: dict[str, Any]) -> str:
+    """One-line benchmark summary naming the actual mean-HV winner from the data."""
+    headline = benchmark.get("headline") or []
     if not headline:
         return "no benchmark rows available"
     winner = max(headline, key=lambda m: (m["mean_hv"], -m["violation_rate"]))
@@ -42,7 +42,7 @@ def _table(headers: list[str], rows: list[list[Any]]) -> str:
     return "\n".join(out)
 
 
-def _q6_ablation_rows(pooled: dict[str, Any]) -> list[list[Any]]:
+def _ablation_rows(pooled: dict[str, Any]) -> list[list[Any]]:
     # Historical artifacts (pre-2026-10) pooled the unit-mixed raw
     # ``mean_daily_shortfall`` (kcal/g/mg averaged together); it is
     # deliberately NOT rendered. They lack ``mean_daily_rel_shortfall_pct``,
@@ -65,13 +65,13 @@ def _q6_ablation_rows(pooled: dict[str, Any]) -> list[list[Any]]:
     return rows
 
 
-def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
-    """Render the Q6 section (selection ablation, composition, exact reference)."""
-    sel = q6["selection_ablation"]
+def _render_ablation(add, ablation: dict[str, Any], table, fmt) -> None:
+    """Render the ablation section (selection ablation, composition, exact reference)."""
+    sel = ablation["selection_ablation"]
     config = sel["config"]
-    add("## Q6 — Objective/selection & meal-composition ablation")
+    add("## Objective/selection & meal-composition ablation")
     add("")
-    add(q6["definition"])
+    add(ablation["definition"])
     add("")
     add(f"### Selection ablation (paired: {config['pop_size']}-pop / {config['n_gen']}-gen "
         f"NSGA-II front per patient × seed {config['seeds']}; all strategies score the "
@@ -81,7 +81,7 @@ def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
         ["Strategy", "Rows", "Feasibility", "Worst-day shortfall %",
          "Mean daily rel. shortfall %", "Met-days fraction", "Cost (SGD)",
          "Variety (objective)", "Deviation", "Mean front size"],
-        _q6_ablation_rows(sel["pooled"]),
+        _ablation_rows(sel["pooled"]),
     ))
     add("")
     add(f"Scoring: {config['scored_against']}. Both shortfall columns are "
@@ -112,16 +112,16 @@ def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
         for name in ("normalised", "adequacy_first") if name in deltas
     ) + ".")
     add("")
-    verdict_note = q6.get("verdict_note")
-    add(f"**Verdict: {q6['verdict']}**"
+    verdict_note = ablation.get("verdict_note")
+    add(f"**Verdict: {ablation['verdict']}**"
         + (f" — {verdict_note}" if verdict_note
            else " — adequacy-first strictly reduces the pooled mean worst-day "
                 "relative shortfall at 100% feasibility and within the 10% cost cap "
-                "(full rule in `evaluation/q_ablation.py` module docstring)."))
+                "(full rule in `evaluation/ablation.py` module docstring)."))
     add("")
 
     # Composition
-    comp = q6["composition_ablation"]
+    comp = ablation["composition_ablation"]
     add("### Meal-composition ablation: 1-dish vs 2-dish (main + side) encoding")
     add("")
     add(comp["note"])
@@ -159,7 +159,7 @@ def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
     add("")
 
     # Exact reference
-    exact = q6["exact_reference"]
+    exact = ablation["exact_reference"]
     add("### Exact-reference quality (scalar-selected plans, seed "
         f"{exact['seed']})")
     add("")
@@ -197,14 +197,14 @@ def _render_q6(add, q6: dict[str, Any], table, fmt) -> None:
     add("")
 
 
-def _render_q7(add, q7: dict[str, Any], table, fmt, pct) -> None:
-    """Render the Q7 external dataset evaluation section."""
-    add("## Q7 — External dataset evaluation (NHANES, MIMIC-IV, HealthBench)")
+def _render_external(add, external: dict[str, Any], table, fmt, pct) -> None:
+    """Render the external dataset evaluation section."""
+    add("## External dataset evaluation (NHANES, MIMIC-IV, HealthBench)")
     add("")
-    add(q7["definition"])
+    add(external["definition"])
     add("")
 
-    nh = q7.get("nhanes_cohort") or {}
+    nh = external.get("nhanes_cohort") or {}
     if nh.get("available"):
         tr = nh["traceability"]
         sg = nh["scope_gate"]
@@ -250,7 +250,7 @@ def _render_q7(add, q7: dict[str, Any], table, fmt, pct) -> None:
             ))
             add("")
 
-    mm = q7.get("mimic_longitudinal_trends") or {}
+    mm = external.get("mimic_longitudinal_trends") or {}
     if mm.get("available"):
         rf = mm["real_trajectory_flags"]
         pb = mm["planted_regime_benchmark"]
@@ -276,7 +276,7 @@ def _render_q7(add, q7: dict[str, Any], table, fmt, pct) -> None:
             ))
             add("")
 
-    hb = q7.get("healthbench_chat") or {}
+    hb = external.get("healthbench_chat") or {}
     if hb.get("available"):
         add(f"### 3. {hb['dataset']} — External emergency triage & nutrition grounding")
         add("")
@@ -300,15 +300,28 @@ def _render_q7(add, q7: dict[str, Any], table, fmt, pct) -> None:
             add(f"Finding: {hb['finding']}")
             add("")
 
-    add(f"**Verdict: {q7['verdict']}.**")
+    add(f"**Verdict: {external['verdict']}.**")
     add("")
 
 
+def _section(results: dict[str, Any], name: str) -> dict[str, Any] | None:
+    if name in results:
+        return results[name]
+    for key, value in results.items():
+        if key.endswith(f"_{name}") and isinstance(value, dict):
+            return value
+    return None
+
+
 def render_report(results: dict[str, Any]) -> str:
-    q1, q2, q3 = results["q1_traceability"], results["q2_conflicts"], results["q3_constraint_satisfaction"]
-    q4, q5 = results["q4_benchmark"], results["q5_groundedness"]
-    q6 = results.get("q6_ablation")
-    q7 = results.get("q7_external")
+    traceability = _section(results, "traceability")
+    conflicts = _section(results, "conflicts")
+    satisfaction = _section(results, "constraint_satisfaction")
+    benchmark = _section(results, "benchmark")
+    groundedness = _section(results, "groundedness")
+    ablation = _section(results, "ablation")
+    external = _section(results, "external")
+    assert traceability and conflicts and satisfaction and benchmark and groundedness
     meta = results["meta"]
 
     lines: list[str] = []
@@ -331,29 +344,29 @@ def render_report(results: dict[str, Any]) -> str:
     add("## Headline verdicts")
     add("")
     headline_rows: list[list[Any]] = [
-        ["Q1 Traceability (Tier 1)", q1["verdict"],
-         (f"{q1['overall']['traceable']}/{q1['overall']['items']} envelope items "
-         f"traceable ({_pct(q1['overall']['rate'])}) across {q1['eligible_patients']} "
-         f"eligible patients; {q1['rejected_patients']} REJECTED patients counted "
+        ["Traceability (Tier 1)", traceability["verdict"],
+         (f"{traceability['overall']['traceable']}/{traceability['overall']['items']} envelope items "
+         f"traceable ({_pct(traceability['overall']['rate'])}) across {traceability['eligible_patients']} "
+         f"eligible patients; {traceability['rejected_patients']} REJECTED patients counted "
          f"separately")],
-        ["Q2 Conflict resolution (Tier 1)", q2["verdict"],
-         (f"{q2['cases_passed']}/{q2['cases_total']} cases "
-         f"({_pct(q2['pass_rate'])}), {q2['checks_passed']}/{q2['checks_total']} checks")],
-        ["Q3 Constraint satisfaction (Tier 1)", q3["verdict"],
-         (f"{q3['zero_violation_plans']}/{q3['plans_attempted']} plans with zero hard "
-         f"violations ({_pct(q3['zero_violation_rate'])}); "
-         f"{q3['infeasible_plans']} infeasible (diagnosed, nothing served); "
-         f"{q3['relaxed_envelopes']} envelopes needed a disclosed MIN relaxation")],
-        ["Q5 Groundedness (Tier 1)", q5["verdict"],
-         (f"grounded {_pct(q5['grounded']['pass_rate'])} "
-         f"(citation accuracy {_pct(q5['grounded']['citation_accuracy'])}), "
-         f"escalation {_pct(q5['escalation']['pass_rate'])}, "
-         f"refusals {_pct(q5['irrelevant_refusals']['pass_rate'])}")],
-        ["Q4 Quality/runtime (Tier 2)", q4["verdict"], _q4_headline_text(q4)
+        ["Conflict resolution (Tier 1)", conflicts["verdict"],
+         (f"{conflicts['cases_passed']}/{conflicts['cases_total']} cases "
+         f"({_pct(conflicts['pass_rate'])}), {conflicts['checks_passed']}/{conflicts['checks_total']} checks")],
+        ["Constraint satisfaction (Tier 1)", satisfaction["verdict"],
+         (f"{satisfaction['zero_violation_plans']}/{satisfaction['plans_attempted']} plans with zero hard "
+         f"violations ({_pct(satisfaction['zero_violation_rate'])}); "
+         f"{satisfaction['infeasible_plans']} infeasible (diagnosed, nothing served); "
+         f"{satisfaction['relaxed_envelopes']} envelopes needed a disclosed MIN relaxation")],
+        ["Groundedness (Tier 1)", groundedness["verdict"],
+         (f"grounded {_pct(groundedness['grounded']['pass_rate'])} "
+         f"(citation accuracy {_pct(groundedness['grounded']['citation_accuracy'])}), "
+         f"escalation {_pct(groundedness['escalation']['pass_rate'])}, "
+         f"refusals {_pct(groundedness['irrelevant_refusals']['pass_rate'])}")],
+        ["Quality/runtime (Tier 2)", benchmark["verdict"], _benchmark_headline_text(benchmark)
          + " (consumed from external benchmark artefacts)"],
     ]
-    if q6:
-        sel = q6["selection_ablation"]["pooled"]
+    if ablation:
+        sel = ablation["selection_ablation"]["pooled"]
         sc = sel["scalar"].get("mean_worst_day_rel_shortfall_pct")
         adq = sel["adequacy_first"].get("mean_worst_day_rel_shortfall_pct")
         sc_cost = sel["scalar"].get("mean_cost") or 0.0
@@ -361,18 +374,18 @@ def render_report(results: dict[str, Any]) -> str:
         cost_pct = ((adq_cost / sc_cost - 1.0) * 100.0) if sc_cost else 0.0
         delta = (adq - sc) if (adq is not None and sc is not None) else None
         headline_rows.append([
-            "Q6 Selection & composition ablation (Tier 2)", q6["verdict"],
+            "Selection & composition ablation (Tier 2)", ablation["verdict"],
             (f"adequacy-first worst-day shortfall {_fmt(adq)}% vs scalar "
             f"{_fmt(sc)}% (Δ {_fmt(delta) if delta is not None else 'n/a'} "
             f"pct-pts), cost {cost_pct:+.1f}% vs scalar; meal-composition "
             f"ablation informational"),
         ])
-    if q7 and q7.get("nhanes_cohort", {}).get("available"):
-        nh = q7["nhanes_cohort"]
-        mm = q7["mimic_longitudinal_trends"]
-        hb = q7["healthbench_chat"]
+    if external and external.get("nhanes_cohort", {}).get("available"):
+        nh = external["nhanes_cohort"]
+        mm = external["mimic_longitudinal_trends"]
+        hb = external["healthbench_chat"]
         headline_rows.append([
-            "Q7 External datasets (Tier 2)", q7["verdict"],
+            "External datasets (Tier 2)", external["verdict"],
             (f"NHANES {nh['traceability']['traceable']}/{nh['traceability']['items']} "
              f"traceable ({nh['evaluated_subjects']} subjects), recall hard-violation rate "
              f"{_pct(nh['dietary_recall_adherence']['baseline_hard_violation_day_rate'])}; "
@@ -380,50 +393,50 @@ def render_report(results: dict[str, Any]) -> str:
              f"HealthBench {hb['nutrition_queries']['answered']}/{hb['nutrition_queries']['total']} "
              f"nutrition answers 100% source-consistent"),
         ])
-    add(_table(["Question", "Verdict", "Headline number"], headline_rows))
+    add(_table(["Criterion", "Verdict", "Headline number"], headline_rows))
     add("")
 
-    # Q1
-    add("## Q1 — Traceability")
+    # Traceability
+    add("## Traceability")
     add("")
-    add(q1["definition"])
+    add(traceability["definition"])
     add("")
     add(_table(
         ["Patient", "Status", "Targets", "Exclusions", "Items", "Traceable", "Rate", "Fired rules"],
         [[r["patient_id"], r["status"], r["targets"], r["exclusions"],
           r["items"], r["traceable"], _pct(r["rate"]), r["fired_rules"]]
-         for r in q1["per_patient"]],
+         for r in traceability["per_patient"]],
     ))
     add("")
-    add(f"**Overall (eligible patients): {q1['overall']['traceable']}/"
-        f"{q1['overall']['items']} = {_pct(q1['overall']['rate'])} — verdict {q1['verdict']}.** "
-        f"REJECTED patients ({', '.join(q1['rejected_patient_ids']) or 'none'}) legitimately "
-        f"have no nutrient targets; their {q1['rejected_exclusions']['items']} exclusions are "
-        f"still {q1['rejected_exclusions']['traceable']}/{q1['rejected_exclusions']['items']} "
+    add(f"**Overall (eligible patients): {traceability['overall']['traceable']}/"
+        f"{traceability['overall']['items']} = {_pct(traceability['overall']['rate'])} — verdict {traceability['verdict']}.** "
+        f"REJECTED patients ({', '.join(traceability['rejected_patient_ids']) or 'none'}) legitimately "
+        f"have no nutrient targets; their {traceability['rejected_exclusions']['items']} exclusions are "
+        f"still {traceability['rejected_exclusions']['traceable']}/{traceability['rejected_exclusions']['items']} "
         f"traceable.")
     add("")
 
-    # Q2
-    add("## Q2 — Conflict resolution")
+    # Conflict resolution
+    add("## Conflict resolution")
     add("")
-    add(q2["definition"])
+    add(conflicts["definition"])
     add("")
     add(_table(
         ["Case", "Verdict", "Failed checks"],
         [[c["name"], "PASS" if c["passed"] else "FAIL",
           "; ".join(ch["expectation"] for ch in c["checks"] if not ch["passed"]) or "—"]
-         for c in q2["cases"]],
+         for c in conflicts["cases"]],
     ))
     add("")
-    add(f"**Pass rate: {q2['cases_passed']}/{q2['cases_total']} cases, "
-        f"{q2['checks_passed']}/{q2['checks_total']} individual checks — verdict "
-        f"{q2['verdict']}.**")
+    add(f"**Pass rate: {conflicts['cases_passed']}/{conflicts['cases_total']} cases, "
+        f"{conflicts['checks_passed']}/{conflicts['checks_total']} individual checks — verdict "
+        f"{conflicts['verdict']}.**")
     add("")
 
-    # Q3
-    add("## Q3 — Constraint satisfaction")
+    # Constraint satisfaction
+    add("## Constraint satisfaction")
     add("")
-    add(q3["definition"])
+    add(satisfaction["definition"])
     add("")
     add(_table(
         ["Patient", "Archetype", "Outcome", "Violations", "Engine", "Per-day OK",
@@ -435,60 +448,60 @@ def render_report(results: dict[str, Any]) -> str:
           _fmt(r.get("per_day_hard_compliant")) if r.get("attempted") else "—",
           ", ".join(sorted({x["nutrient"] for x in r.get("relaxed_constraints", [])})) or "—",
           ", ".join(r.get("blocking_constraints_leave_one_out") or []) or "—"]
-         for r in q3["per_patient"]],
+         for r in satisfaction["per_patient"]],
     ))
     add("")
-    adq_sum = q3.get("adequacy_summary") or {}
+    adq_sum = satisfaction.get("adequacy_summary") or {}
     if adq_sum.get("mean_worst_day_min_shortfall_pct") is not None:
         add(f"Soft-floor adequacy disclosure: mean worst-day MIN shortfall "
             f"**{_fmt(adq_sum['mean_worst_day_min_shortfall_pct'])}%** "
             f"(max **{_fmt(adq_sum['max_worst_day_min_shortfall_pct'])}%**, "
-            f"**{adq_sum['plans_meeting_all_min_floors']}/{q3['zero_violation_plans']}** "
+            f"**{adq_sum['plans_meeting_all_min_floors']}/{satisfaction['zero_violation_plans']}** "
             f"plans meeting every MIN floor on all 7 days).")
         add("")
-    add(f"**Zero-violation plans: {q3['zero_violation_plans']}/{q3['plans_attempted']} "
-        f"({_pct(q3['zero_violation_rate'])}) — verdict {q3['verdict']}.** "
+    add(f"**Zero-violation plans: {satisfaction['zero_violation_plans']}/{satisfaction['plans_attempted']} "
+        f"({_pct(satisfaction['zero_violation_rate'])}) — verdict {satisfaction['verdict']}.** "
         f"Infeasible envelopes are diagnosed explicitly by the solver (empty plan, "
         f"`infeasibility_reason` set) and never served; where a single constraint "
         f"removal restores greedy feasibility it is listed as a blocker.")
     add("")
 
-    # Q4
-    add("## Q4 — Quality/runtime (optimiser benchmark)")
+    # Quality/runtime (optimiser benchmark)
+    add("## Quality/runtime (optimiser benchmark)")
     add("")
-    add(q4["definition"])
+    add(benchmark["definition"])
     add("")
     add("### Headline (main phase: 4 envelopes × 5 seeds, pop=40, gen=80)")
     add("")
     add(_table(["Method", "Guarantee", "Runs", "Mean HV", "HV std", "Violation rate",
                 "Mean runtime (ms)"],
                [[m["method"], m["guarantee"], m["runs"], m["mean_hv"], m["hv_std"],
-                 _pct(m["violation_rate"]), m["mean_runtime_ms"]] for m in q4["headline"]]))
+                 _pct(m["violation_rate"]), m["mean_runtime_ms"]] for m in benchmark["headline"]]))
     add("")
     add("### Mean hypervolume per envelope")
     add("")
-    methods = [m["method"] for m in q4["headline"]]
+    methods = [m["method"] for m in benchmark["headline"]]
     add(_table(["Envelope"] + methods,
                [[e["envelope"]] + [e.get(method) for method in methods]
-                for e in q4["hv_per_envelope"]]))
+                for e in benchmark["hv_per_envelope"]]))
     add("")
     add("### NSGA-II pop × gen sweep (1 seed)")
     add("")
     add(_table(["Pop", "Gen", "Mean HV", "Mean runtime (ms)"],
-               [[s["pop"], s["gen"], s["mean_hv"], s["mean_runtime_ms"]] for s in q4["sweep"]]))
+               [[s["pop"], s["gen"], s["mean_hv"], s["mean_runtime_ms"]] for s in benchmark["sweep"]]))
     add("")
-    add(f"### Recommendation (verbatim from `{q4['artefacts']['md']}`)")
+    add(f"### Recommendation (verbatim from `{benchmark['artefacts']['md']}`)")
     add("")
-    for line in q4["recommendation"].splitlines():
+    for line in benchmark["recommendation"].splitlines():
         add(line)
     add("")
-    add(f"Verdict: **{q4['verdict']}** — {q4['verdict_note']}")
+    add(f"Verdict: **{benchmark['verdict']}** — {benchmark['verdict_note']}")
     add("")
 
-    # Q5
-    add("## Q5 — Groundedness (chat)")
+    # Groundedness (chat)
+    add("## Groundedness (chat)")
     add("")
-    add(q5["definition"])
+    add(groundedness["definition"])
     add("")
     add("### Grounded nutrition questions")
     add("")
@@ -496,36 +509,36 @@ def render_report(results: dict[str, Any]) -> str:
                [[r["question"], r["envelope_variant"], r["status"],
                  ", ".join(r["cited_rule_ids"]) or "—",
                  ", ".join(r["acceptable_rule_ids"]), "PASS" if r["passed"] else "FAIL"]
-                for r in q5["grounded"]["rows"]]))
+                for r in groundedness["grounded"]["rows"]]))
     add("")
     add("### Escalation cases")
     add("")
     add(_table(["Question", "Expected", "Status", "Observed", "Pass"],
                [[r["question"], r["expected_category"], r["status"],
                  r["observed_category"] or "—", "PASS" if r["passed"] else "FAIL"]
-                for r in q5["escalation"]["rows"]]))
+                for r in groundedness["escalation"]["rows"]]))
     add("")
     add("### Irrelevant / low-relevance questions (expected refusal)")
     add("")
     add(_table(["Question", "Status", "Pass"],
                [[r["question"], r["status"], "PASS" if r["passed"] else "FAIL"]
-                for r in q5["irrelevant_refusals"]["rows"]]))
+                for r in groundedness["irrelevant_refusals"]["rows"]]))
     add("")
-    add(f"**Grounded {q5['grounded']['passed']}/{q5['grounded']['total']} "
-        f"({_pct(q5['grounded']['pass_rate'])}), citation accuracy "
-        f"{_pct(q5['grounded']['citation_accuracy'])}; escalation "
-        f"{q5['escalation']['passed']}/{q5['escalation']['total']} "
-        f"({_pct(q5['escalation']['pass_rate'])}); refusals "
-        f"{q5['irrelevant_refusals']['passed']}/{q5['irrelevant_refusals']['total']} "
-        f"({_pct(q5['irrelevant_refusals']['pass_rate'])}); overall "
-        f"{_pct(q5['overall_pass_rate'])} — verdict {q5['verdict']}.**")
+    add(f"**Grounded {groundedness['grounded']['passed']}/{groundedness['grounded']['total']} "
+        f"({_pct(groundedness['grounded']['pass_rate'])}), citation accuracy "
+        f"{_pct(groundedness['grounded']['citation_accuracy'])}; escalation "
+        f"{groundedness['escalation']['passed']}/{groundedness['escalation']['total']} "
+        f"({_pct(groundedness['escalation']['pass_rate'])}); refusals "
+        f"{groundedness['irrelevant_refusals']['passed']}/{groundedness['irrelevant_refusals']['total']} "
+        f"({_pct(groundedness['irrelevant_refusals']['pass_rate'])}); overall "
+        f"{_pct(groundedness['overall_pass_rate'])} — verdict {groundedness['verdict']}.**")
     add("")
     add("### Historical failure probes (included in verdict)")
     add("")
     add(_table(["Probe", "Expected", "Observed", "Gap"],
                [[g["question"], g["expected"],
                  g.get("observed_category") or g.get("observed_status") or "—",
-                 g["gap"]] for g in q5["known_gaps"]]))
+                 g["gap"]] for g in groundedness["known_gaps"]]))
     add("")
     add("### Expert-review rubric (human scoring — cannot be automated)")
     add("")
@@ -534,16 +547,16 @@ def render_report(results: dict[str, Any]) -> str:
         "3 on *safety behaviour* is an automatic fail regardless of the mean.")
     add("")
     add(_table(["Criterion", "Scale", "How a human reviewer scores"],
-               [[r["criterion"], r["scale"], r["how_to_score"]] for r in q5["expert_review_rubric"]]))
+               [[r["criterion"], r["scale"], r["how_to_score"]] for r in groundedness["expert_review_rubric"]]))
     add("")
 
-    # Q6
-    if q6:
-        _render_q6(add, q6, _table, _fmt)
+    # Objective/selection & meal-composition ablation
+    if ablation:
+        _render_ablation(add, ablation, _table, _fmt)
 
-    # Q7
-    if q7:
-        _render_q7(add, q7, _table, _fmt, _pct)
+    # External dataset evaluation
+    if external:
+        _render_external(add, external, _table, _fmt, _pct)
 
     # Limitations
     add("## Limitations & known caveats")

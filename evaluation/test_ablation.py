@@ -1,4 +1,4 @@
-"""Tests for evaluation/q_ablation.py (Q6) — pure-function tests + one smoke run.
+"""Tests for evaluation/ablation.py — pure-function tests + one smoke run.
 
 The real-data test uses a small patient subset
 with heavily reduced optimiser / GA budgets; everything else runs on stub
@@ -19,13 +19,13 @@ import pytest
 
 from backend.optim.problem import OBJECTIVE_NAMES, evaluate, is_feasible
 from backend.optim.toy_data import Dish
-from evaluation.q_ablation import (
+from evaluation.ablation import (
     CompositionEvaluator,
     _repair_individual,
     adequacy_rows,
     composition_ga,
     derive_selection_verdict,
-    evaluate_q6,
+    evaluate_ablation,
     plan_metrics,
 )
 from shared.envelope_schema import (
@@ -399,7 +399,7 @@ def test_composition_ga_keeps_a_feasible_front():
             ids = [d for slot in entry["plan"][day * 3:(day + 1) * 3] for d in slot]
             assert len(ids) == len(set(ids)), "dish repeated within a day"
     # front entries are directly consumable by the selection strategies
-    from evaluation.q_ablation import _STRATEGIES
+    from evaluation.ablation import _STRATEGIES
 
     for selector in _STRATEGIES.values():
         picked = selector(ga["front"], env, ABLATION_POOL)
@@ -407,19 +407,19 @@ def test_composition_ga_keeps_a_feasible_front():
 
 
 # Real-data smoke
-def test_q6_smoke_real_data_two_patients():
+def test_ablation_smoke_real_data_two_patients():
     from backend.optim.real_data import load_dishes
     from evaluation.common import load_patients
 
     patients = load_patients()
     dishes = load_dishes()
     subset = patients[:3]  # includes at least one eligible patient
-    results = evaluate_q6(
+    results = evaluate_ablation(
         subset, dishes, seeds=(42,), pop_size=12, n_gen=12,
         composition_patients=1, composition_pop=16, composition_gen=10,
     )
     assert set(results) == {
-        "question", "definition", "selection_ablation",
+        "criterion", "definition", "selection_ablation",
         "composition_ablation", "exact_reference", "verdict", "verdict_note",
     }
     assert results["verdict"] in ("PASS", "FAIL")

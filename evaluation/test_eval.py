@@ -17,12 +17,12 @@ if str(ROOT) not in sys.path:
 
 
 from evaluation.common import load_patients, target_supported
-from evaluation.q_benchmark import evaluate_q4
-from evaluation.q_conflicts import evaluate_q2
-from evaluation.q_external import evaluate_q7
-from evaluation.q_groundedness import evaluate_q5
-from evaluation.q_satisfaction import evaluate_q3
-from evaluation.q_traceability import evaluate_q1
+from evaluation.benchmark import evaluate_benchmark
+from evaluation.conflicts import evaluate_conflicts
+from evaluation.external import evaluate_external
+from evaluation.groundedness import evaluate_groundedness
+from evaluation.satisfaction import evaluate_satisfaction
+from evaluation.traceability import evaluate_traceability
 from evaluation.report import render_report
 from evaluation.run_eval import run_suite
 
@@ -34,10 +34,10 @@ def _subset():
     return [p for p in load_patients() if p["patient_id"] in wanted]
 
 
-# Q1
+# Traceability
 
-def test_q1_traceability_full_is_complete():
-    results = evaluate_q1()  # cheap: rule engine only, all 20 patients
+def test_traceability_full_is_complete():
+    results = evaluate_traceability()  # cheap: rule engine only, all 20 patients
     assert results["total_patients"] == 20
     # P0007/P0016 (stage-5 pre-dialysis vocabulary) are scope-rejected by
     # the rules engine; P0008/P0017 were already out of scope.
@@ -48,12 +48,12 @@ def test_q1_traceability_full_is_complete():
     assert results["untraceable_items"] == []
     assert results["verdict"] == "PASS"
     # determinism: same patient -> same rates on a second run
-    assert evaluate_q1()["overall"] == results["overall"]
+    assert evaluate_traceability()["overall"] == results["overall"]
 
 
-def test_q1_definition_describes_the_matching_policy_honestly():
-    """Q1 credits matching cited values, even in superseded rows; it is not provenance."""
-    results = evaluate_q1()
+def test_traceability_definition_describes_the_matching_policy_honestly():
+    """Traceability credits matching cited values, even in superseded rows; it is not provenance."""
+    results = evaluate_traceability()
     assert "superseded losers never get credited" not in results["definition"]
     assert "weaker than provenance" in results["definition"]
     # pin the actual policy: a SUPERSEDED row with a matching final value
@@ -73,10 +73,10 @@ def test_q1_definition_describes_the_matching_policy_honestly():
     ) is False
 
 
-# Q2
+# Conflict resolution
 
-def test_q2_all_conflict_cases_pass():
-    results = evaluate_q2()
+def test_all_conflict_cases_pass():
+    results = evaluate_conflicts()
     assert results["cases_total"] >= 8
     assert results["cases_passed"] == results["cases_total"]
     assert results["checks_passed"] == results["checks_total"]
@@ -91,10 +91,10 @@ def test_q2_all_conflict_cases_pass():
     assert not [t for t in c2["engine_targets"] if t["nutrient"] == "potassium_mg"]
 
 
-# Q3
+# Constraint satisfaction
 
-def test_q3_subset_end_to_end():
-    results = evaluate_q3(_subset(), pop_size=20, n_gen=40, diagnose_blockers=True)
+def test_constraint_satisfaction_subset_end_to_end():
+    results = evaluate_satisfaction(_subset(), pop_size=20, n_gen=40, diagnose_blockers=True)
     attempted = [r for r in results["per_patient"] if r["attempted"]]
     rejected = [r for r in results["per_patient"] if not r["attempted"]]
     assert len(rejected) == 1 and rejected[0]["patient_id"] == "P0008"
@@ -181,7 +181,7 @@ def _pd_targets(min_floor, fiber_target=30.0, energy_target=1800.0, sodium_max=7
 
 def test_per_day_check_preserves_aim_identity_and_daily_gap_aggregation():
     """Keep both MIN/TARGET summaries and prevent opposite-day gaps cancelling."""
-    from evaluation.q_satisfaction import _per_day_check
+    from evaluation.satisfaction import _per_day_check
 
     dishes = _pd_dishes()
     plan = ([["lo"]] * 3 + [["hi"]] * 3) * 3 + [["lo"]] * 3  # lo,hi,lo,hi,lo,hi,lo
@@ -209,7 +209,7 @@ def test_per_day_check_preserves_aim_identity_and_daily_gap_aggregation():
 
 def test_per_day_check_retains_original_aims_when_floors_are_relaxed():
     """Relaxed fallback floors must not rewrite the reported aim."""
-    from evaluation.q_satisfaction import _per_day_check
+    from evaluation.satisfaction import _per_day_check
 
     dishes = _pd_dishes()
     plan = [["lo"]] * 21  # every day: 27 g fiber, 1500 kcal, 300 mg sodium
@@ -229,7 +229,7 @@ def test_per_day_check_retains_original_aims_when_floors_are_relaxed():
 
 def test_per_day_check_original_aims_expose_real_shortfall():
     """A plan meeting only the relaxed floor still shows the original gap."""
-    from evaluation.q_satisfaction import _per_day_check
+    from evaluation.satisfaction import _per_day_check
 
     dishes = _pd_dishes()
     # Delivery is 27 g/day: the relaxed 20 g floor is met, but the original
@@ -247,8 +247,8 @@ def test_per_day_check_original_aims_expose_real_shortfall():
     assert relaxed_view["soft_aims_by_constraint"]["fiber_g:min"]["worst_day_shortfall"] == 0.0
 
 
-def test_q4_consumes_benchmark_artefacts_without_rerunning():
-    results = evaluate_q4(rerun_benchmark=False)
+def test_benchmark_consumes_artefacts_without_rerunning():
+    results = evaluate_benchmark(rerun_benchmark=False)
     assert results["artefacts"]["rerun_benchmark"] is False
     methods = {m["method"] for m in results["headline"]}
     # every method recorded in the CSV artefact, not a hardcoded subset
@@ -265,10 +265,10 @@ def test_q4_consumes_benchmark_artefacts_without_rerunning():
     assert "pop=80, gen=80" in results["recommendation"]
 
 
-# Q5
+# Groundedness
 
-def test_q5_groundedness_scores():
-    results = evaluate_q5()
+def test_groundedness_scores():
+    results = evaluate_groundedness()
     assert results["grounded"]["total"] >= 15
     assert results["escalation"]["total"] >= 4
     assert results["irrelevant_refusals"]["total"] >= 3
@@ -280,10 +280,10 @@ def test_q5_groundedness_scores():
     assert len(results["known_gaps"]) >= 3
 
 
-# Q7
+# External datasets
 
-def test_q7_external_datasets():
-    results = evaluate_q7(max_nhanes_subjects=200)
+def test_external_datasets():
+    results = evaluate_external(max_nhanes_subjects=200)
     assert results["verdict"] == "PASS"
     nhanes = results["nhanes_cohort"]
     assert nhanes["available"] is True
@@ -313,16 +313,16 @@ def test_run_suite_and_report(tmp_path):
     results = run_suite(optimiser_kwargs={"pop_size": 20, "n_gen": 40})
     # full 20-patient suite + external datasets structure
     assert set(results) == {
-        "meta", "q1_traceability", "q2_conflicts",
-        "q3_constraint_satisfaction", "q4_benchmark", "q5_groundedness",
-        "q6_ablation", "q7_external",
+        "meta", "traceability", "conflicts",
+        "constraint_satisfaction", "benchmark", "groundedness",
+        "ablation", "external",
     }
     report = render_report(results)
-    for section in ("## Q1 — Traceability", "## Q2 — Conflict resolution",
-                    "## Q3 — Constraint satisfaction",
-                    "## Q4 — Quality/runtime", "## Q5 — Groundedness",
-                    "## Q6 — Objective/selection & meal-composition ablation",
-                    "## Q7 — External dataset evaluation",
+    for section in ("## Traceability", "## Conflict resolution",
+                    "## Constraint satisfaction",
+                    "## Quality/runtime", "## Groundedness",
+                    "## Objective/selection & meal-composition ablation",
+                    "## External dataset evaluation",
                     "## Limitations"):
         assert section in report
     assert "fibre MIN relaxation" in report or "Fibre MIN relaxation" in report

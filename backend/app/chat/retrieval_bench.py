@@ -78,7 +78,7 @@ END_TO_END_QUESTIONS = [
 
 
 # Intake questions require constraint-producing rules. Broader topic questions
-# may use other relevant rules. See evaluation/q_groundedness.py.
+# may use other relevant rules. See evaluation/groundedness.py.
 _SODIUM = ["CKD-2024-SODIUM-2000", "CONFLICT-SODIUM-CKD-WINS",
            "DASH-2025-SODIUM-2300", "DASH-2025-SODIUM-1500",
            "ADA-2026-SODIUM-2300", "GEN-SODIUM-2300"]
@@ -128,7 +128,7 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
     """
     R = _rules
     queries: list[dict[str, Any]] = [
-        # Guideline/nutrient queries mirror evaluation/q_groundedness.
+        # Guideline/nutrient queries mirror evaluation/groundedness.
         {"id": "g01", "category": "guideline_nutrient", "query": "How much sodium can I have per day?", "relevant": R(*_SODIUM)},
         {"id": "g02", "category": "guideline_nutrient", "query": "Is salt bad for my blood pressure?", "relevant": R(*_SODIUM)},
         {"id": "g03", "category": "guideline_nutrient", "query": "What is the sodium limit for someone with high blood pressure?", "relevant": R(*_SODIUM)},
@@ -453,7 +453,7 @@ def _end_to_end_spot_check(
     relevant_by_question: dict[str, set[str]],
 ) -> dict[str, Any]:
     from backend.app.chat import escalation
-    from evaluation.q_groundedness import _claims_supported
+    from evaluation.groundedness import _claims_supported
 
     rows_out: dict[str, list[dict[str, Any]]] = {}
     for name, method in methods.items():
@@ -506,7 +506,7 @@ _TYPO_NONSENSE_PROBES = [
 
 
 def _irrelevant_probes() -> list[str]:
-    from evaluation.q_groundedness import _IRRELEVANT
+    from evaluation.groundedness import _IRRELEVANT
 
     return list(_IRRELEVANT) + _TYPO_NONSENSE_PROBES
 
@@ -758,7 +758,7 @@ def render_report(results):
     lines += ["", "## Limitations", "",
               ("Small, internally authored development/test sets and semantic relevance labels do not establish clinical validity. "
               "Some end-to-end questions overlap ranking questions; those are complementary metrics, not independent evidence. "
-              "Q5 separately checks patient applicability, clinician overrides and exact approved values. "
+              "Groundedness evaluation separately checks patient applicability, clinician overrides and exact approved values. "
               "Full per-query results, thresholds and development examples are in `retrieval_bench_results.json`."), ""]
     return "\n".join(lines)
 

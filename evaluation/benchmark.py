@@ -1,4 +1,4 @@
-"""Q4 — Quality/runtime: consume the existing optimiser benchmark artefacts.
+"""Quality/runtime: consume the existing optimiser benchmark artefacts.
 
 Read the existing benchmark CSV and Markdown rather than running search.
 ``--rerun-benchmark`` regenerates them first. Include every recorded method
@@ -19,7 +19,7 @@ from typing import Any
 from evaluation.common import ROOT
 from backend.storage_paths import artifact_dir
 
-__all__ = ["evaluate_q4", "verdict_from_headline"]
+__all__ = ["evaluate_benchmark", "verdict_from_headline"]
 
 from backend.datasets.paths import dataset_dir
 
@@ -101,7 +101,7 @@ def _recommendation(path: Path = _MD_PATH) -> str:
 
 
 def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
-    """Derive the Q4 verdict and its explanation from the headline table.
+    """Derive the benchmark verdict and its explanation from the headline table.
 
     The hypervolume winner has the highest mean HV across all method rows in
     the benchmark artefact, not a hardcoded algorithm identity. PASS requires
@@ -149,14 +149,14 @@ def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
         " Caveats: HV scores the whole Pareto front (front coverage) — "
         "single-point baselines (GA, greedy) are structurally disadvantaged on "
         "full-front HV, and the quality of the single delivered meal plan "
-        "answers a different question (see Q3). Pymoo rows use actual-evaluation "
+        "is evaluated under Constraint satisfaction. Pymoo rows use actual-evaluation "
         "termination and record search counts; generation-boundary overshoot is "
         "possible. GA/greedy/random retain native budgets."
     )
     return verdict, note
 
 
-def evaluate_q4(rerun_benchmark: bool = False) -> dict[str, Any]:
+def evaluate_benchmark(rerun_benchmark: bool = False) -> dict[str, Any]:
     """Headline optimiser benchmark table + recommendation (from artefacts)."""
     csv_path, md_path = _CSV_PATH, _MD_PATH
     if rerun_benchmark:
@@ -173,7 +173,7 @@ def evaluate_q4(rerun_benchmark: bool = False) -> dict[str, Any]:
     headline = _summary_table(rows)
     verdict, verdict_note = verdict_from_headline(headline)
     return {
-        "question": "Q4 Quality/runtime (optimiser benchmark)",
+        "criterion": "Quality/runtime (optimiser benchmark)",
         "definition": (
             f"Consumes {csv_path.parent}/benchmark_results.{{csv,md}} (4 envelopes x 5 "
             "seeds for every method recorded in the artefact, plus the pop x gen "

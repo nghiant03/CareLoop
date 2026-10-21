@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from evaluation.q_benchmark import (
+from evaluation.benchmark import (
     _recommendation,
     _summary_table,
     verdict_from_headline,

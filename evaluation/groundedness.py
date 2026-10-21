@@ -1,4 +1,4 @@
-"""Q5 — Groundedness: scripted chat questions scored for citation accuracy.
+"""Groundedness: scripted chat questions scored for citation accuracy.
 
 Grounded cases require an acceptable constraint-producing rule citation,
 complete citation metadata, and structured claim coverage. These checks do not
@@ -16,7 +16,7 @@ from typing import Any
 from evaluation.common import load_patients
 from rules.engine import run_rules
 
-__all__ = ["evaluate_q5"]
+__all__ = ["evaluate_groundedness"]
 
 # Rules that actually PRODUCE a constraint for each nutrient (these are the
 # only citations that can genuinely ground a "how much X" answer).
@@ -307,7 +307,7 @@ def _run_known_gaps(kb: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def evaluate_q5(kb: Any | None = None) -> dict[str, Any]:
+def evaluate_groundedness(kb: Any | None = None) -> dict[str, Any]:
     """Groundedness + escalation + refusal scoring over the scripted question set."""
     if kb is None:
         from backend.app.core.kb_loader import get_kb
@@ -326,7 +326,7 @@ def evaluate_q5(kb: Any | None = None) -> dict[str, Any]:
     regressions = _run_known_gaps(kb)
 
     return {
-        "question": "Q5 Groundedness (chat)",
+        "criterion": "Groundedness (chat)",
         "definition": (
             "Scripted questions scored automatically: grounded nutrition "
             "questions must be answered with a citation whose rule_id is in the "

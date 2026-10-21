@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from backend.storage_paths import artifact_dir
-from evaluation import q_benchmark, run_eval
+from evaluation import benchmark, run_eval
 
 
 def test_output_root_is_configurable_and_does_not_create_files(monkeypatch, tmp_path):
@@ -53,16 +53,16 @@ def test_no_generated_reports_inside_repository():
         assert not path.exists(), f"Generated report must not live inside repository: {path}"
 
 
-def test_q4_rerun_reads_generated_files_without_mutating_snapshots(monkeypatch, tmp_path):
+def test_benchmark_rerun_reads_generated_files_without_mutating_snapshots(monkeypatch, tmp_path):
     root = tmp_path / "runs"
     monkeypatch.setenv("CARELOOP_ARTIFACT_DIR", str(root))
     monkeypatch.setenv("CARELOOP_BENCH_SMOKE", "1")
-    published_csv = q_benchmark._CSV_PATH.read_bytes()
-    published_md = q_benchmark._MD_PATH.read_bytes()
+    published_csv = benchmark._CSV_PATH.read_bytes()
+    published_md = benchmark._MD_PATH.read_bytes()
 
     def generate(command, *, cwd, check, env):
         assert command[-1] == "backend.optim.benchmark"
-        assert check and Path(cwd) == q_benchmark.ROOT
+        assert check and Path(cwd) == benchmark.ROOT
         assert env["CARELOOP_BENCH_SMOKE"] == "0"
         assert env["CARELOOP_ARTIFACT_DIR"] == str(root)
         output = root / "optim"
@@ -70,12 +70,12 @@ def test_q4_rerun_reads_generated_files_without_mutating_snapshots(monkeypatch, 
         (output / "benchmark_results.csv").write_bytes(published_csv)
         (output / "benchmark_results.md").write_text("## Recommendation\nGenerated marker\n")
 
-    monkeypatch.setattr(q_benchmark.subprocess, "run", generate)
-    result = q_benchmark.evaluate_q4(rerun_benchmark=True)
+    monkeypatch.setattr(benchmark.subprocess, "run", generate)
+    result = benchmark.evaluate_benchmark(rerun_benchmark=True)
     assert result["recommendation"] == "Generated marker"
     assert result["artefacts"]["csv"] == str(root / "optim/benchmark_results.csv")
-    assert q_benchmark._CSV_PATH.read_bytes() == published_csv
-    assert q_benchmark._MD_PATH.read_bytes() == published_md
+    assert benchmark._CSV_PATH.read_bytes() == published_csv
+    assert benchmark._MD_PATH.read_bytes() == published_md
     assert os.environ["CARELOOP_BENCH_SMOKE"] == "1"
-    assert q_benchmark.evaluate_q4()["artefacts"]["csv"] == str(q_benchmark._CSV_PATH)
+    assert benchmark.evaluate_benchmark()["artefacts"]["csv"] == str(benchmark._CSV_PATH)
 

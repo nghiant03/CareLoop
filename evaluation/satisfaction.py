@@ -1,4 +1,4 @@
-"""Q3 — Constraint satisfaction: engine -> approval -> optimiser -> verification.
+"""Constraint satisfaction: engine -> approval -> optimiser -> verification.
 
 Run eligible proposals through local approval and ``plan_service.plan_meals``.
 Recompute hard compliance against the solved envelope and soft gaps against
@@ -17,7 +17,7 @@ from typing import Any
 from evaluation.common import load_patients
 from rules.engine import run_rules
 
-__all__ = ["evaluate_q3"]
+__all__ = ["evaluate_satisfaction"]
 
 _EPS = 1e-6
 _FIXED_APPROVAL_TIME = datetime(2026, 1, 1, tzinfo=UTC)
@@ -109,7 +109,7 @@ def _blocking_constraints(solved_envelope: Any, dishes: list[Any]) -> list[str]:
     return blockers
 
 
-def evaluate_q3(
+def evaluate_satisfaction(
     patients: list[dict[str, Any]] | None = None,
     dishes: list[Any] | None = None,
     seed: int = 42,
@@ -201,7 +201,7 @@ def evaluate_q3(
 
     rate = (len(zero_violation) / len(attempted)) if attempted else None
     return {
-        "question": "Q3 Constraint satisfaction",
+        "criterion": "Constraint satisfaction",
         "definition": (
             "For every eligible patient: engine -> simulated APPROVED -> "
             "plan_service.plan_meals (single-dish search then original-target "

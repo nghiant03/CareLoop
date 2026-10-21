@@ -26,13 +26,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from evaluation.common import ROOT, load_patients
-from evaluation.q_ablation import evaluate_q6
-from evaluation.q_benchmark import evaluate_q4
-from evaluation.q_conflicts import evaluate_q2
-from evaluation.q_external import evaluate_q7
-from evaluation.q_groundedness import evaluate_q5
-from evaluation.q_satisfaction import evaluate_q3
-from evaluation.q_traceability import evaluate_q1
+from evaluation.ablation import evaluate_ablation
+from evaluation.benchmark import evaluate_benchmark
+from evaluation.conflicts import evaluate_conflicts
+from evaluation.external import evaluate_external
+from evaluation.groundedness import evaluate_groundedness
+from evaluation.satisfaction import evaluate_satisfaction
+from evaluation.traceability import evaluate_traceability
 from evaluation.report import render_report
 from backend.storage_paths import artifact_dir
 from backend.knowledge.runtime import selected_release, source_hashes
@@ -57,7 +57,7 @@ def _source_revision() -> str:
     """Best-effort source revision: jj first, then git, else an explicit marker.
 
     The revision is report metadata, so an unavailable VCS must never abort
-    the suite — that would discard every already-computed question result.
+    the suite — that would discard every already-computed criterion result.
     """
     revision = _run_vcs(
         ["jj", "--ignore-working-copy", "log", "-r", "@",
@@ -73,26 +73,26 @@ def run_suite(
     optimiser_kwargs: dict[str, Any] | None = None,
     max_nhanes_subjects: int | None = 600,
 ) -> dict[str, Any]:
-    """Run Tier-1 contract gates (Q1, Q2, Q3, Q5) and Tier-2 empirical/external evaluations (Q4, Q6, Q7)."""
+    """Run Tier-1 contract gates and Tier-2 empirical/external evaluations."""
     from backend.optim.real_data import load_dishes
 
     optimiser_kwargs = optimiser_kwargs or {}
     patients = load_patients()
 
-    q1 = evaluate_q1(patients)
-    q2 = evaluate_q2()
+    traceability = evaluate_traceability(patients)
+    conflicts = evaluate_conflicts()
 
     dishes = load_dishes()
-    q3 = evaluate_q3(patients, dishes=dishes, **optimiser_kwargs)
+    satisfaction = evaluate_satisfaction(patients, dishes=dishes, **optimiser_kwargs)
 
-    q4 = evaluate_q4(rerun_benchmark=rerun_benchmark)
+    benchmark = evaluate_benchmark(rerun_benchmark=rerun_benchmark)
 
     from backend.app.core.kb_loader import get_kb
     kb = get_kb()
-    q5 = evaluate_q5(kb)
+    groundedness = evaluate_groundedness(kb)
 
-    q6 = evaluate_q6(patients, dishes=dishes, **q6_kwargs(optimiser_kwargs))
-    q7 = evaluate_q7(kb=kb, max_nhanes_subjects=max_nhanes_subjects)
+    ablation = evaluate_ablation(patients, dishes=dishes, **ablation_kwargs(optimiser_kwargs))
+    external = evaluate_external(kb=kb, max_nhanes_subjects=max_nhanes_subjects)
 
     import hashlib
     import platform
@@ -107,12 +107,12 @@ def run_suite(
 
     tier1_verdict = (
         "PASS"
-        if all(x["verdict"] == "PASS" for x in (q1, q2, q3, q5))
+        if all(x["verdict"] == "PASS" for x in (traceability, conflicts, satisfaction, groundedness))
         else "FAIL"
     )
     tier2_verdict = (
         "PASS"
-        if all(x["verdict"] == "PASS" for x in (q4, q6, q7))
+        if all(x["verdict"] == "PASS" for x in (benchmark, ablation, external))
         else "FAIL"
     )
 
@@ -131,30 +131,30 @@ def run_suite(
             "runtime": {"python": platform.python_version(), "platform": platform.platform()},
             "tiers": {
                 "tier1_contracts": {
-                    "questions": ["q1_traceability", "q2_conflicts", "q3_constraint_satisfaction", "q5_groundedness"],
+                    "criteria": ["traceability", "conflicts", "constraint_satisfaction", "groundedness"],
                     "verdict": tier1_verdict,
                 },
                 "tier2_empirical_and_external": {
-                    "questions": ["q4_benchmark", "q6_ablation", "q7_external"],
+                    "criteria": ["benchmark", "ablation", "external"],
                     "verdict": tier2_verdict,
                 },
             },
         },
-        "q1_traceability": q1,
-        "q2_conflicts": q2,
-        "q3_constraint_satisfaction": q3,
-        "q4_benchmark": q4,
-        "q5_groundedness": q5,
-        "q6_ablation": q6,
-        "q7_external": q7,
+        "traceability": traceability,
+        "conflicts": conflicts,
+        "constraint_satisfaction": satisfaction,
+        "benchmark": benchmark,
+        "groundedness": groundedness,
+        "ablation": ablation,
+        "external": external,
     }
 
 
-def q6_kwargs(optimiser_kwargs: dict[str, Any]) -> dict[str, Any]:
-    """Map the shared optimiser budget onto Q6's parameters.
+def ablation_kwargs(optimiser_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Map the shared optimiser budget onto the ablation evaluation parameters.
 
     Seeds stay at the fixed paired triple (42, 43, 44); pop/gen follow the
-    suite budget so ``--quick`` reduces Q6 as well.
+    suite budget so ``--quick`` reduces the ablation run as well.
     """
     kwargs: dict[str, Any] = {}
     if "pop_size" in optimiser_kwargs:
@@ -165,63 +165,66 @@ def q6_kwargs(optimiser_kwargs: dict[str, Any]) -> dict[str, Any]:
 
 
 def _print_headlines(results: dict[str, Any]) -> None:
-    q1, q2, q3 = results["q1_traceability"], results["q2_conflicts"], results["q3_constraint_satisfaction"]
-    q4, q5 = results["q4_benchmark"], results["q5_groundedness"]
-    q6 = results.get("q6_ablation")
-    q7 = results.get("q7_external")
+    traceability = results["traceability"]
+    conflicts = results["conflicts"]
+    satisfaction = results["constraint_satisfaction"]
+    benchmark = results["benchmark"]
+    groundedness = results["groundedness"]
+    ablation = results.get("ablation")
+    external = results.get("external")
 
     def pct(x):
         return "n/a" if x is None else f"{x * 100:.1f}%"
 
     print("CareLoop evaluation — headline results")
     print("  [Tier 1 — Deterministic contract & safety gates]")
-    print(f"  Q1 traceability:          {q1['overall']['traceable']}/{q1['overall']['items']} "
-          f"({pct(q1['overall']['rate'])}) [{q1['verdict']}] "
-          f"(+{q1['rejected_patients']} REJECTED patients counted separately)")
-    print(f"  Q2 conflict resolution:   {q2['cases_passed']}/{q2['cases_total']} cases "
-          f"({pct(q2['pass_rate'])}) [{q2['verdict']}]")
-    print(f"  Q3 constraint satisfaction: {q3['zero_violation_plans']}/"
-          f"{q3['plans_attempted']} zero-violation plans ({pct(q3['zero_violation_rate'])}) "
-          f"[{q3['verdict']}] ({q3['infeasible_plans']} infeasible, "
-          f"{q3['relaxed_envelopes']} relaxed)")
-    print(f"  Q5 groundedness:          grounded {q5['grounded']['passed']}/{q5['grounded']['total']} "
-          f"({pct(q5['grounded']['citation_accuracy'])} citation accuracy), "
-          f"escalation {q5['escalation']['passed']}/{q5['escalation']['total']}, "
-          f"refusals {q5['irrelevant_refusals']['passed']}/{q5['irrelevant_refusals']['total']} "
-          f"[{q5['verdict']}]")
+    print(f"  Traceability:             {traceability['overall']['traceable']}/{traceability['overall']['items']} "
+          f"({pct(traceability['overall']['rate'])}) [{traceability['verdict']}] "
+          f"(+{traceability['rejected_patients']} REJECTED patients counted separately)")
+    print(f"  Conflict resolution:      {conflicts['cases_passed']}/{conflicts['cases_total']} cases "
+          f"({pct(conflicts['pass_rate'])}) [{conflicts['verdict']}]")
+    print(f"  Constraint satisfaction:  {satisfaction['zero_violation_plans']}/"
+          f"{satisfaction['plans_attempted']} zero-violation plans ({pct(satisfaction['zero_violation_rate'])}) "
+          f"[{satisfaction['verdict']}] ({satisfaction['infeasible_plans']} infeasible, "
+          f"{satisfaction['relaxed_envelopes']} relaxed)")
+    print(f"  Groundedness:             grounded {groundedness['grounded']['passed']}/{groundedness['grounded']['total']} "
+          f"({pct(groundedness['grounded']['citation_accuracy'])} citation accuracy), "
+          f"escalation {groundedness['escalation']['passed']}/{groundedness['escalation']['total']}, "
+          f"refusals {groundedness['irrelevant_refusals']['passed']}/{groundedness['irrelevant_refusals']['total']} "
+          f"[{groundedness['verdict']}]")
     print("  [Tier 2 — Empirical benchmarks & external dataset evaluations]")
-    print(f"  Q4 optimiser benchmark:   {q4['verdict']} (consumed from "
-          f"{q4['artefacts']['csv']}, {q4['artefacts']['main_runs']} main runs)")
-    if q6:
-        pooled = q6["selection_ablation"]["pooled"]
+    print(f"  Optimiser benchmark:      {benchmark['verdict']} (consumed from "
+          f"{benchmark['artefacts']['csv']}, {benchmark['artefacts']['main_runs']} main runs)")
+    if ablation:
+        pooled = ablation["selection_ablation"]["pooled"]
         sc = pooled["scalar"].get("mean_worst_day_rel_shortfall_pct")
         adq = pooled["adequacy_first"].get("mean_worst_day_rel_shortfall_pct")
         sc_cost = pooled["scalar"].get("mean_cost") or 0.0
         adq_cost = pooled["adequacy_first"].get("mean_cost") or 0.0
         cost_pct = ((adq_cost / sc_cost - 1.0) * 100.0) if sc_cost else 0.0
         delta = (adq - sc) if (adq is not None and sc is not None) else None
-        print(f"  Q6 selection ablation:    adequacy-first worst-day shortfall "
+        print(f"  Selection ablation:       adequacy-first worst-day shortfall "
               f"{'n/a' if adq is None else f'{adq:.1f}%'} vs scalar "
               f"{'n/a' if sc is None else f'{sc:.1f}%'} "
               f"(Δ {'n/a' if delta is None else f'{delta:+.1f} pct-pts'}), "
-              f"cost {cost_pct:+.1f}% [{q6['verdict']}] "
+              f"cost {cost_pct:+.1f}% [{ablation['verdict']}] "
               f"(composition ablation informational)")
-    if q7 and q7.get("nhanes_cohort", {}).get("available"):
-        nh = q7["nhanes_cohort"]
-        mm = q7["mimic_longitudinal_trends"]
-        hb = q7["healthbench_chat"]
-        print(f"  Q7 external datasets:     NHANES {nh['traceability']['traceable']}/{nh['traceability']['items']} "
+    if external and external.get("nhanes_cohort", {}).get("available"):
+        nh = external["nhanes_cohort"]
+        mm = external["mimic_longitudinal_trends"]
+        hb = external["healthbench_chat"]
+        print(f"  External datasets:        NHANES {nh['traceability']['traceable']}/{nh['traceability']['items']} "
               f"traceable across {nh['evaluated_subjects']} subjects, "
               f"recall hard-violation rate {pct(nh['dietary_recall_adherence']['baseline_hard_violation_day_rate'])}; "
               f"MIMIC {mm['real_trajectory_flags']['total']} flags ({mm['patients_total']} pts); "
               f"HealthBench {hb['nutrition_queries']['answered']}/{hb['nutrition_queries']['total']} nutrition queries "
-              f"grounded [{q7['verdict']}]")
+              f"grounded [{external['verdict']}]")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="evaluation.run",
-        description="CareLoop two-tier evaluation suite (Q1-Q7, external output only).",
+        description="CareLoop two-tier evaluation suite (external output only).",
     )
     parser.add_argument(
         "--rerun-benchmark", action="store_true",

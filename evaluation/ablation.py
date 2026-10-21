@@ -1,4 +1,4 @@
-"""Q6 — Paired selection ablation, experimental composition, and exact reference.
+"""Paired selection ablation, experimental composition, and exact reference.
 
 Reuse each patient/seed front across selection strategies and score original
 aims. Local approval copies never write clinical state. ``adequacy_rows`` owns
@@ -50,9 +50,9 @@ __all__ = [
     "adequacy_rows",
     "composition_ga",
     "derive_selection_verdict",
+    "evaluate_ablation",
     "evaluate_composition_ablation",
     "evaluate_exact_reference",
-    "evaluate_q6",
     "evaluate_selection_ablation",
     "plan_metrics",
 ]
@@ -1154,7 +1154,7 @@ def evaluate_exact_reference(
     }
 
 
-def evaluate_q6(
+def evaluate_ablation(
     patients: list[dict[str, Any]] | None = None,
     dishes: list[Dish] | None = None,
     seeds: tuple[int, ...] = SEEDS,
@@ -1165,7 +1165,7 @@ def evaluate_q6(
     composition_gen: int = 60,
     composition_seed: int | None = None,
 ) -> dict[str, Any]:
-    """Q6: selection ablation -> composition ablation -> exact reference."""
+    """Selection ablation -> composition ablation -> exact reference."""
     from shared.envelope_schema import NutrientEnvelope
 
     patients = patients if patients is not None else load_patients()
@@ -1201,7 +1201,7 @@ def evaluate_q6(
     )
 
     return {
-        "question": "Q6 Objective/selection & meal-composition ablation",
+        "criterion": "Objective/selection & meal-composition ablation",
         "definition": (
             "P1 review comparison: single-dish raw-unit scalar selection vs "
             "nutrient-normalised selection vs adequacy-first/lexicographic "

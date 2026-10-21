@@ -1,4 +1,4 @@
-"""Q2 — Conflict resolution: scripted conflict cases with expected outcomes.
+"""Conflict resolution: scripted conflict cases with expected outcomes.
 
 Check envelopes and traces against the priority and tie policies in
 ``rules/ENGINE.md``.
@@ -17,7 +17,7 @@ from evaluation.common import (
 )
 from rules.engine import run_rules
 
-__all__ = ["conflict_cases", "evaluate_q2"]
+__all__ = ["conflict_cases", "evaluate_conflicts"]
 
 Check = Callable[[dict[str, Any], list[dict[str, Any]]], bool]
 
@@ -212,7 +212,7 @@ def conflict_cases() -> list[dict[str, Any]]:
     ]
 
 
-def evaluate_q2() -> dict[str, Any]:
+def evaluate_conflicts() -> dict[str, Any]:
     """Run every conflict case; record engine verdicts and pass/fail per check."""
     cases = []
     total_checks = 0
@@ -241,7 +241,7 @@ def evaluate_q2() -> dict[str, Any]:
         })
     cases_passed = sum(1 for c in cases if c["passed"])
     return {
-        "question": "Q2 Conflict resolution",
+        "criterion": "Conflict resolution",
         "definition": (
             "Scripted conflict cases with expected outcomes, checked against the "
             "engine's envelope + trace (priority hierarchy CKD 90 > safety 88 > "

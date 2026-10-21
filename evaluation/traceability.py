@@ -1,4 +1,4 @@
-"""Q1 — Traceability: every envelope constraint/exclusion cites a fired rule.
+"""Traceability: every envelope constraint/exclusion cites a fired rule.
 
 Targets and exclusions need a matching trace action with guideline, section,
 and rule ID. Count rejected patients separately but still check their exclusions
@@ -16,7 +16,7 @@ from evaluation.common import (
 )
 from rules.engine import run_rules
 
-__all__ = ["evaluate_q1"]
+__all__ = ["evaluate_traceability"]
 
 
 def _evaluate_patient(patient: dict[str, Any]) -> dict[str, Any]:
@@ -57,7 +57,7 @@ def _evaluate_patient(patient: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def evaluate_q1(patients: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def evaluate_traceability(patients: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Traceability of every envelope constraint/exclusion to a cited rule firing."""
     patients = patients if patients is not None else load_patients()
     per_patient = [_evaluate_patient(p) for p in patients]
@@ -73,7 +73,7 @@ def evaluate_q1(patients: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     rejected_exclusion_traceable = sum(r["traceable"] for r in rejected)
 
     return {
-        "question": "Q1 Traceability",
+        "criterion": "Traceability",
         "definition": (
             "Every envelope target and exclusion must be traceable to >=1 fired "
             "trace row carrying a citation (guideline + section + rule_id). "

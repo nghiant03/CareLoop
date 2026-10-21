@@ -1,4 +1,4 @@
-"""Q7 — External dataset evaluation (Tier 2 empirical benchmark).
+"""External dataset evaluation (Tier 2 empirical benchmark).
 
 Evaluates CareLoop's rule engine, adherence classifier, longitudinal lab-trend
 detector, and chat grounding/escalation pipeline on external public datasets
@@ -41,12 +41,12 @@ from backend.app.adherence.analysis import classify_constraint
 from backend.datasets.paths import dataset_dir
 from backend.mining.trends import detect_trends
 from evaluation.common import exclusion_supported, target_supported
-from evaluation.q_groundedness import _claim_sources_consistent
+from evaluation.groundedness import _claim_sources_consistent
 from rules.engine import run_rules
 from shared.envelope_schema import ConstraintKind
 from shared.provenance import citation_for
 
-__all__ = ["ckd_epi_2021", "evaluate_q7"]
+__all__ = ["ckd_epi_2021", "evaluate_external"]
 
 _NUTRIENT_RECALL_COLS = {
     "energy_kcal": ("DR1TKCAL", "DR2TKCAL"),
@@ -725,7 +725,7 @@ def _evaluate_healthbench(raw_root: Path, kb: Any = None) -> dict[str, Any]:
     }
 
 
-def evaluate_q7(
+def evaluate_external(
     raw_root: Path | None = None,
     kb: Any = None,
     max_nhanes_subjects: int | None = 600,
@@ -751,7 +751,7 @@ def evaluate_q7(
         )
 
     return {
-        "question": "Q7 External dataset evaluation (NHANES, MIMIC-IV, HealthBench)",
+        "criterion": "External dataset evaluation (NHANES, MIMIC-IV, HealthBench)",
         "tier": "tier2_empirical",
         "definition": (
             "Empirical evaluation of CareLoop across three external clinical/health "
