@@ -1,38 +1,39 @@
+@import '@fontsource/public-sans/400.css';
+@import '@fontsource/public-sans/500.css';
+@import '@fontsource/public-sans/600.css';
+@import '@fontsource/public-sans/700.css';
+@import '@fontsource/roboto-mono/400.css';
+@import '@fontsource/roboto-mono/500.css';
+@import '@fontsource/roboto-mono/600.css';
 @import "tailwindcss";
 
-:root {
-  --color-primary-50: #f0f9ff;
-  --color-primary-100: #e0f2fe;
-  --color-primary-200: #bae6fd;
-  --color-primary-300: #7dd3fc;
-  --color-primary-400: #38bdf8;
-  --color-primary-500: #0ea5e9;
-  --color-primary-600: #0284c7;
-  --color-primary-700: #0369a1;
-  --color-primary-800: #075985;
-  --color-primary-900: #0c4a6e;
+@theme {
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
-  --color-slate-50: #f8fafc;
-  --color-slate-100: #f1f5f9;
-  --color-slate-200: #e2e8f0;
-  --color-slate-300: #cbd5e1;
-  --color-slate-400: #94a3b8;
-  --color-slate-500: #64748b;
-  --color-slate-600: #475569;
-  --color-slate-700: #334155;
-  --color-slate-800: #1e293b;
-  --color-slate-900: #0f172a;
+  /* Lab-report palette: paper, ink, hairline rules. Hue is reserved for state. */
+  --color-paper: #fbfaf6;
+  --color-panel: #f4f2ea;
+  --color-card: #ffffff;
+  --color-ink: #17140f;
+  --color-ink-2: #453f35;
+  --color-ink-3: #6f6759;
+  --color-rule: #e3e0d3;
+  --color-rule-2: #c8c3b0;
 
-  --color-rose-50: #fff1f2;
-  --color-rose-100: #ffe4e6;
-  --color-rose-500: #f43f5e;
-  --color-rose-600: #e11d48;
-  --color-amber-50: #fffbeb;
-  --color-amber-400: #fbbf24;
-  --color-amber-500: #f59e0b;
-  --color-emerald-50: #ecfdf5;
-  --color-emerald-500: #10b981;
-  --color-emerald-600: #059669;
+  /* State hues */
+  --color-flag: #b3352b;
+  --color-flag-bg: #f9e9e5;
+  --color-flag-rule: #e3b8ae;
+  --color-ok: #1f6f4a;
+  --color-ok-bg: #e6f0e7;
+  --color-ok-rule: #b3d2ba;
+  --color-warn: #9a5b12;
+  --color-warn-bg: #f8efdd;
+  --color-warn-rule: #e0c79b;
+  --color-line: #1d4ed8;
+  --color-line-bg: #e7edfb;
+  --color-line-rule: #b9c8ef;
 }
 
 html {
@@ -41,31 +42,250 @@ html {
 }
 
 body {
-  background-color: #f8fafc;
-  color: #1e293b;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }
 
-/* Use focus-visible so keyboard navigation has a ring without marking every click. */
+/* Browser surfaces carry the design too. */
+::selection {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+input, textarea, select {
+  caret-color: var(--color-line);
+}
+
+/* Keyboard navigation ring; clicks stay unmarked. */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
-select:focus-visible {
-  outline: 2px solid #38bdf8;
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-line);
   outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--color-panel);
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: var(--color-rule-2);
+  border: 2px solid var(--color-panel);
+  border-radius: 0;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--color-ink-3);
+}
+
+@layer components {
+  /* Squared, ruled report surfaces. */
+  .panel {
+    @apply border border-rule bg-card;
+  }
+  .panel-tint {
+    @apply border border-rule bg-panel;
+  }
+
+  /* Mono microcopy: column headers, report codes, department tags. */
+  .micro-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+  }
+
+  /* Buttons: 1px ruled, squared corners, no shadow. */
+  .btn-primary, .btn-approve, .btn-danger, .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 border px-4 py-2 text-sm font-semibold transition-colors;
+    border-radius: 2px;
+  }
+  .btn-primary:disabled, .btn-approve:disabled, .btn-danger:disabled, .btn-ghost:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+  .btn-primary {
+    @apply border-ink bg-ink text-paper hover:bg-ink-2;
+  }
+  .btn-approve {
+    @apply border-ok bg-ok text-white hover:brightness-110;
+  }
+  .btn-danger {
+    @apply border-flag-rule bg-card text-flag hover:bg-flag-bg;
+  }
+  .btn-ghost {
+    @apply border-rule-2 bg-card text-ink-2 hover:bg-panel;
+  }
+
+  /* Form fields. */
+  .field {
+    @apply w-full border border-rule-2 bg-card px-3 py-2 text-sm text-ink placeholder:text-ink-3;
+    border-radius: 2px;
+  }
+  .field:focus {
+    border-color: var(--color-line);
+  }
+  .field:disabled {
+    @apply bg-panel;
+  }
+
+  /* State flags: squared mono chips; hue only from state. */
+  .flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid;
+    border-radius: 2px;
+    padding: 0.125rem 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .flag-ok {
+    color: var(--color-ok);
+    background: var(--color-ok-bg);
+    border-color: var(--color-ok-rule);
+  }
+  .flag-bad {
+    color: var(--color-flag);
+    background: var(--color-flag-bg);
+    border-color: var(--color-flag-rule);
+  }
+  .flag-warn {
+    color: var(--color-warn);
+    background: var(--color-warn-bg);
+    border-color: var(--color-warn-rule);
+  }
+  .flag-info {
+    color: var(--color-line);
+    background: var(--color-line-bg);
+    border-color: var(--color-line-rule);
+  }
+  .flag-neutral {
+    color: var(--color-ink-2);
+    background: var(--color-panel);
+    border-color: var(--color-rule-2);
+  }
+
+  /* Notice strips (banners, callouts). */
+  .notice {
+    @apply border p-3 text-sm;
+    border-radius: 2px;
+  }
+  .notice-error {
+    color: var(--color-flag);
+    background: var(--color-flag-bg);
+    border-color: var(--color-flag-rule);
+  }
+  .notice-warn {
+    color: var(--color-warn);
+    background: var(--color-warn-bg);
+    border-color: var(--color-warn-rule);
+  }
+  .notice-ok {
+    color: var(--color-ok);
+    background: var(--color-ok-bg);
+    border-color: var(--color-ok-rule);
+  }
+  .notice-info {
+    color: var(--color-line);
+    background: var(--color-line-bg);
+    border-color: var(--color-line-rule);
+  }
+
+  /* Data tables: hairline rules, expressed grid, mono column heads. */
+  .data-table {
+    @apply min-w-full border-collapse text-left text-sm;
+  }
+  .data-table thead th {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+    border-bottom: 1px solid var(--color-rule-2);
+    padding: 0.625rem 1rem;
+    white-space: nowrap;
+  }
+  .data-table thead th + th {
+    border-left: 1px solid var(--color-rule);
+  }
+  .data-table tbody td {
+    border-bottom: 1px solid var(--color-rule);
+    padding: 0.625rem 1rem;
+    vertical-align: top;
+  }
+  .data-table tbody td + td {
+    border-left: 1px solid var(--color-rule);
+  }
+  .data-table tbody tr:hover {
+    background: var(--color-panel);
+  }
+
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* The one authored moment: a scanning bar for loading states. */
+@keyframes scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.scan-bar {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  background: var(--color-rule);
+}
+.scan-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 25%;
+  background: var(--color-ink);
+  animation: scan 1.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* Range-bar overflow region reads as hatched, beyond the limit rule. */
+.hatch-flag {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--color-flag) 0,
+    var(--color-flag) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+}
+/* Soft floors hatch in caution amber; red is reserved for hard flags. */
+.hatch-warn {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--color-warn) 0,
+    var(--color-warn) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-bar::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.25;
+  }
+  .range-fill {
+    transition: none;
+  }
 }

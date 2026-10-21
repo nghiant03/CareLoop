@@ -11,59 +11,59 @@ export default function PatientCard({ patient, selected, onClick, action }: Pati
   return (
     <div
       onClick={onClick}
-      className={`rounded-xl border bg-white p-4 shadow-sm transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5 ${
-        selected ? 'border-sky-500 ring-1 ring-sky-500' : 'border-slate-200'
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
+      className={`cursor-pointer border bg-card p-4 transition-colors hover:bg-panel ${
+        selected ? 'border-ink bg-panel' : 'border-rule'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-slate-900">
+          <p className="micro-label">{patient.id}</p>
+          <h3 className="mt-0.5 text-base font-semibold text-ink">
             {patient.name || `Patient ${patient.id}`}
           </h3>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-ink-3">
             {patient.age} yrs · {patient.sex}
           </p>
         </div>
-        {action}
+        <div className="flex items-center gap-2">
+          {selected && <span className="flag flag-neutral">Selected</span>}
+          {action}
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
         {patient.diagnoses?.map((d) => (
-          <Badge key={d} variant="primary">
+          <span key={d} className="flag flag-neutral">
             {d}
-          </Badge>
+          </span>
         ))}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-rule pt-2.5 text-xs">
         {patient.egfr !== undefined && (
-          <span className="rounded-md bg-slate-100 px-2 py-1">eGFR {patient.egfr}</span>
+          <span className="text-ink-3">
+            eGFR <span className="num font-medium text-ink-2">{patient.egfr}</span>
+          </span>
         )}
         {patient.serum_k !== undefined && (
-          <span className="rounded-md bg-slate-100 px-2 py-1">K {patient.serum_k}</span>
+          <span className="text-ink-3">
+            K <span className="num font-medium text-ink-2">{patient.serum_k}</span>
+          </span>
         )}
         {patient.serum_po4 !== undefined && (
-          <span className="rounded-md bg-slate-100 px-2 py-1">PO₄ {patient.serum_po4}</span>
+          <span className="text-ink-3">
+            PO₄ <span className="num font-medium text-ink-2">{patient.serum_po4}</span>
+          </span>
         )}
       </div>
     </div>
-  );
-}
-
-function Badge({
-  children,
-  variant = 'default',
-}: {
-  children: React.ReactNode;
-  variant?: 'default' | 'primary';
-}) {
-  const classes =
-    variant === 'primary'
-      ? 'bg-sky-50 text-sky-700 ring-1 ring-sky-100'
-      : 'bg-slate-100 text-slate-700';
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${classes}`}>
-      {children}
-    </span>
   );
 }

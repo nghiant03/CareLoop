@@ -25,14 +25,21 @@ export default function ApprovalModeBanner() {
   if (mode === 'clinician') return null;
 
   return (
-    <aside aria-label="Approval policy" role="status" className="bg-amber-50 px-4 py-3 text-sm text-amber-900">
-      <p className="mx-auto max-w-7xl">
-        {mode === 'auto'
-          ? 'Demo mode — new targets are auto-approved, not clinically reviewed. Clinician review and the review queue simulate a clinician role. Edits require manual re-approval.'
-          : mode === 'loading'
-            ? 'Checking approval mode… Do not assume targets have been clinically reviewed.'
-            : 'Approval mode unavailable. Do not assume clinical review; checking again automatically.'}
-      </p>
+    <aside
+      aria-label="Approval policy"
+      role="status"
+      className="border-b border-warn-rule bg-warn-bg px-4 py-2.5 text-sm"
+    >
+      <div className="mx-auto flex max-w-7xl items-start gap-3">
+        <span className="flag flag-warn mt-0.5 shrink-0">Notice</span>
+        <p className="text-warn">
+          {mode === 'auto'
+            ? 'Demo mode — new targets are auto-approved, not clinically reviewed. Clinician review and the review queue simulate a clinician role. Edits require manual re-approval.'
+            : mode === 'loading'
+              ? 'Checking approval mode… Do not assume targets have been clinically reviewed.'
+              : 'Approval mode unavailable. Do not assume clinical review; checking again automatically.'}
+        </p>
+      </div>
     </aside>
   );
 }

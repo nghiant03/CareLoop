@@ -6,45 +6,39 @@ interface RuleTraceProps {
 
 export default function RuleTrace({ trace }: RuleTraceProps) {
   if (!trace || trace.length === 0) {
-    return <p className="text-sm text-slate-500">No rules fired.</p>;
+    return <p className="text-sm text-ink-3">No rules fired.</p>;
   }
 
   const sorted = [...trace].sort((a, b) => a.priority - b.priority);
 
   return (
-    <ol className="relative space-y-4 before:absolute before:left-2 before:top-1.5 before:h-full before:w-0.5 before:bg-slate-200">
+    <ol className="border border-rule bg-card">
       {sorted.map((entry, idx) => (
-        <li key={`${entry.rule_id}-${idx}`} className="relative pl-8">
-          <span
-            className={`absolute left-0 top-0 inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold ring-2 ring-white ${
-              entry.overridden_by ? 'bg-rose-100 text-rose-700' : 'bg-sky-100 text-sky-700'
-            }`}
-          >
-            {entry.priority}
+        <li
+          key={`${entry.rule_id}-${idx}`}
+          className={`flex gap-4 p-4 ${idx > 0 ? 'border-t border-rule' : ''}`}
+        >
+          <span className="num mt-0.5 shrink-0 text-xs font-semibold text-ink-3">
+            P{entry.priority}
           </span>
-          <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-slate-900">{entry.rule_id}</span>
-              <span className="text-xs text-slate-500">· {entry.guideline}</span>
-              {entry.section && (
-                <span className="text-xs text-slate-500">· {entry.section}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="font-mono text-sm font-semibold text-ink">{entry.rule_id}</span>
+              <span className="text-xs text-ink-3">· {entry.guideline}</span>
+              {entry.section && <span className="text-xs text-ink-3">· {entry.section}</span>}
+              {entry.overridden_by && (
+                <span className="flag flag-bad">
+                  Overridden by <span className="font-bold">{entry.overridden_by}</span>
+                </span>
               )}
             </div>
-            {entry.message && (
-              <p className="mt-1 text-sm text-slate-700">{entry.message}</p>
-            )}
-            {entry.overridden_by && (
-              <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">
-                <span>Overridden by</span>
-                <span className="font-semibold">{entry.overridden_by}</span>
-              </div>
-            )}
+            {entry.message && <p className="mt-1 text-sm text-ink-2">{entry.message}</p>}
             {entry.url && (
               <a
                 href={entry.url ?? undefined}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:text-sky-700 hover:underline"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-line hover:underline"
               >
                 View guideline
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

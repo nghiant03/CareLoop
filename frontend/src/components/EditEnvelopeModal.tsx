@@ -123,14 +123,14 @@ export default function EditEnvelopeModal({
   };
 
   const kindClasses: Record<NutrientConstraint['kind'], string> = {
-    max: 'bg-rose-50 text-rose-700',
-    min: 'bg-emerald-50 text-emerald-700',
-    target: 'bg-sky-50 text-sky-700',
+    max: 'flag-bad',
+    min: 'flag-warn',
+    target: 'flag-info',
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/50 p-4 sm:items-center"
       onClick={handleBackdropClick}
       aria-labelledby="edit-envelope-title"
       aria-describedby="edit-envelope-desc"
@@ -139,70 +139,69 @@ export default function EditEnvelopeModal({
     >
       <div
         ref={modalRef}
-        className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-slate-900/10"
+        className="w-full max-w-2xl overflow-hidden border border-rule-2 bg-card"
       >
-        <div className="border-b border-slate-100 p-5">
-          <h2 id="edit-envelope-title" className="text-lg font-semibold text-slate-900">
+        <div className="border-b border-rule-2 p-5">
+          <p className="micro-label mb-1">Amendment · invalidates approval</p>
+          <h2 id="edit-envelope-title" className="text-lg font-bold tracking-tight text-ink">
             Edit nutrient constraints
           </h2>
-          <p id="edit-envelope-desc" className="mt-1 text-sm text-slate-500">
+          <p id="edit-envelope-desc" className="mt-1 text-sm text-ink-3">
             Adjust the values below. Saving marks the envelope as{' '}
-            <span className="font-medium text-sky-700">EDITED</span> and requires
+            <span className="font-medium text-line">EDITED</span> and requires
             re-approval.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5">
           {saveError && (
-            <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+            <div className="notice notice-error mb-4">
               {saveError}
               <button
                 type="button"
                 onClick={() => setSaveError(null)}
-                className="ml-2 font-medium underline hover:text-rose-900"
+                className="ml-2 font-semibold underline hover:opacity-80"
               >
                 Dismiss
               </button>
             </div>
           )}
 
-          <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-slate-200">
+          <div className="max-h-[50vh] overflow-y-auto border border-rule">
             {envelope.constraints.length === 0 ? (
-              <p className="p-4 text-sm text-slate-500">
+              <p className="p-4 text-sm text-ink-3">
                 No nutrient constraints are available to edit.
               </p>
             ) : (
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-700">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <th className="px-4 py-3 font-semibold">Nutrient</th>
-                    <th className="px-4 py-3 font-semibold">Kind</th>
-                    <th className="px-4 py-3 font-semibold">Value</th>
-                    <th className="px-4 py-3 font-semibold">Unit</th>
-                    <th className="px-4 py-3 font-semibold">Original</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th>Nutrient</th>
+                    <th>Kind</th>
+                    <th>Value</th>
+                    <th>Unit</th>
+                    <th>Original</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {envelope.constraints.map((c, idx) => {
                     const key = `${c.nutrient}-${c.kind}-${idx}`;
                     const changed = isChanged(c, idx);
                     return (
                       <tr
                         key={key}
-                        className={changed ? 'bg-sky-50/50' : 'hover:bg-slate-50/60'}
+                        className={changed ? 'bg-line-bg' : ''}
                       >
-                        <td className="px-4 py-3 font-medium text-slate-900">
+                        <td className="font-medium text-ink">
                           {NUTRIENT_LABELS[c.nutrient] || c.nutrient}
                         </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${kindClasses[c.kind]}`}
-                          >
+                        <td>
+                          <span className={`flag ${kindClasses[c.kind]}`}>
                             {c.kind}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td>
                           <input
                             type="number"
                             min="0"
@@ -210,21 +209,19 @@ export default function EditEnvelopeModal({
                             required
                             value={values[key] ?? ''}
                             onChange={(e) => handleChange(key, e.target.value)}
-                            className="block w-full rounded-lg border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:w-28"
+                            className="field num block w-full sm:w-28"
                             aria-label={`${NUTRIENT_LABELS[c.nutrient] || c.nutrient} ${c.kind} value`}
                           />
                         </td>
-                        <td className="px-4 py-3 text-slate-500">{c.unit}</td>
-                        <td className="px-4 py-3 tabular-nums text-slate-500">
+                        <td className="text-ink-3">{c.unit}</td>
+                        <td className="num text-ink-3">
                           {c.value}
                         </td>
-                        <td className="px-4 py-3">
+                        <td>
                           {changed ? (
-                            <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">
-                              Modified
-                            </span>
+                            <span className="flag flag-info">Modified</span>
                           ) : (
-                            <span className="text-xs text-slate-400">—</span>
+                            <span className="text-xs text-ink-3">—</span>
                           )}
                         </td>
                       </tr>
@@ -236,32 +233,32 @@ export default function EditEnvelopeModal({
           </div>
 
           <div className="mt-4">
-            <label htmlFor="edit-note" className="block text-sm font-medium text-slate-700">
-              Edit note <span className="font-normal text-slate-500">(optional)</span>
+            <label htmlFor="edit-note" className="block text-sm font-medium text-ink-2">
+              Edit note <span className="font-normal text-ink-3">(optional)</span>
             </label>
             <textarea
               id="edit-note"
               rows={2}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="mt-1 block w-full rounded-lg border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:ring-sky-500"
+              className="field mt-1"
               placeholder="Reason for edit"
             />
           </div>
 
-          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <div className="mt-6 flex flex-col-reverse gap-3 border-t border-rule pt-4 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 disabled:opacity-60"
+              className="btn-ghost"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 disabled:bg-sky-300"
+              className="btn-primary"
             >
               {isSaving ? 'Saving…' : 'Save changes'}
             </button>
