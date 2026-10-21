@@ -1,5 +1,4 @@
 interface PageHeaderProps {
-  /** Department code in the report vocabulary, e.g. ENV, QUE, SIM. */
   code: string;
   title: string;
   children?: React.ReactNode;

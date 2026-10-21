@@ -21,7 +21,6 @@ const SwapApplicationContext = createContext<{ pending: boolean; begin: () => bo
 
 export default function PatientMealPlanScreen() {
   const requests = useRequestScope();
-  // Invalidate swap callbacks as soon as a different plan is requested, before its response.
   const planRequests = useRequestScope();
   const selectionIsCurrent = requests.capture();
   const planIsCurrent = planRequests.capture();
@@ -267,7 +266,6 @@ function PlanView({
   onError: (msg: string) => void;
 }) {
   const [swapPending, setSwapPending] = useState(false);
-  // Share one lock across slots; the ref rejects another click before React commits disabled controls.
   const swapLock = useRef(false);
   const swapApplications = {
     pending: swapPending,

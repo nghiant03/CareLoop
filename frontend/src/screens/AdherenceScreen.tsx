@@ -625,7 +625,6 @@ function SeriesCard({
   flag: import('../types').TrendFlag | undefined;
 }) {
   const latest = series.points[series.points.length - 1];
-  // The backend's default trend assessment requires three complete-day points.
   const assessmentAvailable = series.points.filter((point) => point.complete !== false).length >= 3;
   return (
     <div className="border border-rule bg-card p-4">

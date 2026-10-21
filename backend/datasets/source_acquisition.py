@@ -30,6 +30,16 @@ SOURCES = {
     "usda/download_index.html": "https://fdc.nal.usda.gov/download-datasets/",
     "mimic/demo_index.html": "https://physionet.org/content/mimic-iv-demo/2.2/",
     "mimic/demo.zip": "https://physionet.org/static/published-projects/mimic-iv-demo/mimic-iv-clinical-database-demo-2.2.zip",
+    # eICU-CRD demo 2.0.1 (open access, ~2,500 ICU stays): a second longitudinal
+    # lab/medication source that cross-validates trend thresholds from MIMIC demo.
+    "eicu/demo_index.html": "https://physionet.org/content/eicu-crd-demo/2.0.1/",
+    **{f"eicu/{name}.csv.gz": f"https://physionet.org/files/eicu-crd-demo/2.0.1/{name}.csv.gz"
+       for name in ("patient", "lab", "medication", "diagnosis", "pastHistory")},
+    # UCI ML repository: real hospital encounters with medications and A1c at
+    # scale (medication-rule coverage), plus a small cross-sectional CKD cohort
+    # as an independent check on NHANES-derived rule-engine concordance.
+    "uci/diabetes_130_us_hospitals.zip": "https://archive.ics.uci.edu/static/public/296/diabetes+130-us+hospitals+for+years+1999-2008.zip",
+    "uci/chronic_kidney_disease.zip": "https://archive.ics.uci.edu/static/public/336/chronic+kidney+disease.zip",
 }
 
 def download(item):

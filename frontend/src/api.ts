@@ -59,7 +59,6 @@ function normalizeTrace(row: RuleFire): TraceEntry {
   };
 }
 
-/** HTTP failures preserve the server body/code and the existing display message. */
 export class HttpApiError extends Error implements ApiError {
   readonly status: number;
   readonly code: string | undefined;
@@ -76,7 +75,7 @@ export class HttpApiError extends Error implements ApiError {
     this.name = 'HttpApiError';
     this.error = code ?? 'http_error';
     this.detail = message;
-    this.data = message; // Retain the old message alias for existing callers.
+    this.data = message;
   }
 }
 
@@ -95,7 +94,6 @@ async function handleResponse<T>(res: Response): Promise<T> {
       const message = record.message || (typeof raw === 'string' ? raw : (nested.message || nested.error || JSON.stringify(raw)));
       if (typeof message === 'string') detail = message;
     } catch {
-      // Non-JSON error bodies retain the HTTP status text as the message.
     }
     throw new HttpApiError(res.status, code, body, detail);
   }
@@ -146,7 +144,6 @@ export async function getEnvelope(id: string): Promise<Envelope> {
     .then(normalizeEnvelope);
 }
 
-/** Latest envelope in any lifecycle state. This lookup does not authorize planning. */
 export async function getLatestEnvelope(patientId: string): Promise<Envelope> {
   return fetch(`${API_PREFIX}/envelopes/latest?patient_id=${encodeURIComponent(patientId)}`)
     .then((r) => handleResponse<EnvelopeResponse>(r))
@@ -264,7 +261,6 @@ export async function getAdherenceDeviation(
     handleResponse<AdherenceDeviation>(r)
   ).then((data) => ({
     ...data,
-    // Normalize legacy local flag keys; current keys pass through.
     flags: data.flags.map((flag) => {
       const candidates = [
         `${flag.envelope_id}::v${flag.envelope_version}::${flag.series_key}`,
@@ -288,7 +284,6 @@ export async function getPlan(planId: string): Promise<MealPlan> {
   );
 }
 
-/** Omitted planId uses the latest saved plan. Plan-specific UI must supply its saved ID. */
 export async function getSubstitutions(
   dishId: string,
   patientId: string,
@@ -300,9 +295,6 @@ export async function getSubstitutions(
   ).then((r) => handleResponse<SubstitutionResponse>(r));
 }
 
-/** Replace every source occurrence. Omitted plan_id selects the latest saved plan.
- * Saving is best-effort. A missing response ID does not prove that no commit occurred.
- */
 export async function applySwap(payload: SwapApplyRequest): Promise<MealPlan> {
   return fetch(`${API_PREFIX}/mining/swaps/apply`, {
     method: 'POST',
@@ -311,7 +303,6 @@ export async function applySwap(payload: SwapApplyRequest): Promise<MealPlan> {
   }).then((r) => handleResponse<MealPlan>(r));
 }
 
-/** Derive and persist newly seen review conditions, then list by persisted status. */
 export async function getReviewQueue(
   patientId: string | null,
   status: 'open' | 'acknowledged' | 'actioned' | 'all'

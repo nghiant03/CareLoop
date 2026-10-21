@@ -11,7 +11,6 @@
   --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Roboto Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
-  /* Lab-report palette: paper, ink, hairline rules. Hue is reserved for state. */
   --color-paper: #fbfaf6;
   --color-panel: #f4f2ea;
   --color-card: #ffffff;
@@ -21,7 +20,6 @@
   --color-rule: #e3e0d3;
   --color-rule-2: #c8c3b0;
 
-  /* State hues */
   --color-flag: #b3352b;
   --color-flag-bg: #f9e9e5;
   --color-flag-rule: #e3b8ae;
@@ -47,7 +45,6 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Browser surfaces carry the design too. */
 ::selection {
   background: var(--color-ink);
   color: var(--color-paper);
@@ -57,7 +54,6 @@ input, textarea, select {
   caret-color: var(--color-line);
 }
 
-/* Keyboard navigation ring; clicks stay unmarked. */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -85,7 +81,6 @@ select:focus-visible,
 }
 
 @layer components {
-  /* Squared, ruled report surfaces. */
   .panel {
     @apply border border-rule bg-card;
   }
@@ -93,7 +88,6 @@ select:focus-visible,
     @apply border border-rule bg-panel;
   }
 
-  /* Mono microcopy: column headers, report codes, department tags. */
   .micro-label {
     font-family: var(--font-mono);
     font-size: 0.6875rem;
@@ -103,7 +97,6 @@ select:focus-visible,
     color: var(--color-ink-3);
   }
 
-  /* Buttons: 1px ruled, squared corners, no shadow. */
   .btn-primary, .btn-approve, .btn-danger, .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 border px-4 py-2 text-sm font-semibold transition-colors;
     border-radius: 2px;
@@ -124,7 +117,6 @@ select:focus-visible,
     @apply border-rule-2 bg-card text-ink-2 hover:bg-panel;
   }
 
-  /* Form fields. */
   .field {
     @apply w-full border border-rule-2 bg-card px-3 py-2 text-sm text-ink placeholder:text-ink-3;
     border-radius: 2px;
@@ -136,7 +128,6 @@ select:focus-visible,
     @apply bg-panel;
   }
 
-  /* State flags: squared mono chips; hue only from state. */
   .flag {
     display: inline-flex;
     align-items: center;
@@ -176,7 +167,6 @@ select:focus-visible,
     border-color: var(--color-rule-2);
   }
 
-  /* Notice strips (banners, callouts). */
   .notice {
     @apply border p-3 text-sm;
     border-radius: 2px;
@@ -202,7 +192,6 @@ select:focus-visible,
     border-color: var(--color-line-rule);
   }
 
-  /* Data tables: hairline rules, expressed grid, mono column heads. */
   .data-table {
     @apply min-w-full border-collapse text-left text-sm;
   }
@@ -238,7 +227,6 @@ select:focus-visible,
   }
 }
 
-/* The one authored moment: a scanning bar for loading states. */
 @keyframes scan {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(400%); }
@@ -258,7 +246,6 @@ select:focus-visible,
   animation: scan 1.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
-/* Range-bar overflow region reads as hatched, beyond the limit rule. */
 .hatch-flag {
   background-image: repeating-linear-gradient(
     -45deg,
@@ -268,7 +255,6 @@ select:focus-visible,
     transparent 4px
   );
 }
-/* Soft floors hatch in caution amber; red is reserved for hard flags. */
 .hatch-warn {
   background-image: repeating-linear-gradient(
     -45deg,

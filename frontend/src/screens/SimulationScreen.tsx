@@ -42,7 +42,6 @@ export default function SimulationScreen() {
       const res = await listSimulations(patientId);
       if (isCurrent()) setPast(res.simulations);
     } catch (err: any) {
-      // A history failure must not hide a successful new comparison.
       if (isCurrent()) setPastError(err.message || 'Simulation history unavailable');
     } finally {
       if (isCurrent()) setPastLoading(false);
@@ -63,7 +62,6 @@ export default function SimulationScreen() {
     setRunning(false);
     setError(null);
     if (patient) {
-      // Copy the latest envelope's targets to avoid retyping. This lookup accepts any status.
       try {
         const envelope = await getLatestEnvelope(patient.id);
         if (!isCurrent()) return;

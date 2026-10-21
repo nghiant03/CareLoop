@@ -126,7 +126,6 @@ export interface PlanTotal {
   unit: string;
   value: number;
   targets: PlanTotalTarget[];
-  /** MAX ceilings only; null when this nutrient has no MAX constraint. */
   compliant: boolean | null;
 }
 
@@ -174,12 +173,9 @@ export interface AdequacyItem {
   unit: string;
   aim: number;
   mean_daily: number;
-  /** One-based day with the largest deviation; earliest day wins a tie. */
   worst_day: number;
   worst_daily: number;
-  /** Compatibility name: MIN shortfall or absolute TARGET deviation, including overshoot. */
   shortfall: number;
-  /** Same deviation as a percentage of the original aim; zero when aim <= 1e-9. */
   shortfall_pct: number;
   met_days: number;
   total_days: number;
@@ -307,7 +303,6 @@ export interface AdherenceSummary {
 }
 
 export interface AdherencePoint {
-  /** Absent on older responses; the backend treats those points as complete. */
   complete?: boolean;
   date: string;
   total: number;
@@ -381,7 +376,6 @@ export interface SubstituteDish {
   dish_id: string;
   name: string;
   distance: number;
-  /** Adjusted ranking score; lower is better and may be negative. distance is its legacy alias. */
   ranking_score?: number;
   nutrient_distance: number;
   category_match: boolean;
@@ -548,7 +542,6 @@ export interface SimulationListResponse {
   simulations: Simulation[];
 }
 
-/** Persisted GET rows keep the comparison nested, unlike POST responses. */
 export interface SimulationHistoryRecord {
   simulation_id: string;
   patient_id: string;
