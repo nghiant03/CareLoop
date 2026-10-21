@@ -11,6 +11,7 @@ import {
 import type { Patient, ReviewItem } from '../types';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
+import PageHeader from '../components/PageHeader';
 import { useRequestScope } from '../hooks/useRequestScope';
 
 type ReviewStatus = 'open' | 'acknowledged' | 'actioned' | 'all';
@@ -134,27 +135,24 @@ export default function ReviewQueueScreen() {
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) || null;
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-12">
+    <main className="pb-12">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Review queue</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Triage adherence flags, hard-violation days, and lab trends. Acknowledge, record an action,
-            or create a revised envelope proposal.
-          </p>
-        </div>
+        <PageHeader code="QUE" title="Review queue">
+          Triage adherence flags, hard-violation days, and lab trends. Acknowledge, record an action,
+          or create a revised envelope proposal.
+        </PageHeader>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <div className="notice notice-error mb-4">
             {error}
-            <button onClick={() => setError(null)} className="ml-2 font-medium underline hover:text-rose-900">
+            <button onClick={() => setError(null)} className="ml-2 font-semibold underline hover:opacity-80">
               Dismiss
             </button>
           </div>
         )}
 
-        <section className="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <section className="panel mb-8 p-5">
+          <h2 className="micro-label mb-3 border-b border-rule pb-2">
             Filter
           </h2>
           {loadingPatients ? (
@@ -164,14 +162,14 @@ export default function ReviewQueueScreen() {
           ) : (
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <div className="flex-1">
-                <label htmlFor="review-patient" className="mb-1 block text-sm font-medium text-slate-700">
+                <label htmlFor="review-patient" className="micro-label mb-1 block">
                   Patient
                 </label>
                 <select
                   id="review-patient"
                   value={selectedPatientId}
                   onChange={(e) => { resetFilter(); setSelectedPatientId(e.target.value); }}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  className="field"
                 >
                   <option value="">All patients</option>
                   {patients.map((p) => (
@@ -182,18 +180,18 @@ export default function ReviewQueueScreen() {
                 </select>
               </div>
               <div className="flex-1">
-                <label htmlFor="review-status" className="mb-1 block text-sm font-medium text-slate-700">
+                <span className="micro-label mb-1 block" id="review-status-label">
                   Status
-                </label>
-                <div className="flex flex-wrap gap-2">
+                </span>
+                <div className="flex flex-wrap divide-x divide-rule border border-rule" role="group" aria-labelledby="review-status-label">
                   {STATUS_TABS.map((tab) => (
                     <button
                       key={tab.key}
                       onClick={() => { if (status !== tab.key) { resetFilter(); setStatus(tab.key); } }}
-                      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      className={`px-3 py-2 text-sm font-medium transition-colors ${
                         status === tab.key
-                          ? 'bg-sky-600 text-white'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          ? 'bg-ink text-paper'
+                          : 'bg-card text-ink-2 hover:bg-panel'
                       }`}
                     >
                       {tab.label}
@@ -206,9 +204,9 @@ export default function ReviewQueueScreen() {
         </section>
 
         {selectedPatient && (
-          <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">
-              Selected patient: <span className="font-semibold text-slate-900">{selectedPatient.name || selectedPatient.id}</span>
+          <div className="panel mb-6 p-4">
+            <p className="text-sm text-ink-3">
+              Selected patient: <span className="font-semibold text-ink">{selectedPatient.name || selectedPatient.id}</span>
               {' · '}
               {selectedPatient.age} yrs · {selectedPatient.sex} · {selectedPatient.diagnoses?.join(', ')}
             </p>
@@ -246,7 +244,7 @@ export default function ReviewQueueScreen() {
         )}
 
         <section className="mt-10">
-          <h2 className="mb-4 text-lg font-semibold text-slate-900">History</h2>
+          <h2 className="mb-4 text-lg font-bold tracking-tight text-ink">History</h2>
           {historyLoading ? (
             <LoadingState text="Loading history…" />
           ) : history.length === 0 ? (
@@ -285,7 +283,7 @@ function ReviewCard({
   const canPropose = item.source === 'adherence_flag' || item.source === 'lab_trend';
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="panel p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -293,17 +291,17 @@ function ReviewCard({
             <SourceBadge source={item.source} />
             {item.status !== 'OPEN' && <StatusBadge status={item.status} />}
           </div>
-          <p className="mt-2 text-sm text-slate-700">
-            <span className="font-medium">{item.patient_id}</span> · {formatDate(item.created_at)}
+          <p className="mt-2 text-sm text-ink-3">
+            <span className="num font-medium text-ink">{item.patient_id}</span> · {formatDate(item.created_at)}
           </p>
-          <p className="mt-1 text-sm text-slate-900">{item.reason}</p>
+          <p className="mt-1 text-sm text-ink">{item.reason}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {item.status === 'OPEN' && (
             <button
               onClick={onAcknowledge}
               disabled={working}
-              className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              className="btn-ghost px-3 py-1.5"
             >
               {working ? 'Working…' : 'Acknowledge'}
             </button>
@@ -312,7 +310,7 @@ function ReviewCard({
             <button
               onClick={onProposal}
               disabled={working}
-              className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700 disabled:bg-sky-300 transition-colors"
+              className="btn-primary px-3 py-1.5"
             >
               {working ? 'Working…' : 'Create proposal'}
             </button>
@@ -323,8 +321,8 @@ function ReviewCard({
       <PayloadDetail payload={payload} source={item.source} />
 
       {item.status !== 'ACTION_RECORDED' && (
-        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className="mt-4 border-t border-rule pt-4">
+          <label className="micro-label mb-1 block">
             Record action
           </label>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -334,7 +332,7 @@ function ReviewCard({
               onChange={(e) => onActionFormChange({ ...actionForm, action: e.target.value })}
               placeholder="What action was taken?"
               disabled={working}
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              className="field flex-1"
             />
             <input
               type="text"
@@ -342,12 +340,12 @@ function ReviewCard({
               onChange={(e) => onActionFormChange({ ...actionForm, note: e.target.value })}
               placeholder="Optional note"
               disabled={working}
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              className="field flex-1"
             />
             <button
               onClick={onAction}
               disabled={working || !actionForm.action.trim()}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-300 transition-colors"
+              className="btn-primary"
             >
               {working ? 'Saving…' : 'Save'}
             </button>
@@ -356,12 +354,12 @@ function ReviewCard({
       )}
 
       {item.action && (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-          <p className="font-medium text-slate-900">Recorded action</p>
-          <p className="mt-1 text-slate-700">{item.action.action}</p>
-          {item.action.note && <p className="mt-1 text-slate-500">{item.action.note}</p>}
+        <div className="mt-3 border border-rule bg-panel p-3 text-sm">
+          <p className="micro-label">Recorded action</p>
+          <p className="mt-1 font-medium text-ink">{item.action.action}</p>
+          {item.action.note && <p className="mt-1 text-ink-3">{item.action.note}</p>}
           {item.linked_envelope_id && (
-            <p className="mt-1 text-slate-500">Linked envelope: {item.linked_envelope_id}</p>
+            <p className="num mt-1 text-ink-3">Linked envelope: {item.linked_envelope_id}</p>
           )}
         </div>
       )}
@@ -375,32 +373,32 @@ function PayloadDetail({ payload, source }: { payload: ReviewItem['payload']; so
   if (source === 'adherence_flag') {
     const p = payload as import('../types').AdherenceFlagPayload;
     return (
-      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+      <div className="mt-3 border border-rule bg-panel p-3 text-sm">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div>
-            <span className="text-xs text-slate-500">Nutrient</span>
-            <p className="font-medium text-slate-900">{p.nutrient}</p>
+            <span className="micro-label">Nutrient</span>
+            <p className="font-medium text-ink">{p.nutrient}</p>
           </div>
           <div>
-            <span className="text-xs text-slate-500">Slope</span>
-            <p className="font-medium text-slate-900">{p.slope_pct_per_day?.toFixed ? p.slope_pct_per_day.toFixed(2) : p.slope_pct_per_day}%/day</p>
+            <span className="micro-label">Slope</span>
+            <p className="num font-medium text-ink">{p.slope_pct_per_day?.toFixed ? p.slope_pct_per_day.toFixed(2) : p.slope_pct_per_day}%/day</p>
           </div>
           <div>
-            <span className="text-xs text-slate-500">Latest exposure</span>
-            <p className="font-medium text-slate-900">{p.latest_exposure_pct?.toFixed ? p.latest_exposure_pct.toFixed(1) : p.latest_exposure_pct}%</p>
+            <span className="micro-label">Latest exposure</span>
+            <p className="num font-medium text-ink">{p.latest_exposure_pct?.toFixed ? p.latest_exposure_pct.toFixed(1) : p.latest_exposure_pct}%</p>
           </div>
           <div>
-            <span className="text-xs text-slate-500">Projected 3d</span>
-            <p className="font-medium text-slate-900">{p.projected_3d_exposure_pct?.toFixed ? p.projected_3d_exposure_pct.toFixed(1) : p.projected_3d_exposure_pct}%</p>
+            <span className="micro-label">Projected 3d</span>
+            <p className="num font-medium text-ink">{p.projected_3d_exposure_pct?.toFixed ? p.projected_3d_exposure_pct.toFixed(1) : p.projected_3d_exposure_pct}%</p>
           </div>
         </div>
         {p.contributors && p.contributors.length > 0 && (
-          <div className="mt-2">
-            <span className="text-xs text-slate-500">Contributing dishes</span>
-            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-slate-700">
+          <div className="mt-2 border-t border-rule pt-2">
+            <span className="micro-label">Contributing dishes</span>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-ink-2">
               {p.contributors.map((c) => (
                 <li key={c.dish_id}>
-                  {c.dish_name || c.dish_id} · {c.amount.toFixed(1)} ({c.pct_of_day_total.toFixed(0)}%)
+                  {c.dish_name || c.dish_id} · <span className="num">{c.amount.toFixed(1)}</span> ({c.pct_of_day_total.toFixed(0)}%)
                 </li>
               ))}
             </ul>
@@ -413,10 +411,10 @@ function PayloadDetail({ payload, source }: { payload: ReviewItem['payload']; so
   if (source === 'hard_violation_day') {
     const p = payload as import('../types').ViolationDayPayload;
     return (
-      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-        {p.date && <p className="font-medium text-slate-900">Date: {p.date}</p>}
+      <div className="mt-3 border border-rule bg-panel p-3 text-sm">
+        {p.date && <p className="num font-medium text-ink">Date: {p.date}</p>}
         {p.meals && p.meals.length > 0 && (
-          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-slate-700">
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-ink-2">
             {p.meals.map((m, idx) => (
               <li key={idx}>
                 {m.meal}: {m.dish_name || m.dish_id}
@@ -431,19 +429,19 @@ function PayloadDetail({ payload, source }: { payload: ReviewItem['payload']; so
   if (source === 'lab_trend') {
     const p = payload as import('../types').LabTrendPayload;
     return (
-      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+      <div className="mt-3 border border-rule bg-panel p-3 text-sm">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <div>
-            <span className="text-xs text-slate-500">Analyte</span>
-            <p className="font-medium text-slate-900">{p.analyte}</p>
+            <span className="micro-label">Analyte</span>
+            <p className="font-medium text-ink">{p.analyte}</p>
           </div>
           <div>
-            <span className="text-xs text-slate-500">Direction</span>
-            <p className="font-medium text-slate-900 capitalize">{p.direction}</p>
+            <span className="micro-label">Direction</span>
+            <p className="font-medium capitalize text-ink">{p.direction}</p>
           </div>
           <div>
-            <span className="text-xs text-slate-500">Slope</span>
-            <p className="font-medium text-slate-900">{p.slope}</p>
+            <span className="micro-label">Slope</span>
+            <p className="num font-medium text-ink">{p.slope}</p>
           </div>
         </div>
       </div>
@@ -455,17 +453,17 @@ function PayloadDetail({ payload, source }: { payload: ReviewItem['payload']; so
 
 function HistoryRow({ item }: { item: ReviewItem }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="border border-rule bg-card p-4">
       <div className="flex flex-wrap items-center gap-2">
         <SeverityBadge severity={item.severity} />
         <SourceBadge source={item.source} />
         <StatusBadge status={item.status} />
-        <span className="text-xs text-slate-500">{formatDate(item.created_at)}</span>
+        <span className="num text-xs text-ink-3">{formatDate(item.created_at)}</span>
       </div>
-      <p className="mt-1 text-sm text-slate-700">{item.reason}</p>
+      <p className="mt-1 text-sm text-ink-2">{item.reason}</p>
       {item.action && (
-        <p className="mt-1 text-sm text-slate-600">
-          Action: <span className="font-medium">{item.action.action}</span>
+        <p className="mt-1 text-sm text-ink-3">
+          Action: <span className="font-medium text-ink">{item.action.action}</span>
           {item.action.note && <> · {item.action.note}</>}
         </p>
       )}
@@ -476,11 +474,7 @@ function HistoryRow({ item }: { item: ReviewItem }) {
 function SeverityBadge({ severity }: { severity: ReviewItem['severity'] }) {
   const isAlert = severity === 'alert';
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-        isAlert ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
-      }`}
-    >
+    <span className={`flag ${isAlert ? 'flag-bad' : 'flag-warn'}`}>
       {severity === 'alert' ? 'Alert' : 'Review'}
     </span>
   );
@@ -493,7 +487,7 @@ function SourceBadge({ source }: { source: ReviewItem['source'] }) {
     lab_trend: 'Lab trend',
   };
   return (
-    <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+    <span className="flag flag-neutral">
       {labels[source]}
     </span>
   );
@@ -506,7 +500,7 @@ function StatusBadge({ status }: { status: ReviewItem['status'] }) {
     ACTION_RECORDED: 'Actioned',
   };
   return (
-    <span className="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800">
+    <span className="flag flag-info">
       {labels[status]}
     </span>
   );

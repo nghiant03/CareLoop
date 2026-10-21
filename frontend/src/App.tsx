@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import TopBar from './components/TopBar';
 import OfflineBanner from './components/OfflineBanner';
 import ApprovalModeBanner from './components/ApprovalModeBanner';
@@ -10,23 +10,9 @@ import ReviewQueueScreen from './screens/ReviewQueueScreen';
 import SimulationScreen from './screens/SimulationScreen';
 
 function AppContent() {
-  const location = useLocation();
-  const activeScreen =
-    location.pathname === '/plan'
-      ? 'patient'
-      : location.pathname === '/chat'
-      ? 'chat'
-      : location.pathname === '/adherence'
-      ? 'adherence'
-      : location.pathname === '/review-queue'
-      ? 'review'
-      : location.pathname === '/simulations'
-      ? 'simulation'
-      : 'clinician';
-
   return (
-    <div className="min-h-screen bg-slate-50">
-      <TopBar activeScreen={activeScreen} />
+    <div className="min-h-screen bg-paper">
+      <TopBar />
       <OfflineBanner />
       <ApprovalModeBanner />
       <Routes>

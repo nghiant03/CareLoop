@@ -3,6 +3,8 @@ import { listPatients, searchDishes, logMeal, getCalendarMetadata, getAdherenceS
 import type { Patient, Dish, AdherenceSummary, AdherenceDeviation, AdherenceAnalysis } from '../types';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
+import PageHeader from '../components/PageHeader';
+import RangeBar from '../components/RangeBar';
 import { useRequestScope } from '../hooks/useRequestScope';
 
 const NUTRIENT_LABELS: Record<string, string> = {
@@ -61,24 +63,21 @@ export default function AdherenceScreen() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-12">
+    <main className="pb-12">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Adherence</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Log the meals a patient actually eats and see how they compare to their nutrient
-            envelope.
-          </p>
-        </div>
+        <PageHeader code="ADH" title="Adherence">
+          Log the meals a patient actually eats and see how they compare to their nutrient
+          envelope.
+        </PageHeader>
 
-        <section className="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <section className="panel mb-6 p-5">
+          <h2 className="micro-label mb-3 border-b border-rule pb-2">
             Select patient
           </h2>
           {patientsError && (
-            <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+            <div className="notice notice-error mb-4">
               {patientsError}
-              <button onClick={() => setPatientsError(null)} className="ml-2 font-medium underline">
+              <button onClick={() => setPatientsError(null)} className="ml-2 font-semibold underline">
                 Dismiss
               </button>
             </div>
@@ -90,7 +89,7 @@ export default function AdherenceScreen() {
           ) : (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
-                <label htmlFor="adherence-patient" className="mb-1 block text-sm font-medium text-slate-700">
+                <label htmlFor="adherence-patient" className="micro-label mb-1 block">
                   Patient
                 </label>
                 <select
@@ -108,7 +107,7 @@ export default function AdherenceScreen() {
                     setSelectedPatient(p);
                     if (p) loadData(p.id);
                   }}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  className="field"
                 >
                   <option value="">Select a patient</option>
                   {patients.map((p) => (
@@ -123,7 +122,7 @@ export default function AdherenceScreen() {
         </section>
 
         {selectedPatient && (
-          <div className="mb-4 rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:inline-flex">
+          <div className="mb-6 flex border-b border-rule-2">
             {[
               { key: 'summary', label: 'Summary' },
               { key: 'log', label: 'Log a meal' },
@@ -132,10 +131,10 @@ export default function AdherenceScreen() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as typeof activeTab)}
-                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${
+                className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.key
-                    ? 'bg-sky-600 text-white'
-                    : 'text-slate-600 hover:bg-slate-50'
+                    ? 'border-ink text-ink'
+                    : 'border-transparent text-ink-3 hover:border-rule-2 hover:text-ink'
                 }`}
               >
                 {tab.label}
@@ -241,46 +240,48 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
   };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-4 text-lg font-semibold text-slate-900">Log a meal</h2>
-      <p className="mb-4 text-sm text-slate-600">Add each dish and its servings, then save the meal. Saving replaces the existing log for this meal and date.</p>
+    <section className="panel p-5">
+      <h2 className="text-lg font-bold tracking-tight text-ink">Log a meal</h2>
+      <p className="mb-4 mt-1 text-sm text-ink-3">Add each dish and its servings, then save the meal. Saving replaces the existing log for this meal and date.</p>
       {items.length > 0 && (
-        <div className="mb-6 space-y-3">
+        <div className="mb-6 border border-rule">
           {items.map(({ dish, quantity }, index) => (
-            <div key={`${dish.dish_id}-${index}`} className="flex flex-wrap items-center gap-3">
-              <span className="flex-1 text-sm text-slate-900">{dish.name}</span>
-              <label className="text-sm text-slate-700">
+            <div key={`${dish.dish_id}-${index}`} className={`flex flex-wrap items-center gap-3 px-3 py-2.5 ${index > 0 ? 'border-t border-rule' : ''}`}>
+              <span className="flex-1 text-sm font-medium text-ink">{dish.name}</span>
+              <label className="text-sm text-ink-2">
                 Servings
                 <input type="number" min="0.25" max="10" step="0.25" value={quantity}
                   aria-label={`Servings of ${dish.name}`} disabled={logging}
                   onChange={(e) => setItems((current) => current.map((item, i) => i === index ? { ...item, quantity: Number(e.target.value) } : item))}
-                  className="ml-2 w-20 rounded border border-slate-300 px-2 py-2 text-base" />
+                  className="field num ml-2 w-20! px-2 py-1.5 text-sm" />
               </label>
               <button onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
                 disabled={logging} aria-label={`Remove ${dish.name}`}
-                className="px-3 py-2 text-sm text-rose-700 underline">Remove</button>
+                className="px-2 py-1.5 text-sm font-medium text-flag underline decoration-flag-rule underline-offset-4">Remove</button>
             </div>
           ))}
-           <button onClick={handleSave}
-             disabled={logging || !date || (!!calendarError && !manualDateConfirmed) || items.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0 || item.quantity > 10)}
-            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50">
-            {logging ? 'Saving meal…' : 'Save meal'}
-          </button>
+          <div className="border-t border-rule bg-panel px-3 py-2.5">
+            <button onClick={handleSave}
+              disabled={logging || !date || (!!calendarError && !manualDateConfirmed) || items.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0 || item.quantity > 10)}
+              className="btn-primary">
+              {logging ? 'Saving meal…' : 'Save meal'}
+            </button>
+          </div>
         </div>
       )}
 
       {error && (
-        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+        <div className="notice notice-error mb-4">
           {error}
-          <button onClick={() => setError(null)} className="ml-2 font-medium underline">
+          <button onClick={() => setError(null)} className="ml-2 font-semibold underline">
             Dismiss
           </button>
         </div>
       )}
       {success && (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+        <div className="notice notice-ok mb-4">
           {success}
-          <button onClick={() => setSuccess(null)} className="ml-2 font-medium underline">
+          <button onClick={() => setSuccess(null)} className="ml-2 font-semibold underline">
             Dismiss
           </button>
         </div>
@@ -288,7 +289,7 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
-          <label htmlFor="log-date" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="log-date" className="micro-label mb-1 block">
             Date
           </label>
           <input
@@ -296,27 +297,27 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
             type="date"
             value={date}
             onChange={(e) => { dateEdited.current = true; setDate(e.target.value); setManualDateConfirmed(false); }}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="field"
           />
           {calendarError ? (
-            <div className="mt-1 text-xs text-rose-800" role="alert">
+            <div className="mt-1 text-xs text-flag" role="alert">
               <p>Server date unavailable. Retry, or enter a date and confirm manual entry.</p>
-              <button type="button" className="mt-1 font-medium underline" onClick={() => { setCalendarError(null); setCalendarRetry((n) => n + 1); }}>Retry</button>
-              {date && <button type="button" className="ml-3 mt-1 font-medium underline" onClick={() => setManualDateConfirmed(true)}>Use this date manually</button>}
+              <button type="button" className="mt-1 font-semibold underline" onClick={() => { setCalendarError(null); setCalendarRetry((n) => n + 1); }}>Retry</button>
+              {date && <button type="button" className="ml-3 mt-1 font-semibold underline" onClick={() => setManualDateConfirmed(true)}>Use this date manually</button>}
             </div>
           ) : (
-            <p className="mt-1 text-xs text-slate-500">{date ? 'Defaults to the server’s calendar date.' : 'Loading server date…'}</p>
+            <p className="mt-1 text-xs text-ink-3">{date ? 'Defaults to the server’s calendar date.' : 'Loading server date…'}</p>
           )}
         </div>
         <div>
-          <label htmlFor="log-meal" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="log-meal" className="micro-label mb-1 block">
             Meal
           </label>
           <select
             id="log-meal"
             value={meal}
             onChange={(e) => setMeal(e.target.value as typeof meal)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="field"
           >
             {MEAL_OPTIONS.map((m) => (
               <option key={m} value={m}>
@@ -326,7 +327,7 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
           </select>
         </div>
         <div className="sm:col-span-1">
-          <label htmlFor="dish-search" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="dish-search" className="micro-label mb-1 block">
             Search dish
           </label>
           <input
@@ -347,18 +348,18 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
               }
             }}
             placeholder="e.g. chicken rice"
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="field"
           />
         </div>
       </div>
 
       <div className="mt-4">
         {!query.trim() ? (
-          <p className="text-sm text-slate-500">Type a dish name to search.</p>
+          <p className="text-sm text-ink-3">Type a dish name to search.</p>
         ) : searching ? (
           <LoadingState text="Searching dishes…" />
         ) : searchError ? (
-          <p role="alert" className="text-sm text-rose-800">Search unavailable: {searchError}</p>
+          <p role="alert" className="text-sm text-flag">Search unavailable: {searchError}</p>
         ) : results.length === 0 ? (
           <EmptyState title="No dishes found" description="Try a different search term." />
         ) : (
@@ -368,13 +369,13 @@ function LogMealSection({ patient, onLogged }: { patient: Patient; onLogged: () 
                 <button
                   onClick={() => handleSelect(dish)}
                   disabled={logging}
-                  className="flex h-full w-full flex-col items-start rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50/40 disabled:opacity-60"
+                  className="flex h-full w-full flex-col items-start border border-rule bg-card p-4 text-left transition-colors hover:border-ink-3 hover:bg-panel disabled:opacity-60"
                 >
-                  <span className="text-sm font-semibold text-slate-900">{dish.name}</span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-sm font-semibold text-ink">{dish.name}</span>
+                  <span className="text-xs text-ink-3">
                     {dish.category} {dish.cuisine ? `· ${dish.cuisine}` : ''}
                   </span>
-                  <span className="mt-2 text-xs text-slate-500">
+                  <span className="num mt-2 border-t border-rule pt-2 text-xs text-ink-2">
                     Na {fmt(dish.sodium_mg)}mg · K {fmt(dish.potassium_mg)}mg · P{' '}
                     {fmt(dish.phosphorus_mg)}mg
                   </span>
@@ -400,7 +401,7 @@ function SummarySection({
   if (loading) return <LoadingState text="Loading summary…" />;
   if (error)
     return (
-      <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+      <div className="notice notice-error">
         {error}
       </div>
     );
@@ -412,33 +413,33 @@ function SummarySection({
   return (
     <div className="space-y-6">
       {summary.informational_only && summary.notice && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="notice notice-warn">
           {summary.notice}
         </div>
       )}
 
-      {!!summary.unattributed_days?.length && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      {!!summary.unattributed_days?.length && <p className="notice notice-warn">
         {summary.unattributed_days.length} logged day(s) have no historical approval and are excluded from target comparisons.
       </p>}
 
       {multiVersion && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+        <div className="notice notice-info">
           History spans {versions.length} envelope versions.
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Days logged" value={summary.aggregate.days_logged} />
-        <StatCard label="Hard violation days" value={summary.aggregate.hard_violation_days} tone="rose" />
-        <StatCard
+      <div className="grid grid-cols-1 divide-y divide-rule border border-rule bg-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <SummaryStat label="Days logged" value={summary.aggregate.days_logged} />
+        <SummaryStat label="Hard violation days" value={summary.aggregate.hard_violation_days} tone="flag" />
+        <SummaryStat
           label="Days without hard violations"
           value={summary.aggregate.days_logged - summary.aggregate.hard_violation_days}
-          tone="emerald"
+          tone="ok"
         />
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold text-slate-900">
+      <div className="panel p-5">
+        <h3 className="mb-4 text-lg font-bold tracking-tight text-ink">
           Last {summary.window.days} days
         </h3>
         {summary.days.length === 0 ? (
@@ -465,34 +466,26 @@ function DayCard({ day }: { day: import('../types').AdherenceDay }) {
   const expectedMeals = completeness ? completeness.expected_meals : 3;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h4 className="text-sm font-semibold text-slate-900">{formatDate(day.date)}</h4>
+    <div className="border border-rule bg-card p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-rule pb-2.5">
+        <h4 className="text-sm font-bold text-ink">{formatDate(day.date)}</h4>
         {day.compliant ? (
-          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-            Compliant
-          </span>
+          <span className="flag flag-ok">Compliant</span>
         ) : (
-          <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800">
-            Hard violation
-          </span>
+          <span className="flag flag-bad">Hard violation</span>
         )}
-        <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-            complete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-          }`}
-        >
+        <span className={`flag ${complete ? 'flag-ok' : 'flag-warn'}`}>
           {complete ? 'Complete' : `${mealsLogged} of ${expectedMeals} meals`}
         </span>
         {day.envelope_id && (
-          <span className="text-xs text-slate-400">
+          <span className="num text-xs text-ink-3">
             {day.envelope_id}
             {day.envelope_version ? ` v${day.envelope_version}` : ''}
           </span>
         )}
       </div>
       {day.meals.length > 0 && (
-        <p className="mb-3 text-xs text-slate-500">
+        <p className="mb-3 text-xs text-ink-3">
           {Array.from(new Set(day.meals.map((m) => m.meal)))
             .map((m) => m.charAt(0).toUpperCase() + m.slice(1))
             .join(' · ')}
@@ -512,10 +505,10 @@ function DayCard({ day }: { day: import('../types').AdherenceDay }) {
           .map((v) => (
             <div
               key={v.dish_id}
-              className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+              className="notice notice-error mt-3 text-xs"
             >
-              <span className="font-medium">{v.dish_name || v.dish_id}</span>
-              {v.meal ? <span className="text-rose-600"> · {v.meal}</span> : null}
+              <span className="font-semibold">{v.dish_name || v.dish_id}</span>
+              {v.meal ? <span> · {v.meal}</span> : null}
               <p className="mt-0.5">{v.reason}</p>
             </div>
           ))}
@@ -525,37 +518,40 @@ function DayCard({ day }: { day: import('../types').AdherenceDay }) {
 
 function NutrientSummaryBar({ analysis }: { analysis: AdherenceAnalysis }) {
   const limit = analysis.limit || 1;
-  const pct = Math.min((analysis.total / limit) * 100, 100);
   const isViolation = analysis.status === 'hard_violation';
   const isGap = analysis.status === 'soft_gap';
-  const barColor = isViolation ? 'bg-rose-500' : isGap ? 'bg-amber-500' : 'bg-emerald-500';
   const contributors = analysis.contributors || [];
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
-      <div className="flex items-center justify-between text-xs text-slate-600">
-        <span className="font-medium text-slate-900">{nutrientLabel(analysis.nutrient)}</span>
-        <span>
+    <div className="border border-rule bg-panel/50 p-3">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium text-ink">{nutrientLabel(analysis.nutrient)}</span>
+        <span className="num text-ink-2">
           {fmt(analysis.total)} / {fmt(analysis.limit)} {analysis.unit}
         </span>
       </div>
-      <div className="mt-2 h-2 w-full rounded-full bg-slate-100">
-        <div className={`h-2 rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+      <div className="mt-2">
+        <RangeBar
+          value={analysis.total}
+          limit={limit}
+          kind={analysis.kind}
+          state={isViolation ? 'over' : isGap ? 'under' : 'ok'}
+        />
       </div>
       <div className="mt-1.5 flex items-center gap-1 text-xs">
         {analysis.status === 'hard_violation' && (
-          <span className="font-medium text-rose-600">Over limit</span>
+          <span className="font-semibold text-flag">Over limit</span>
         )}
         {analysis.status === 'soft_gap' && (
-          <span className="font-medium text-amber-600">{analysis.kind === 'target' ? (analysis.direction === 'over' ? 'Above target' : analysis.direction === 'under' ? 'Below target' : 'Target deviation') : 'Below aim'}</span>
+          <span className="font-semibold text-warn">{analysis.kind === 'target' ? (analysis.direction === 'over' ? 'Above target' : analysis.direction === 'under' ? 'Below target' : 'Target deviation') : 'Below aim'}</span>
         )}
         {analysis.status === 'ok' && (
-          <span className="font-medium text-emerald-600">On track</span>
+          <span className="font-semibold text-ok">On track</span>
         )}
       </div>
       {contributors.length > 0 && (
-        <div className="mt-2 text-xs text-slate-500">
-          <span className="font-medium text-slate-600">Top contributors:</span>{' '}
+        <div className="mt-2 text-xs text-ink-3">
+          <span className="font-medium text-ink-2">Top contributors:</span>{' '}
           {contributors
             .map((c: any) => `${c.dish_name || c.dish_id} ${fmt(c.amount)}${analysis.unit}`)
             .join(', ')}
@@ -577,7 +573,7 @@ function TrendsSection({
   if (loading) return <LoadingState text="Loading trends…" />;
   if (error)
     return (
-      <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+      <div className="notice notice-error">
         {error}
       </div>
     );
@@ -588,14 +584,14 @@ function TrendsSection({
   return (
     <div className="space-y-6">
       {deviation.informational_only && deviation.notice && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="notice notice-warn">
           {deviation.notice}
         </div>
       )}
 
       {worsening.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          <p className="font-medium">Trends to review</p>
+        <div className="border border-warn-rule bg-warn-bg p-4 text-sm text-warn">
+          <p className="font-semibold">Trends to review</p>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             {worsening.map((f) => (
               <li key={f.series_key}>{f.reason}</li>
@@ -604,8 +600,8 @@ function TrendsSection({
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold text-slate-900">Nutrient trends</h3>
+      <div className="panel p-5">
+        <h3 className="mb-4 text-lg font-bold tracking-tight text-ink">Nutrient trends</h3>
         {Object.values(deviation.series).length === 0 ? (
           <EmptyState title="No trend data yet" description="Log all three meals on at least three days to assess trends." />
         ) : (
@@ -632,40 +628,40 @@ function SeriesCard({
   // The backend's default trend assessment requires three complete-day points.
   const assessmentAvailable = series.points.filter((point) => point.complete !== false).length >= 3;
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
+    <div className="border border-rule bg-card p-4">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-slate-900">{nutrientLabel(series.nutrient)}</span>
-        <span className="text-xs text-slate-500">{series.kind}</span>
+        <span className="text-sm font-semibold text-ink">{nutrientLabel(series.nutrient)}</span>
+        <span className="micro-label">{series.kind}</span>
       </div>
-      <div className="mt-2 text-xs text-slate-600">
+      <div className="num mt-2 text-xs text-ink-2">
         Limit {fmt(series.limit)} {series.unit}
       </div>
       {latest && (
-        <div className="mt-1 text-xs text-slate-600">
+        <div className="num mt-1 text-xs text-ink-2">
           Latest {fmt(latest.total)} {series.unit} ({latest.pct > 0 ? '+' : ''}
           {fmt(latest.pct)}%)
         </div>
       )}
       {flag && (
         <div
-          className={`mt-3 rounded-lg px-3 py-2 text-xs ${
+          className={`notice mt-3 text-xs ${
             flag.direction === 'worsening'
-              ? 'bg-rose-50 text-rose-800'
-              : 'bg-emerald-50 text-emerald-800'
+              ? 'notice-error'
+              : 'notice-ok'
           }`}
         >
-          <span className="font-medium">
+          <span className="font-semibold">
             {flag.direction === 'worsening' ? 'Worsening' : 'Improving'}
           </span>{' '}
-          · {flag.slope_pct_per_day > 0 ? '+' : ''}
-          {fmt(flag.slope_pct_per_day)} pp/day
+          · <span className="num">{flag.slope_pct_per_day > 0 ? '+' : ''}
+          {fmt(flag.slope_pct_per_day)} pp/day</span>
           {flag.severity === 'alert' && (
-            <span className="ml-1 font-medium text-rose-600">· Alert</span>
+            <span className="ml-1 font-semibold">· Alert</span>
           )}
         </div>
       )}
       {!flag && (
-        <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        <div className="mt-3 border border-rule bg-panel px-3 py-2 text-xs text-ink-2">
           {assessmentAvailable ? 'No detected trend' : 'Not assessed: fewer than three complete logged days'}
         </div>
       )}
@@ -673,24 +669,24 @@ function SeriesCard({
   );
 }
 
-function StatCard({
+function SummaryStat({
   label,
   value,
-  tone = 'sky',
+  tone = 'ink',
 }: {
   label: string;
   value: number;
-  tone?: 'sky' | 'rose' | 'emerald';
+  tone?: 'ink' | 'flag' | 'ok';
 }) {
   const toneClass: Record<string, string> = {
-    sky: 'bg-sky-50 text-sky-800',
-    rose: 'bg-rose-50 text-rose-800',
-    emerald: 'bg-emerald-50 text-emerald-800',
+    ink: 'text-ink',
+    flag: 'text-flag',
+    ok: 'text-ok',
   };
   return (
-    <div className={`rounded-xl border border-slate-200 p-5 ${toneClass[tone]}`}>
-      <p className="text-2xl font-semibold">{value}</p>
-      <p className="text-xs font-medium opacity-80">{label}</p>
+    <div className="p-5">
+      <p className={`num text-3xl font-semibold tracking-tight ${toneClass[tone]}`}>{value}</p>
+      <p className="micro-label mt-1">{label}</p>
     </div>
   );
 }
@@ -704,7 +700,7 @@ function nutrientLabel(key: string): string {
   return NUTRIENT_LABELS[key] || key;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string) {
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 }

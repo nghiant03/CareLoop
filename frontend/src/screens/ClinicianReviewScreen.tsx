@@ -18,6 +18,7 @@ import EmptyState from '../components/EmptyState';
 import ConstraintTable from '../components/ConstraintTable';
 import RuleTrace from '../components/RuleTrace';
 import EditEnvelopeModal from '../components/EditEnvelopeModal';
+import PageHeader from '../components/PageHeader';
 import { useRequestScope } from '../hooks/useRequestScope';
 
 export default function ClinicianReviewScreen() {
@@ -201,37 +202,33 @@ export default function ClinicianReviewScreen() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-12">
+    <main className="pb-12">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Clinician review</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Select a patient, generate a proposed nutrient envelope, then approve or adjust it.
-          </p>
-        </div>
+        <PageHeader code="ENV" title="Clinician review">
+          Select a patient, generate a proposed nutrient envelope, then approve or adjust it.
+        </PageHeader>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <div className="notice notice-error mb-4">
             {error}
             <button
               onClick={() => setError(null)}
-              className="ml-2 font-medium underline hover:text-rose-900"
+              className="ml-2 font-semibold underline hover:opacity-80"
             >
               Dismiss
             </button>
           </div>
         )}
 
-        <section className="mb-8">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Patients
-          </h2>
+        <div className="lg:grid lg:grid-cols-[minmax(300px,340px)_1fr] lg:items-start lg:gap-8">
+        <section className="mb-8 lg:mb-0">
+          <h2 className="micro-label mb-3 border-b border-rule pb-2">Patient roster</h2>
           {loadingPatients ? (
             <LoadingState text="Loading patients…" />
           ) : patients.length === 0 ? (
             <EmptyState title="No patients found" description="Check that the backend is running and has patient records." />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
               {patients.map((patient) => (
                 <PatientCard
                   key={patient.id}
@@ -244,14 +241,22 @@ export default function ClinicianReviewScreen() {
           )}
         </section>
 
+        <div>
+        {!selectedPatient && !envelopeLoading && (
+          <EmptyState
+            title="No patient selected"
+            description="Choose a patient from the roster to generate and review a proposed nutrient envelope."
+          />
+        )}
         {selectedPatient && (
-          <section className="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="panel mb-8 p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">
+                <p className="micro-label">{selectedPatient.id}</p>
+                <h2 className="mt-0.5 text-lg font-bold tracking-tight text-ink">
                   {selectedPatient.name || `Patient ${selectedPatient.id}`}
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-ink-3">
                   {selectedPatient.age} yrs · {selectedPatient.sex} ·{' '}
                   {selectedPatient.diagnoses?.join(', ')}
                 </p>
@@ -259,7 +264,7 @@ export default function ClinicianReviewScreen() {
               <button
                 onClick={handleGenerate}
                 disabled={envelopeLoading || actionLoading || savingEdit || isEditOpen}
-                className="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 disabled:bg-sky-300 transition-colors"
+                className="btn-primary"
               >
                 {envelopeLoading ? 'Generating…' : 'Generate proposed envelope'}
               </button>
@@ -269,57 +274,63 @@ export default function ClinicianReviewScreen() {
 
         {envelope && (
           <section className="space-y-6">
-            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Proposed envelope</h2>
-                <p className="text-sm text-slate-500">
-                  Status:
-                  <StatusBadge status={envelope.status} />
-                </p>
+            <div className="panel">
+              <div className="flex flex-col gap-3 border-b border-rule p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-bold tracking-tight text-ink">Proposed envelope</h2>
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-3">
+                    <span className="num">{envelope.id}</span>
+                    <span className="num">v{envelope.version}</span>
+                    <span className="num">rev {envelope.lifecycle_revision}</span>
+                    {envelope.status === 'APPROVED' ? (
+                      <span className="inline-flex items-center border border-ok-rule bg-ok-bg px-2.5 py-1">
+                        <span className="flag flag-ok">Approved</span>
+                      </span>
+                    ) : (
+                      <StatusFlag status={envelope.status} />
+                    )}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleApprove}
+                    disabled={envelopeLoading || savingEdit || actionLoading || envelope.status === 'APPROVED' || envelope.status === 'REJECTED' || !envelope.scope_eligible || (envelope.constraints?.length ?? 0) === 0}
+                    title={envelope.status === 'REJECTED' ? 'Out-of-scope proposal — cannot be approved' : undefined}
+                    className="btn-approve"
+                  >
+                    {actionLoading ? 'Working…' : 'Approve'}
+                  </button>
+                  <button
+                    onClick={handleEdit}
+                    disabled={envelopeLoading || savingEdit || actionLoading || envelope.status === 'REJECTED' || !envelope.scope_eligible}
+                    className="btn-ghost"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleReject}
+                    disabled={envelopeLoading || savingEdit || actionLoading || envelope.status === 'REJECTED'}
+                    className="btn-danger"
+                  >
+                    {actionLoading ? 'Working…' : 'Reject'}
+                  </button>
+                  <button onClick={handleReloadEnvelope} disabled={envelopeLoading || savingEdit || actionLoading}
+                    className="px-3 py-2 text-sm font-semibold text-ink-2 underline decoration-rule-2 underline-offset-4 hover:text-ink disabled:opacity-50">
+                    Reload envelope
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={handleApprove}
-                  disabled={envelopeLoading || savingEdit || actionLoading || envelope.status === 'APPROVED' || envelope.status === 'REJECTED' || !envelope.scope_eligible || (envelope.constraints?.length ?? 0) === 0}
-                  title={envelope.status === 'REJECTED' ? 'Out-of-scope proposal — cannot be approved' : undefined}
-                  className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed transition-colors"
-                >
-                  {actionLoading ? 'Working…' : 'Approve'}
-                </button>
-                <button
-                  onClick={handleEdit}
-                  disabled={envelopeLoading || savingEdit || actionLoading || envelope.status === 'REJECTED' || !envelope.scope_eligible}
-                  className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 transition-colors"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={handleReject}
-                  disabled={envelopeLoading || savingEdit || actionLoading || envelope.status === 'REJECTED'}
-                  className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50 transition-colors"
-                >
-                  {actionLoading ? 'Working…' : 'Reject'}
-                </button>
-                <button onClick={handleReloadEnvelope} disabled={envelopeLoading || savingEdit || actionLoading}
-                  className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-700 underline disabled:opacity-50">
-                  Reload envelope
-                </button>
+
+              <div className="p-5">
+                <h3 className="micro-label mb-3">Nutrient constraints</h3>
+                <ConstraintTable
+                  constraints={envelope.constraints || []}
+                />
               </div>
             </div>
 
-            <div>
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Nutrient constraints
-              </h3>
-              <ConstraintTable
-                constraints={envelope.constraints || []}
-              />
-            </div>
-
-            <div>
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Fired-rule trace
-              </h3>
+            <div className="panel p-5">
+              <h3 className="micro-label mb-3">Fired-rule trace</h3>
               <RuleTrace trace={envelope.trace || []} />
             </div>
           </section>
@@ -354,6 +365,8 @@ export default function ClinicianReviewScreen() {
             }}
           />
         )}
+        </div>
+        </div>
       </div>
     </main>
   );
@@ -414,21 +427,21 @@ function ObservationsSection({
   };
 
   return (
-    <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <section className="panel mt-8 p-5">
+      <h2 className="micro-label mb-3 border-b border-rule pb-2">
         Clinical observations
       </h2>
 
-      <form onSubmit={handleSubmit} className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end">
+      <form onSubmit={handleSubmit} className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-700">Metric</label>
+          <label className="micro-label mb-1 block">Metric</label>
           <select
             value={metric}
             onChange={(e) => {
               setMetric(e.target.value as typeof metric);
               setUnit('');
             }}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="field w-full sm:w-36"
           >
             <option value="serum_K_meq_L">Serum K</option>
             <option value="serum_PO4_mg_dL">Serum PO4</option>
@@ -437,57 +450,57 @@ function ObservationsSection({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-700">Value</label>
+          <label className="micro-label mb-1 block">Value</label>
           <input
             type="number"
             step="any"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="field num w-32"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-700">Unit</label>
+          <label className="micro-label mb-1 block">Unit</label>
           <input
             type="text"
             value={unit}
             onChange={(e) => setUnit(e.target.value)}
             placeholder={metricUnits[metric]}
-            className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="field w-28"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-700">Source</label>
+          <label className="micro-label mb-1 block">Source</label>
           <input
             type="text"
             value={source}
             onChange={(e) => setSource(e.target.value)}
             placeholder="e.g. lab"
-            className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="field w-32"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-700">Observed at</label>
+          <label className="micro-label mb-1 block">Observed at</label>
           <input
             type="date"
             value={observedAt}
             onChange={(e) => setObservedAt(e.target.value)}
-            className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="field w-40"
           />
         </div>
         <button
           type="submit"
           disabled={submitting || value === ''}
-          className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-300 transition-colors"
+          className="btn-primary"
         >
           {submitting ? 'Recording…' : 'Record observation'}
         </button>
       </form>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+        <div className="notice notice-error mb-4">
           {error}
-          <button onClick={() => setError(null)} className="ml-2 font-medium underline">
+          <button onClick={() => setError(null)} className="ml-2 font-semibold underline">
             Dismiss
           </button>
         </div>
@@ -498,25 +511,25 @@ function ObservationsSection({
       ) : observations.length === 0 ? (
         <EmptyState title="No observations" description="Record a follow-up observation after reviewing an alert." />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
+        <div className="overflow-x-auto border border-rule">
+          <table className="data-table">
+            <thead>
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Metric</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Value</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Observed at</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Source</th>
+                <th>Metric</th>
+                <th className="text-right">Value</th>
+                <th>Observed at</th>
+                <th>Source</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {observations.map((obs) => (
-                <tr key={obs.observation_id} className="hover:bg-slate-50">
-                  <td className="px-3 py-2 font-medium text-slate-900">{obs.metric}</td>
-                  <td className="px-3 py-2 text-slate-700">
-                    {obs.value} {obs.unit}
+                <tr key={obs.observation_id}>
+                  <td className="font-medium text-ink">{obs.metric}</td>
+                  <td className="num text-right text-ink-2">
+                    {obs.value} <span className="text-ink-3">{obs.unit}</span>
                   </td>
-                  <td className="px-3 py-2 text-slate-700">{obs.observed_at}</td>
-                  <td className="px-3 py-2 text-slate-700">{obs.source || '—'}</td>
+                  <td className="num text-ink-2">{obs.observed_at}</td>
+                  <td className="text-ink-3">{obs.source || '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -527,16 +540,12 @@ function ObservationsSection({
   );
 }
 
-function StatusBadge({ status }: { status: Envelope['status'] }) {
+function StatusFlag({ status }: { status: Envelope['status'] }) {
   const classes: Record<Envelope['status'], string> = {
-    PROPOSED: 'bg-amber-100 text-amber-800',
-    APPROVED: 'bg-emerald-100 text-emerald-800',
-    REJECTED: 'bg-rose-100 text-rose-800',
-    EDITED: 'bg-sky-100 text-sky-800',
+    PROPOSED: 'flag-warn',
+    APPROVED: 'flag-ok',
+    REJECTED: 'flag-bad',
+    EDITED: 'flag-neutral',
   };
-  return (
-    <span className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${classes[status]}`}>
-      {status}
-    </span>
-  );
+  return <span className={`flag ${classes[status]}`}>{status}</span>;
 }

@@ -9,6 +9,7 @@ import type {
 } from '../types';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
+import PageHeader from '../components/PageHeader';
 import { useRequestScope } from '../hooks/useRequestScope';
 
 export default function SimulationScreen() {
@@ -118,27 +119,24 @@ export default function SimulationScreen() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-12">
+    <main className="pb-12">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">What-if simulation</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Compare a proposed nutrient target change against the current approved envelope. This is a
-            simulation and does not change the patient's active plan.
-          </p>
-        </div>
+        <PageHeader code="SIM" title="What-if simulation">
+          Compare a proposed nutrient target change against the current approved envelope. This is a
+          simulation and does not change the patient's active plan.
+        </PageHeader>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <div className="notice notice-error mb-4">
             {error}
-            <button onClick={() => setError(null)} className="ml-2 font-medium underline">
+            <button onClick={() => setError(null)} className="ml-2 font-semibold underline">
               Dismiss
             </button>
           </div>
         )}
 
-        <section className="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <section className="panel mb-8 p-5">
+          <h2 className="micro-label mb-3 border-b border-rule pb-2">
             Select patient
           </h2>
           {loadingPatients ? (
@@ -148,7 +146,7 @@ export default function SimulationScreen() {
           ) : (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
-                <label htmlFor="sim-patient" className="mb-1 block text-sm font-medium text-slate-700">
+                <label htmlFor="sim-patient" className="micro-label mb-1 block">
                   Patient
                 </label>
                 <select
@@ -158,7 +156,7 @@ export default function SimulationScreen() {
                     const p = patients.find((pt) => pt.id === e.target.value) || null;
                     handleSelectPatient(p);
                   }}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  className="field"
                 >
                   <option value="">Select a patient</option>
                   {patients.map((p) => (
@@ -173,11 +171,11 @@ export default function SimulationScreen() {
         </section>
 
         {selectedPatient && (
-          <section className="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <section className="panel mb-8 p-5">
+            <h2 className="micro-label mb-3 border-b border-rule pb-2">
               Proposed targets
             </h2>
-            {prefillNotice && <p role="status" className="mb-3 text-sm text-amber-800">{prefillNotice}</p>}
+            {prefillNotice && <p role="status" className="notice notice-warn mb-3">{prefillNotice}</p>}
             {prefillLoading && <LoadingState text="Loading latest envelope…" />}
             {targets.length === 0 ? (
               <EmptyState title="No targets loaded" description="No editable targets have been loaded from the latest envelope." />
@@ -190,14 +188,14 @@ export default function SimulationScreen() {
                       value={target.nutrient}
                       onChange={(e) => updateTarget(idx, { nutrient: e.target.value })}
                       placeholder="Nutrient"
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                      className="field flex-1"
                     />
                     <select
                       value={target.kind}
                       onChange={(e) =>
                         updateTarget(idx, { kind: e.target.value as NutrientConstraint['kind'] })
                       }
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                      className="field sm:w-28"
                     >
                       <option value="max">max</option>
                       <option value="min">min</option>
@@ -208,18 +206,18 @@ export default function SimulationScreen() {
                       value={target.value}
                       onChange={(e) => updateTarget(idx, { value: Number(e.target.value) })}
                       placeholder="Value"
-                      className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                      className="field num sm:w-32"
                     />
                     <input
                       type="text"
                       value={target.unit}
                       onChange={(e) => updateTarget(idx, { unit: e.target.value })}
                       placeholder="Unit"
-                      className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                      className="field sm:w-28"
                     />
                     <button
                       onClick={() => removeTarget(idx)}
-                      className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50 transition-colors"
+                      className="btn-danger"
                     >
                       Remove
                     </button>
@@ -227,17 +225,17 @@ export default function SimulationScreen() {
                 ))}
               </div>
             )}
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex gap-2 border-t border-rule pt-4">
               <button
                 onClick={addTarget}
-                className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 transition-colors"
+                className="btn-ghost"
               >
                 Add target
               </button>
               <button
                 onClick={handleRun}
                 disabled={running || targets.length === 0}
-                className="rounded-lg bg-sky-600 px-5 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:bg-sky-300 transition-colors"
+                className="btn-primary"
               >
                 {running ? 'Running…' : 'Run what-if'}
               </button>
@@ -249,11 +247,11 @@ export default function SimulationScreen() {
 
         {selectedPatient && (
           <section className="mt-10">
-            <h2 className="mb-4 text-lg font-semibold text-slate-900">Past simulations</h2>
+            <h2 className="mb-4 text-lg font-bold tracking-tight text-ink">Past simulations</h2>
             {pastLoading ? (
               <LoadingState text="Loading past simulations…" />
             ) : pastError ? (
-              <p role="alert" className="text-sm text-rose-800">History unavailable: {pastError}</p>
+              <p role="alert" className="text-sm text-flag">History unavailable: {pastError}</p>
             ) : past.length === 0 ? (
               <EmptyState title="No past simulations" description="Run a what-if to see comparisons here." />
             ) : (
@@ -273,7 +271,7 @@ export default function SimulationScreen() {
 function SimulationResult({ simulation }: { simulation: Simulation }) {
   return (
     <section className="space-y-6">
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <div className="notice notice-warn">
         This is a simulation. The patient's active plan and approved envelope are unchanged.
       </div>
 
@@ -289,29 +287,25 @@ function SimulationResult({ simulation }: { simulation: Simulation }) {
 
 function SideCard({ title, side }: { title: string; side: SimulationSide }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-3 text-base font-semibold text-slate-900">{title}</h3>
+    <div className="panel p-5">
+      <h3 className="mb-3 border-b border-rule pb-2 text-base font-bold tracking-tight text-ink">{title}</h3>
       <div className="space-y-3 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           {side.feasible === true && (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-              Feasible
-            </span>
+            <span className="flag flag-ok">Feasible</span>
           )}
           {side.feasible === false && (
-            <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800">
-              Infeasible
-            </span>
+            <span className="flag flag-bad">Infeasible</span>
           )}
           {side.violation_count !== null && side.violation_count !== undefined && (
-            <span className="text-slate-600">Violations: {side.violation_count}</span>
+            <span className="text-ink-3">Violations: <span className="num">{side.violation_count}</span></span>
           )}
         </div>
-        {side.plan_id && <p className="text-slate-600">Plan: {side.plan_id}</p>}
-        {side.envelope_id && <p className="text-slate-600">Envelope: {side.envelope_id}</p>}
-        {typeof side.cost === 'number' && <p className="text-slate-600">Cost: {side.cost.toFixed(2)}</p>}
+        {side.plan_id && <p className="text-ink-2">Plan: <span className="num">{side.plan_id}</span></p>}
+        {side.envelope_id && <p className="text-ink-2">Envelope: <span className="num">{side.envelope_id}</span></p>}
+        {typeof side.cost === 'number' && <p className="text-ink-2">Cost: <span className="num">{side.cost.toFixed(2)}</span></p>}
         {side.infeasibility_reason && (
-          <p className="rounded-lg bg-rose-50 p-2 text-rose-800">{side.infeasibility_reason}</p>
+          <p className="notice notice-error">{side.infeasibility_reason}</p>
         )}
         {side.objectives && <ObjectivesTable objectives={side.objectives} />}
       </div>
@@ -321,19 +315,19 @@ function SideCard({ title, side }: { title: string; side: SimulationSide }) {
 
 function ObjectivesTable({ objectives }: { objectives: Record<string, number> }) {
   return (
-    <div className="mt-2 overflow-x-auto">
-      <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50">
+    <div className="mt-2 overflow-x-auto border border-rule">
+      <table className="data-table">
+        <thead>
           <tr>
-            <th className="px-3 py-2 text-left font-semibold text-slate-700">Objective</th>
-            <th className="px-3 py-2 text-left font-semibold text-slate-700">Value</th>
+            <th>Objective</th>
+            <th className="text-right">Value</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody>
           {Object.entries(objectives).map(([key, value]) => (
-            <tr key={key} className="hover:bg-slate-50">
-              <td className="px-3 py-2 font-medium text-slate-900">{key}</td>
-              <td className="px-3 py-2 text-slate-700">{value.toFixed ? value.toFixed(4) : value}</td>
+            <tr key={key}>
+              <td className="font-medium text-ink">{key}</td>
+              <td className="num text-right text-ink-2">{value.toFixed ? value.toFixed(4) : value}</td>
             </tr>
           ))}
         </tbody>
@@ -352,9 +346,9 @@ function DeltasCard({ deltas }: { deltas: SimulationDeltas }) {
   ] as const;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-4 text-base font-semibold text-slate-900">Deltas (simulated − base)</h3>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="panel p-5">
+      <h3 className="mb-4 text-base font-bold tracking-tight text-ink">Deltas (simulated − base)</h3>
+      <div className="grid grid-cols-1 divide-y divide-rule border border-rule sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-5 lg:divide-x">
         {rows.map((row) => {
           const value = deltas[row.key as keyof SimulationDeltas];
           let tone: string;
@@ -368,9 +362,9 @@ function DeltasCard({ deltas }: { deltas: SimulationDeltas }) {
             tone = isBetter ? 'text-emerald-700' : isWorse ? 'text-rose-700' : 'text-slate-900';
           }
           return (
-            <div key={row.key} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{row.label}</p>
-              <p className={`mt-1 text-lg font-semibold ${tone}`}>
+            <div key={row.key} className="bg-card p-4">
+              <p className="micro-label">{row.label}</p>
+              <p className={`num mt-1 text-lg font-semibold ${tone}`}>
                 {value === null || value === undefined ? '—' : typeof value === 'number' ? value.toFixed(4) : String(value)}
               </p>
             </div>
@@ -383,11 +377,11 @@ function DeltasCard({ deltas }: { deltas: SimulationDeltas }) {
 
 function SimulationCard({ simulation }: { simulation: Simulation }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="panel p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-900">{simulation.simulation_id}</p>
-          <p className="text-xs text-slate-500">{simulation.created_at ? formatDate(simulation.created_at) : ''}</p>
+          <p className="num text-sm font-semibold text-ink">{simulation.simulation_id}</p>
+          <p className="num text-xs text-ink-3">{simulation.created_at ? formatDate(simulation.created_at) : ''}</p>
         </div>
         <div className="flex gap-2">
           <FeasibilityBadge feasible={simulation.base.feasible} />
@@ -407,9 +401,9 @@ function SimulationCard({ simulation }: { simulation: Simulation }) {
 function FeasibilityBadge({ feasible }: { feasible: boolean | null | undefined }) {
   if (feasible === null || feasible === undefined) return null;
   return feasible ? (
-    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Feasible</span>
+    <span className="flag flag-ok">Feasible</span>
   ) : (
-    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800">Infeasible</span>
+    <span className="flag flag-bad">Infeasible</span>
   );
 }
 
@@ -429,9 +423,9 @@ function DeltaValue({
     tone = isBetter ? 'text-emerald-700' : isWorse ? 'text-rose-700' : 'text-slate-900';
   }
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`text-sm font-semibold ${tone}`}>{value === null || value === undefined ? '—' : value.toFixed(4)}</p>
+    <div className="border border-rule bg-panel p-2">
+      <p className="micro-label">{label}</p>
+      <p className={`num text-sm font-semibold ${tone}`}>{value === null || value === undefined ? '—' : value.toFixed(4)}</p>
     </div>
   );
 }

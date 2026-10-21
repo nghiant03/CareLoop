@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { listPatients, sendChat } from '../api';
 import type { Patient, ChatMessageResponse, Citation } from '../types';
 import LoadingState from '../components/LoadingState';
+import PageHeader from '../components/PageHeader';
 import { useRequestScope } from '../hooks/useRequestScope';
 
 interface Message {
@@ -70,17 +71,14 @@ export default function ChatScreen() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-12">
+    <main className="pb-12">
       <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Chat</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Ask questions about a patient’s diet plan. Citations link back to guidelines.
-          </p>
-        </div>
+        <PageHeader code="CHT" title="Chat">
+          Ask questions about a patient’s diet plan. Citations link back to guidelines.
+        </PageHeader>
 
-        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <label htmlFor="chat-patient" className="mb-1 block text-sm font-medium text-slate-700">
+        <div className="panel mb-4 p-4">
+          <label htmlFor="chat-patient" className="micro-label mb-1 block">
             Patient
           </label>
           {loadingPatients ? (
@@ -98,7 +96,7 @@ export default function ChatScreen() {
                 setError(null);
                 setSending(false);
               }}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              className="field"
             >
               <option value="">Select a patient</option>
               {patients.map((p) => (
@@ -111,20 +109,20 @@ export default function ChatScreen() {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <div className="notice notice-error mb-4">
             {error}
-            <button onClick={() => setError(null)} className="ml-2 font-medium underline">
+            <button onClick={() => setError(null)} className="ml-2 font-semibold underline">
               Dismiss
             </button>
           </div>
         )}
 
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="panel">
           <div className="flex h-96 flex-col">
             <div className="flex-1 overflow-y-auto p-4">
               {messages.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center text-center text-slate-500">
-                  <p className="text-sm">Select a patient and type a message to begin.</p>
+                <div className="flex h-full flex-col items-center justify-center text-center">
+                  <p className="text-sm text-ink-3">Select a patient and type a message to begin.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -134,15 +132,18 @@ export default function ChatScreen() {
                       className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-2xl rounded-2xl px-4 py-3 text-sm ${
+                        className={`max-w-2xl border px-4 py-3 text-sm ${
                           msg.role === 'user'
-                            ? 'bg-sky-600 text-white rounded-br-none'
-                            : 'bg-slate-100 text-slate-900 rounded-bl-none'
+                            ? 'border-ink bg-ink text-paper'
+                            : 'border-rule bg-card text-ink'
                         }`}
                       >
+                        <p className="micro-label mb-1.5" style={{ color: msg.role === 'user' ? 'var(--color-rule-2)' : undefined }}>
+                          {msg.role === 'user' ? 'Query' : 'Response'}
+                        </p>
                         <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
                         {msg.role === 'assistant' && msg.escalated && (
-                          <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-amber-800">
+                          <div className="notice notice-warn mt-3 flex items-start gap-2">
                             <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5V2m0 0a2.5 2.5 0 012.5 2.5v.5M21 9.5h-2.5m-4.5 0H9m-4.5 0H2m3 0v7.2a2 2 0 00.8 1.6l1.7 1.3a2 2 0 002.4 0l1.7-1.3a2 2 0 01.8-.2h4.6a2 2 0 01.8.2l1.7 1.3a2 2 0 002.4 0l1.7-1.3a2 2 0 00.8-1.6V9.5" />
                             </svg>
@@ -150,14 +151,14 @@ export default function ChatScreen() {
                           </div>
                         )}
                         {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-2">
+                          <div className="mt-3 flex flex-wrap gap-1.5 border-t border-rule pt-2.5">
                             {msg.citations.map((c, idx) => (
                               <a
                                 key={idx}
                                 href={c.url ?? undefined}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-white"
+                                className="flag flag-info hover:underline"
                               >
                                 {c.guideline}
                                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -175,7 +176,7 @@ export default function ChatScreen() {
               )}
             </div>
 
-            <form onSubmit={handleSend} className="border-t border-slate-200 p-3">
+            <form onSubmit={handleSend} className="border-t border-rule-2 p-3">
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -183,12 +184,12 @@ export default function ChatScreen() {
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={selectedPatient ? 'Type your question…' : 'Select a patient first'}
                   disabled={!selectedPatient || sending}
-                  className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 disabled:bg-slate-100"
+                  className="field flex-1"
                 />
                 <button
                   type="submit"
                   disabled={!selectedPatient || sending || !input.trim()}
-                  className="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 disabled:bg-sky-300 transition-colors"
+                  className="btn-primary"
                 >
                   {sending ? 'Sending…' : 'Send'}
                 </button>

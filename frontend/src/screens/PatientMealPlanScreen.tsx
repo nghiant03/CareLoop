@@ -13,6 +13,8 @@ import type {
 } from '../types';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
+import PageHeader from '../components/PageHeader';
+import RangeBar from '../components/RangeBar';
 import { useRequestScope } from '../hooks/useRequestScope';
 
 const SwapApplicationContext = createContext<{ pending: boolean; begin: () => boolean; end: () => void }>({ pending: false, begin: () => false, end: () => {} });
@@ -100,29 +102,26 @@ export default function PatientMealPlanScreen() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-12">
+    <main className="pb-12">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Meal plan</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Choose a patient to generate a 7-day, 3-meal plan based on their approved nutrient envelope.
-          </p>
-        </div>
+        <PageHeader code="PLN" title="Meal plan">
+          Choose a patient to generate a 7-day, 3-meal plan based on their approved nutrient envelope.
+        </PageHeader>
 
         {error && (
-          <div className={`mb-4 rounded-lg border p-3 text-sm ${needsApproval ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`}>
+          <div className={`notice mb-4 ${needsApproval ? 'notice-warn' : 'notice-error'}`}>
             {error}
             <button
               onClick={() => setError(null)}
-              className="ml-2 font-medium underline hover:opacity-80"
+              className="ml-2 font-semibold underline hover:opacity-80"
             >
               Dismiss
             </button>
           </div>
         )}
 
-        <section className="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <section className="panel mb-8 p-5">
+          <h2 className="micro-label mb-3 border-b border-rule pb-2">
             Select patient
           </h2>
           {loadingPatients ? (
@@ -132,7 +131,7 @@ export default function PatientMealPlanScreen() {
           ) : (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
-                <label htmlFor="patient" className="mb-1 block text-sm font-medium text-slate-700">
+                <label htmlFor="patient" className="micro-label mb-1 block">
                   Patient
                 </label>
                 <select
@@ -150,7 +149,7 @@ export default function PatientMealPlanScreen() {
                     setSavedPlansLoading(false);
                     if (p) loadSavedPlans(p.id);
                   }}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  className="field"
                 >
                   <option value="">Select a patient</option>
                   {patients.map((p) => (
@@ -163,7 +162,7 @@ export default function PatientMealPlanScreen() {
               <button
                 onClick={handleGeneratePlan}
                 disabled={planLoading || !selectedPatient}
-                className="inline-flex items-center justify-center rounded-lg bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:bg-sky-300 transition-colors"
+                className="btn-primary"
               >
                 {planLoading ? 'Generating plan…' : 'Generate 7-day plan'}
               </button>
@@ -212,8 +211,8 @@ function SavedPlansSection({
   currentPlanId?: string;
 }) {
   return (
-    <section className="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <section className="panel mb-8 p-5">
+      <h2 className="micro-label mb-3 border-b border-rule pb-2">
         Saved plans
       </h2>
       {loading ? (
@@ -225,36 +224,28 @@ function SavedPlansSection({
           {plans.map((p) => (
             <div
               key={p.plan_id}
-              className={`rounded-lg border p-4 ${
+              className={`border p-4 ${
                 currentPlanId === p.plan_id
-                  ? 'border-sky-300 bg-sky-50'
-                  : 'border-slate-200 bg-slate-50'
+                  ? 'border-ink bg-panel'
+                  : 'border-rule bg-card'
               }`}
             >
-              <p className="text-sm font-semibold text-slate-900">{p.plan_id}</p>
-              <p className="text-xs text-slate-500">{new Date(p.created_at).toLocaleString()}</p>
+              <p className="num text-sm font-semibold text-ink">{p.plan_id}</p>
+              <p className="num mt-0.5 text-xs text-ink-3">{new Date(p.created_at).toLocaleString()}</p>
               <div className="mt-2 flex flex-wrap gap-1">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    p.feasible ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                  }`}
-                >
+                <span className={`flag ${p.feasible ? 'flag-ok' : 'flag-bad'}`}>
                   {p.feasible ? 'Feasible' : 'Infeasible'}
                 </span>
                 {p.engine && (
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                    {p.engine}
-                  </span>
+                  <span className="flag flag-neutral">{p.engine}</span>
                 )}
                 {p.derived_from && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                    after swap
-                  </span>
+                  <span className="flag flag-warn">after swap</span>
                 )}
               </div>
               <button
                 onClick={() => onLoad(p.plan_id)}
-                className="mt-3 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 transition-colors"
+                className="btn-ghost mt-3 px-3 py-1.5 text-xs"
               >
                 Load plan
               </button>
@@ -294,8 +285,8 @@ function PlanView({
   return (
     <SwapApplicationContext.Provider value={swapApplications}>
     <div className="space-y-6">
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">{plan.patient_id} — 7-day plan</h2>
+      <div className="panel p-5">
+        <h2 className="text-lg font-bold tracking-tight text-ink">{plan.patient_id} — 7-day plan</h2>
         <PlanStatus plan={plan} />
         <ExplanationView explanation={plan.explanation} />
       </div>
@@ -331,45 +322,41 @@ function PlanView({
 
 function PlanStatus({ plan }: { plan: MealPlan }) {
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-      <span
-        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-          plan.feasible ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-        }`}
-      >
+    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-rule py-3 text-sm">
+      <span className={`flag ${plan.feasible ? 'flag-ok' : 'flag-bad'}`}>
         {plan.feasible ? 'Hard constraints met' : 'No plan returned'}
       </span>
-      {plan.feasible && <span className="text-amber-800">
+      {plan.feasible && <span className="text-warn">
         {plan.adequate ? 'All nutrient aims met' : 'Some nutrient aims remain unmet — see adequacy below'}
       </span>}
-      {plan.feasible && !plan.meal_complete && <span className="text-amber-800">Meal composition incomplete</span>}
-      {plan.data_quality && <p className="basis-full text-slate-600">
+      {plan.feasible && !plan.meal_complete && <span className="text-warn">Meal composition incomplete</span>}
+      {plan.data_quality && <p className="basis-full text-ink-2">
         Nutrient data: {plan.data_quality.unverified_dishes} of {plan.data_quality.dish_count} catalogue dishes unverified.
         {plan.data_quality.cost_is_estimated && ' Costs are synthetic estimates, not measured prices.'}
       </p>}
       {plan.engine && (
-        <span className="text-slate-500">
-          Engine: <span className="font-medium text-slate-700">{plan.engine}</span>
+        <span className="text-ink-3">
+          Engine: <span className="font-medium text-ink-2">{plan.engine}</span>
         </span>
       )}
       {typeof plan.violation_count === 'number' && (
-        <span className="text-slate-500">
-          Violations: <span className="font-medium text-slate-700">{plan.violation_count}</span>
+        <span className="text-ink-3">
+          Violations: <span className="num font-medium text-ink-2">{plan.violation_count}</span>
         </span>
       )}
       {typeof plan.runtime_ms === 'number' && (
-        <span className="text-slate-500">
-          Runtime: <span className="font-medium text-slate-700">{plan.runtime_ms} ms</span>
+        <span className="text-ink-3">
+          Runtime: <span className="num font-medium text-ink-2">{plan.runtime_ms} ms</span>
         </span>
       )}
       {typeof plan.allowed_dish_count === 'number' && (
-        <span className="text-slate-500">
-          Allowed dishes: <span className="font-medium text-slate-700">{plan.allowed_dish_count}</span>
+        <span className="text-ink-3">
+          Allowed dishes: <span className="num font-medium text-ink-2">{plan.allowed_dish_count}</span>
         </span>
       )}
       {plan.plan_id && (
-        <span className="text-slate-500">
-          Plan ID: <span className="font-medium text-slate-700">{plan.plan_id}</span>
+        <span className="text-ink-3">
+          Plan ID: <span className="num font-medium text-ink-2">{plan.plan_id}</span>
         </span>
       )}
     </div>
@@ -379,9 +366,9 @@ function PlanStatus({ plan }: { plan: MealPlan }) {
 function ExplanationView({ explanation }: { explanation?: PatientExplanation | null }) {
   if (!explanation) return null;
   return (
-    <div className="mt-4 rounded-lg border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
+    <div className="panel-tint mt-4 p-4 text-sm text-ink-2">
       {explanation.headline && (
-        <h3 className="mb-2 font-semibold text-sky-900">{explanation.headline}</h3>
+        <h3 className="mb-2 font-semibold text-ink">{explanation.headline}</h3>
       )}
       {explanation.daily_targets && explanation.daily_targets.length > 0 && (
         <ul className="mb-3 space-y-1">
@@ -394,8 +381,8 @@ function ExplanationView({ explanation }: { explanation?: PatientExplanation | n
       )}
       {explanation.why && explanation.why.length > 0 && (
         <div className="mb-3">
-          <p className="mb-1 font-medium text-sky-900">Why these targets?</p>
-          <ul className="list-disc space-y-1 pl-5 text-sky-800">
+          <p className="mb-1 font-medium text-ink">Why these targets?</p>
+          <ul className="list-disc space-y-1 pl-5">
             {explanation.why.map((item, idx) => (
               <li key={idx}>{item}</li>
             ))}
@@ -404,8 +391,8 @@ function ExplanationView({ explanation }: { explanation?: PatientExplanation | n
       )}
       {explanation.avoid && explanation.avoid.length > 0 && (
         <div className="mb-3">
-          <p className="mb-1 font-medium text-sky-900">Avoid</p>
-          <ul className="list-disc space-y-1 pl-5 text-sky-800">
+          <p className="mb-1 font-medium text-ink">Avoid</p>
+          <ul className="list-disc space-y-1 pl-5">
             {explanation.avoid.map((item, idx) => (
               <li key={idx}>{item}</li>
             ))}
@@ -414,8 +401,8 @@ function ExplanationView({ explanation }: { explanation?: PatientExplanation | n
       )}
       {explanation.plan_summary && explanation.plan_summary.length > 0 && (
         <div className="mb-3">
-          <p className="mb-1 font-medium text-sky-900">Plan summary</p>
-          <ul className="list-disc space-y-1 pl-5 text-sky-800">
+          <p className="mb-1 font-medium text-ink">Plan summary</p>
+          <ul className="list-disc space-y-1 pl-5">
             {explanation.plan_summary.map((item, idx) => (
               <li key={idx}>{item}</li>
             ))}
@@ -423,7 +410,7 @@ function ExplanationView({ explanation }: { explanation?: PatientExplanation | n
         </div>
       )}
       {explanation.approval_note && (
-        <p className="mt-2 font-medium text-amber-700">{explanation.approval_note}</p>
+        <p className="mt-2 font-medium text-warn">{explanation.approval_note}</p>
       )}
     </div>
   );
@@ -439,25 +426,25 @@ function InfeasibilityView({
   violations: { nutrient?: string; kind?: string; amount?: number | null; actual?: number | null; limit?: number | null }[];
 }) {
   return (
-    <section className="rounded-xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
-      <h3 className="text-base font-semibold text-rose-900">Plan could not be generated</h3>
-      <p className="mt-1 text-sm text-rose-800">
+    <section className="border border-flag-rule bg-flag-bg p-5">
+      <h3 className="text-base font-bold text-flag">Plan could not be generated</h3>
+      <p className="mt-1 text-sm text-flag">
         {status === 'search_exhausted' ? 'Search ended without finding a plan. This does not prove that no feasible plan exists.' : status === 'proven_infeasible' ? 'No feasible plan exists under the current meal encoding and constraints.' : ''}
       </p>
-      {reason && <p className="mt-1 text-sm text-rose-800">{reason}</p>}
+      {reason && <p className="mt-1 text-sm text-flag">{reason}</p>}
       {violations && violations.length > 0 && (
         <div className="mt-3">
-          <h4 className="mb-2 text-sm font-semibold text-rose-900">Constraint violations</h4>
-          <ul className="divide-y divide-rose-100 rounded-lg border border-rose-200 bg-white text-sm">
+          <h4 className="micro-label mb-2 text-flag!">Constraint violations</h4>
+          <ul className="divide-y divide-rule border border-rule bg-card text-sm">
             {violations.map((v, idx) => (
               <li key={idx} className="p-3">
-                <span className="font-medium text-slate-900">{v.nutrient || 'Unknown nutrient'}</span>
-                <span className="ml-2 text-slate-600">({v.kind || 'constraint'})</span>
-                <div className="mt-1 text-slate-600">
+                <span className="font-medium text-ink">{v.nutrient || 'Unknown nutrient'}</span>
+                <span className="ml-2 text-ink-3">({v.kind || 'constraint'})</span>
+                <div className="num mt-1 text-ink-2">
                   {v.actual !== null && v.actual !== undefined && <span>Actual: {v.actual} </span>}
                   {v.limit !== null && v.limit !== undefined && <span>Limit: {v.limit} </span>}
                   {v.amount !== null && v.amount !== undefined && (
-                    <span className="text-rose-700">Excess: {v.amount}</span>
+                    <span className="text-flag">Excess: {v.amount}</span>
                   )}
                 </div>
               </li>
@@ -477,25 +464,25 @@ function RelaxationCallout({
   notes: string[];
 }) {
   return (
-    <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
-      <h3 className="mb-2 text-base font-semibold text-amber-900">Relaxation notes</h3>
-      <p className="mb-3 text-sm text-amber-800">
+    <section className="border border-warn-rule bg-warn-bg p-5">
+      <h3 className="mb-2 text-base font-bold text-warn">Relaxation notes</h3>
+      <p className="mb-3 text-sm text-warn">
         Some targets were relaxed to make a feasible plan. A clinician can review these changes.
       </p>
       {notes.map((note, idx) => (
-        <p key={idx} className="mb-2 text-sm text-amber-900">
+        <p key={idx} className="mb-2 text-sm text-warn">
           {note}
         </p>
       ))}
       {constraints.map((c, idx) => (
         <div
           key={idx}
-          className="mb-2 rounded-lg border border-amber-200 bg-white p-3 text-sm text-amber-900"
+          className="mb-2 border border-warn-rule bg-card p-3 text-sm text-ink-2"
         >
-          <p className="font-medium">
+          <p className="num font-medium text-ink">
             {c.nutrient}: {c.requested} → {c.relaxed_to} {c.unit}
           </p>
-          <p className="mt-1 text-amber-800">{c.reason}</p>
+          <p className="mt-1 text-warn">{c.reason}</p>
         </div>
       ))}
     </section>
@@ -504,50 +491,48 @@ function RelaxationCallout({
 
 function AdequacyPanel({ items }: { items: AdequacyItem[] }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-4 text-base font-semibold text-slate-900">Adequacy vs. approved goals</h3>
-      <p className="mb-3 text-sm text-slate-600">Minimums show shortfall; targets show distance above or below the approved value.</p>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200 text-sm">
-          <thead className="bg-slate-50">
+    <section className="panel p-5">
+      <h3 className="text-base font-bold tracking-tight text-ink">Adequacy vs. approved goals</h3>
+      <p className="mb-4 mt-1 text-sm text-ink-3">Minimums show shortfall; targets show distance above or below the approved value.</p>
+      <div className="overflow-x-auto border border-rule">
+        <table className="data-table">
+          <thead>
             <tr>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">Nutrient</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">Aim</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">Mean daily</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">Worst day</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">Aim gap</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">Met days</th>
+              <th>Nutrient</th>
+              <th className="text-right">Aim</th>
+              <th className="text-right">Mean daily</th>
+              <th>Worst day</th>
+              <th>Aim gap</th>
+              <th className="text-right">Met days</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {items.map((item, idx) => {
               const severity = adequacySeverity(item);
               return (
-                <tr key={idx} className="hover:bg-slate-50">
-                  <td className="px-3 py-2 font-medium text-slate-900">
+                <tr key={idx}>
+                  <td className="font-medium text-ink">
                     {item.nutrient}
-                    <span className="ml-1 text-xs font-normal text-slate-500">({item.kind})</span>
+                    <span className="ml-1 text-xs font-normal text-ink-3">({item.kind})</span>
                   </td>
-                  <td className="px-3 py-2 text-slate-700">
+                  <td className="num text-right text-ink-2">
                     {item.aim} {item.unit}
                     {item.relaxed_aim !== null && (
-                      <span className="ml-1 text-xs text-amber-700">relaxed to {item.relaxed_aim}</span>
+                      <span className="ml-1 text-xs text-warn">relaxed to {item.relaxed_aim}</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-slate-700">
+                  <td className="num text-right text-ink-2">
                     {item.mean_daily.toFixed(1)} {item.unit}
                   </td>
-                  <td className="px-3 py-2 text-slate-700">
+                  <td className="num text-ink-2">
                     Day {item.worst_day}: {item.worst_daily.toFixed(1)} {item.unit}
                   </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${severity.class}`}
-                    >
+                  <td>
+                    <span className={`flag ${severity.class}`}>
                       {item.shortfall.toFixed(1)} {item.unit} ({item.shortfall_pct.toFixed(0)}%)
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-slate-700">
+                  <td className="num text-right text-ink-2">
                     {item.met_days} / {item.total_days}
                   </td>
                 </tr>
@@ -562,15 +547,15 @@ function AdequacyPanel({ items }: { items: AdequacyItem[] }) {
 
 function adequacySeverity(item: AdequacyItem) {
   if (item.met_days === item.total_days && item.shortfall <= 0) {
-    return { class: 'bg-emerald-100 text-emerald-800' };
+    return { class: 'flag-ok' };
   }
   if (item.shortfall_pct >= 25 || item.met_days === 0) {
-    return { class: 'bg-rose-100 text-rose-800' };
+    return { class: 'flag-bad' };
   }
   if (item.shortfall_pct >= 10 || item.met_days < item.total_days / 2) {
-    return { class: 'bg-amber-100 text-amber-800' };
+    return { class: 'flag-warn' };
   }
-  return { class: 'bg-emerald-100 text-emerald-800' };
+  return { class: 'flag-ok' };
 }
 
 function DayCard({
@@ -587,15 +572,15 @@ function DayCard({
   const meals = groupSlotsByMeal(day.slots || []);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-slate-900">Day {day.day}</h3>
+    <section className="panel p-5">
+      <div className="mb-4 flex items-center justify-between border-b border-rule pb-2">
+        <h3 className="text-base font-bold tracking-tight text-ink">Day {day.day}</h3>
       </div>
 
       <div className="space-y-4">
         {Object.entries(meals).map(([meal, slots]) => (
           <div key={meal}>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <h4 className="micro-label mb-2">
               {meal}
             </h4>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -607,10 +592,10 @@ function DayCard({
         ))}
       </div>
 
-      <div className="mt-6">
-        <h4 className="mb-3 text-sm font-semibold text-slate-900">Daily totals vs targets</h4>
+      <div className="mt-6 border-t border-rule pt-4">
+        <h4 className="micro-label mb-3">Daily totals vs targets</h4>
         {day.totals?.length === 0 ? (
-          <p className="text-sm text-slate-500">No nutrient totals returned.</p>
+          <p className="text-sm text-ink-3">No nutrient totals returned.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {day.totals.map((nut, idx) => (
@@ -655,12 +640,11 @@ function SlotCard({
     .slice(0, 3);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{slot.meal}</p>
-      <p className="mt-1 text-sm font-medium text-slate-900">{slot.name}</p>
-      {slot.category && <p className="text-xs text-slate-500">{slot.category}</p>}
+    <div className="border border-rule bg-card p-3">
+      <p className="mt-0.5 text-sm font-semibold text-ink">{slot.name}</p>
+      {slot.category && <p className="text-xs text-ink-3">{slot.category}</p>}
       {summary.length > 0 && (
-        <p className="mt-2 text-xs text-slate-600">
+        <p className="num mt-2 border-t border-rule pt-2 text-xs text-ink-2">
           {summary.map((entry) => `${entry.label} ${Number(entry.value).toFixed(1)} ${entry.unit}`).join(' · ')}
         </p>
       )}
@@ -735,25 +719,25 @@ function SwapButton({
       <button
         onClick={handleSuggest}
         disabled={loading || applications.pending || !savedPlanId}
-        className="mt-2 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-200 hover:bg-sky-50 disabled:text-slate-400 transition-colors"
+        className="btn-ghost mt-2 px-2.5 py-1 text-xs"
       >
         {loading ? 'Loading…' : 'Suggest swaps'}
       </button>
-      {!savedPlanId && <p className="mt-2 text-xs text-amber-800">Swaps require a saved plan ID. Reload a saved plan to choose its exact source.</p>}
+      {!savedPlanId && <p className="mt-2 text-xs text-warn">Swaps require a saved plan ID. Reload a saved plan to choose its exact source.</p>}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-3xl rounded-xl bg-white p-5 shadow-2xl ring-1 ring-slate-900/10">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/50 p-4 sm:items-center">
+          <div className="w-full max-w-3xl border border-rule-2 bg-card p-5">
+            <div className="mb-4 flex items-center justify-between border-b border-rule pb-3">
+              <h3 className="text-lg font-bold tracking-tight text-ink">
                 Swap suggestions for {slot.name}
               </h3>
-              <button onClick={() => setOpen(false)} className="text-sm text-slate-500 hover:text-slate-700">
+              <button onClick={() => setOpen(false)} className="text-sm font-medium text-ink-3 underline decoration-rule-2 underline-offset-4 hover:text-ink">
                 Close
               </button>
             </div>
-            <p className="mb-3 text-sm text-slate-600">Applying a swap replaces every occurrence of this dish in this saved plan.</p>
+            <p className="mb-3 text-sm text-ink-2">Applying a swap replaces every occurrence of this dish in this saved plan.</p>
             {notice && (
-              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <div className="notice notice-warn mb-4">
                 {notice}
               </div>
             )}
@@ -792,54 +776,52 @@ function SubstitutionCard({
   const highlight = ['sodium_mg', 'potassium_mg', 'phosphorus_mg'];
 
   return (
-    <div className="rounded-lg border border-slate-200 p-4">
+    <div className="border border-rule p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-semibold text-slate-900">{sub.name}</p>
-          <p className="text-xs text-slate-500">
-            {sub.category_match ? 'Same category' : 'Different category'} · ranking score {(sub.ranking_score ?? sub.distance).toFixed(2)} · cost Δ{' '}
-            {sub.cost_delta.toFixed(2)}
+          <p className="font-semibold text-ink">{sub.name}</p>
+          <p className="text-xs text-ink-3">
+            {sub.category_match ? 'Same category' : 'Different category'} · ranking score <span className="num">{(sub.ranking_score ?? sub.distance).toFixed(2)}</span> · cost Δ{' '}
+            <span className="num">{sub.cost_delta.toFixed(2)}</span>
           </p>
         </div>
         <button
           onClick={onApply}
           disabled={disabled}
-          className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700 disabled:bg-sky-300 transition-colors"
+          className="btn-primary px-3 py-1.5"
         >
           Apply swap
         </button>
       </div>
-      <p className="mt-2 text-sm text-slate-700">{sub.reason}</p>
+      <p className="mt-2 text-sm text-ink-2">{sub.reason}</p>
       {nutrients.length > 0 && (
-        <div className="mt-3 overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
+        <div className="mt-3 overflow-x-auto border border-rule">
+          <table className="data-table">
+            <thead>
               <tr>
-                <th className="px-2 py-1 text-left text-xs font-semibold text-slate-700">Day</th>
+                <th>Day</th>
                 {nutrients.map((n) => (
                   <th
                     key={n}
-                    className={`px-2 py-1 text-left text-xs font-semibold ${
-                      highlight.includes(n) ? 'text-rose-700' : 'text-slate-700'
-                    }`}
+                    className={highlight.includes(n) ? 'text-flag!' : ''}
                   >
                     {n}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {days.map((day) => (
                 <tr key={day}>
-                  <td className="px-2 py-1 text-slate-900">Day {day}</td>
+                  <td className="font-medium text-ink">Day {day}</td>
                   {nutrients.map((n) => {
                     const value = sub.day_deltas[day][n];
                     const isHighlight = highlight.includes(n);
                     return (
                       <td
                         key={n}
-                        className={`px-2 py-1 text-xs ${
-                          value > 0 ? 'text-rose-700' : value < 0 ? 'text-emerald-700' : 'text-slate-600'
+                        className={`num text-xs ${
+                          value > 0 ? 'text-flag' : value < 0 ? 'text-ok' : 'text-ink-3'
                         } ${isHighlight ? 'font-semibold' : ''}`}
                       >
                         {value > 0 ? '+' : ''}
@@ -863,51 +845,48 @@ function NutrientBar({ nutrient }: { nutrient: PlanTotal }) {
   const minTarget = targets?.find((t) => t.kind === 'min');
     const target = maxTarget || minTarget || targets?.find((t) => t.kind === 'target');
 
-  let percentage = 0;
   let overLimit = false;
   let belowMinimum = false;
 
   if (maxTarget && maxTarget.value > 0) {
-    percentage = Math.min((value / maxTarget.value) * 100, 100);
     overLimit = value > maxTarget.value;
   } else if (minTarget && minTarget.value > 0) {
-    percentage = Math.min((value / minTarget.value) * 100, 100);
     belowMinimum = value < minTarget.value && compliant !== true;
-  } else if (target && target.value > 0) {
-    percentage = Math.min((value / target.value) * 100, 100);
   }
 
-  const barColor = overLimit ? 'bg-rose-500' : belowMinimum ? 'bg-amber-500' : 'bg-sky-500';
+  const state = overLimit ? 'over' : belowMinimum ? 'under' : 'ok';
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="flex items-center justify-between text-xs text-slate-600">
-        <span className="font-medium text-slate-900">{nutrient.nutrient}</span>
-        <span>
+    <div className="border border-rule bg-card p-3">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium text-ink">{nutrient.nutrient}</span>
+        <span className="num text-ink-2">
           {value} {unit}
         </span>
       </div>
-      <div className="mt-2 h-2 w-full rounded-full bg-slate-100">
-        <div className={`h-2 rounded-full transition-all ${barColor}`} style={{ width: `${percentage}%` }} />
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1">
+      {target && target.value > 0 && (
+        <div className="mt-2">
+          <RangeBar value={value} limit={target.value} kind={target.kind} state={state} />
+        </div>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         {targets?.map((t, idx) => (
-          <span key={idx} className="text-xs text-slate-500">
+          <span key={idx} className="num text-xs text-ink-3">
             {t.kind} {t.value} {t.unit}
           </span>
         ))}
         {compliant === true && (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">OK</span>
+          <span className="flag flag-ok">OK</span>
         )}
         {compliant === false && (
-          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800">Over limit</span>
+          <span className="flag flag-bad">Over limit</span>
         )}
         {compliant === null && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">No hard rule</span>
+          <span className="flag flag-neutral">No hard rule</span>
         )}
       </div>
-      {overLimit && <p className="mt-1.5 text-xs font-medium text-rose-600" role="alert">Over limit</p>}
-      {belowMinimum && <p className="mt-1.5 text-xs font-medium text-amber-600" role="alert">Below minimum</p>}
+      {overLimit && <p className="mt-1.5 text-xs font-semibold text-flag" role="alert">Over limit</p>}
+      {belowMinimum && <p className="mt-1.5 text-xs font-semibold text-warn" role="alert">Below minimum</p>}
     </div>
   );
 }
