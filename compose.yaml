@@ -1,105 +1,41 @@
-name: careloop-app
-
+name: careloop
 services:
-  postgres:
+  db:
     image: postgres:18-bookworm
-    restart: unless-stopped
     environment:
-      POSTGRES_DB: postgres
-      POSTGRES_HOST_AUTH_METHOD: trust
-      PGUSER: ${CARELOOP_DATABASE_USER:-postgres}
+      POSTGRES_DB: careloop
+      POSTGRES_USER: careloop
+      POSTGRES_PASSWORD: local-demo-only
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:55432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql
-      - ./deploy/postgres/01-databases.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
+      - database_v1:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$PGUSER -d postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    stop_grace_period: 60s
-
-  setup:
-    build:
-      context: .
-      dockerfile: deploy/backend/Dockerfile
+      test: ["CMD-SHELL", "pg_isready -U careloop -d careloop"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  migrate:
+    build: .
     environment:
-      CARELOOP_APP_DATABASE_URL: postgresql://${CARELOOP_DATABASE_USER:-postgres}@postgres:5432/careloop_clinical
-      CARELOOP_KNOWLEDGE_DATABASE_URL: postgresql://${CARELOOP_DATABASE_USER:-postgres}@postgres:5432/careloop_knowledge
-    command: ["python", "-m", "backend.storage.setup"]
+      CARELOOP_DATABASE_URL: postgresql://careloop:local-demo-only@db:5432/careloop
+    command: ["python", "-m", "careloop.db"]
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-
-  backend:
-    build:
-      context: .
-      dockerfile: deploy/backend/Dockerfile
+  api:
+    build: .
     environment:
-      CARELOOP_APP_DATABASE_URL: postgresql://${CARELOOP_DATABASE_USER:-postgres}@postgres:5432/careloop_clinical
-      CARELOOP_APPROVAL_MODE: ${CARELOOP_APPROVAL_MODE:-auto}
-      CARELOOP_KNOWLEDGE_DATABASE_URL: postgresql://${CARELOOP_DATABASE_USER:-postgres}@postgres:5432/careloop_knowledge
-      CARELOOP_ARTIFACT_DIR: /var/lib/careloop/artifacts
-      CARELOOP_DATASET_DIR: /datasets
-      CARELOOP_KNOWLEDGE_MODE: database
-      CARELOOP_DEPLOYMENT_MODE: ${CARELOOP_DEPLOYMENT_MODE:-review}
-      CARELOOP_KNOWLEDGE_RELEASE: ${CARELOOP_KNOWLEDGE_RELEASE:-}
-    volumes:
-      - run_artifacts:/var/lib/careloop
-      - ${CARELOOP_DATASET_DIR:-${HOME}/.local/share/careloop/datasets}:/datasets:ro
+      CARELOOP_DATABASE_URL: postgresql://careloop:local-demo-only@db:5432/careloop
+    ports:
+      - "127.0.0.1:8000:8000"
     depends_on:
-      setup:
+      migrate:
         condition: service_completed_successfully
-    read_only: true
-    tmpfs:
-      - /tmp
-    init: true
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5).read()"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    stop_grace_period: 30s
-
-  frontend:
-    build:
-      context: .
-      dockerfile: deploy/frontend/Dockerfile
-    command: ["-c", "/etc/nginx/${CARELOOP_DEPLOYMENT_MODE:-review}.conf", "-g", "daemon off;"]
-    ports:
-      - "127.0.0.1:${CARELOOP_HTTP_PORT:-8080}:8080"
-    depends_on:
-      backend:
-        condition: service_healthy
-    read_only: true
-    tmpfs:
-      - /tmp
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
-      interval: 15s
-      timeout: 5s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
       retries: 3
-
 volumes:
-  postgres_data:
-  run_artifacts:
+  database_v1:
