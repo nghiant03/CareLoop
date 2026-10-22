@@ -1,88 +1,37 @@
-# Python
+# Dependencies and generated artifacts
+node_modules/
+dist/
+build/
+.venv/
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-.venv/
-venv/
-env/
-.eggs/
-*.egg-info/
-build/
-dist/
 .pytest_cache/
-.mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
 
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
+# Local configuration, credentials, tooling and repository metadata
+.env
+.env.*
+!.env.example
+.secrets/
+*.pem
+.agents/
+.crush/
+.jj/
+.gitnexus/
 
-# Jupyter
-.ipynb_checkpoints/
-
-# Neo4j / data dumps
-data/neo4j/
-data/cache/
-data/external/
-# Raw datasets must never be tracked, even in a legacy checkout location.
+# External datasets and runtime state do not belong in the checkout
 /data/
 /dataset/
 /datasets/
-# Dataset formats are ignored globally; only frontend code configuration is allowed.
-*.json
-*.jsonl
-*.csv
-*.xpt
-*.parquet
-*.xlsx
-*.pdf
-*.zip
-!/frontend/package.json
-!/frontend/package-lock.json
-!/frontend/tsconfig.json
-!/frontend/tsconfig.app.json
-!/frontend/tsconfig.node.json
-!/frontend/.oxlintrc.json
+/artifacts/
+*.sqlite*
+*.db
 *.dump
 
-# Env / secrets
-.env
-.env.local
-.secrets/
-*.pem
-
-# Node / frontend
-node_modules/
-dist/
-.parcel-cache/
-
-# OS
+# Editors and OS
+.DS_Store
 Thumbs.db
-
-# Agents
-.agents/
-
-# Runtime state and unpublished run outputs
-*.sqlite3
-*.sqlite3-*
-*.sqlite
-*.sqlite-*
-*.db
-*.db-*
-artifacts/
-# Redundant generated exports/reports must not re-enter source control.
-/shared/envelope_schema.json
-/evaluation/results.json
-/evaluation/EVALUATION.md
-/backend/optim/benchmark_results.md
-/backend/optim/benchmark_wall_time.md
-/backend/mining/COMPARISON.md
-/backend/app/chat/retrieval_bench_results.json
-/backend/app/chat/RETRIEVAL_BENCH.md
+*.swp
+*.swo
