@@ -28,11 +28,15 @@ distinctions and [the architecture](docs/ARCHITECTURE.md) for documented contrac
   owns trends and substitutions. `backend/app/adherence/` analyzes logged meals.
 - `backend/app/chat/` retrieves evidence and composes answers;
   `backend/app/explain/` builds explanation views.
-- `backend/knowledge/` owns operator-only draft/review/publication and runtime
+- `backend/knowledge/` owns operator-only discovery/draft/review/publication and runtime
   release selection. In database mode, rules, catalogue, optimizer, mining and
   chat must use the same process-pinned published snapshot; never silently fall
   back to fixture files. See `docs/KNOWLEDGE.md`. Keep clinical and knowledge
-  databases separate. Actor labels are attestations, not authenticated identities.
+  databases separate. The isolated operator web workspace/API replaces the knowledge
+  CLI. Discovery is provider-neutral and LLM-only (provider selection is deferred),
+  with instructions in `backend/knowledge/prompts/discover_rules.md`; it accepts
+  multiple guideline files without source manifests/hashes or static KDIGO patterns.
+  Actor labels are attestations, not authenticated identities.
 - `frontend/src/api.ts` adapts HTTP responses for the frontend; view contracts
   live in `frontend/src/types.ts`. Check actual response shapes when changing
   either side. Export JSON Schema only when needed with
@@ -97,7 +101,8 @@ default (`CARELOOP_ARTIFACT_DIR` overrides the external root). Publish report sn
 Mining comparisons also write to external `outputs/mining/`, never the published report
 by default. PostgreSQL integration tests require `CARELOOP_TEST_POSTGRES_URL`
 and create/drop only unique test databases; skipped cases are not server verification.
-See `docs/POSTGRES.md` for schema/data migration and the single Compose stack.
+See `docs/POSTGRES.md` for the single Compose stack and automatic deployment setup;
+application startup never creates schema. No migration CLI or backup feature is provided.
 
 The Python manifest is the repository-root `pyproject.toml` (single `careloop`
 distribution covering `backend/`, `shared/`, and `rules/`); the frontend manifest

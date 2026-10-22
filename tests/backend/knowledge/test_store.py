@@ -9,7 +9,6 @@ import psycopg
 import psycopg.sql
 import pytest
 
-from backend.knowledge.__main__ import main
 from backend.knowledge.store import KnowledgeStore, load_release
 from backend.knowledge.validation import content_hash, validate_documents
 
@@ -181,29 +180,6 @@ def test_initialization_refuses_the_clinical_database(pg_databases):
         KnowledgeStore(database).initialize()
     with psycopg.connect(database) as connection:
         assert connection.execute("SELECT count(*) FROM patients").fetchone() == (0,)
-
-
-def test_operator_cli_import_review_publish_export_clone_history(tmp_path, capsys, pg_databases, monkeypatch):
-    monkeypatch.setenv("CARELOOP_KNOWLEDGE_DATABASE_URL", pg_databases["knowledge"])
-    prefix = []
-    assert main(prefix + ["init"]) == 0
-    from backend.datasets.paths import dataset_path
-    assert main(prefix + ["import", "--draft-id", "initial", "--rules-file", str(dataset_path("rules.json")),
-                           "--dishes-file", str(dataset_path("dishes.json")), "--actor", "Author"]) == 0
-    assert main(prefix + ["review", "--draft-id", "initial", "--expected-revision", "1", "--actor", "Reviewer",
-                          "--decision", "approve", "--note", "Reviewed estimates"]) == 0
-    assert main(prefix + ["publish", "--draft-id", "initial", "--expected-revision", "1", "--actor", "Publisher",
-                          "--release-id", "release-1", "--note", "Publish"]) == 0
-    output = tmp_path / "export"
-    assert main(prefix + ["export", "--release-id", "release-1", "--out-dir", str(output)]) == 0
-    assert len(json.loads((output / "dishes.json").read_text())) == 214
-    assert main(prefix + ["clone", "--release-id", "release-1", "--draft-id", "next", "--actor", "Author"]) == 0
-    for command in ("list", "show", "history"):
-        assert main(prefix + [command] + ([] if command == "list" else ["--draft-id", "next"])) == 0
-    capsys.readouterr()
-    with pytest.raises(SystemExit) as error:
-        main(prefix + ["export", "--release-id", "release-1", "--out-dir", str(output)])
-    assert error.value.code == 1
 
 
 def test_historical_revisions_and_release_name_collisions_preserve_content(store, documents):

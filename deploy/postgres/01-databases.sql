@@ -1,7 +1,4 @@
--- First initialization only. The separate migrate service owns application DDL.
--- A single admin role owns both databases; runtime role separation is out of scope.
-CREATE DATABASE careloop_clinical OWNER careloop_admin;
-CREATE DATABASE careloop_knowledge OWNER careloop_admin;
-
-REVOKE ALL ON DATABASE careloop_clinical FROM PUBLIC;
-REVOKE ALL ON DATABASE careloop_knowledge FROM PUBLIC;
+-- First initialization only. The automatic setup task owns application DDL.
+-- Use PostgreSQL's built-in role; no custom admin account or group is provisioned.
+CREATE DATABASE careloop_clinical;
+CREATE DATABASE careloop_knowledge;

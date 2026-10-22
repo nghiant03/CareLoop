@@ -10,19 +10,18 @@ function setup(options: { enabled?: boolean; stale?: boolean; fail?: boolean } =
   const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     const url = String(input);
     if (options.fail) return new Response('', { status: 503 });
-    const data = url.endsWith('/documents') ? { rules: { rules }, dishes: [] }
-      : url.endsWith('/history') ? []
-      : url.includes('/revision?') ? { rules: { rules: [{ ...rules[0], verbatim_quote: 'Earlier quote' }] }, dishes: [] }
-      : url.endsWith('/decision') ? { ...draft, review: { decision: 'reject' } }
-      : { deployment_mode: 'review', draft, current_draft: { ...draft, revision: options.stale ? 3 : 2 }, technical_review: { blockers: ['Clinical exclusion unresolved'] }, review_enabled: options.enabled ?? true, csrf_token: 'token' };
+    const data = url.endsWith('/review') ? { ...draft, review: { decision: 'reject' } }
+      : { draft: { ...draft, revision: options.stale ? 3 : 2 }, revision: 2, events: [],
+        documents: { rules: { rules: url.includes('?revision=') ? [{ ...rules[0], verbatim_quote: 'Earlier quote' }] : rules,
+          authoring_review: { blockers: ['Clinical exclusion unresolved'] } }, dishes: [] } };
     return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
   });
   vi.stubGlobal('fetch', fetchMock);
-  render(<KnowledgeReviewScreen />);
+  render(<KnowledgeReviewScreen draftId="draft-one" token="token" onBack={() => {}} />);
   return fetchMock;
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 it('browses rules, filters missing evidence and never links unsafe URLs', async () => {
   setup();
@@ -55,9 +54,9 @@ it('records an explicit revision-bound decision with a CSRF token', async () => 
   await userEvent.click(screen.getByRole('checkbox'));
   await userEvent.click(screen.getByRole('button', { name: 'Record review decision' }));
   await screen.findByText('Review decision recorded. This does not publish or activate the draft.');
-  const call = fetchMock.mock.calls.find(([path]) => String(path).endsWith('/decision'));
+  const call = fetchMock.mock.calls.find(([path]) => String(path).endsWith('/review'));
   expect(call?.[1]?.headers).toEqual({ 'Content-Type': 'application/json', 'X-Review-Token': 'token' });
-  expect(JSON.parse(String(call?.[1]?.body))).toEqual({ actor: 'independent-reviewer', note: 'Evidence incomplete', decision: 'reject', expected_revision: 2 });
+  expect(JSON.parse(String(call?.[1]?.body))).toEqual({ actor: 'independent-reviewer', note: 'Evidence incomplete', decision: 'reject', expected_revision: 2, confirmed: true });
 });
 
 it('disables decisions for stale snapshots', async () => {
@@ -74,4 +73,20 @@ it('offers recovery when loading fails', async () => {
   expect(screen.getByRole('alert').textContent).toContain('503');
   expect(screen.getByRole('button', { name: 'Retry loading' })).toBeTruthy();
   await waitFor(() => expect(screen.queryByText('Loading knowledge review')).toBeNull());
+});
+
+it('preserves unsaved JSON across sections and asks before leaving the draft', async () => {
+  setup();
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  await screen.findByRole('heading', { name: 'SODIUM' });
+  await userEvent.click(screen.getByRole('button', { name: 'Edit & publish' }));
+  const editor = screen.getByLabelText('Rulebook JSON (required)') as HTMLTextAreaElement;
+  await userEvent.type(editor, ' pending edit');
+  const pending = editor.value;
+  await userEvent.click(screen.getByRole('button', { name: 'Rules' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Edit & publish' }));
+  expect((screen.getByLabelText('Rulebook JSON (required)') as HTMLTextAreaElement).value).toBe(pending);
+  await userEvent.click(screen.getByRole('button', { name: 'All knowledge drafts' }));
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Discard unsaved knowledge edits?'));
+  expect((screen.getByLabelText('Rulebook JSON (required)') as HTMLTextAreaElement).value).toBe(pending);
 });

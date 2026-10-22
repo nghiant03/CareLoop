@@ -30,9 +30,18 @@ talks to the backend with no CORS setup in dev. Other scripts:
 | `/adherence` | `AdherenceScreen` | log dishes and serving quantities; inspect daily summaries and trends |
 | `/review-queue` | `ReviewQueueScreen` | triage alerts, record actions, and create proposals |
 | `/simulations` | `SimulationScreen` | compare proposed targets with the current planning baseline |
+| `/knowledge-review` | `KnowledgeWorkspaceScreen` | operator draft creation, editing, evidence inspection, independent review and publication; multi-source discovery with a deferred provider |
 
 Top navigation lives in `components/TopBar.tsx`; `components/OfflineBanner.tsx`
 flags when the backend is unreachable (`/api/healthz` probe).
+
+The knowledge workspace runs in the separate `review` deployment mode and uses
+`src/knowledgeReview.ts` for `/api/knowledge/*`. It starts without a draft or release,
+requires no login, and replaces the knowledge operator CLI. Discovery accepts
+multiple guideline files and an editable prompt, without manifest/hash checks or
+static KDIGO patterns. No LLM provider is selected yet, so extraction is explicitly
+unavailable; draft authoring and publication remain usable. Published mode cannot
+serve operator endpoints. See `../docs/KNOWLEDGE.md`.
 
 ## Supporting components
 

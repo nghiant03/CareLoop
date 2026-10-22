@@ -13,8 +13,8 @@ and import support have been removed; existing database files are not modified.
 
 ## Deploy locally
 
-The root `compose.yaml` runs PostgreSQL 18, migrations, FastAPI and React.
-Clinical and knowledge databases are separate. Knowledge releases require restart.
+The root `compose.yaml` runs PostgreSQL 18, automatic database setup, FastAPI and
+React. Clinical and knowledge databases are separate. Knowledge releases require restart.
 
 ### 1. Prepare the environment
 
@@ -24,9 +24,7 @@ Requires Docker Compose, daemon access, Python 3.11+ and `uv`. From the reposito
 uv sync --extra dev
 
 export CARELOOP_DATASET_DIR="$HOME/.local/share/careloop/datasets"
-export CARELOOP_OPERATOR_UID=$(id -u)
-export CARELOOP_OPERATOR_GID=$(id -g)
-mkdir -p "$CARELOOP_DATASET_DIR/outputs/knowledge"
+mkdir -p "$CARELOOP_DATASET_DIR"
 docker compose config --quiet
 ```
 
@@ -38,33 +36,43 @@ For NHANES, USDA, KDIGO and MIMIC demo downloads, follow
 [the research download instructions](docs/DATASETS.md#download-research-sources).
 Research data does not replace CareLoop fixtures or approved knowledge.
 
-Propose guideline-backed rules with `.venv/bin/python -m backend.knowledge discover`.
-Candidates need review. See [knowledge discovery](docs/KNOWLEDGE.md#automatically-propose-evidence-backed-rules).
+Knowledge discovery, authoring, review and publication use the web workspace,
+not an operator CLI. See [knowledge discovery](docs/KNOWLEDGE.md#automatically-propose-evidence-backed-rules).
 
-### 2. Initialize the databases
+### 2. Start the knowledge workspace
 
 ```sh
-docker compose up -d --wait postgres
-docker compose run --build --rm migrate
+docker compose up --build -d --wait
 ```
 
-PostgreSQL: `127.0.0.1:5433`. Migrations create schemas, **not clinical data or
-knowledge releases**. The backend checks schemas but never creates tables.
+Compose waits for PostgreSQL, runs its one-shot `setup` task, and starts the
+backend only after both schemas are ready. There is no manual migration command.
+Setup preserves existing compatible databases and refuses unrelated/incomplete
+schemas; it does not import data, create approvals or publish knowledge.
 
-Before startup:
+Open **http://127.0.0.1:8080/knowledge-review**. This is the default deployment mode;
+it needs no existing draft or published release. Use **Create draft**, **Clone
+release**, **Discover sources**, and a draft's review/edit/publication sections.
+Clinical routes are unavailable here.
 
-- **Existing state:** preserve PostgreSQL volumes/backups and any retired SQLite
-  files. This version cannot open or import SQLite journals.
-- **Knowledge:**
-  [create, review and publish a draft](docs/POSTGRES.md#bootstrap-knowledge-when-no-authoring-journal-exists).
-  Publication requires independent approval of the exact draft revision.
+Discovery accepts multiple PDF, HTML, Markdown or text guidelines without hashes,
+manifests or KDIGO-specific patterns. Its instructions live in a separate prompt
+file and can be edited per request. **No LLM provider has been selected**; the UI
+discloses this and extraction stays unavailable until an adapter is connected.
 
-### 3. Start the application
+The local demo has no login, custom database admin account or operator UID/GID
+settings. PostgreSQL uses passwordless trust and the built-in `postgres` role,
+bound to `127.0.0.1:5433`. Do not expose this stack publicly. For existing volumes
+created with `careloop_admin`, set `CARELOOP_DATABASE_USER=careloop_admin` before
+startup; no role or stored data is renamed or recreated.
+
+### 3. Activate a reviewed knowledge release
 
 Use your reviewed, published release ID:
 
 ```sh
 export CARELOOP_KNOWLEDGE_RELEASE=YOUR_REVIEWED_RELEASE_ID
+export CARELOOP_DEPLOYMENT_MODE=published
 docker compose up --build -d --wait
 docker compose ps
 
@@ -72,7 +80,7 @@ curl --fail http://127.0.0.1:8080/api/healthz
 curl --fail http://127.0.0.1:8080/api/kb/stats
 ```
 
-Open **http://127.0.0.1:8080**. Backend proxy: `/api`. API docs: `/api/docs`.
+Open **http://127.0.0.1:8080**. Backend proxy: `/api`. API docs: `/api/docs` in either mode.
 Override the HTTP port with `CARELOOP_HTTP_PORT`. Missing releases block startup
 without fixture fallback. Health checks do not establish clinical readiness.
 
@@ -81,19 +89,20 @@ If Docker requires sudo, use `sudo docker compose`. Preserve startup settings:
 ```sh
 sudo env CARELOOP_DATASET_DIR="$CARELOOP_DATASET_DIR" \
   CARELOOP_KNOWLEDGE_RELEASE="$CARELOOP_KNOWLEDGE_RELEASE" \
+  CARELOOP_DEPLOYMENT_MODE=published \
   docker compose up --build -d --wait
 ```
 
 ## Operate and preserve state
 
 ```sh
-docker compose logs --tail=100 postgres migrate backend frontend
+docker compose logs --tail=100 postgres setup backend frontend
 docker compose stop
 ```
 
 `docker compose down` keeps volumes. **`down -v` deletes databases.**
-Back up both databases and test restoration before accepting writes.
-Restart the backend when changing knowledge releases.
+Preserve existing volumes and retired SQLite files. Restart the backend when
+changing knowledge releases. No backup feature or scheduled backup job is included.
 
 See [PostgreSQL operations](docs/POSTGRES.md) and
 [deployment configuration](deploy/README.md).

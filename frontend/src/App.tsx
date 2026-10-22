@@ -1,5 +1,5 @@
 import { Navigate, Routes, Route, useLocation } from 'react-router-dom';
-import KnowledgeReviewScreen from './screens/KnowledgeReviewScreen';
+import KnowledgeWorkspaceScreen from './screens/KnowledgeWorkspaceScreen';
 import TopBar from './components/TopBar';
 import OfflineBanner from './components/OfflineBanner';
 import ApprovalModeBanner from './components/ApprovalModeBanner';
@@ -32,7 +32,7 @@ function AppRoutes() {
 
 function AppContent() {
   const location = useLocation();
-  if (location.pathname === '/knowledge-review') return <KnowledgeReviewScreen />;
+  if (location.pathname === '/knowledge-review') return <KnowledgeWorkspaceScreen />;
   return (
     <DemoProvider>
       <div className="min-h-screen bg-paper">

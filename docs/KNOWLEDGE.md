@@ -1,234 +1,159 @@
-# Database-managed knowledge
+# Knowledge workspace and published knowledge
 
-## PostgreSQL deployment
+Knowledge operations use a web UI and HTTP API. The operator knowledge CLI has
+been removed. Clinical and knowledge state remain in separate PostgreSQL databases.
+Schema preparation belongs to the automatic deployment `setup` task, not runtime.
 
-The root Compose stack selects a PostgreSQL published release. Configure
-`CARELOOP_KNOWLEDGE_DATABASE_URL` for runtime and operator commands. Never also
-set the retired `CARELOOP_KNOWLEDGE_DB` path (it now fails explicitly). Run schema migrations with the admin
-role through `backend.storage.migrate init`, not the operator `init` command;
-on PostgreSQL the latter only verifies an existing schema.
+## Open the workspace
 
-[POSTGRES.md](POSTGRES.md) is the deployment/bootstrap guide. Database
-roles replace filesystem-only access controls on the journal. Runtime reads
-use read-only transactions and a reader role; operator writes are append-only.
-Privileged administrators can still bypass guards. Actor labels still do not
-authenticate people or establish clinical validity.
+Start the root Compose stack normally and visit
+**http://127.0.0.1:8080/knowledge-review**. The default deployment mode is `review`:
+it starts with an empty authoring journal, without a preselected draft or release.
+No manual database initialization command or operator UID/GID is required.
 
-The operator CLI manages rules and the dish catalogue in a **separate PostgreSQL
-authoring database**; SQLite journals and imports are no longer supported.
-Drafts never authorize runtime use. The service loads one
-explicitly selected, reviewed, published release through read-only connections,
-then pins its contents for the process lifetime.
+If returning from clinical mode, select `CARELOOP_DEPLOYMENT_MODE=review`, unset
+`CARELOOP_KNOWLEDGE_RELEASE`, and restart backend/frontend. A workspace cannot
+select a live release simultaneously. Clinical routes are disabled in this mode.
 
-External `fixtures/rules.json` and `fixtures/dishes.json` remain bootstrap and regression fixtures
-outside Git. In database mode they are not the live source, fallback, or authoring
-authority. The in-memory graph/BM25 index remains a derived read model, not the
-authoring journal. The patient-workflow database remains separate.
+## Security boundary
 
-## Security and governance boundary
+This is a **loopback-only local demo**, not a production knowledge administration
+system. There is no login or application admin account. Actor names are attestations,
+not authenticated identities, signatures or proof of independent people.
 
-This phase exposes **no knowledge-editing HTTP endpoints**. Give database write
-access only to trusted operators, and read access to the service account.
-`--actor` records an operator-attested identity; it is not authenticated. An
-approving reviewer label must differ from all authors/editors of the draft,
-including case/whitespace variants, but labels cannot prove independent people.
-Use your existing identity/change-approval procedures around this CLI. It does
-not supply role-based access control, electronic signatures, or tamper-proof
-audit storage. Privileged database administrators can bypass SQL triggers.
+The workspace API runs only in operator mode, not alongside clinical routes.
+Mutations require the process-bound `X-Review-Token` obtained from `GET /knowledge`.
+Cross-origin mutations and unexpected Host headers are refused. These are browser
+request protections, not authentication. Never publish this surface on the internet
+or use it for real clinical operations without a separate security design.
 
-Every successful mutation appends an audit event in the same transaction as its
-content/review/publication record. Existing rows cannot be updated or deleted
-through ordinary SQL. Full draft revisions and released content are retained.
-Edits append a revision; review belongs to exactly one revision and does not
-carry forward. Publishing requires the latest revision's approving review.
-Rejected revisions require a new edit/review cycle, not replacement of the
-review record. Published drafts cannot be edited; clone a release to continue.
-
-Validation checks supported DSL, identifiers, unique IDs, finite nonnegative
-nutrients, required catalogue fields, rule compilation, and representative
-scope/suppression cases. It is not clinical validation or a complete behavioural
-regression suite. Import/review output discloses unverified dishes and missing
-optional guideline quotes/URLs. Existing evidence is preserved without claiming
-new verification. Review knowledge changes and run the relevant clinical safety
-and evaluation checks before publishing or deploying them.
+Local PostgreSQL accepts passwordless connections using its built-in `postgres`
+role. There is no custom `careloop_admin` account on fresh installations. Existing
+volumes may retain their original role; see [POSTGRES.md](POSTGRES.md).
 
 ## Automatically propose evidence-backed rules
 
-After downloading the KDIGO guideline, run:
+Open **Discover sources**. Discovery is LLM-based; there are no hard-coded KDIGO
+recommendation patterns and no static fallback. A concrete provider has deliberately
+**not been selected**. Until one is connected, the UI disables extraction and the
+API returns HTTP 503 without attempting a model call. No API key or provider-specific
+environment variable is required just to run the workspace.
 
-```sh
-.venv/bin/python -m backend.knowledge discover
-```
+### Add another source
 
-Discovery verifies the PDF against `research/manifest.json`, extracts fresh text
-with `pdftotext`, and proposes candidates for KDIGO 2024 recommendations
-**3.3.1.1 (protein)** and **3.3.2.1 (sodium)**. It requires Poppler's `pdftotext`,
-but not pandas or research staging. It does not download files itself.
+1. Obtain an appropriately licensed guideline from its publisher. Save a PDF,
+   HTML, Markdown or UTF-8 text file outside the checkout.
+2. In **Discover sources**, choose **Add guideline files**. Select multiple files,
+   or add more in another selection. ADA, DASH, KDOQI and other guidelines do not
+   require new Python adapters or an allowlist entry.
+3. Optionally enter the original publisher URL next to each file. The server does
+   not download URLs or read arbitrary host filesystem paths from requests.
+4. Inspect or edit **Extraction instructions**, then extract once a provider adapter
+   is available. Up to 10 sources and a 32 MiB encoded request are accepted.
+5. Inspect every candidate against the original source before authoring executable
+   rule changes. Candidates never become live knowledge automatically.
 
-Reports go to external `outputs/knowledge-discovery/<report-hash>/rule_candidates.json`.
-`CARELOOP_ARTIFACT_DIR` overrides the output root. Identical reruns reuse the report.
-Different input bytes produce a new report. Existing edited or incomplete report
-directories are never overwritten.
+**No manifest registration, file hash calculation or hash validation is part of
+discovery.** File-format/readability checks and source-quote matching remain.
+PDFs use Poppler's `pdftotext` (included in the backend image); HTML/text are read
+directly. Scanned PDFs need separately prepared readable text; no OCR is implied.
 
-Each candidate contains:
+The backend's `DiscoveryClient` protocol exposes
+`extract_candidates(instructions=..., source_text=...) -> dict`. A future provider
+adapter owns transport, credentials and response parsing. The core service is
+callable from Python and the API; it is not coupled to a CLI or to OpenAI.
 
-- Source URL, verified PDF hash, one-based PDF pages and exact extracted quotes.
-- Numeric suggestion with source units, converted units and evidence grade.
-- Proposed adult CKD stage 3–4 scope, preserving existing scope exclusions.
-- Linked practice points for metabolic instability, frailty, sarcopenia,
-  paediatric considerations and sodium-wasting nephropathy.
-- Same-nutrient baseline rules for comparison, with their conditions and actions.
-- Review blockers and `NEEDS_REVIEW` status.
+### Editable prompt and evidence
 
-Protein is proposed as a **soft TARGET** in g/kg/day, not an inferred minimum or
-maximum. Sodium retains the source's strict `<` operator while suggesting a
-daily mg MAX for review. CareLoop's MAX allows equality, and treating a guideline
-recommendation as a hard ceiling requires a clinical decision. Neither mapping
-is automatically executable.
+Default instructions live in **`backend/knowledge/prompts/discover_rules.md`**,
+not in Python. The workspace loads this resource and sends any per-request edits
+as `instructions`. Edits do not change the server file. Direct Python callers can
+use `load_discovery_prompt(path)` for an external prompt file.
 
-Unsupported wording retains its quote without an inferred value. Missing caveats
-are disclosed. Recognized repeated statements with contradictory values block
-numeric mapping. PDF layout extraction may mix columns, so compare quotes with
-the original PDF. Manifest verification detects changed bytes, not publisher
-authenticity or clinical validity.
+Discovery sends overlapping bounded text chunks to the selected adapter. It
+accepts recognized nutrient/constraint identifiers, finite positive values, an
+explicit unit/body-weight basis and quotations present in the supplied text.
+Repeated identical chunk results are deduplicated. Reports retain source filenames,
+optional URLs, exact extracted-text spans, PDF page numbers, model metadata,
+instructions, source populations, model-reported caveats and baseline-rule comparisons.
+API uploads are temporary; the returned report is not written to either database.
 
-By default, discovery compares the external development rule fixture. To compare
-an exported published rulebook and choose an explicit output directory:
+Every candidate remains `NEEDS_REVIEW`, with `executable_rule: null` and
+`automatic_activation_allowed: false`. The report format is now schema version 2;
+old schema-1 reports remain preserved files, not automatic import inputs. Optional
+Python report writing uses fresh external run directories, not content hashes,
+and never overwrites existing operator work.
 
-```sh
-.venv/bin/python -m backend.knowledge discover \
-  --research-dir "$CARELOOP_DATASET_DIR/research" \
-  --rules-file /absolute/path/to/exported/rules.json \
-  --out-dir "$CARELOOP_DATASET_DIR/outputs/rule-review"
-```
+A matching quote proves text presence, **not** correct interpretation. Review
+numbers, units, sodium versus salt, per-kg versus daily quantities, negation,
+population, strict inequality, evidence grades and exceptions in the full document.
+Extraction is non-exhaustive and nondeterministic. Model caveats are unverified
+suggestions. NHANES/MIMIC associations and food-composition values are not automatic
+prescribing evidence. MIN/TARGET are soft aims; MAX allows equality and is a hard
+ceiling only after an explicit clinical mapping decision.
 
-This command never opens a clinical or knowledge database. It does not change
-rules, approve envelopes, generate a release, or run on backend startup. The
-candidate report is not accepted by the executable-rulebook importer.
+## Create, edit and review drafts
 
-Review the candidates, resolve the blockers, and author executable changes through
-the draft workflow below. Then run rule/scope tests, obtain independent review,
-and publish that exact revision. Observational NHANES/MIMIC associations and food
-composition records are not automatic prescribing-rule sources. Other guideline
-sections need explicit evidence adapters before numeric proposal generation.
+- **Create draft:** load or paste a complete CareLoop `rules.json` and dish
+  catalogue JSON; supply a draft ID and author label. External fixtures can be
+  initial inputs but are not clinical approval. Discovery reports are not rulebooks.
+- **Open a draft:** inspect searchable rules, exact evidence, conditions/actions,
+  authoring blockers, catalogue provenance and event history. Compare a selected
+  rule against an earlier revision.
+- **Edit & publish:** edit the complete documents and save a new revision with
+  a change rationale. Revisions are append-only; reviews do not carry forward.
+- **History & decision:** an independent reviewer label records approve/reject
+  for the exact displayed revision and confirms complete-revision review.
+- **Publish revision:** supply an unused release ID and publication rationale.
+  The latest revision requires an approving review. Publication does not activate
+  knowledge, approve patient envelopes or establish clinical validity.
+- **Clone release:** start another draft from a published release. Published
+  drafts are immutable.
 
-## Bootstrap without switching the live app
+Every mutation uses the expected revision and is transactional. Stale operations,
+self-review, duplicate decisions and identity collisions are refused. Successful
+content/review/publication writes append audit events in the same transaction.
+Privileged PostgreSQL users can bypass journal guards; this is not tamper-proof
+storage. Server validation checks schema, DSL compilation, representative scope
+cases and catalogue fields, not complete clinical validity.
 
-Provision PostgreSQL schemas with the migration admin. Substitute simulated identities
-and reviewed release names; the commands below describe the workflow, not a
-pre-approved release. Nothing runs automatically on application startup.
+**Published dish IDs preserve historical meaning.** Keep their nutrient values,
+portion, category, ingredients and tags unchanged and retain old IDs for saved
+plans and logs. Corrections require new IDs. There is no catalogue deactivation
+or deletion feature. No operation here deletes existing journal records.
 
-```sh
-export CARELOOP_KNOWLEDGE_DATABASE_URL="postgresql://careloop_admin@127.0.0.1:5433/careloop_knowledge"
-umask 077
-.venv/bin/python -m backend.knowledge init
-.venv/bin/python -m backend.knowledge import \
-  --draft-id bootstrap --rules-file "$CARELOOP_DATASET_DIR/fixtures/rules.json" \
-  --dishes-file "$CARELOOP_DATASET_DIR/fixtures/dishes.json" --actor AUTHOR
-.venv/bin/python -m backend.knowledge show --draft-id bootstrap
-.venv/bin/python -m backend.knowledge review \
-  --draft-id bootstrap --expected-revision 1 --actor REVIEWER \
-  --decision approve --note 'Describe the actual review and known limitations'
-.venv/bin/python -m backend.knowledge publish \
-  --draft-id bootstrap --expected-revision 1 --release-id knowledge-2026-10 \
-  --actor PUBLISHER --note 'Reference the approved change record'
-```
+## HTTP API
 
-The URL or URL-file setting is required; there is no default database path or
-`--db` option. Operator `init` only verifies the schema created by the separate
-admin migration. A clinical database is refused by its schema domain marker.
-Import captures raw source-file SHA-256 hashes and preserves the original JSON
-metadata, citations and dish provenance. Published hashes use canonical JSON,
-so they are independent of whitespace or key ordering.
+The browser uses `/api` as a proxy prefix; application routes below omit it.
+Interactive documentation is available at `/api/docs` in operator mode.
 
-## Select the release for runtime
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/knowledge` | Draft list, request token, provider availability and prompt |
+| POST | `/knowledge/discover` | Uploaded sources and optional instructions → review-only report |
+| POST | `/knowledge/drafts` | Create a draft from rule/catalogue documents |
+| GET | `/knowledge/drafts/{id}?revision=N` | Current or historical documents and event history |
+| PUT | `/knowledge/drafts/{id}` | Append an edited revision |
+| POST | `/knowledge/drafts/{id}/review` | Independent revision-bound decision |
+| POST | `/knowledge/drafts/{id}/publish` | Publish an approved revision; never activate it |
+| GET | `/knowledge/releases/{id}` | Read a published rulebook/catalogue |
+| POST | `/knowledge/clone` | Clone a published release into a new draft |
 
-Stop the service before changing its knowledge configuration. Configure these
-settings in the service environment, not only the author's shell:
+Review/publication requests require an explicit `confirmed: true`. Old
+`/knowledge-review/*` inspection endpoints are replaced by these workspace routes;
+the browser entry path `/knowledge-review` remains unchanged.
 
-```sh
-export CARELOOP_KNOWLEDGE_MODE=database
-export CARELOOP_KNOWLEDGE_DATABASE_URL="postgresql://careloop_admin@127.0.0.1:5433/careloop_knowledge"
-export CARELOOP_KNOWLEDGE_RELEASE=knowledge-2026-10
-export CARELOOP_APP_DATABASE_URL="postgresql://careloop_admin@127.0.0.1:5433/careloop_clinical"
-.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
-```
+## Activate a published release
 
-Database mode requires both a database and an explicit release ID. Supplying
-either database/release setting without a mode also selects database mode; an
-incomplete configuration fails. Missing databases/releases, drafts, checksum
-failures, unsupported schemas/DSL and validation failures block startup. There
-is no fallback to Git data and no implicit “latest release” selection. Changing
-settings within a running process is rejected; restart all workers together.
-Publishing alone does not activate the release or hot-reload any cache.
+Select `CARELOOP_DEPLOYMENT_MODE=published` and an explicit
+`CARELOOP_KNOWLEDGE_RELEASE`, then restart backend/frontend. All runtime consumers
+pin the same published snapshot until restart. Missing, draft, corrupt or
+incompatible releases block startup; there is no fixture fallback or implicit
+latest selection. Publication alone does not hot-reload caches.
 
-For local development and existing fixture tests, unset the database/release
-settings and use `CARELOOP_KNOWLEDGE_MODE=fixtures` (the default when unconfigured).
-Explicit file arguments to low-level loaders remain available for tests and
-offline experiments; live default loaders use the selected release.
-
-Verify `/kb/stats`: it reports `knowledge_release_id` and source hashes. Rule
-proposals persist `knowledge_release_id` and `knowledge_source_hashes`; plan
-documents persist the active catalogue/retrieval release and retain their
-approved-envelope snapshot. A plan can therefore record a newer catalogue
-release than the historical envelope's rule release without rewriting either.
-Evaluation metadata records the active release and hashes. Use
-`evaluation.run --rerun-benchmark` when evaluating a new release rather than
-treating historical fixture benchmark snapshots as evidence for changed data.
-
-## Author the next revision
-
-```sh
-.venv/bin/python -m backend.knowledge clone \
-  --release-id knowledge-2026-10 --draft-id next --actor AUTHOR
-.venv/bin/python -m backend.knowledge export \
-  --draft-id next --out-dir "$CARELOOP_DATASET_DIR/outputs/knowledge-edit"
-# Edit the exported rules.json/dishes.json, not the published database rows.
-.venv/bin/python -m backend.knowledge edit \
-  --draft-id next --expected-revision 1 --actor AUTHOR --note 'Explain changes' \
-  --rules-file "$CARELOOP_DATASET_DIR/outputs/knowledge-edit/rules.json" \
-  --dishes-file "$CARELOOP_DATASET_DIR/outputs/knowledge-edit/dishes.json"
-.venv/bin/python -m backend.knowledge history --draft-id next
-```
-
-Export refuses an existing output directory. `export --draft-id next --revision 1`
-retrieves an earlier draft snapshot; `export --release-id ...` retrieves an
-immutable release. `list` shows current revision, review, release and validation
-information. Edits, reviews and publication require `--expected-revision` and
-reject stale versions. Review revision 2 after the edit above; approving revision
-1 would not authorize its publication. Assign a new release ID on publication.
-
-**Dish IDs preserve historical clinical meaning.** A new release must retain all
-previously published dish IDs with their nutrient values, portion, category,
-ingredients and tags unchanged. Corrections get a new dish ID while retaining
-the old record for saved plans and meal logs. Names and provenance/verification
-metadata can be reviewed separately, but setting `verified=true` remains an
-operator attestation requiring source evidence. There is no catalogue deletion
-or deactivation mechanism in this phase; introducing one requires a separate
-historical-log/saved-plan compatibility design.
-
-## Backups, rollout and rollback
-
-Back up both PostgreSQL journals using consistent logical dumps. Store backups
-privately outside Git and rehearse restoration into new databases. See
-[POSTGRES.md](POSTGRES.md) for backup/restore commands and deployment limits.
-Keep any retired SQLite files and WAL files as archives, not runtime storage.
-
-First rehearse bootstrap and the chosen release against copies of application
-state, verifying scope exclusions, target approval gates, citations, plan
-feasibility/adequacy and historical logs. Selecting a release does not approve
-patient envelopes or backfill provenance into old ones. Legacy envelopes remain
-readable with a null release ID and empty knowledge hashes; their embedded
-traces remain authoritative.
-
-The envelope JSON Schema now includes optional provenance fields. Older backend
-binaries with `extra='forbid'` cannot read newly written envelopes containing
-those fields. Deploy compatible readers before new writes; a code rollback to
-such binaries requires an appropriate state snapshot, not just a release switch.
-Do not erase provenance from stored clinical records to work around that limit.
-
-To roll knowledge back, stop workers, select the previous immutable release ID,
-and restart with compatible code. Older catalogues may not contain new dish IDs
-already referenced by live records; check those references and rehearse against
-current state before rolling back. A release switch alone cannot guarantee
-safe clinical rollback or recover writes made after a database backup.
+Live envelopes/plans and evaluation artifacts retain release IDs and source hashes.
+Release-integrity checks are separate from discovery and remain unchanged.
+Legacy snapshots retain their embedded traces; no provenance is fabricated for them.
+Older binaries may reject newer envelope fields, and an older release may lack dish
+IDs referenced by current state. Selecting a previous release is not automatically
+a safe rollback. Preserve databases, released evidence and historical records.

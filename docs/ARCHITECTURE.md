@@ -82,7 +82,8 @@ convention:
 The durable envelope's embedded `RuleFire` trace is authoritative for explanations.
 Deployment uses `CARELOOP_APP_DATABASE_URL` for PostgreSQL.
 SQLite durable storage and imports are removed; legacy path settings fail closed.
-PostgreSQL schema migrations are explicit, outside runtime startup.
+PostgreSQL schema preparation runs automatically as a deployment prerequisite,
+outside runtime startup; there is no manual migration command.
 See [STORAGE.md](STORAGE.md) for migration,
 backups, and the separation between run outputs and published evidence.
 `trace_store.py` serializes that trace; legacy side-store data is used only for
@@ -98,7 +99,14 @@ In database mode, those inputs instead come from a pinned published snapshot in
 the separate PostgreSQL `backend/knowledge/` authoring journal. The graph/retrieval index
 remains a derived in-memory read model. Drafts, reviews and releases are durable,
 append-only records; runtime never writes or auto-imports the authoring database.
-See [KNOWLEDGE.md](KNOWLEDGE.md) for operator security, compatibility and rollout.
+The isolated operator web workspace/API owns discovery, drafts, revision-bound
+review and publication; it replaces the operator CLI and can start with an empty
+journal. Discovery uses a provider-neutral LLM interface and editable prompt
+resource, multiple uploaded guidelines, no source manifest/hash checks and no
+guideline-specific extraction patterns. No concrete provider is selected yet;
+the workspace explicitly disables extraction until one is connected. Candidates
+never activate themselves. See [KNOWLEDGE.md](KNOWLEDGE.md) for operator security,
+compatibility and rollout.
 
 - Node/edge kinds: `Guideline → Section → Rule → NutrientConstraint`,
   `Diagnosis`, `ExclusionFlag`, `Dish → NutrientProfile` (~61 rules, 214 dishes,

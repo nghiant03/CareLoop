@@ -34,6 +34,22 @@ export interface ReviewStatus {
   csrf_token: string;
 }
 
+export interface KnowledgeWorkspace {
+  deployment_mode: 'review';
+  clinical_workflows_enabled: false;
+  csrf_token: string;
+  drafts: ReviewDraft[];
+  discovery_available: boolean;
+  instructions: string;
+}
+
+export interface DraftSnapshot {
+  draft: ReviewDraft;
+  revision: number;
+  documents: ReviewDocuments;
+  events: ReviewEvent[];
+}
+
 export interface ReviewDocuments {
   rules: DocumentRecord & { rules: KnowledgeRule[] };
   dishes: (DocumentRecord & { dish_id: string; name: string })[];
@@ -49,10 +65,13 @@ export interface ReviewEvent {
 }
 
 export async function reviewRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api/knowledge-review${path}`, { cache: 'no-store', ...init });
+  const response = await fetch(`/api/knowledge${path}`, { cache: 'no-store', ...init });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(typeof body?.detail === 'string' ? body.detail : `Review request failed (${response.status}). Try refreshing the workspace.`);
+    const detail = typeof body?.detail === 'string' ? body.detail
+      : Array.isArray(body?.detail) ? body.detail.map((item: { msg?: string }) => item.msg || 'Invalid field').join('; ')
+      : `Knowledge request failed (${response.status}). Try refreshing the workspace.`;
+    throw new Error(detail);
   }
   return response.json();
 }

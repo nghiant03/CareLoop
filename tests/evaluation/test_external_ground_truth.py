@@ -12,7 +12,7 @@ from backend.datasets.research_transform import (
 )
 from backend.knowledge.discovery import (
     evaluate_cross_guideline_ground_truth,
-    extract_rules_openai_compat,
+    extract_rules,
     verify_quote_in_source,
 )
 from evaluation.external import (
@@ -57,10 +57,10 @@ def test_openai_compat_rule_extraction_verifies_verbatim_quotes():
     assert verify_quote_in_source("", passage) is False
 
     class FakeOpenAIClient:
-        def chat_completion(self, messages, temperature=0.0, json_mode=False):
-            assert json_mode is True
-            assert temperature == 0.0
-            return json.dumps({
+        def extract_candidates(self, *, instructions, source_text):
+            assert instructions
+            assert source_text == passage
+            return {
                 "candidates": [
                     {
                         "section": "3.3.2.1",
@@ -82,9 +82,9 @@ def test_openai_compat_rule_extraction_verifies_verbatim_quotes():
                         "source_population": "People with CKD",
                     },
                 ]
-            })
+            }
 
-    extracted = extract_rules_openai_compat(passage, {"guideline": "KDIGO 2024 CKD"}, FakeOpenAIClient())
+    extracted = extract_rules(passage, {"guideline": "KDIGO 2024 CKD"}, FakeOpenAIClient())
     assert len(extracted) == 1
     cand = extracted[0]
     assert cand["status"] == "NEEDS_REVIEW"

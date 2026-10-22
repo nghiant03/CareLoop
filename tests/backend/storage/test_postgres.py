@@ -8,7 +8,7 @@ import pytest
 from backend.app.core import persistence
 from backend.knowledge.store import KnowledgeStore
 from backend.storage import postgres
-from backend.storage.migrate import initialize_database, main, schema_sql
+from backend.storage.migrate import initialize_database, schema_sql
 
 
 def test_parameter_adapter_preserves_literals_comments_and_percent():
@@ -66,9 +66,8 @@ def test_knowledge_rejects_paths_without_creating_files(tmp_path):
 
 
 def test_import_command_is_removed():
-    with pytest.raises(SystemExit) as error:
-        main(["import-sqlite", "--component", "clinical"])
-    assert error.value.code == 2
+    from backend.storage import migrate
+    assert not hasattr(migrate, "main")
 
 
 @pytest.mark.parametrize("rows", [[], [{"component":"knowledge","version":1}],

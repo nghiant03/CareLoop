@@ -14,6 +14,8 @@ RUN groupadd --gid 10001 careloop \
     && useradd --uid 10001 --gid careloop --no-create-home careloop \
     && mkdir -p /var/lib/careloop/artifacts /app \
     && chown -R careloop:careloop /var/lib/careloop
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -r /var/lib/apt/lists/*
 COPY --from=builder /wheels /wheels
 RUN python -m pip install --no-cache-dir --no-index --find-links=/wheels careloop \
     && rm -r /wheels

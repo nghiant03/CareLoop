@@ -4,7 +4,8 @@ import PageHeader from '../components/PageHeader';
 import LoadingState from '../components/LoadingState';
 import WorkspaceHeader from '../components/WorkspaceHeader';
 import { reviewRequest, safeSourceUrl } from '../knowledgeReview';
-import type { DocumentRecord, ReviewDocuments, ReviewEvent, ReviewStatus } from '../knowledgeReview';
+import type { DocumentRecord, DraftSnapshot, ReviewDocuments, ReviewEvent, ReviewStatus } from '../knowledgeReview';
+import KnowledgeDraftEditor from './KnowledgeDraftEditor';
 
 function RecordDetails({ value }: { value: unknown }) {
   if (value == null) return <p className="text-sm text-ink-3">Not provided.</p>;
@@ -14,7 +15,7 @@ function RecordDetails({ value }: { value: unknown }) {
   return url ? <a className="text-line underline break-all" href={url} target="_blank" rel="noreferrer">{String(value)}</a> : <span className="whitespace-pre-wrap break-words">{String(value)}</span>;
 }
 
-export default function KnowledgeReviewScreen() {
+export default function KnowledgeReviewScreen({ draftId, token, onBack }: { draftId: string; token: string; onBack: () => void }) {
   const [status, setStatus] = useState<ReviewStatus>();
   const [documents, setDocuments] = useState<ReviewDocuments>();
   const [events, setEvents] = useState<ReviewEvent[]>([]);
@@ -34,34 +35,44 @@ export default function KnowledgeReviewScreen() {
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [editorDirty, setEditorDirty] = useState(false);
+
+  useEffect(() => {
+    if (!editorDirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [editorDirty]);
+
+  function confirmDiscard() {
+    return !editorDirty || window.confirm('Discard unsaved knowledge edits? Stay here to save a new revision first.');
+  }
 
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([
-      reviewRequest<ReviewStatus>('', { signal: controller.signal }),
-      reviewRequest<ReviewDocuments>('/documents', { signal: controller.signal }),
-      reviewRequest<ReviewEvent[]>('/history', { signal: controller.signal }),
-    ]).then(([nextStatus, nextDocuments, nextEvents]) => {
-      setStatus(nextStatus); setDocuments(nextDocuments); setEvents(nextEvents); setError('');
+    reviewRequest<DraftSnapshot>(`/drafts/${encodeURIComponent(draftId)}`, { signal: controller.signal }).then(snapshot => {
+      setStatus({ deployment_mode: 'review', clinical_workflows_enabled: false, draft: { ...snapshot.draft, revision: snapshot.revision }, current_draft: snapshot.draft,
+        technical_review: snapshot.documents.rules.authoring_review as DocumentRecord || null, review_enabled: true, csrf_token: token });
+      setDocuments(snapshot.documents); setEvents(snapshot.events); setError('');
     }).catch((failure: Error) => { if (!controller.signal.aborted) setError(failure.message); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [refresh]);
+  }, [refresh, draftId, token]);
 
   useEffect(() => {
     if (!comparisonRevision) return;
     const controller = new AbortController();
-    reviewRequest<ReviewDocuments>(`/revision?revision=${comparisonRevision}`, { signal: controller.signal })
-      .then(setBaseline).catch((failure: Error) => { if (!controller.signal.aborted) setComparisonError(failure.message); });
+    reviewRequest<DraftSnapshot>(`/drafts/${encodeURIComponent(draftId)}?revision=${comparisonRevision}`, { signal: controller.signal })
+      .then(snapshot => setBaseline(snapshot.documents)).catch((failure: Error) => { if (!controller.signal.aborted) setComparisonError(failure.message); });
     return () => controller.abort();
-  }, [comparisonRevision]);
+  }, [comparisonRevision, draftId]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!status) return;
     setBusy(true); setError(''); setMessage('');
     try {
-      await reviewRequest('/decision', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Review-Token': status.csrf_token }, body: JSON.stringify({ actor: actor.trim(), note: note.trim(), decision, expected_revision: status.draft.revision }) });
+      await reviewRequest(`/drafts/${encodeURIComponent(draftId)}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Review-Token': status.csrf_token }, body: JSON.stringify({ actor: actor.trim(), note: note.trim(), decision, confirmed, expected_revision: status.draft.revision }) });
       setMessage('Review decision recorded. This does not publish or activate the draft.');
       setRefresh(value => value + 1); setNote(''); setConfirmed(false);
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Unable to record decision.'); }
@@ -84,27 +95,28 @@ export default function KnowledgeReviewScreen() {
   return <div className="knowledge-workspace min-h-screen bg-paper text-ink">
     <a href="#knowledge-content" className="skip-link">Skip to knowledge review</a>
     <WorkspaceHeader label="Knowledge review">
-      <div className="workspace-tools"><span className="workspace-mode">Unpublished draft</span><a href="/api/docs">API reference</a></div>
+      <div className="workspace-tools"><button className="btn-ghost" onClick={() => { if (confirmDiscard()) onBack(); }}>All knowledge drafts</button><a href="/api/docs">API reference</a></div>
     </WorkspaceHeader>
     <main id="knowledge-content" tabIndex={-1} className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader code="KNW" title="Knowledge review"><p>Inspect source evidence, assess rule mappings and record a decision for this draft revision.</p></PageHeader>
-      <div className="notice notice-warn mb-5"><strong>Unpublished knowledge. No clinical use.</strong> Planning, patient guidance, editing and publication are disabled. Reviewer names are attestations, not authenticated identities.</div>
+      <div className="notice notice-warn mb-5"><strong>Operator workspace. No clinical use.</strong> Planning and patient guidance are disabled. Editing, review and publication are separate actions. Names are attestations, not authenticated identities.</div>
       {error && <p role="alert" className="notice notice-error mb-4">{error}</p>}
       {message && <p role="status" className="notice notice-ok mb-4">{message}</p>}
-      {stale && <p role="alert" className="notice notice-error mb-4">A newer draft exists. You are inspecting pinned revision {status.draft.revision}. Restart review deployment with the current revision before recording a decision.</p>}
+      {stale && <p role="alert" className="notice notice-error mb-4">A newer draft exists. Refresh review status to inspect the current revision before recording a decision.</p>}
       <section aria-label="Draft summary" className="draft-summary">
         <div className="min-w-0"><h2 className="font-semibold break-all">{status.draft.draft_id}</h2><p className="mt-1 text-sm text-ink-3">Author: {status.draft.author}</p></div>
         <dl className="draft-facts">
-          <div><dt>Pinned revision</dt><dd>{status.draft.revision}</dd></div>
+          <div><dt>Displayed revision</dt><dd>{status.draft.revision}</dd></div>
           <div><dt>Rules</dt><dd>{rules.length}</dd></div>
           <div><dt>Dishes</dt><dd>{documents.dishes.length}</dd></div>
         </dl>
         <div className="flex flex-wrap items-center gap-3">
           <span className={`flag ${current.review?.decision === 'approve' ? 'flag-ok' : current.review?.decision === 'reject' ? 'flag-bad' : 'flag-warn'}`}>{current.review ? `Decision: ${current.review.decision}` : 'Awaiting review'}</span>
-          <button className="btn-ghost" onClick={() => setRefresh(value => value + 1)}>Refresh review status</button>
+          <button className="btn-ghost" onClick={() => { if (confirmDiscard()) setRefresh(value => value + 1); }}>Refresh review status</button>
         </div>
       </section>
-      <nav aria-label="Knowledge sections" className="review-sections">{['Rules', 'Blockers & provenance', 'Catalogue', 'History & decision'].map(label => <button key={label} aria-pressed={section === label} className="review-section" onClick={() => { setSection(label); setQuery(''); }}>{label}</button>)}</nav>
+      <nav aria-label="Knowledge sections" className="review-sections">{['Rules', 'Blockers & provenance', 'Catalogue', 'History & decision', 'Edit & publish'].map(label => <button key={label} aria-pressed={section === label} className="review-section" onClick={() => { setSection(label); setQuery(''); }}>{label}</button>)}</nav>
+      <div hidden={section !== 'Edit & publish'}><KnowledgeDraftEditor key={`${draftId}-${status.draft.revision}`} draft={status.draft} documents={documents} token={token} onDirtyChange={setEditorDirty} onChanged={() => setRefresh(value => value + 1)} /></div>
       {section === 'Catalogue' && <div className="review-search mb-5"><label className="block text-sm font-semibold mb-2" htmlFor="catalogue-search">Search catalogue</label><input id="catalogue-search" name="search" type="search" className="field" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search dish IDs, names or ingredients" /></div>}
       {section === 'Rules' && <>
         <div className="review-grid">

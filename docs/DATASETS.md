@@ -130,16 +130,14 @@ Do not replace them with NHANES participants or USDA records.
 
 ## Propose guideline-backed rules
 
-```sh
-.venv/bin/python -m backend.knowledge discover
-```
-
-This verifies the downloaded KDIGO PDF and automatically proposes protein and
-sodium rule candidates with quotes, caveats and baseline-rule comparisons.
-It requires `pdftotext` but not research transformation. Reports stay outside
-the checkout. Candidates are unapproved and non-executable, with no database
-writes. See [knowledge discovery](KNOWLEDGE.md#automatically-propose-evidence-backed-rules)
-for supported recommendations, limitations and review steps.
+Open **Discover sources** in the knowledge web workspace at `/knowledge-review`.
+Upload PDF, HTML, Markdown or text guidelines, including sources other than KDIGO;
+no manifest registration, source hash validation or new source-specific Python
+pattern is needed. Instructions live in `backend/knowledge/prompts/discover_rules.md`
+and can be edited per extraction in the UI. Discovery is LLM-only, but no provider
+has been selected yet; extraction is explicitly unavailable until an adapter is
+connected. Candidates are review-only and never write either database. See
+[knowledge discovery](KNOWLEDGE.md#automatically-propose-evidence-backed-rules).
 
 ## Transform research data
 

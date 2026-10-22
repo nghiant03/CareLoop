@@ -2,7 +2,8 @@
 
 CareLoop uses **PostgreSQL only** for persistent clinical and knowledge state.
 The two databases remain separate. Runtime verifies migrated schemas but never
-creates tables. See [POSTGRES.md](POSTGRES.md) for setup, backups and restoration.
+creates tables. Compose's one-shot setup task prepares/checks both schemas before
+the backend starts; there is no manual migration CLI. See [POSTGRES.md](POSTGRES.md).
 
 | Category | Location | Version control |
 |---|---|---|
@@ -15,8 +16,8 @@ creates tables. See [POSTGRES.md](POSTGRES.md) for setup, backups and restoratio
 
 ## Removed SQLite runtime and imports
 
-`CARELOOP_APP_DB`, `CARELOOP_KNOWLEDGE_DB`, the knowledge CLI's `--db` option,
-`backend.app.core.migrate_storage` and `backend.storage.migrate import-sqlite`
+`CARELOOP_APP_DB`, `CARELOOP_KNOWLEDGE_DB`, the knowledge operator CLI,
+`backend.app.core.migrate_storage` and SQLite import commands
 are no longer supported. Retired environment settings fail explicitly rather
 than silently selecting an empty PostgreSQL database. No database files are
 deleted, opened or converted by this change. Existing PostgreSQL version-1

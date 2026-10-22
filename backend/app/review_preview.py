@@ -1,84 +1,154 @@
-"""Draft inspection and opt-in review decisions, separate from clinical workflows.
+"""Local operator knowledge workspace, isolated from all clinical workflows.
 
-No patient, planner, chat, envelope approval or publication handlers are imported here.
-The explicit draft revision is pinned at startup and is never a runtime release.
+Names remain attestations, not authentication. Serve only on loopback. All writes
+require a process-bound request token; no schema setup occurs in this application.
 """
 
+import base64
+import binascii
+import logging
 import os
 import secrets
 from contextlib import asynccontextmanager
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Literal
+from urllib.parse import urlsplit
 
 import psycopg
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from backend.knowledge.store import KnowledgeStore
-from backend.knowledge.validation import content_hash
+from backend.knowledge.discovery import (
+    DiscoveryClient,
+    discover_rules,
+    load_discovery_prompt,
+)
+from backend.knowledge.store import KnowledgeStore, load_release
 from backend.storage.postgres import database_url
 
+MAX_REQUEST_BYTES = 32 * 1024 * 1024
+logger = logging.getLogger("careloop.knowledge")
 
-class ReviewDecision(BaseModel):
+
+class OperatorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+
+class Authorship(OperatorRequest):
     actor: str = Field(min_length=1, max_length=200)
-    decision: Literal["approve", "reject"]
+
+
+class CreateDraft(Authorship):
+    draft_id: str = Field(min_length=1, max_length=100)
+    rules: dict
+    dishes: list[dict]
+
+
+class RevisionAction(Authorship):
     expected_revision: int = Field(ge=1)
     note: str = Field(min_length=1, max_length=10000)
 
 
-def create_review_app() -> FastAPI:
-    """Start only with an explicit, existing draft revision and a read-only snapshot.
+class EditDraft(RevisionAction):
+    rules: dict
+    dishes: list[dict]
 
-    Missing or mismatched configuration fails startup. Draft edits require restart
-    with a new revision, just as published knowledge uses a controlled restart.
-    No application database initialization or source-fixture fallback occurs.
-    """
+
+class ReviewDecision(RevisionAction):
+    decision: Literal["approve", "reject"]
+    confirmed: Literal[True]
+
+
+class PublishDraft(RevisionAction):
+    release_id: str = Field(min_length=1, max_length=100)
+    confirmed: Literal[True]
+
+
+class CloneRelease(Authorship):
+    release_id: str = Field(min_length=1, max_length=100)
+    draft_id: str = Field(min_length=1, max_length=100)
+
+
+class SourceUpload(OperatorRequest):
+    name: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=MAX_REQUEST_BYTES)
+    encoding: Literal["text", "base64"] = "text"
+    source_url: str | None = Field(default=None, max_length=2000)
+
+
+class DiscoveryRequest(OperatorRequest):
+    sources: list[SourceUpload] = Field(min_length=1, max_length=10)
+    draft_id: str | None = None
+    instructions: str | None = Field(default=None, min_length=1, max_length=100000)
+
+
+def create_review_app(*, discovery_client: DiscoveryClient | None = None) -> FastAPI:
+    """Start the operator surface against an already prepared knowledge database."""
     @asynccontextmanager
     async def lifespan(app):
-        draft_id = os.environ.get("CARELOOP_REVIEW_DRAFT", "")
-        revision_text = os.environ.get("CARELOOP_REVIEW_REVISION", "")
-        if not draft_id or not revision_text.isdecimal() or int(revision_text) < 1:
-            raise ValueError("review deployment requires CARELOOP_REVIEW_DRAFT and a positive CARELOOP_REVIEW_REVISION")
+        if os.environ.get("CARELOOP_KNOWLEDGE_RELEASE"):
+            raise ValueError("knowledge workspace cannot select a live release; use published mode for clinical workflows")
         url = database_url("knowledge")
         if not url:
-            raise ValueError("review deployment requires a knowledge PostgreSQL URL")
-        if os.environ.get("CARELOOP_KNOWLEDGE_RELEASE"):
-            raise ValueError("review deployment cannot select a published release simultaneously")
+            raise ValueError("knowledge workspace requires a knowledge PostgreSQL URL")
         store = KnowledgeStore(url)
-        rules, dishes = store.documents(draft_id, int(revision_text))
-        state = store.show(draft_id)
-        if (state["revision"] != int(revision_text) or state["rules_hash"] != content_hash(rules)
-                or state["dishes_hash"] != content_hash(dishes)):
-            raise ValueError("draft changed during review startup or selected revision is not current")
+        store.initialize()  # Checks only; the deployment setup task creates schemas.
         app.state.store = store
         app.state.token = secrets.token_urlsafe(32)
-        app.state.snapshot = {"deployment_mode": "review", "clinical_workflows_enabled": False,
-                              "draft": state, "technical_review": rules.get("authoring_review"),
-                              "rules": rules, "dishes": dishes}
+        app.state.discovery_client = discovery_client
         yield
 
-    app = FastAPI(title="CareLoop knowledge review — no clinical use", lifespan=lifespan,
+    app = FastAPI(title="CareLoop knowledge workspace — no clinical use", lifespan=lifespan,
                   root_path="/api", description=(
-                      "Inspect an unpublished draft and optionally record revision-bound review decisions. "
-                      "Patient guidance, meal planning, document editing and publication are unavailable."))
+                      "Local operator discovery, draft authoring, revision-bound review and publication. "
+                      "Publication never activates knowledge. Patient guidance and planning are unavailable."))
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"])
 
     @app.middleware("http")
     async def restrict_surface(request: Request, call_next):
         path = request.scope.get("path", "")
         if path.startswith("/api/"):
             path = path[4:]
-        allowed = {"/", "/healthz", "/knowledge-review", "/knowledge-review/documents",
-                   "/knowledge-review/history", "/knowledge-review/revision",
-                   "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
-        decision_request = path == "/knowledge-review/decision" and request.method == "POST"
-        if not decision_request and (request.method not in {"GET", "HEAD"} or path not in allowed):
+        if not (path == "/knowledge" or path.startswith("/knowledge/") or path in {
+            "/", "/healthz", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json",
+        }):
             return JSONResponse(status_code=503, content={
                 "error": "review_only_deployment", "clinical_workflows_enabled": False,
-                "detail": "Only draft inspection and explicitly enabled review decisions are available. Clinical workflows are disabled.",
-            })
+                "detail": "Clinical workflows are disabled in the knowledge workspace.",
+            }, headers={"Cache-Control": "no-store"})
+        if request.method not in {"GET", "HEAD"}:
+            origin = request.headers.get("origin")
+            if origin and (urlsplit(origin).scheme, urlsplit(origin).netloc) != (request.url.scheme, request.url.netloc):
+                return JSONResponse(status_code=403, content={"detail": "Cross-origin operator requests are not allowed"})
+            # Bound both declared and streamed bodies before JSON validation.
+            received = bytearray()
+            async for chunk in request.stream():
+                received.extend(chunk)
+                if len(received) > MAX_REQUEST_BYTES:
+                    return JSONResponse(status_code=413, content={"detail": "Request exceeds the 32 MiB upload limit"})
+            request._body = bytes(received)
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         return response
+
+    def require_token(request: Request):
+        if not secrets.compare_digest(request.headers.get("x-review-token", ""), app.state.token):
+            raise HTTPException(status_code=403, detail="Reload the workspace before submitting an operator action")
+
+    @app.exception_handler(ValueError)
+    async def invalid_operation(request: Request, error: ValueError):
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(psycopg.IntegrityError)
+    async def conflicting_operation(request: Request, error: psycopg.IntegrityError):
+        return JSONResponse(status_code=409, content={"detail": "A draft, release or review with this identity already exists. Refresh before retrying."})
+
+    @app.exception_handler(psycopg.Error)
+    async def storage_failure(request: Request, error: psycopg.Error):
+        return JSONResponse(status_code=503, content={"detail": "Knowledge storage is unavailable. No successful save is confirmed; refresh before retrying."})
 
     @app.get("/healthz")
     def healthz():
@@ -86,47 +156,85 @@ def create_review_app() -> FastAPI:
                 "clinical_workflows_enabled": False}
 
     @app.get("/")
-    @app.get("/knowledge-review", summary="Inspect review status, provenance and blockers")
-    def review_status():
-        snapshot = app.state.snapshot
-        result = {key: snapshot[key] for key in ("deployment_mode", "clinical_workflows_enabled", "draft", "technical_review")}
-        result["review_enabled"] = True
-        result["csrf_token"] = app.state.token
-        result["current_draft"] = app.state.store.show(snapshot["draft"]["draft_id"])
-        return result
+    @app.get("/knowledge")
+    def workspace_status():
+        return {"deployment_mode": "review", "clinical_workflows_enabled": False,
+                "csrf_token": app.state.token, "drafts": app.state.store.list_drafts(),
+                "discovery_available": app.state.discovery_client is not None,
+                "instructions": load_discovery_prompt()}
 
-    @app.get("/knowledge-review/documents", summary="Inspect the pinned rules and catalogue, not a live release")
-    def documents():
-        snapshot = app.state.snapshot
-        return {"clinical_workflows_enabled": False, "rules": snapshot["rules"], "dishes": snapshot["dishes"]}
+    @app.post("/knowledge/drafts", dependencies=[Depends(require_token)], status_code=201)
+    def create_draft(payload: CreateDraft):
+        return app.state.store.create_draft(**payload.model_dump())
 
-    @app.get("/knowledge-review/history")
-    def history():
-        return app.state.store.history(app.state.snapshot["draft"]["draft_id"])
+    @app.get("/knowledge/drafts/{draft_id}")
+    def draft_snapshot(draft_id: str, revision: int | None = None):
+        state = app.state.store.show(draft_id)
+        selected_revision = state["revision"] if revision is None else revision
+        if selected_revision < 1 or selected_revision > state["revision"]:
+            raise HTTPException(status_code=404, detail="Draft revision not found")
+        rules, dishes = app.state.store.documents(draft_id, selected_revision)
+        return {"draft": state, "revision": selected_revision,
+                "documents": {"rules": rules, "dishes": dishes}, "events": app.state.store.history(draft_id)}
 
-    @app.get("/knowledge-review/revision")
-    def revision(revision: int):
-        if revision < 1 or revision > app.state.snapshot["draft"]["revision"]:
-            return JSONResponse(status_code=404, content={"detail": "Revision outside pinned snapshot"})
-        rules, dishes = app.state.store.documents(app.state.snapshot["draft"]["draft_id"], revision)
-        return {"rules": rules, "dishes": dishes}
+    @app.put("/knowledge/drafts/{draft_id}", dependencies=[Depends(require_token)])
+    def edit_draft(draft_id: str, payload: EditDraft):
+        return app.state.store.edit_draft(draft_id, **payload.model_dump())
 
-    @app.post("/knowledge-review/decision")
-    def decide(payload: ReviewDecision, request: Request):
-        if not secrets.compare_digest(request.headers.get("x-review-token", ""), app.state.token):
-            return JSONResponse(status_code=403, content={"detail": "Reload the workspace before submitting a review"})
-        draft = app.state.snapshot["draft"]
-        if payload.expected_revision != draft["revision"]:
-            return JSONResponse(status_code=409, content={"detail": "Decision must match the displayed pinned revision"})
-        try:
-            current = app.state.store.show(draft["draft_id"])
-            if (current["rules_hash"], current["dishes_hash"]) != (draft["rules_hash"], draft["dishes_hash"]):
-                raise ValueError("stale draft revision; restart review deployment")
-            result = app.state.store.review(draft["draft_id"], **payload.model_dump())
-        except ValueError as error:
-            return JSONResponse(status_code=409, content={"detail": str(error)})
-        except psycopg.IntegrityError:
-            return JSONResponse(status_code=409, content={"detail": "A decision already exists for this revision"})
-        return result
+    @app.post("/knowledge/drafts/{draft_id}/review", dependencies=[Depends(require_token)])
+    def review_draft(draft_id: str, payload: ReviewDecision):
+        return app.state.store.review(draft_id, **payload.model_dump(exclude={"confirmed"}))
+
+    @app.post("/knowledge/drafts/{draft_id}/publish", dependencies=[Depends(require_token)])
+    def publish_draft(draft_id: str, payload: PublishDraft):
+        release = app.state.store.publish(draft_id, **payload.model_dump(exclude={"confirmed"}))
+        return {"release_id": release.release_id, "published_at": release.published_at,
+                "activated": False, "detail": "Select this release in published deployment mode and restart to activate it."}
+
+    @app.get("/knowledge/releases/{release_id}")
+    def release_documents(release_id: str):
+        release = load_release(app.state.store.database, release_id)
+        return {"release_id": release.release_id, "rules": release.rules_document(), "dishes": release.dishes()}
+
+    @app.post("/knowledge/clone", dependencies=[Depends(require_token)], status_code=201)
+    def clone_release(payload: CloneRelease):
+        release = load_release(app.state.store.database, payload.release_id)
+        return app.state.store.create_draft(payload.draft_id, release.rules_document(), release.dishes(),
+                                           actor=payload.actor, parent_release=payload.release_id,
+                                           provenance={"parent_release": payload.release_id})
+
+    @app.post("/knowledge/discover", dependencies=[Depends(require_token)])
+    def discover(payload: DiscoveryRequest):
+        if app.state.discovery_client is None:
+            raise HTTPException(status_code=503, detail="Discovery provider is not configured. No provider has been selected; no extraction was attempted.")
+        rules = {"dsl_version": "1.0", "rules": []}
+        if payload.draft_id:
+            rules, _ = app.state.store.documents(payload.draft_id)
+        with TemporaryDirectory(prefix="careloop-discovery-") as directory:
+            paths = []
+            names = set()
+            for source in payload.sources:
+                if (Path(source.name).name != source.name or source.name in {".", ".."}
+                        or "\\" in source.name or source.name in names):
+                    raise HTTPException(status_code=422, detail="Source filenames must be unique names, not filesystem paths")
+                names.add(source.name)
+                path = Path(directory) / source.name
+                try:
+                    content = (base64.b64decode(source.content, validate=True) if source.encoding == "base64"
+                               else source.content.encode("utf-8"))
+                except (ValueError, binascii.Error) as error:
+                    raise HTTPException(status_code=422, detail="Source contains invalid base64 data") from error
+                path.write_bytes(content)
+                paths.append(path)
+            try:
+                return discover_rules(paths, rules, app.state.discovery_client,
+                                      source_urls=[source.source_url for source in payload.sources],
+                                      source_names=[source.name for source in payload.sources],
+                                      instructions=payload.instructions)
+            except (ValueError, TypeError) as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+            except Exception as error:
+                logger.warning("Knowledge extraction failed (%s)", type(error).__name__)
+                raise HTTPException(status_code=502, detail="Discovery failed. Check source readability and the configured provider; no knowledge was changed.") from error
 
     return app

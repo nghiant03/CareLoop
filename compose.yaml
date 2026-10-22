@@ -5,57 +5,33 @@ services:
     image: postgres:18-bookworm
     restart: unless-stopped
     environment:
-      POSTGRES_USER: careloop_admin
       POSTGRES_DB: postgres
       POSTGRES_HOST_AUTH_METHOD: trust
+      PGUSER: ${CARELOOP_DATABASE_USER:-postgres}
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./deploy/postgres/01-databases.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U careloop_admin -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$PGUSER -d postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
     stop_grace_period: 60s
 
-  migrate:
+  setup:
     build:
       context: .
       dockerfile: deploy/backend/Dockerfile
     environment:
-      CARELOOP_APP_DATABASE_URL: postgresql://careloop_admin@postgres:5432/careloop_clinical
-      CARELOOP_KNOWLEDGE_DATABASE_URL: postgresql://careloop_admin@postgres:5432/careloop_knowledge
-    command: ["python", "-m", "backend.storage.migrate", "init", "--component", "both"]
+      CARELOOP_APP_DATABASE_URL: postgresql://${CARELOOP_DATABASE_USER:-postgres}@postgres:5432/careloop_clinical
+      CARELOOP_KNOWLEDGE_DATABASE_URL: postgresql://${CARELOOP_DATABASE_USER:-postgres}@postgres:5432/careloop_knowledge
+    command: ["python", "-m", "backend.storage.setup"]
     depends_on:
       postgres:
         condition: service_healthy
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-
-  knowledge:
-    profiles: ["tools"]
-    user: "${CARELOOP_OPERATOR_UID:-1000}:${CARELOOP_OPERATOR_GID:-1000}"
-    build:
-      context: .
-      dockerfile: deploy/backend/Dockerfile
-    environment:
-      CARELOOP_KNOWLEDGE_DATABASE_URL: postgresql://careloop_admin@postgres:5432/careloop_knowledge
-    volumes:
-      - ${CARELOOP_DATASET_DIR:-${HOME}/.local/share/careloop/datasets}/outputs/knowledge:/work
-    working_dir: /work
-    entrypoint: ["python", "-m", "backend.knowledge"]
-    command: ["list"]
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
     read_only: true
     tmpfs:
       - /tmp
@@ -69,21 +45,19 @@ services:
       context: .
       dockerfile: deploy/backend/Dockerfile
     environment:
-      CARELOOP_APP_DATABASE_URL: postgresql://careloop_admin@postgres:5432/careloop_clinical
+      CARELOOP_APP_DATABASE_URL: postgresql://${CARELOOP_DATABASE_USER:-postgres}@postgres:5432/careloop_clinical
       CARELOOP_APPROVAL_MODE: ${CARELOOP_APPROVAL_MODE:-auto}
-      CARELOOP_KNOWLEDGE_DATABASE_URL: postgresql://careloop_admin@postgres:5432/careloop_knowledge
+      CARELOOP_KNOWLEDGE_DATABASE_URL: postgresql://${CARELOOP_DATABASE_USER:-postgres}@postgres:5432/careloop_knowledge
       CARELOOP_ARTIFACT_DIR: /var/lib/careloop/artifacts
       CARELOOP_DATASET_DIR: /datasets
       CARELOOP_KNOWLEDGE_MODE: database
-      CARELOOP_DEPLOYMENT_MODE: ${CARELOOP_DEPLOYMENT_MODE:-published}
-      CARELOOP_REVIEW_DRAFT: ${CARELOOP_REVIEW_DRAFT:-}
-      CARELOOP_REVIEW_REVISION: ${CARELOOP_REVIEW_REVISION:-}
+      CARELOOP_DEPLOYMENT_MODE: ${CARELOOP_DEPLOYMENT_MODE:-review}
       CARELOOP_KNOWLEDGE_RELEASE: ${CARELOOP_KNOWLEDGE_RELEASE:-}
     volumes:
       - run_artifacts:/var/lib/careloop
       - ${CARELOOP_DATASET_DIR:-${HOME}/.local/share/careloop/datasets}:/datasets:ro
     depends_on:
-      migrate:
+      setup:
         condition: service_completed_successfully
     read_only: true
     tmpfs:
@@ -106,7 +80,7 @@ services:
     build:
       context: .
       dockerfile: deploy/frontend/Dockerfile
-    command: ["-c", "/etc/nginx/${CARELOOP_DEPLOYMENT_MODE:-published}.conf", "-g", "daemon off;"]
+    command: ["-c", "/etc/nginx/${CARELOOP_DEPLOYMENT_MODE:-review}.conf", "-g", "daemon off;"]
     ports:
       - "127.0.0.1:${CARELOOP_HTTP_PORT:-8080}:8080"
     depends_on:

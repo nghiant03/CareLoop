@@ -87,7 +87,7 @@ def check_schema(connection, component: str) -> None:
     try:
         rows = connection.execute("SELECT component, version FROM careloop_schema").fetchall()
     except psycopg.errors.UndefinedTable:
-        raise RuntimeError("PostgreSQL schema is not initialized; run backend.storage.migrate init") from None
+        raise RuntimeError("PostgreSQL schema is not initialized; the deployment setup task must finish before application startup") from None
     if len(rows) != 1 or rows[0]["component"] != component or rows[0]["version"] != 1:
         raise RuntimeError(f"Wrong or unsupported PostgreSQL {component} schema")
 

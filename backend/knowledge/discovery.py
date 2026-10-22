@@ -1,148 +1,91 @@
-"""Propose nutrition rules from verified guideline files without changing live knowledge.
+"""Use an LLM to propose review-only nutrition rules from operator-selected sources.
 
-Candidates are review artifacts, not executable rulebooks or patient envelopes.
-Only KDIGO protein and sodium recommendations have numeric mapping adapters.
-Their exceptions and unresolved DSL semantics always block automatic activation.
+Discovery requires no manifest or hashes and has no guideline-specific patterns.
+Candidates are evidence-linked review artifacts, never executable rulebooks.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import re
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
+from uuid import uuid4
 
-from backend.knowledge.validation import content_hash
 from backend.storage_paths import artifact_dir
 
-KDIGO_PATH = "raw/guidelines/kdigo_2024_ckd.pdf"
-KDIGO_URL = "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf"
-GENERATOR = "kdigo-nutrition-v1"
-_HEADING = re.compile(r"(?m)^[ \t]*(Recommendation|Practice Point)\s+(\d+(?:\.\d+)+):[ \t]*")
+GENERATOR = "llm-nutrition-v2"
+CHUNK_CHARS = 24000
+CHUNK_OVERLAP = 2000
+DEFAULT_PROMPT = Path(__file__).with_name("prompts") / "discover_rules.md"
 
 
-@dataclass(frozen=True)
-class EvidenceExcerpt:
-    statement_type: str
-    section: str
-    pdf_page: int
-    start: int
-    end: int
-    quote: str
+class DiscoveryClient(Protocol):
+    """Provider-neutral boundary; a future adapter owns transport and JSON parsing."""
 
-    def document(self) -> dict:
-        return {"statement_type": self.statement_type, "section": self.section,
-                "pdf_page": self.pdf_page, "page_text_start": self.start,
-                "page_text_end": self.end, "quote": self.quote}
+    def extract_candidates(self, *, instructions: str, source_text: str) -> dict:
+        """Return a document containing a ``candidates`` list."""
+        ...
 
 
-@dataclass(frozen=True)
-class RecommendationMapping:
-    section: str
-    nutrient: str
-    pattern: str
-    kind: str
-    source_unit: str
-    output_basis: str
-    scale: float
-    source_operator: str
-    caveats: tuple[tuple[str, str], ...]
-    blockers: tuple[str, ...]
+def load_discovery_prompt(prompt_file: Path | None = None) -> str:
+    """Load editable instructions separately from extraction logic."""
+    instructions = (prompt_file or DEFAULT_PROMPT).read_text(encoding="utf-8")
+    if not instructions.strip():
+        raise ValueError("Discovery instructions must not be empty")
+    return instructions
 
 
-_MAPPINGS = (
-    RecommendationMapping(
-        section="3.3.1.1", nutrient="protein_g",
-        pattern=r"We suggest maintaining a protein intake of (?P<value>\d+(?:\.\d+)?) "
-                r"g/kg body weight/d in adults with CKD G3[–-]G5 \((?P<grade>\d[A-D])\)\.",
-        kind="TARGET", source_unit="g/kg body weight/d", output_basis="g_per_kg_per_day",
-        scale=1, source_operator="maintain",
-        caveats=(("3.3.1.3", "metabolically unstable"),
-                 ("3.3.1.4", "children"), ("3.3.1.5", "frailty and sarcopenia")),
-        blockers=(
-            "Review metabolic instability, frailty and sarcopenia. Current rule conditions do not represent these exclusions.",
-            "Keep protein as a soft TARGET, not an inferred MIN floor or hard MAX ceiling.",
-            "Confirm body-weight basis and conversion to daily grams before writing executable actions.",
-        ),
-    ),
-    RecommendationMapping(
-        section="3.3.2.1", nutrient="sodium_mg",
-        pattern=r"We suggest that sodium intake be <(?P<value>\d+(?:\.\d+)?) g of sodium per day "
-                r"\(or <\d+(?:\.\d+)? mmol of sodium per day, or <\d+(?:\.\d+)? g of sodium chloride "
-                r"per day\) in people with CKD \((?P<grade>\d[A-D])\)\.",
-        kind="MAX", source_unit="g sodium/day", output_basis="mg_per_day",
-        scale=1000, source_operator="<",
-        caveats=(("3.3.2.1", "sodium-wasting nephropathy"), ("3.3.2.2", "children")),
-        blockers=(
-            "Review sodium-wasting nephropathy. Current rule conditions do not represent this exception.",
-            "The source uses strict '<'. CareLoop MAX ceilings allow equality, so boundary semantics require review.",
-            "A guideline recommendation is not automatically a hard clinical ceiling. Review the proposed MAX mapping.",
-        ),
-    ),
-)
+def _read_source(path: Path) -> str:
+    """Read a local PDF, HTML, Markdown or text document without a manifest."""
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
+        payload = path.read_bytes()
+        if not payload.startswith(b"%PDF"):
+            raise ValueError(f"Source is not a PDF: {path}")
+        try:
+            result = subprocess.run(["pdftotext", "-layout", "-", "-"], input=payload,
+                                    capture_output=True, check=True, timeout=120)
+        except FileNotFoundError as error:
+            raise RuntimeError("Install pdftotext (Poppler tools) before reading PDF sources") from error
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            raise RuntimeError(f"PDF extraction failed or timed out: {path}") from error
+        text = result.stdout.decode("utf-8")
+    elif suffix in {".txt", ".md", ".html", ".htm"}:
+        text = path.read_text(encoding="utf-8")
+        if suffix in {".html", ".htm"}:
+            from html import unescape
+
+            text = unescape(_strip_html(text))
+    else:
+        raise ValueError(f"Unsupported source format {suffix!r}; use PDF, HTML, Markdown or text")
+    if not text.strip():
+        raise ValueError(f"Source has no extractable text: {path}")
+    return text
 
 
-def _verified_pdf(research_dir: Path) -> tuple[bytes, dict]:
-    """Verify recorded bytes and source identity, not publisher authenticity or clinical validity."""
-    manifest = json.loads((research_dir / "manifest.json").read_text())
-    if not isinstance(manifest, list) or any(not isinstance(entry, dict) for entry in manifest):
-        raise ValueError("Research manifest must be a list of source records")
-    matches = [entry for entry in manifest if entry.get("path") == KDIGO_PATH]
-    if len(matches) != 1:
-        raise ValueError("Manifest must contain exactly one KDIGO guideline record")
-    record = matches[0]
-    if record.get("status") != "downloaded" or record.get("source_url") != KDIGO_URL:
-        raise ValueError("KDIGO source must be downloaded from the supported guideline URL")
-    path = research_dir / KDIGO_PATH
-    payload = path.read_bytes()
-    if not payload.startswith(b"%PDF"):
-        raise ValueError("KDIGO source is not a PDF")
-    digest = hashlib.sha256(payload).hexdigest()
-    if digest != record.get("sha256") or type(record.get("bytes")) is not int or len(payload) != record["bytes"]:
-        raise ValueError("KDIGO source size/hash does not match the download manifest")
-    return payload, {"path": KDIGO_PATH, "source_url": KDIGO_URL, "sha256": digest,
-                  "bytes": record["bytes"], "verification": "manifest_size_and_sha256"}
+def _text_chunks(text: str):
+    """Bound model requests with overlapping text windows, not medical patterns."""
+    start = 0
+    while start < len(text):
+        end = min(start + CHUNK_CHARS, len(text))
+        yield text[start:end]
+        if end == len(text):
+            break
+        start = end - CHUNK_OVERLAP
 
 
-def extract_statements(text: str) -> list[EvidenceExcerpt]:
-    """Retain exact spans and one-based PDF pages from pdftotext's layout output.
-
-    Repeated summary/body statements are kept for mapping-consistency checks.
-    Quotes describe extracted PDF text, not a claim of OCR or layout fidelity.
-    """
-    statements = []
-    for page_number, page in enumerate(text.split("\f"), start=1):
-        headings = list(_HEADING.finditer(page))
-        for index, heading in enumerate(headings):
-            end = headings[index + 1].start() if index + 1 < len(headings) else len(page)
-            block = page[heading.end():end]
-            blank = re.search(r"\n[ \t]*\n", block)
-            if blank:
-                end = heading.end() + blank.start()
-            quote = page[heading.start():end].strip()
-            start = page.find(quote, heading.start(), end) if quote else heading.start()
-            statements.append(EvidenceExcerpt(heading[1], heading[2], page_number,
-                                               start, start + len(quote), quote))
-    return statements
-
-
-def _mapped_constraint(mapping: RecommendationMapping, quote: str) -> dict | None:
-    normalized = " ".join(quote.split())
-    prefix = re.escape(f"Recommendation {mapping.section}: ")
-    match = re.match(prefix + mapping.pattern, normalized)
+def _quote_evidence(quote: str, text: str) -> dict:
+    """Locate model quotes in the extracted text, preserving original whitespace."""
+    match = re.search(r"\s+".join(re.escape(word) for word in quote.split()), text)
     if match is None:
-        return None
-    source_value = float(match["value"])
-    value = source_value * mapping.scale
-    if not math.isfinite(value) or value <= 0:
-        return None
-    return {"nutrient": mapping.nutrient, "kind": mapping.kind, "value": value,
-            "basis": mapping.output_basis, "source_value": source_value,
-            "source_unit": mapping.source_unit, "source_operator": mapping.source_operator,
-            "evidence_grade": match["grade"]}
+        raise ValueError("Candidate quote was not found in the source text")
+    return {"quote": match.group(), "verified_substring": True,
+            "text_start": match.start(), "text_end": match.end(),
+            "pdf_page": text.count("\f", 0, match.start()) + 1,
+            "pdf_page_end": text.count("\f", 0, match.end()) + 1}
 
 
 def _related_rules(rules_document: dict, nutrient: str) -> list[dict]:
@@ -158,18 +101,14 @@ def _related_rules(rules_document: dict, nutrient: str) -> list[dict]:
     return sorted(related, key=lambda rule: rule["rule_id"])
 
 
-def propose_rules(text: str, source: dict, rules_document: dict) -> dict:
-    """Build deterministic, blocked candidates from supported recommendations.
-
-    Numeric suggestions require recognized wording. Unknown or contradictory
-    passages retain their evidence but get no numeric mapping. Existing rules
-    and patient scope gates are never modified or evaluated by discovery.
-    """
+def propose_rules(text: str, source: dict, rules_document: dict, client: DiscoveryClient,
+                  instructions: str | None = None) -> dict:
+    """Extract candidates using only the LLM; baseline rules are comparison-only."""
     if not isinstance(rules_document, dict) or rules_document.get("dsl_version") != "1.0":
         raise ValueError("Discovery requires a CareLoop DSL 1.0 baseline rulebook")
     rules = rules_document.get("rules")
-    if not isinstance(rules, list) or not rules:
-        raise ValueError("Baseline rules must be a nonempty list")
+    if not isinstance(rules, list):
+        raise TypeError("Baseline rules must be a list")
     ids = set()
     for rule in rules:
         if (not isinstance(rule, dict) or not isinstance(rule.get("rule_id"), str)
@@ -178,83 +117,74 @@ def propose_rules(text: str, source: dict, rules_document: dict) -> dict:
                 or any(not isinstance(action, dict) for action in rule["actions"])):
             raise ValueError("Baseline rules require unique IDs and action objects")
         ids.add(rule["rule_id"])
-    baseline_hash = content_hash(rules_document)
-    statements = extract_statements(text)
-    candidates, missing = [], []
-    for mapping in _MAPPINGS:
-        matches = [item for item in statements
-                   if item.statement_type == "Recommendation" and item.section == mapping.section]
-        if not matches:
-            missing.append(mapping.section)
-            continue
-        mapped = [_mapped_constraint(mapping, item.quote) for item in matches]
-        recognized = [item for item in mapped if item is not None]
-        suggested = recognized[0] if recognized else None
-        blockers = list(mapping.blockers)
-        if not recognized:
-            blockers.append("Recommendation wording is unsupported. A reviewer must interpret the source without an inferred value.")
-        elif any(item != suggested for item in recognized):
-            suggested = None
-            blockers.append("Repeated recommendation statements disagree. Resolve source values before mapping.")
-        caveat_evidence = []
-        for section, phrase in mapping.caveats:
-            excerpts = [item for item in statements if item.statement_type == "Practice Point"
-                        and item.section == section and phrase in " ".join(item.quote.split()).lower()]
-            if excerpts:
-                caveat_evidence.append(excerpts[0].document())
-            else:
-                blockers.append(f"Required caveat was not found: Practice Point {section} ({phrase}). Check the PDF.")
-        candidate = {
-            "status": "NEEDS_REVIEW", "guideline": "KDIGO 2024 CKD", "section": mapping.section,
-            "source_population": "Adults with CKD G3–G5" if mapping.nutrient == "protein_g" else "People with CKD",
-            "proposed_careloop_scope": {
-                "age_min": 18, "diagnoses": ["CKD_stage_3", "CKD_stage_4"],
-                "preserve_scope_exclusions": ["pregnancy", "paediatric", "dialysis", "CKD_stage_5", "egfr_below_15"],
-                "review_required": True,
-            },
-            "suggested_constraint": suggested,
-            "evidence": [item.document() for item in matches], "caveat_evidence": caveat_evidence,
-            "review_blockers": blockers, "related_rules": _related_rules(rules_document, mapping.nutrient),
-            "executable_rule": None, "automatic_activation_allowed": False,
-        }
-        candidate["candidate_id"] = "KDIGO-2024-" + mapping.section.replace(".", "-") + "-" + content_hash(
-            {"generator": GENERATOR, "source": source, "section": mapping.section})[:16]
-        candidates.append(candidate)
-    supported = {mapping.section for mapping in _MAPPINGS}
-    return {"schema_version": "1.0", "generator": GENERATOR, "source": source,
-            "extraction": "pdftotext -layout", "baseline_rules_sha256": baseline_hash,
-            "candidates": candidates, "missing_supported_sections": missing,
-            "unsupported_nutrition_sections": sorted({item.section for item in statements
-                if item.statement_type == "Recommendation" and item.section.startswith("3.3.")
-                and item.section not in supported}),
+    candidates, seen = [], set()
+    for chunk in _text_chunks(text):
+        for candidate in extract_rules(chunk, source, client, instructions=instructions):
+            key = json.dumps({"section": candidate["section"],
+                              "population": candidate["source_population"],
+                              "constraint": candidate["suggested_constraint"],
+                              "quote": " ".join(candidate["evidence"][0]["quote"].split())}, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            evidence = _quote_evidence(candidate["evidence"][0]["quote"], text)
+            if Path(source["path"]).suffix.lower() != ".pdf":
+                evidence.pop("pdf_page")
+                evidence.pop("pdf_page_end")
+            evidence["source"] = dict(source)
+            candidate["evidence"] = [evidence]
+            candidate["candidate_id"] = f"CAND-{uuid4().hex}"
+            candidate["related_rules"] = _related_rules(rules_document, candidate["suggested_constraint"]["nutrient"])
+            candidate["review_blockers"] = [
+                "Verify the suggested value, units, constraint kind and population against the original source.",
+                "Review the full guideline for exceptions, negation, conflicting recommendations and missing caveats; extraction is not exhaustive.",
+                "Preserve CareLoop scope exclusions. A source recommendation does not authorize use for excluded patients.",
+                "CareLoop MAX allows equality and MIN/TARGET are soft aims; review any strict source operator and clinical interpretation.",
+            ]
+            candidates.append(candidate)
+    return {"schema_version": "2.0", "generator": GENERATOR, "source": dict(source),
+            "extraction": {"adapter": type(client).__name__, "model": getattr(client, "model", "unspecified")},
+            "candidates": candidates,
             "limitations": [
-                "Discovery supports KDIGO 2024 protein and sodium recommendations only. It is not clinical validation.",
-                "Manifest checks detect changed bytes, not publisher authenticity. Check the original PDF and its exceptions.",
-                "PDF layout extraction can omit or mix columns. Review all quoted passages against their PDF pages.",
-                "NHANES, MIMIC, food composition and observational associations are not prescribing evidence adapters.",
+                "LLM output is non-deterministic and may omit or misinterpret recommendations. No clinical validity is established.",
+                "Quote matching proves text presence, not that numbers, units, scope or caveats were interpreted correctly.",
+                "Source authenticity and clinical suitability are operator responsibilities; discovery uses no manifest or hash checks.",
+                "PDF layout extraction can omit or mix columns. Review quotes against their PDF pages.",
                 "These candidates cannot be imported as an executable rulebook. Resolve blockers before authoring a draft.",
             ]}
 
 
-def discover_rules(research_dir: Path, rules_document: dict) -> dict:
-    """Verify the downloaded PDF and extract fresh text, never trusting cached staging quotes."""
-    payload, source = _verified_pdf(research_dir)
-    try:
-        result = subprocess.run(["pdftotext", "-layout", "-", "-"], input=payload,
-                                capture_output=True, check=True, timeout=120)
-    except FileNotFoundError as error:
-        raise RuntimeError("Install pdftotext (Poppler tools) before running discovery") from error
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-        raise RuntimeError("Guideline PDF extraction failed or timed out") from error
-    report = propose_rules(result.stdout.decode("utf-8"), source, rules_document)
+def discover_rules(sources: list[Path], rules_document: dict, client: DiscoveryClient,
+                   source_urls: list[str | None] | None = None, *,
+                   instructions: str | None = None, source_names: list[str] | None = None) -> dict:
+    """Extract from any explicitly selected guideline files, with no static fallback."""
+    if not sources:
+        raise ValueError("Select at least one guideline source")
+    if source_urls is not None and len(source_urls) != len(sources):
+        raise ValueError("Source URLs must correspond to the selected sources")
+    if source_names is not None and len(source_names) != len(sources):
+        raise ValueError("Source names must correspond to the selected sources")
+    instructions = instructions if instructions is not None else load_discovery_prompt()
+    reports = []
+    for index, path in enumerate(sources):
+        path = path.expanduser().resolve()
+        name = source_names[index] if source_names is not None else str(path)
+        source = {"path": name, "guideline": Path(name).stem,
+                  "source_url": source_urls[index] if source_urls is not None else None}
+        reports.append(propose_rules(_read_source(path), source, rules_document, client, instructions))
+    report = {"schema_version": "2.0", "generator": GENERATOR,
+              "sources": [{**item["source"], "candidate_count": len(item["candidates"])} for item in reports],
+              "extraction": {**reports[0]["extraction"], "instructions": instructions},
+              "candidates": [candidate for item in reports for candidate in item["candidates"]],
+              "limitations": reports[0]["limitations"]}
     if not report["candidates"]:
-        raise ValueError("No supported guideline recommendations found. Check source version and extraction")
+        raise ValueError("No valid source-quoted nutrition candidates returned by the LLM; inspect the sources and provider output")
     return report
 
 
 def write_discovery_report(report: dict, out_dir: Path | None = None) -> Path:
-    """Write an external content-addressed report. Identical retries reuse it without overwrite."""
-    destination = (out_dir or artifact_dir("knowledge-discovery") / content_hash(report)).expanduser().resolve()
+    """Write an external run directory without hashes or overwriting existing work."""
+    destination = (out_dir or artifact_dir("knowledge-discovery") / uuid4().hex).expanduser().resolve()
     checkout = Path(__file__).resolve().parents[2]
     if destination == checkout or checkout in destination.parents:
         raise ValueError("Discovery output directory must be outside the code checkout")
@@ -297,41 +227,27 @@ def verify_quote_in_source(quote: str, source_text: str) -> bool:
     return norm_quote in norm_source
 
 
-def extract_rules_openai_compat(
+def extract_rules(
     source_text: str,
     source_meta: dict,
-    client: object,
+    client: DiscoveryClient,
+    *,
+    instructions: str | None = None,
 ) -> list[dict]:
-    """Extract blocked candidate rules via an OpenAI-compatible ``/v1/chat/completions`` client.
+    """Validate source-quoted, review-only proposals returned by any LLM adapter.
 
     Every returned candidate must supply a verbatim ``quote`` verified against
     ``source_text`` (preventing zero-quote or hallucinated extractions), a
     recognized nutrient and constraint kind, and a finite positive numeric value.
     All candidates remain ``NEEDS_REVIEW`` with ``automatic_activation_allowed=False``.
     """
-    if not hasattr(client, "chat_completion"):
-        raise TypeError("client must provide chat_completion(messages, temperature=..., json_mode=True)")
-
-    system_prompt = (
-        "Extract quantitative clinical nutrition recommendations from the supplied guideline passage "
-        "into JSON object format: {\"candidates\": [{\"section\": str, \"nutrient\": str, "
-        "\"kind\": \"MIN\"|\"MAX\"|\"TARGET\", \"value\": float, \"basis\": str, "
-        "\"quote\": str, \"source_population\": str, \"caveats\": [str]}]}. "
-        "Each candidate MUST include an exact verbatim 'quote' copied from the source text. "
-        "Never invent numbers or quotes."
-    )
-    raw_json = client.chat_completion(
-        [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": source_text},
-        ],
-        temperature=0.0,
-        json_mode=True,
-    )
-    parsed = json.loads(raw_json)
+    instructions = instructions if instructions is not None else load_discovery_prompt()
+    if not instructions.strip():
+        raise ValueError("Discovery instructions must not be empty")
+    parsed = client.extract_candidates(instructions=instructions, source_text=source_text)
     raw_candidates = parsed.get("candidates") if isinstance(parsed, dict) else None
     if not isinstance(raw_candidates, list):
-        raise ValueError("OpenAI-compatible extraction must return a JSON object with a 'candidates' list")  # noqa: TRY004
+        raise TypeError("LLM extraction must return an object with a 'candidates' list")
 
     verified_candidates: list[dict] = []
     for item in raw_candidates:
@@ -341,31 +257,43 @@ def extract_rules_openai_compat(
         nutrient = item.get("nutrient", "")
         kind = item.get("kind", "")
         val = item.get("value")
+        try:
+            number = float(val) if isinstance(val, (int, float)) and not isinstance(val, bool) else 0.0
+        except OverflowError:
+            continue
         if (
-            nutrient not in _ALLOWED_NUTRIENTS
-            or kind not in _ALLOWED_KINDS
-            or isinstance(val, bool)
-            or not isinstance(val, (int, float))
-            or not math.isfinite(float(val))
-            or float(val) <= 0
+            not isinstance(nutrient, str) or nutrient not in _ALLOWED_NUTRIENTS
+            or not isinstance(kind, str) or kind not in _ALLOWED_KINDS
+            or not math.isfinite(number)
+            or number <= 0
         ):
             continue
         if not verify_quote_in_source(quote, source_text):
             continue
+        basis = item.get("basis")
+        caveats = item.get("caveats", [])
+        if not isinstance(basis, str) or not basis.strip() or not isinstance(caveats, list):
+            continue
+        constraint = {"nutrient": nutrient, "kind": kind, "value": number, "basis": basis.strip()}
+        for field in ("source_unit", "source_operator", "evidence_grade"):
+            if isinstance(item.get(field), str):
+                constraint[field] = item[field]
+        source_value = item.get("source_value")
+        if isinstance(source_value, (int, float)) and not isinstance(source_value, bool):
+            try:
+                if math.isfinite(source_value) and source_value > 0:
+                    constraint["source_value"] = source_value
+            except OverflowError:
+                pass
         section = str(item.get("section") or "unspecified")
         verified_candidates.append({
             "status": "NEEDS_REVIEW",
             "guideline": str(source_meta.get("guideline") or "External Guideline"),
             "section": section,
             "source_population": str(item.get("source_population") or "Requires clinician review"),
-            "suggested_constraint": {
-                "nutrient": nutrient,
-                "kind": kind,
-                "value": float(val),
-                "basis": str(item.get("basis") or "daily"),
-            },
+            "suggested_constraint": constraint,
             "evidence": [{"quote": " ".join(quote.split()), "verified_substring": True}],
-            "caveats": [c for c in (item.get("caveats") or []) if isinstance(c, str)],
+            "caveats": [c for c in caveats if isinstance(c, str)],
             "executable_rule": None,
             "automatic_activation_allowed": False,
         })

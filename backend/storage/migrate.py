@@ -1,9 +1,7 @@
-"""Explicit PostgreSQL schema initialization; never called by runtime startup."""
+"""Deployment schema preparation primitives; never called by application startup."""
 
 from __future__ import annotations
 
-import argparse
-import json
 from pathlib import Path
 
 import psycopg
@@ -12,7 +10,6 @@ from psycopg import sql
 from backend.storage.postgres import (
     _WRITE_LOCKS,
     check_schema,
-    database_url,
     storage_row,
 )
 
@@ -63,28 +60,3 @@ def initialize_database(url: str, component: str) -> dict:
                                      "FOR EACH STATEMENT EXECUTE FUNCTION reject_knowledge_mutation()")
                              .format(sql.Identifier(table + "_immutable"), sql.Identifier(table)))
     return {"component": component, "schema_version": 1, "initialized": True}
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("init",))
-    parser.add_argument("--component", choices=("clinical", "knowledge", "both"), required=True)
-    args = parser.parse_args(argv)
-    try:
-        components = ("clinical", "knowledge") if args.component == "both" else (args.component,)
-        results = []
-        for component in components:
-            url = database_url(component)
-            if url is None:
-                raise ValueError(f"configure the {component} PostgreSQL DATABASE_URL")
-            results.append(initialize_database(url, component))
-    except psycopg.Error:
-        parser.exit(1, "PostgreSQL migration failed. Inspect server access/schema without sharing credentials.\n")
-    except (ValueError, OSError) as exc:
-        parser.exit(1, f"Migration refused: {exc}\n")
-    print(json.dumps(results, indent=2, sort_keys=True))
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
