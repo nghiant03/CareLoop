@@ -1,5 +1,3 @@
-"""Data curation and offline USDA importer regressions in the focused rule gate."""
-
 import json
 
 import pytest
@@ -96,12 +94,12 @@ def test_curated_tags_are_recipe_roles_not_fat_thresholds():
         assert len(record["tags"]) == len(set(record["tags"]))
         if record["category"] in {"drink", "dessert"}:
             assert "lean_protein" not in record["tags"]
-    for dish_id in ["SG0045", "SG0141", "SG0148"]:  # rice and vegetable sides
+    for dish_id in ["SG0045", "SG0141", "SG0148"]:
         assert "lean_protein" not in dishes[dish_id]["tags"]
-    for dish_id in ["SG0005", "SG0011", "SG0153", "SG0214"]:  # stir-fry, grill, braise, bake
+    for dish_id in ["SG0005", "SG0011", "SG0153", "SG0214"]:
         assert "deep_fried" not in dishes[dish_id]["tags"]
     for dish_id in ["SG0084", "SG0102", "SG0104", "SG0113", "SG0120", "SG0154"]:
         assert "deep_fried" in dishes[dish_id]["tags"]
-    assert dishes["SG0102"]["fat_g"] <= 20  # a fried snack need not cross a fat proxy
+    assert dishes["SG0102"]["fat_g"] <= 20
     assert dishes["SG0214"]["fat_g"] > 20
     assert "lean_protein" in dishes["SG0214"]["tags"]

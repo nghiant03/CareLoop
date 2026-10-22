@@ -1,5 +1,3 @@
-"""Trend explanations identify the trigger without changing alert policy."""
-
 import pytest
 
 from backend.mining.trends import detect_trends

@@ -1,5 +1,3 @@
-"""Add the repository root to the import path for shared contracts."""
-
 from __future__ import annotations
 
 import sys

@@ -1,16 +1,3 @@
-"""Longitudinal lab trend detection (K+ and PO4).
-
-Dated observations take precedence per analyte and use elapsed months of
-30.4375 days. Fixture arrays otherwise use one-month spacing. Infer their
-orientation from offsets, then serum-value matching; default to newest-first.
-Returned series are oldest-first. Theil-Sen uses median pairwise slopes.
-
-``_THRESHOLDS`` defines analyte-specific projection and urgent-value limits.
-``_would_flag`` owns the slope/projection rule. Sparse dated series can flag
-an urgent latest value without a measured rise. Two-month-half-life EWMA may
-de-escalate an older rise, but never an urgent latest dated observation.
-"""
-
 from __future__ import annotations
 
 from datetime import date
@@ -19,7 +6,6 @@ import numpy as np
 
 _MIN_SERIES_LEN = 3
 
-# Concentration thresholds and corresponding fixture/observation fields.
 _THRESHOLDS = {
     "K": {"flag": 5.5, "urgent_now": 5.0, "unit": "mmol/L", "field": "labs_K_monthly", "serum": "serum_K_meq_L"},
     "PO4": {"flag": 5.0, "urgent_now": 4.6, "unit": "mg/dL", "field": "labs_PO4_monthly", "serum": "serum_PO4_mg_dL"},
@@ -29,11 +15,7 @@ _SLOPE_TRIGGER = 0.05
 
 
 def _theil_sen_slope(y: list[float], times=None) -> float:
-    """Median pairwise concentration slope per month; skip nonpositive intervals.
-
-    ``times`` uses elapsed months. Without it, readings are one month apart.
-    Return 0.0 when no positive interval exists.
-    """
+    """Use elapsed months or monthly spacing when times are omitted."""
     values = np.asarray(y, dtype=float)
     n = len(values)
     times = list(range(n)) if times is None else times
@@ -45,12 +27,7 @@ def _theil_sen_slope(y: list[float], times=None) -> float:
 
 
 def _ewma_slope(y: list[float], halflife: float = 2.0, times=None) -> float:
-    """Exponentially weighted least-squares slope with more weight on recent months.
-
-    ``times`` uses elapsed months; omitted times assume monthly readings.
-    Weights decay with a half-life of ``halflife`` months. Return 0.0 when
-    the weighted time variance is zero. Input must contain at least one reading.
-    """
+    """Recent readings receive exponentially greater weight by elapsed month."""
     values = np.asarray(y, dtype=float)
     x = np.arange(len(values), dtype=float) if times is None else np.asarray(times, dtype=float)
     w = 0.5 ** ((x[-1] - x) / halflife)
@@ -61,13 +38,11 @@ def _ewma_slope(y: list[float], halflife: float = 2.0, times=None) -> float:
 
 
 def _would_flag(slope: float, latest: float, cfg: dict) -> bool:
-    """The shared flag rule: slope above trigger or 3-month projection crossing."""
     projected = latest + 3.0 * slope
     return bool(slope > _SLOPE_TRIGGER or (projected >= cfg["flag"] and latest < cfg["flag"]))
 
 
 def _is_current_first(patient: dict, field: str, serum_field: str) -> bool:
-    """Infer whether index 0 is the newest reading from offsets or the serum value."""
     offsets = patient.get("months_offset_ago")
     values = patient.get(field) or []
     if (
@@ -75,9 +50,9 @@ def _is_current_first(patient: dict, field: str, serum_field: str) -> bool:
         and len(offsets) == len(values)
         and all(isinstance(o, (int, float)) for o in offsets)
     ):
-        if offsets[0] < offsets[-1]:  # e.g. [0..5]: index 0 = 0 months ago
+        if offsets[0] < offsets[-1]:
             return True
-        if offsets[0] > offsets[-1]:  # e.g. [5..0]: index 0 = oldest
+        if offsets[0] > offsets[-1]:
             return False
     serum = patient.get(serum_field)
     if serum is not None and values:
@@ -86,7 +61,7 @@ def _is_current_first(patient: dict, field: str, serum_field: str) -> bool:
             return True
         if abs(float(values[-1]) - float(serum)) <= eps:
             return False
-    return True  # dataset convention: newest-first
+    return True
 
 
 def _oldest_first(patient: dict, field: str, serum_field: str) -> list[float]:
@@ -95,21 +70,7 @@ def _oldest_first(patient: dict, field: str, serum_field: str) -> list[float]:
 
 
 def detect_trends(patients: list[dict]) -> list[dict]:
-    """Detect rising potassium / phosphate trends across patients.
-
-    Returns a list of flags sorted by severity ("urgent" first) then slope
-    (descending). Each flag: {patient_id, analyte, slope_per_month,
-    ewma_slope_per_month, values (oldest->newest), projected_3mo, severity,
-    reason}.
-
-    Dated observations take precedence over fixture monthly series; elapsed
-    dates determine slopes. Sparse dated series can flag an urgent latest value
-    even without enough points for the usual trend rule.
-
-    Theil-Sen raises trend flags. EWMA (half-life 2 months) can downgrade an
-    urgent trend to "review" when the recent regime no longer satisfies the
-    flag rule, but never de-escalates an urgent latest dated observation.
-    """
+    """Dated observations take precedence. EWMA never deescalates an urgent latest dated value."""
     flags: list[dict] = []
     for p in patients:
         for analyte, cfg in _THRESHOLDS.items():
@@ -129,7 +90,6 @@ def detect_trends(patients: list[dict]) -> list[dict]:
             if not _would_flag(slope, latest, cfg) and (not dates or latest < cfg["urgent_now"]):
                 continue
 
-            # EWMA distinguishes an older rise from an ongoing one.
             ewma = _ewma_slope(series, times=times)
             ewma_rising = _would_flag(ewma, latest, cfg)
 
@@ -151,7 +111,7 @@ def detect_trends(patients: list[dict]) -> list[dict]:
                     f"(slope {slope:+.3f} {cfg['unit']}/month, latest {latest:.2f})"
                 )
             else:
-                # An urgent value is not evidence of a measured rise.
+                # An urgent value alone does not establish a measured rise.
                 reason = (
                     f"{analyte} {latest:.2f} {cfg['unit']} is at or above the "
                     f"clinical alert level {cfg['urgent_now']} "

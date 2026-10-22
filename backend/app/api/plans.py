@@ -1,5 +1,3 @@
-"""Generate and retrieve meal plans, gated on an approved envelope for generation."""
-
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query

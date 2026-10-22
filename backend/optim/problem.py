@@ -1,18 +1,4 @@
-"""Canonical meal-plan objectives and hard-constraint evaluation.
-
-Plans are day-major meal lists, with one or more dish IDs per meal. All four
-objectives are minimized: daily nutrient deviation, negative mean tag preference,
-negative horizon variety, and total SGD cost. Variety equally weights normalized
-Shannon entropy and the distinct-dish ratio. Tag preferences are placeholders.
-
-Hard constraints are daily/horizon MAX ceilings, exclusions, and dish membership.
-MIN shortfalls and TARGET distances are soft aims. MAX excess also contributes
-to the deviation objective to guide infeasible search candidates.
-
-``evaluate`` tolerates nutrient excess <= EPS and reports hard violations.
-It requires APPROVED status but leaves scope and target-readiness checks to the
-application gate. ``exclusion_mapping.py`` defines catalogue exclusion heuristics.
-"""
+"""Canonical meal plan objectives and hard constraint evaluation."""
 
 from __future__ import annotations
 
@@ -37,7 +23,6 @@ MEAL_LABELS = ("breakfast", "lunch", "dinner")
 
 EPS = 1e-9
 
-# Shared ordering for objective vectors, CSV columns, and pymoo F columns.
 OBJECTIVE_NAMES: tuple[str, ...] = (
     "nutrient_target_deviation",
     "preference_fit",
@@ -45,7 +30,7 @@ OBJECTIVE_NAMES: tuple[str, ...] = (
     "cost",
 )
 
-# Placeholder preferences, not patient-specific. Higher scores are preferred.
+# Placeholder preferences are not patient specific.
 TAG_PREFERENCE: dict[str, float] = {
     "lean_protein": 1.0,
     "high_protein": 1.0,
@@ -59,8 +44,7 @@ TAG_PREFERENCE: dict[str, float] = {
     "high_energy": -0.3,
 }
 
-# Raw deviation mixes nutrient units despite scaling. See selection for
-# relative-deviation strategies.
+# Raw deviation mixes nutrient units despite scaling.
 SCALAR_WEIGHTS: dict[str, float] = {
     "nutrient_target_deviation": 0.001,
     "preference_fit": 0.5,
@@ -130,8 +114,6 @@ def _matches_exclusion(flag, dish: Dish) -> bool:
     if flag.kind == ExclusionKind.INGREDIENT:
         return value in ingredients
     if flag.kind == ExclusionKind.DISH_CATEGORY:
-        # Toy exclusions may use tags as categories. Rulebook-only names need
-        # the catalogue predicates in exclusion_mapping.py after literal matching.
         if value == category or value in tags:
             return True
         return semantic_exclusion_hit(flag.kind.value, value, dish)
@@ -143,7 +125,6 @@ def _matches_exclusion(flag, dish: Dish) -> bool:
 
 
 def exclusion_for(dish: Dish, envelope: NutrientEnvelope):
-    """Return the first exclusion flag hitting ``dish``, or ``None``."""
     for flag in envelope.exclusions:
         if _matches_exclusion(flag, dish):
             return flag
@@ -151,25 +132,20 @@ def exclusion_for(dish: Dish, envelope: NutrientEnvelope):
 
 
 def allowed_dishes(envelope: NutrientEnvelope, dishes: list[Dish]) -> list[Dish]:
-    """Dishes that survive every exclusion flag (the runnable meal pool)."""
     return [d for d in dishes if exclusion_for(d, envelope) is None]
 
 
 @dataclass(frozen=True)
 class ConstraintSlot:
-    kind: str  # "max"; MIN/TARGET aims do not enter the hard-constraint layout
-    scope: str  # "daily" | "horizon"
+    kind: str
+    scope: str
     nutrient: str
-    day: int | None  # zero-based day index; None for the horizon slot
+    day: int | None
     limit: float
 
 
 def constraint_layout(envelope: NutrientEnvelope, n_days: int = DAYS) -> list[ConstraintSlot]:
-    """Canonical, fixed-length ordering of the HARD nutrient constraints.
-
-    In envelope order, give each MAX ceiling one slot per day followed by its
-    horizon slot. MIN/TARGET aims are soft and have no constraint-vector slots.
-    """
+    """Each MAX ceiling contributes daily slots followed by its horizon slot."""
     layout: list[ConstraintSlot] = []
     for c in envelope.targets:
         if c.kind == ConstraintKind.MAX:
@@ -190,13 +166,7 @@ def constraint_names(envelope: NutrientEnvelope, n_days: int = DAYS) -> list[str
 def constraint_vector(
     plan: Plan, envelope: NutrientEnvelope, dishes: list[Dish], n_days: int | None = None
 ) -> list[float]:
-    """Return unshifted nonnegative excesses in canonical constraint order.
-
-    Fixed length for an envelope and horizon: daily and horizon MAX ceilings in
-    constraint_layout order. MIN/TARGET aims and structural violations are absent.
-    Values are unshifted excesses; evaluate tolerates magnitudes <= EPS. A pymoo
-    adapter must subtract EPS to preserve that tolerance with G <= 0.
-    """
+    """Excesses are unshifted. Pymoo adapters subtract EPS to match canonical tolerance."""
     _require_approved(envelope)
     n = _validate_plan(plan) if n_days is None else n_days
     lookup = dish_lookup(dishes)
@@ -216,12 +186,6 @@ def constraint_vector(
 def _obj_target_deviation(
     daily: list[dict[str, float]], envelope: NutrientEnvelope
 ) -> float:
-    """Mean per-day deviation from the envelope's nutrient band (soft term).
-
-    Sum TARGET distance, MIN shortfall, and MAX excess, then average over days,
-    not constraints. MAX excess supplies a search penalty in the infeasible
-    region. MIN/TARGET deviations never count as hard violations.
-    """
     constraints = list(envelope.targets)
     if not constraints or not daily:
         return 0.0
@@ -233,7 +197,7 @@ def _obj_target_deviation(
                 dev += abs(value - c.value)
             elif c.kind == ConstraintKind.MIN:
                 dev += max(0.0, c.value - value)
-            else:  # MAX
+            else:
                 dev += max(0.0, value - c.value)
     return dev / len(daily)
 
@@ -266,7 +230,6 @@ def _obj_cost(plan: Plan, lookup: dict[str, Dish]) -> float:
 
 
 def scalar_score(objectives: dict[str, float]) -> float:
-    """Lower is better: weighted sum used to pick one plan from a front."""
     return sum(SCALAR_WEIGHTS[k] * objectives[k] for k in OBJECTIVE_NAMES)
 
 
@@ -277,17 +240,7 @@ def objective_vector(objectives: dict[str, float]) -> tuple[float, ...]:
 def evaluate(
     plan: Plan, envelope: NutrientEnvelope, dishes: list[Dish]
 ) -> tuple[dict[str, float], list[dict]]:
-    """Return ``(objectives, constraint_violations)`` for ``plan``.
-
-    ``objectives`` is a dict keyed by :data:`OBJECTIVE_NAMES` (all minimise).
-    ``constraint_violations`` lists HARD violations only — MAX ceilings
-    (daily + horizon), exclusions and membership.  MIN shortfalls and TARGET
-    deviations are soft objective terms and never appear here.  An empty list
-    means hard-feasible, not nutritionally adequate. Raise EnvelopeNotApprovedError
-    for non-APPROVED envelopes and ValueError when the slot count is not a
-    multiple of MEALS_PER_DAY. Empty plans pass this geometry check. Nutrient
-    violation days and structural meal indices are zero-based.
-    """
+    """Hard feasibility is separate from adequacy and meal delivery. Nutrient days and structural meal indices are zero based."""
     _require_approved(envelope)
     n_days = _validate_plan(plan)
     lookup = dish_lookup(dishes)
@@ -359,11 +312,7 @@ def evaluate(
 
 
 def is_feasible(plan: Plan, envelope: NutrientEnvelope, dishes: list[Dish]) -> bool:
-    """Check MAX ceilings, exclusions, and dish membership via ``evaluate``.
-
-    This does not assess adequacy or require nonempty meals. Approval and slot
-    geometry failures raise as in ``evaluate`` rather than returning False.
-    """
+    """An empty plan may be hard feasible. This check does not assess adequacy or meal delivery."""
     _require_approved(envelope)
     _objectives, violations = evaluate(plan, envelope, dishes)
     return len(violations) == 0
@@ -374,7 +323,6 @@ def violation_count(violations: list[dict]) -> int:
 
 
 def violation_magnitude(violations: list[dict]) -> float:
-    """Finite total violation size (structural violations count as large)."""
     total = 0.0
     for v in violations:
         amount = v.get("amount", 0.0)

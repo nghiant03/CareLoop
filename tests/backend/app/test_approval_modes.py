@@ -1,5 +1,3 @@
-"""Live approval policy, persisted history and downstream gates."""
-
 import pytest
 
 from backend.app.core import persistence

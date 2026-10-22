@@ -114,7 +114,6 @@ export async function getApprovalMode(): Promise<'auto' | 'clinician'> {
   return config.approval_mode;
 }
 
-/** Switch the demo approval policy for subsequent rule runs (unauthenticated demo control). */
 export async function setApprovalMode(mode: 'auto' | 'clinician'): Promise<'auto' | 'clinician'> {
   const config = await fetch(`${API_PREFIX}/config/approval-mode`, {
     method: 'PUT',

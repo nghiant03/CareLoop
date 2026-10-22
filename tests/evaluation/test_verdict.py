@@ -1,5 +1,3 @@
-"""Check data-derived benchmark verdicts and feasible-front hypervolume reporting."""
-
 from __future__ import annotations
 
 from evaluation.benchmark import (
@@ -60,7 +58,6 @@ def test_verdict_names_actual_hv_winner_not_nsga2():
     ]
     verdict, note = verdict_from_headline(headline)
     assert verdict == "PASS"
-    # sms has the higher HV — the note must name it, not NSGA-II
     assert "sms leads the benchmark on mean hypervolume" in note
     assert "0.6459" in note
     assert "nsga2" not in note.split(".")[0]
@@ -78,7 +75,6 @@ def test_verdict_fails_when_hv_winner_violates_constraints():
 
 
 def test_summary_table_violation_rate_is_exact_not_rounded():
-    """One violation in 2001 runs must fail even though its rounded rate is zero."""
     rows = [_row("tiny", 0.5, violations=0) for _ in range(2000)]
     rows.append(_row("tiny", 0.5, violations=1))
     table = _summary_table(rows)
@@ -87,13 +83,10 @@ def test_summary_table_violation_rate_is_exact_not_rounded():
     assert tiny["violation_rate"] != 0.0
     assert tiny["violation_rate"] == 1 / 2001
 
-    # decision path: a nonzero exact rate must FAIL even though a rounded
-    # presentation would print 0%; the note keeps visible precision
     verdict, note = verdict_from_headline(table)
     assert verdict == "FAIL"
     assert "0.050% hard-constraint violation rate" in note
 
-    # zero violations stays an exact 0.0 and PASSes
     clean_rows = [_row("clean", 0.9, violations=0) for _ in range(5)]
     verdict, _note = verdict_from_headline(_summary_table(clean_rows))
     assert verdict == "PASS"

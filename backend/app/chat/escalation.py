@@ -1,15 +1,9 @@
-"""Escalate configured emergency, diagnosis, medication, and scope patterns.
-
-Matching is deterministic. No match does not establish clinical safety or scope.
-"""
-
 from __future__ import annotations
 
 import re
 
 __all__ = ["CATEGORIES", "check"]
 
-# Drug names catch change requests that omit generic medication words.
 _DRUGS = (
     r"(?:metformin|insulin|lisinopril|enalapril|losartan|valsartan|"
     r"dapagliflozin|empagliflozin|furosemide|spironolactone|"
@@ -32,7 +26,6 @@ _CATEGORIES: dict[str, list[str]] = {
         r"slurring (my |his |her |their )?speech",
         r"speech (is |has |has been )?slurred",
         r"severe (bleeding|dizziness|headache)",
-        # Metabolic emergencies: ketoacidosis signs and extreme glucose reads.
         r"keto?acidosis",
         r"\bketones?\b",
         (
@@ -76,8 +69,7 @@ _COMPILED: dict[str, list[re.Pattern[str]]] = {
     for category, patterns in _CATEGORIES.items()
 }
 
-# Preserve the configured direct-reading and "above/over" floors. Unitless
-# legacy readings mean mg/dL; explicit mmol/L readings use the same policy.
+# Unitless legacy glucose readings use milligrams per deciliter.
 _GLUCOSE_READING = re.compile(
     r"\b(?:blood\s+sugars?|blood\s+glucose|glucose|sugars?)\b"
     r"(?:\s+(?:is|are|was|were|of|at|around|about|reading))*\s*"
@@ -91,7 +83,6 @@ _MMOL_TO_MGDL = 18.0
 
 
 def _extreme_glucose_reading(text: str) -> bool:
-    """Match the configured emergency glucose category without an upper cap."""
     for comparator, value, unit in _GLUCOSE_READING.findall(text):
         reading = float(value)
         if "mmol" in unit.lower():
@@ -121,16 +112,11 @@ _REASONS = {
     ),
 }
 
-# Scan order: most safety-critical first.
 CATEGORIES = ["emergency", "medication_change", "diagnosis", "out_of_scope"]
 
 
 def check(question: str) -> dict[str, object]:
-    """Return the first matching safety category in CATEGORIES order.
-
-    Result keys are ``escalate``, ``reason``, and ``category``. With no match,
-    return False and null reason/category; downstream grounding still applies.
-    """
+    """Check categories in safety priority order before grounding."""
     for category in CATEGORIES:
         for pattern in _COMPILED[category]:
             if pattern.search(question):

@@ -1,5 +1,3 @@
-"""Load rules and dishes into a process-wide, in-memory KB on first access."""
-
 from __future__ import annotations
 
 import logging
@@ -23,12 +21,11 @@ _KB: KBGraph | None = None
 
 
 def get_kb() -> KBGraph:
-    """Return the process KB, building it on first use."""
     global _KB
     release = selected_release()
     if _KB is None:
         if release is None:
-            kb = load_kb(RULES_PATH, DISHES_PATH)  # development fixtures
+            kb = load_kb(RULES_PATH, DISHES_PATH)
         else:
             kb = load_kb(RULES_PATH, DISHES_PATH, valid_from=release.published_at,
                          rules_document=release.rules_document(), dishes_document=release.dishes(),
@@ -42,12 +39,10 @@ def get_kb() -> KBGraph:
 
 
 def get_index() -> KBIndex:
-    """Retrieval index over the process KB (cached per KBGraph instance)."""
     return build_index(get_kb())
 
 
 def reset_kb() -> None:
-    """Clear and close the process KB; the next access loads source files again."""
     global _KB
     if _KB is not None:
         _KB.close()

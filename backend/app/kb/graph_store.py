@@ -1,13 +1,4 @@
-"""Versioned knowledge-base graph store (SQLite + NetworkX).
-
-Node content is immutable. New versions close the previous validity interval.
-Edges are immutable, pinned to node versions, and inactive when either endpoint
-closes. Identical edge writes reuse the existing row.
-
-NetworkX views select current state or a timestamp. Validity has one time axis,
-not separate valid-time and transaction-time histories. See
-``rules/neo4j_schema_design.md`` and ``rules/SCHEMA_DECISION.md``.
-"""
+"""Versioned SQLite knowledge graph with immutable content."""
 
 from __future__ import annotations
 
@@ -49,7 +40,6 @@ def _slug(text: str) -> str:
 
 
 def unit_for_nutrient(nutrient: str) -> str:
-    """Canonical unit for a nutrient field name (e.g. ``sodium_mg`` -> ``mg``)."""
     return _NUTRIENT_UNITS.get(nutrient, "")
 
 
@@ -91,13 +81,7 @@ def diagnosis_logical_id(code: str) -> str:
 
 
 def _validate_rule(rule: dict[str, Any]) -> None:
-    """Reject a malformed rule before any neighbourhood write.
-
-    Atomic rule appends depend on whole-input validation: a bad rule must fail
-    before the first write, not after a partially committed neighbourhood.
-    Action types without graph nodes (e.g. ``assert``) pass through unexamined,
-    matching what ``append_rule`` chooses not to model.
-    """
+    """Validate the whole rule before any neighborhood write."""
     if not isinstance(rule, dict):
         raise TypeError("rule must be an object")
     for field in ("rule_id", "guideline", "section"):
@@ -136,8 +120,6 @@ def _validate_rule(rule: dict[str, Any]) -> None:
 
 
 class KBGraph:
-    """Append-only, versioned knowledge graph backed by SQLite + NetworkX."""
-
     def __init__(self, db_path: str | Path = ":memory:") -> None:
         self.db_path = str(db_path)
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
@@ -212,14 +194,7 @@ class KBGraph:
         version: int | None = None,
         valid_from: str | None = None,
     ) -> int:
-        """Append node content and close its previous interval. Return the version.
-
-        Matching current props reuse the existing version, ignoring metadata
-        differences. Otherwise allocate a version or require the supplied one
-        to exceed every existing version. ``valid_from`` defaults to UTC now
-        and cannot predate the open version. Invalid ordering raises ValueError
-        before writing.
-        """
+        """Identical content reuses the current version despite metadata changes."""
         with self._conn:
             return self._append_node(
                 label, logical_id, props, source, version, valid_from
@@ -234,7 +209,7 @@ class KBGraph:
         version: int | None,
         valid_from: str | None,
     ) -> int:
-        """Transaction-free node append; the caller owns the transaction."""
+        """The caller owns the transaction."""
         ts = valid_from or _utcnow()
         props_json = json.dumps(props, sort_keys=True, separators=(",", ":"))
         checksum = _checksum(props)
@@ -287,12 +262,7 @@ class KBGraph:
         dst_version: int | None = None,
         valid_from: str | None = None,
     ) -> int:
-        """Append an edge pinned to explicit node versions; returns edge_id.
-
-        Pure insert — edges are immutable, so no history is ever rewritten.
-        Re-asserting an edge identical in type, endpoints, pinned versions, and
-        props is idempotent and returns the existing edge_id.
-        """
+        """Identical edges reuse their existing identity."""
         with self._conn:
             return self._append_edge(
                 rel_type, src_id, dst_id, props, src_version, dst_version, valid_from
@@ -308,12 +278,11 @@ class KBGraph:
         dst_version: int | None = None,
         valid_from: str | None = None,
     ) -> int:
-        """Transaction-free edge append; the caller owns the transaction."""
+        """The caller owns the transaction."""
         src_version = src_version if src_version is not None else self._current_version_of(src_id)
         dst_version = dst_version if dst_version is not None else self._current_version_of(dst_id)
         props_json = json.dumps(props or {}, sort_keys=True, separators=(",", ":"))
         ts = valid_from or _utcnow()
-        # Reimports must not duplicate edges or the constraints reached through them.
         existing = self._conn.execute(
             "SELECT edge_id FROM edges WHERE rel_type = ? AND src_id = ? "
             "AND src_version = ? AND dst_id = ? AND dst_version = ? AND props = ?",
@@ -330,7 +299,7 @@ class KBGraph:
             """,
             (rel_type, src_id, src_version, dst_id, dst_version, props_json, ts),
         )
-        assert cur.lastrowid is not None  # INSERT into an INTEGER PRIMARY KEY table.
+        assert cur.lastrowid is not None
         return cur.lastrowid
 
     def append_rule(
@@ -339,11 +308,6 @@ class KBGraph:
         source: str | None = None,
         valid_from: str | None = None,
     ) -> int:
-        """Append a rule and its graph neighbourhood in one transaction.
-
-        Validate before writing and roll back all changes on failure. Guideline
-        revisions reconnect every current section. Return the rule version.
-        """
         _validate_rule(rule)
         ts = valid_from or _utcnow()
         rule_id = str(rule["rule_id"])
@@ -370,8 +334,7 @@ class KBGraph:
                 version=None,
                 valid_from=ts,
             )
-            # Reconnect unchanged sections to the new guideline version without
-            # deleting their historical edges.
+            # Reconnect unchanged sections without deleting historical edges.
             for section_lid in self._current_sections_of(guideline):
                 self._append_edge("HAS_SECTION", gid, section_lid, valid_from=ts)
 
@@ -456,7 +419,6 @@ class KBGraph:
             return self._current_version_of(rid)
 
     def _current_sections_of(self, guideline: str) -> list[str]:
-        """Logical ids of the guideline's currently open Section nodes."""
         prefix = f"section:{_slug(guideline)}:"
         rows = self._conn.execute(
             "SELECT logical_id FROM nodes WHERE label = 'Section' AND valid_to IS NULL"
@@ -494,12 +456,7 @@ class KBGraph:
         label: str | None = None,
         version: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List active nodes, optionally filtered by label.
-
-        ``version`` is an ISO timestamp, not a numeric node revision. None means
-        current state; timestamps select valid_from <= t < valid_to, with an
-        open valid_to extending indefinitely. Return nodes by logical ID.
-        """
+        """The version argument selects a timestamp rather than a numeric revision."""
         where, params = [], []
         if label is not None:
             where.append("label = ?")
@@ -517,14 +474,7 @@ class KBGraph:
         return [self._node_row(r) for r in rows]
 
     def edges(self, version: str | None = None) -> list[dict[str, Any]]:
-        """List edges by ID whose pinned endpoint versions are active.
-
-        ``version`` is an ISO snapshot timestamp, or None for current state.
-        Activity is determined from endpoint intervals; a snapshot additionally
-        requires the edge itself to have been created (``valid_from``) no later
-        than the snapshot time, so later-created edges never appear in earlier
-        snapshots despite append-only history.
-        """
+        """Snapshot edges require both pinned endpoint versions to be active."""
         if version is None:
             node_pred: tuple[str, list[str]] = ("{alias}.valid_to IS NULL", [])
             edge_pred = ""
@@ -564,14 +514,12 @@ class KBGraph:
         ]
 
     def current_version(self) -> str | None:
-        """Tag of the current KB state: the newest ``valid_from`` timestamp."""
         row = self._conn.execute(
             "SELECT MAX(valid_from) AS t FROM nodes"
         ).fetchone()
         return row["t"] if row and row["t"] else None
 
     def get_rule(self, rule_id: str, version: int | None = None) -> dict[str, Any] | None:
-        """Current (or requested) version of a rule, with its constraints."""
         rid = rule_logical_id(rule_id)
         if version is not None:
             row = self._conn.execute(
@@ -621,7 +569,6 @@ class KBGraph:
         ]
 
     def rules_for_nutrient(self, nutrient: str) -> list[dict[str, Any]]:
-        """Current rules that PRODUCE a NutrientConstraint for ``nutrient``."""
         rows = self._conn.execute(
             """
             SELECT DISTINCT r.logical_id FROM edges e
@@ -643,12 +590,7 @@ class KBGraph:
         return out
 
     def dishes_meeting(self, constraint: dict[str, Any], limit: int = 50) -> list[dict[str, Any]]:
-        """Current dishes whose NutrientProfile satisfies ``constraint``.
-
-        ``constraint`` is ``{"nutrient": ..., "kind": "max"|"min"|"target",
-        "value": ...}``. A ``target`` is treated as a soft ceiling (values at or
-        under the target qualify, closest first).
-        """
+        """TARGET acts as a soft ceiling for catalogue filtering."""
         nutrient = constraint["nutrient"]
         kind = constraint["kind"]
         value = float(constraint["value"])
@@ -674,7 +616,6 @@ class KBGraph:
                     "slack": score,
                 }
             )
-        # Closest to the bound first (smallest slack), tie-break on dish id.
         dishes.sort(key=lambda d: (d["slack"], d["dish_id"]))
         return dishes[:limit]
 
@@ -692,11 +633,6 @@ class KBGraph:
         return self._node_row(row) if row else None
 
     def node_history(self, node_id: str) -> list[dict[str, Any]]:
-        """All versions of a logical node, oldest first.
-
-        Accepts a fully-qualified logical id (``rule:X``) or a bare id, which is
-        searched across labels.
-        """
         lid = node_id
         if ":" not in node_id:
             row = self._conn.execute(
@@ -713,7 +649,6 @@ class KBGraph:
         return [self._node_row(r) for r in rows]
 
     def graph(self, version: str | None = None) -> nx.MultiDiGraph:
-        """Materialise a NetworkX snapshot (current state or point-in-time)."""
         g = nx.MultiDiGraph()
         for node in self.nodes(version=version):
             g.add_node(node["id"], label=node["label"], version=node["version"], **node["props"])
@@ -728,7 +663,6 @@ class KBGraph:
         return g
 
     def stats(self) -> dict[str, Any]:
-        """Counts of current nodes by label and active edges by relation type."""
         node_counts: dict[str, int] = {}
         for node in self.nodes():
             node_counts[node["label"]] = node_counts.get(node["label"], 0) + 1
@@ -744,7 +678,6 @@ class KBGraph:
 
 
     def rules(self) -> list[dict[str, Any]]:
-        """All current rules."""
         out = []
         for node in self.nodes(label="Rule"):
             rule_id = node["id"].split(":", 1)[1]
@@ -755,7 +688,6 @@ class KBGraph:
         return out
 
     def dishes(self) -> list[dict[str, Any]]:
-        """All current dishes with their nutrient profile attached."""
         out = []
         for node in self.nodes(label="Dish"):
             dish = dict(node["props"])
@@ -776,11 +708,6 @@ def load_kb(
     dishes_document: list[dict] | None = None,
     source: str | None = None,
 ) -> KBGraph:
-    """Build a graph from explicit files or an already validated release snapshot.
-
-    Release documents bypass file reads; source identifies the published release
-    without replacing the catalogue's original nutrient provenance.
-    """
     ts = valid_from or _utcnow()
     kb = KBGraph(db_path)
 

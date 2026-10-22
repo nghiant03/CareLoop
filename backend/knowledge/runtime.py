@@ -1,4 +1,4 @@
-"""Pin one explicitly selected knowledge release for the lifetime of a process."""
+"""Pin one published knowledge release per process."""
 
 from __future__ import annotations
 
@@ -18,12 +18,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 
 
 def selected_release() -> KnowledgeRelease | None:
-    """Fixture mode is the development default; configured database mode fails closed.
-
-    Any database/release setting requires both. Mode/configuration changes after
-    first use require restart, preventing mixed process-wide rule/catalogue caches.
-    Runtime connections are read-only and never bootstrap from repository JSON.
-    """
+    """Configured database mode fails closed. Release changes require restart."""
     global _CONFIG, _RELEASE
     url = database_url("knowledge")
     database = url or ""

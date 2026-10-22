@@ -1,9 +1,3 @@
-"""Cohort clustering for synthetic CKD/T2D patients.
-
-Median-impute available features, drop absent columns, and standardize before
-k-means. Fixed ``random_state`` is repeatable within the same numerical environment.
-"""
-
 from __future__ import annotations
 
 from collections import Counter
@@ -28,7 +22,6 @@ FEATURE_NAMES = (
 
 
 def _feature_matrix(patients: list[dict], feature_names: list[str]) -> np.ndarray:
-    """Build an (n_patients, n_features) matrix, median-imputing Nones."""
     raw: list[list[float | None]] = []
     for p in patients:
         row = [p.get(name) for name in feature_names]
@@ -51,18 +44,9 @@ def cluster_patients(
     patients: list[dict],
     k_range: tuple[int, int] = (2, 6),
 ) -> dict:
-    """Choose k-means cohorts by highest mean silhouette, preferring smaller k.
-
-    ``patients`` are profile dicts. ``k_range`` is inclusive, restricted to
-    2 <= k < patient count. Return k, input-order labels, silhouette, cluster
-    profiles, and feature names. Raise ValueError for empty input, no usable
-    features or k, or a labeling with too few clusters to score.
-    """
     if not patients:
         raise ValueError("cluster_patients requires at least one patient")
 
-    # Keep a feature only if at least one patient has a value for it, so an
-    # entirely-absent field does not produce an all-NaN column.
     present = [name for name in FEATURE_NAMES if any(p.get(name) is not None for p in patients)]
     if not present:
         raise ValueError("no usable numeric features found on patients")

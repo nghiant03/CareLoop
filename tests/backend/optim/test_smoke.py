@@ -1,11 +1,8 @@
-"""Toy optimizer smoke checks, runnable with pytest or directly as a script."""
-
 from __future__ import annotations
 
 import os
 import sys
 
-# Allow direct execution: `python backend/optim/test_smoke.py`.
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
@@ -26,12 +23,11 @@ def _envelope():
 
 
 def _feasible_day() -> list[list[str]]:
-    """One day that respects protein MIN/MAX and the sodium MAX, no exclusions."""
     return [
-        ["grilled_salmon_brown_rice"],   # P38 Na400
-        ["yong_tau_foo_soup"],           # P20 Na650
-        ["vegetable_bee_hoon"],          # P12 Na600
-    ]  # day totals: P70 (60..80), Na1650 (<=2000)
+        ["grilled_salmon_brown_rice"],
+        ["yong_tau_foo_soup"],
+        ["vegetable_bee_hoon"],
+    ]
 
 
 def test_feasible_plan_returns_true():
@@ -40,7 +36,6 @@ def test_feasible_plan_returns_true():
 
 
 def test_max_constraint_violation_returns_false():
-    # 3x Nasi Lemak/day => sodium 4200 mg > 2000 mg MAX.
     plan = [["nasi_lemak"]] * 21
     _, violations = evaluate(plan, _envelope(), TOY_DISHES)
     assert is_feasible(plan, _envelope(), TOY_DISHES) is False
@@ -48,30 +43,23 @@ def test_max_constraint_violation_returns_false():
 
 
 def test_min_shortfall_is_soft_not_a_violation():
-    # Three servings supply 36 g protein below the 60 g MIN. The soft shortfall
-    # affects nutrient_target_deviation, not hard feasibility.
     plan = [["vegetable_bee_hoon"]] * 21
     objectives, violations = evaluate(plan, _envelope(), TOY_DISHES)
     assert is_feasible(plan, _envelope(), TOY_DISHES) is True
     assert violations == []
     assert all(v["type"] != "min_daily" for v in violations)
-    # the protein shortfall (24 g/day below the 60 g floor) must be visible in
-    # the deviation objective: 24 g x 7 days / 7 days = 24 g mean shortfall.
     assert objectives["nutrient_target_deviation"] >= 24.0 - 1e-6
 
 
 def test_excluded_dish_returns_false():
     env = _envelope()
 
-    # ingredient exclusion: 'lard' in Char Kway Teow
     lard_plan = [["char_kway_teow"], ["fish_soup_bee_hoon"], ["vegetable_bee_hoon"]] * 7
     assert is_feasible(lard_plan, env, TOY_DISHES) is False
 
-    # category exclusion: 'deep_fried' for the fried chicken wing set
     fried_plan = [["fried_chicken_wing_set"], ["fish_soup_bee_hoon"], ["vegetable_bee_hoon"]] * 7
     assert is_feasible(fried_plan, env, TOY_DISHES) is False
 
-    # both flagged as exclusions (not merely nutrient violations)
     _o, violations = evaluate(fried_plan, env, TOY_DISHES)
     assert any(v["type"] == "exclusion" for v in violations)
 
@@ -116,7 +104,6 @@ def test_baselines_run_and_return_plans():
     for result in (rnd, greedy, exhaustive):
         assert len(result["plan"]) == 21
         assert set(result["objectives"]) == set(OBJECTIVE_NAMES)
-    # greedy + exhaustive should be feasible on this toy problem
     assert greedy["feasible"] is True
     assert exhaustive["feasible"] is True
 

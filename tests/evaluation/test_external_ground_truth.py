@@ -1,5 +1,3 @@
-"""Tests for independent external ground-truth evaluations, SG FoodID staging, and OpenAI-compatible extraction."""
-
 from __future__ import annotations
 
 import json

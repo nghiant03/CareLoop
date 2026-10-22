@@ -1,9 +1,3 @@
-"""Check adherence math, constraint identity, complete days, and attribution.
-
-Stub dishes make calculations exact. The exclusion regression also exercises
-the HTTP app with real rule and catalogue data.
-"""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -34,7 +28,6 @@ def _clean_meal_logs():
 
 @pytest.fixture
 def _isolated_envelope_store():
-    """Snapshot the process-global envelope store around each test."""
     snapshot = dict(ENVELOPE_STORE)
     yield
     ENVELOPE_STORE.clear()
@@ -42,8 +35,6 @@ def _isolated_envelope_store():
 
 
 class StubDish:
-    """Minimal dish stand-in: exact nutrients, no exclusions unless stated."""
-
     def __init__(self, dish_id: str, nutrients: dict[str, float], **attrs):
         self.dish_id = dish_id
         self.name = attrs.get("name", dish_id)
@@ -71,7 +62,6 @@ def _envelope(patient_id: str, targets, exclusions=None) -> NutrientEnvelope:
 
 
 def _logs(patient_id: str, days_and_dishes: list[tuple[str, str]]) -> list[dict[str, str]]:
-    """One lunch log per (date, dish_id) pair."""
     return [
         {"patient_id": patient_id, "date": day, "meal": "lunch", "dish_id": dish_id}
         for day, dish_id in days_and_dishes
@@ -79,10 +69,6 @@ def _logs(patient_id: str, days_and_dishes: list[tuple[str, str]]) -> list[dict[
 
 
 def _complete_logs(logs, dishes):
-    """Add zero-nutrient meals so trend fixtures are complete without changing totals.
-
-    Register ZERO in the supplied dish mapping and return a new log list.
-    """
     dishes["ZERO"] = StubDish("ZERO", {})
     return logs + [dict(entry, meal=meal, dish_id="ZERO")
                    for entry in logs for meal in ("breakfast", "dinner")]
@@ -94,7 +80,6 @@ _CITATION = CitationSource(
 
 
 def test_min_shortfall_exposure_rises_and_flags_worsening() -> None:
-    """Falling intake below a 25 g floor yields rising exposure: 20, 40, 60%."""
     patient = "P0001"
     envelope = _envelope(
         patient,
@@ -114,7 +99,6 @@ def test_min_shortfall_exposure_rises_and_flags_worsening() -> None:
     assert series["limit"] == 25.0
     assert [p["total"] for p in series["points"]] == [20.0, 15.0, 10.0]
     assert [p["exposure"] for p in series["points"]] == pytest.approx([20.0, 40.0, 60.0])
-    # signed pct stays signed: below the floor is negative
     assert [p["pct"] for p in series["points"]] == pytest.approx([-20.0, -40.0, -60.0])
 
     flags = result["flags"]
@@ -124,13 +108,11 @@ def test_min_shortfall_exposure_rises_and_flags_worsening() -> None:
     assert flag["kind"] == "min"
     assert flag["direction"] == "worsening"
     assert flag["slope_pct_per_day"] == pytest.approx(20.0)
-    assert flag["severity"] == "alert"  # latest 60 % >= 25 % alert threshold
-    # per-day projection on the same time base: 60 + 3 * 20 = 120
+    assert flag["severity"] == "alert"
     assert flag["projected_3d_exposure_pct"] == pytest.approx(120.0)
 
 
 def test_min_satisfied_day_has_zero_exposure() -> None:
-    """Meeting the floor is zero exposure (no inversion into the MAX branch)."""
     envelope = _envelope(
         "P0001",
         [NutrientConstraint(nutrient=NutrientKind.FIBER_G, kind=ConstraintKind.MIN, value=25.0, unit="g")],
@@ -144,9 +126,6 @@ def test_min_satisfied_day_has_zero_exposure() -> None:
 
 
 def test_band_nutrient_gets_one_series_per_constraint() -> None:
-    """Protein MIN 50 / MAX 60: two series, each with its own limit and
-    direction, exactly one point per date per series. A single-constraint
-    nutrient (sodium MAX) keeps the plain nutrient key."""
     patient = "P0001"
     envelope = _envelope(
         patient,
@@ -166,7 +145,6 @@ def test_band_nutrient_gets_one_series_per_constraint() -> None:
     result = analysis.analyse_patient(logs, envelope, dishes)
     series = result["series"]
 
-    # single-constraint nutrient: unchanged plain key
     assert set(series) == {"protein_g:min", "protein_g:max", "sodium_mg"}
     assert series["sodium_mg"]["kind"] == "max"
     assert series["sodium_mg"]["limit"] == 1000.0
@@ -178,19 +156,15 @@ def test_band_nutrient_gets_one_series_per_constraint() -> None:
     assert max_series["kind"] == "max"
     assert max_series["limit"] == 60.0
 
-    # one point per date per series, in chronological order
     for s in (min_series, max_series, series["sodium_mg"]):
         assert [p["date"] for p in s["points"]] == days
 
-    # day 1 (55 g): inside the band -> zero exposure on both sides
     assert min_series["points"][0]["exposure"] == 0.0
     assert max_series["points"][0]["exposure"] == 0.0
-    # Above MAX still satisfies MIN; each series must use its own bound.
     assert max_series["points"][1]["exposure"] == pytest.approx(
         (70.0 - 60.0) / 60.0 * 100.0, abs=1e-3
     )
     assert min_series["points"][1]["exposure"] == 0.0
-    # MIN limit is actually used on the MIN side: 40 g would be a 20 % shortfall
     under = analysis.deviation_series(
         [{"date": "2026-03-03", "totals": {"protein_g": 40.0}}], envelope
     )
@@ -199,7 +173,6 @@ def test_band_nutrient_gets_one_series_per_constraint() -> None:
 
 
 def test_band_nutrient_soft_gap_rows_per_constraint() -> None:
-    """Day rows classify each band side independently (MIN under, MAX over)."""
     envelope = _envelope(
         "P0001",
         [
@@ -218,7 +191,6 @@ def test_band_nutrient_soft_gap_rows_per_constraint() -> None:
 
 
 def test_slope_uses_elapsed_days_not_indices() -> None:
-    """Ten-day intervals yield 0.5 percentage points/day, below the trigger."""
     envelope = _envelope(
         "P0001",
         [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=1000.0, unit="mg")],
@@ -227,7 +199,6 @@ def test_slope_uses_elapsed_days_not_indices() -> None:
         f"S{i}": StubDish(f"S{i}", {"sodium_mg": sodium})
         for i, sodium in enumerate([1050.0, 1100.0, 1150.0])
     }
-    # observations 10 days apart
     logs = _logs(
         "P0001",
         [("2026-01-01", "S0"), ("2026-01-11", "S1"), ("2026-01-21", "S2")],
@@ -238,21 +209,17 @@ def test_slope_uses_elapsed_days_not_indices() -> None:
     points = result["series"]["sodium_mg"]["points"]
     assert [p["exposure"] for p in points] == pytest.approx([5.0, 10.0, 15.0])
 
-    # 0.5 pct-points/day is a slow drift: no flag at the default trigger
     assert result["flags"] == []
 
-    # lowering the trigger exposes the exact per-day slope
     flags = analysis.trend_flags(result["series"], slope_trigger=0.3)
     assert len(flags) == 1
     flag = flags[0]
     assert flag["direction"] == "worsening"
     assert flag["slope_pct_per_day"] == pytest.approx(0.5)
-    # 3-day projection on the same (per-day) time base: 15 + 3 * 0.5 = 16.5
     assert flag["projected_3d_exposure_pct"] == pytest.approx(16.5)
 
 
 def test_slope_uneven_spacing_is_a_true_per_day_rate() -> None:
-    """One-day then two-day intervals: use elapsed days, not indices."""
     envelope = _envelope(
         "P0001",
         [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=1000.0, unit="mg")],
@@ -265,7 +232,6 @@ def test_slope_uneven_spacing_is_a_true_per_day_rate() -> None:
     logs = _complete_logs(logs, dishes)
     result = analysis.analyse_patient(logs, envelope, dishes)
     flags = analysis.trend_flags(result["series"], slope_trigger=0.1)
-    # pairwise slopes: 5/1, 5/2, 10/3 -> median 10/3 (rounded to 4 dp)
     assert flags[0]["slope_pct_per_day"] == pytest.approx(10.0 / 3.0, abs=1e-3)
 
 
@@ -279,8 +245,6 @@ def _category_exclusion(value: str) -> ExclusionFlag:
 
 
 def test_excluded_dish_is_hard_violation_even_with_ok_nutrients() -> None:
-    """A dish hit by an envelope exclusion is a hard violation regardless of
-    its nutrient totals; compliant flips to False."""
     envelope = _envelope(
         "P0001",
         [
@@ -304,7 +268,6 @@ def test_excluded_dish_is_hard_violation_even_with_ok_nutrients() -> None:
             "reason": "test exclusion: deep_fried",
         }
     ]
-    # the nutrient row itself is still "ok" — the exclusion is the violation
     assert day["nutrients"][0]["status"] == "ok"
 
 
@@ -323,8 +286,6 @@ def test_allowed_dish_with_no_exclusions_stays_compliant() -> None:
 
 
 def test_exclusion_violations_count_in_aggregate_days() -> None:
-    """Exclusion violations drive ``hard_violation_days`` but are dish-scoped,
-    so ``hard_violations_by_nutrient`` stays empty for them."""
     envelope = _envelope(
         "P0001",
         [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=100_000.0, unit="mg")],
@@ -339,7 +300,6 @@ def test_exclusion_violations_count_in_aggregate_days() -> None:
 
 
 def test_day_completeness_counts_distinct_logged_meals() -> None:
-    """``completeness`` counts the distinct meal slots with >= 1 log."""
     envelope = _envelope(
         "P0001",
         [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=100_000.0, unit="mg")],
@@ -362,7 +322,6 @@ def test_day_completeness_counts_distinct_logged_meals() -> None:
     )
     assert partial["completeness"] == {"meals_logged": 1, "expected_meals": 3, "complete": False}
 
-    # same slot twice is still one logged meal (upsert semantics upstream)
     dup = analysis.analyse_day(
         "2026-03-03",
         [{"meal": "lunch", "dish_id": "A"}, {"meal": "lunch", "dish_id": "B"}],
@@ -373,7 +332,6 @@ def test_day_completeness_counts_distinct_logged_meals() -> None:
 
 
 def test_range_aggregate_reports_complete_days() -> None:
-    """Aggregate reports the count and fraction of complete logged days."""
     envelope = _envelope(
         "P0001",
         [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=100_000.0, unit="mg")],
@@ -389,18 +347,12 @@ def test_range_aggregate_reports_complete_days() -> None:
     assert result["aggregate"]["days_logged"] == 2
     assert result["aggregate"]["complete_days"] == 1
     assert result["aggregate"]["fraction_complete"] == pytest.approx(0.5)
-    # empty window: no days -> fraction 0.0 (not a ZeroDivisionError)
     empty = analysis.analyse_range([], envelope, dishes)
     assert empty["aggregate"]["complete_days"] == 0
     assert empty["aggregate"]["fraction_complete"] == 0.0
 
 
 def test_nutrient_rows_carry_ranked_contributors() -> None:
-    """MAX excess ranks highest amounts first; MIN shortfall ranks lowest first.
-
-    Return up to two contributors with their percentage of the day total.
-    Dish IDs break ties.
-    """
     envelope = _envelope(
         "P0001",
         [
@@ -426,7 +378,6 @@ def test_nutrient_rows_carry_ranked_contributors() -> None:
     )
     rows = {(r["nutrient"], r["kind"]): r for r in day["nutrients"]}
 
-    # sodium: 1000 total vs MAX 900 -> hard violation; contributors ranked DESC
     sodium = rows[("sodium_mg", "max")]
     assert sodium["status"] == "hard_violation"
     assert sodium["contributors"] == [
@@ -434,15 +385,12 @@ def test_nutrient_rows_carry_ranked_contributors() -> None:
         {"dish_id": "B", "dish_name": "Dish B", "amount": 300.0, "pct_of_day_total": pytest.approx(30.0)},
     ]
 
-    # fiber: 25 total vs MIN 30 -> shortfall; contributors ranked ASC (what was
-    # actually eaten); the 5 g tie between A and C breaks by dish_id
     fiber = rows[("fiber_g", "min")]
     assert fiber["status"] == "soft_gap"
     assert [c["dish_id"] for c in fiber["contributors"]] == ["A", "C"]
     assert [c["amount"] for c in fiber["contributors"]] == [5.0, 5.0]
     assert fiber["contributors"][0]["pct_of_day_total"] == pytest.approx(20.0)
 
-    # zero day total: percentages guard to 0.0 instead of dividing by zero
     potassium = rows[("potassium_mg", "max")]
     assert potassium["status"] == "ok"
     assert len(potassium["contributors"]) == 2
@@ -450,7 +398,6 @@ def test_nutrient_rows_carry_ranked_contributors() -> None:
 
 
 def test_day_rows_carry_envelope_identity() -> None:
-    """Every day row is stamped with the attributing envelope id + version."""
     envelope = _envelope(
         "P0001",
         [NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=1000.0, unit="mg")],
@@ -463,10 +410,6 @@ def test_day_rows_carry_envelope_identity() -> None:
 
 
 def test_p0006_roasted_chicken_rice_excluded(client, _isolated_envelope_store) -> None:
-    """P0006's rules-engine envelope excludes SG0002 (high-glycaemic-load /
-    high-potassium semantic mappings). Logging it must yield compliant=False
-    with a hard violation naming the dish and the exclusion — even though
-    every nutrient total stays under its ceiling."""
     run = client.post("/rules/run", json={"patient_id": "P0006"})
     assert run.status_code == 200, run.text
     envelope = run.json()["envelope"]
@@ -499,7 +442,5 @@ def test_p0006_roasted_chicken_rice_excluded(client, _isolated_envelope_store) -
     assert hit["exclusion_value"] in {"high_glycaemic_load", "high_potassium_foods"}
     assert hit["reason"]
 
-    # SG0002's nutrients alone stay under P0006's ceilings: no nutrient-side
-    # hard violations, only the exclusion.
     assert body["aggregate"]["hard_violations_by_nutrient"] == {}
     assert body["aggregate"]["hard_violation_days"] == 1

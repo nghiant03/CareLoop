@@ -1,5 +1,3 @@
-"""Deployment schema preparation primitives; never called by application startup."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,13 +22,11 @@ def tables_for(component: str) -> tuple[str, ...]:
 
 
 def schema_sql(component: str) -> str:
-    """Load a frozen versioned PostgreSQL migration."""
     tables_for(component)
     return (Path(__file__).with_name("migrations") / f"001_{component}.sql").read_text(encoding="utf-8")
 
 
 def initialize_database(url: str, component: str) -> dict:
-    """Apply version 1 as admin; check existing databases without recreating them."""
     expected = set(tables_for(component)) | {"careloop_schema", "careloop_imports"}
     with psycopg.connect(url, row_factory=storage_row, connect_timeout=5) as conn:
         conn.execute("SELECT pg_advisory_xact_lock(%s)", (_WRITE_LOCKS[component],))
@@ -45,8 +41,7 @@ def initialize_database(url: str, component: str) -> dict:
         conn.execute(schema_sql(component))  # pyrefly: ignore[no-matching-overload]
         conn.execute("CREATE TABLE careloop_schema (component TEXT PRIMARY KEY, version INTEGER NOT NULL)")
         conn.execute("INSERT INTO careloop_schema VALUES (%s,1)", (component,))
-        # Retain the v1 metadata table for compatibility with existing databases.
-        # No SQLite import command or runtime backend remains.
+        # Retain version one metadata for existing database compatibility.
         conn.execute("""CREATE TABLE careloop_imports (
             source_digest TEXT PRIMARY KEY, source_path TEXT NOT NULL,
             imported_at TIMESTAMPTZ NOT NULL DEFAULT now(), counts_json TEXT NOT NULL

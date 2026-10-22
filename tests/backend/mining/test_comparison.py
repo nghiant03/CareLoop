@@ -1,9 +1,3 @@
-"""Tests for backend.mining.comparison — the method-comparison study.
-
-A module-scoped fixture shares one study result across semantic assertions.
-Artifact tests reuse it and write only to temporary paths.
-"""
-
 import math
 
 import pytest
@@ -39,7 +33,6 @@ class TestClustering:
             if m["silhouette"] is not None:
                 assert -1.0 <= m["silhouette"] <= 1.0
             assert 0 <= m["noise_points"] <= c["n_patients"]
-            # stability: ARI lives in [-1, 1]
             for key in ("seed_stability_ari", "bootstrap_stability_ari"):
                 assert -1.0 <= m[key] <= 1.0
 
@@ -80,7 +73,6 @@ class TestTrends:
                     assert 0.0 <= s["mean_lead_months"] <= comparison._N_MONTHS
 
     def test_true_positives_detected(self, results):
-        """Both should-flag scenarios are detected by every estimator."""
         for name, method in results["trends"]["synthetic"].items():
             assert method["detection_rate_true_positive"] >= 0.9, name
 
@@ -89,8 +81,6 @@ class TestTrends:
             assert method["false_positive_rate_flat"] <= 0.2, name
 
     def test_ewma_adapts_to_plateau_better_than_theil_sen(self, results):
-        """The headline differentiator: after a rise stops, the
-        EWMA-weighted slope must stop flagging sooner than Theil-Sen."""
         t = results["trends"]["synthetic"]
         assert (
             t["ewma"]["false_positive_rate_plateau"]
@@ -99,7 +89,7 @@ class TestTrends:
 
     def test_real_data_reproduces_trends_module(self, results):
         rp = results["trends"]["real_patients"]
-        assert rp["n_series"] == 40  # 20 patients x 2 analytes
+        assert rp["n_series"] == 40
         assert rp["matches_trends_module"] is True
         assert rp["per_method"]["theil-sen"]["n_flags"] == rp["trends_module_n_flags"]
         for m in rp["per_method"].values():
@@ -148,7 +138,6 @@ class TestArtifact:
         ):
             assert heading in text
         assert text.count("**Verdict") == 3
-        # markdown tables present
         assert text.count("|---") >= 6
         assert "historical unweighted composite" in text
         assert "Current production" in text

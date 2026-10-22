@@ -1,11 +1,4 @@
-"""Seeded synthetic patient generator for fixtures and demonstrations.
-
-Cycle through ``ARCHETYPES`` and generate monthly potassium/phosphate histories.
-One seed drives every draw. NumPy is preferred, with a stdlib fallback for
-standalone use. Results depend on the RNG backend and Python/NumPy version.
-
-Run: ``python -m backend.datasets.patients_generator --n 20 --seed 0``.
-"""
+"""Seeded synthetic patient generation."""
 
 from __future__ import annotations
 
@@ -21,11 +14,7 @@ from backend.datasets.patient import Patient
 
 
 class _StdlibRNG:
-    """Minimal stand-in for ``numpy.random.Generator`` used by this generator.
-
-    Mirrors numpy semantics for the methods we call, in particular
-    ``integers(low, high)`` with an *exclusive* high bound.
-    """
+    """Match NumPy semantics with an exclusive upper integer bound."""
 
     def __init__(self, seed: int | None) -> None:
         self._r = random.Random(seed)
@@ -55,7 +44,6 @@ _NUMPY_NOTICE_SHOWN = False
 
 
 def get_rng(seed: int | None):
-    """Return (RNG, backend label), using NumPy or the deterministic stdlib shim."""
     global _NUMPY_NOTICE_SHOWN
     try:  # pragma: no cover - depends on environment
         import numpy as np  # type: ignore
@@ -72,9 +60,7 @@ def get_rng(seed: int | None):
         return _StdlibRNG(seed), "stdlib.random.Random"
 
 
-# Each archetype is a dict of distribution parameters. Ranges are (mean, sd).
-# ``k_trend`` / ``po4_trend`` are the total drift across the 6-month window
-# (recent value minus oldest value); positive => rising trend.
+# Positive drift means the recent value exceeds the oldest value.
 
 ARCHETYPES: dict[str, dict[str, Any]] = {
     "T2D": {
@@ -239,17 +225,12 @@ def _longitudinal(
     hi: float,
     n_months: int = 6,
 ) -> list[float]:
-    """Return ``n_months`` values, index 0 = most recent.
-
-    ``current`` is the most-recent value; older values step back by
-    ``total_trend`` across the window (positive => rising trend).
-    """
+    """Index zero is newest. Positive drift means values rise toward the present."""
     out: list[float] = []
     for i in range(n_months):
         base = current - total_trend * (i / (n_months - 1))
         noise = rng.normal(0.0, monthly_sd)
         out.append(round(_clip(base + noise, lo, hi), 2))
-    # Anchor the current value exactly to the requested target.
     out[0] = round(_clip(current, lo, hi), 2)
     return out
 
@@ -306,7 +287,6 @@ def make_patient(rng, index: int, archetype: str) -> Patient:
 
 
 def generate(n: int, seed: int | None) -> list[Patient]:
-    """Generate ``n`` patients by cycling through all archetypes."""
     if n < 0:
         raise ValueError("n must be >= 0")
     rng, _backend = get_rng(seed)

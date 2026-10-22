@@ -1,10 +1,3 @@
-"""Tests for evaluation/ablation.py — pure-function tests + one smoke run.
-
-The real-data test uses a small patient subset
-with heavily reduced optimiser / GA budgets; everything else runs on stub
-dishes and hand-checkable numbers.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -93,7 +86,6 @@ def _totals(*days: dict[str, float]) -> list[dict[str, float]]:
     return list(days)
 
 
-# Adequacy
 def test_adequacy_rows_mirrors_plan_service_semantics():
     env = _envelope()
     daily = _totals(
@@ -101,26 +93,22 @@ def test_adequacy_rows_mirrors_plan_service_semantics():
         {"energy_kcal": 1400.0, "protein_g": 30.0, "sodium_mg": 1000.0, "potassium_mg": 900.0},
     )
     rows = {r["nutrient"]: r for r in adequacy_rows(daily, env)}
-    # MAX ceilings are excluded from adequacy
     assert set(rows) == {"protein_g", "energy_kcal"}
-    protein = rows["protein_g"]  # MIN 50: worst day 30 -> shortfall 20, 40%
+    protein = rows["protein_g"]
     assert protein["aim"] == 50.0
-    assert protein["mean_daily_shortfall"] == pytest.approx(10.0)  # (0 + 20) / 2
+    assert protein["mean_daily_shortfall"] == pytest.approx(10.0)
     assert protein["worst_day_rel_shortfall_pct"] == pytest.approx(40.0)
     assert protein["met_days_fraction"] == pytest.approx(0.5)
-    energy = rows["energy_kcal"]  # TARGET 1800: worst (lowest) day 1400 -> 22.2%
-    assert energy["mean_daily_shortfall"] == pytest.approx(200.0)  # (0 + 400) / 2
+    energy = rows["energy_kcal"]
+    assert energy["mean_daily_shortfall"] == pytest.approx(200.0)
     assert energy["worst_day_rel_shortfall_pct"] == pytest.approx(400.0 / 18.0, rel=1e-6)
     assert energy["met_days_fraction"] == pytest.approx(0.5)
 
-    # dimensionless per-aim gap: mean over days of gap/aim (percent), so
-    # cross-aim pooling never mixes kcal/g/mg units
-    assert protein["mean_daily_rel_shortfall_pct"] == pytest.approx(20.0)  # mean(0, 40)
+    assert protein["mean_daily_rel_shortfall_pct"] == pytest.approx(20.0)
     assert energy["mean_daily_rel_shortfall_pct"] == pytest.approx(
         (0.0 + 400.0 / 18.0) / 2, rel=1e-6
     )
 
-    # zero-aim guard: relative shortfall is 0 when aim <= 0
     zero_env = _envelope().model_copy(update={"targets": [
         NutrientConstraint(nutrient=NutrientKind.PROTEIN_G,
                            kind=ConstraintKind.MIN, value=0.0, unit="g"),
@@ -132,9 +120,6 @@ def test_adequacy_rows_mirrors_plan_service_semantics():
 
 def test_plan_metrics_matches_problem_evaluate():
     env = _envelope()
-    # 2-dish-per-slot plan (multi-dish meals are natively supported):
-    # per day 3 x (30 + 2) = 96 g protein (MIN 50 met), 3 x (600 + 300) = 2700
-    # kcal (TARGET 1800 overshot by 900), sodium 3 x (400 + 50) = 1350 <= 2000.
     plan = [["m_protein", "s_veg"]] * 21
     metrics = plan_metrics(plan, env, ABLATION_POOL)
     objectives, violations = evaluate(plan, env, ABLATION_POOL)
@@ -147,7 +132,7 @@ def test_plan_metrics_matches_problem_evaluate():
             "nutrient_target_deviation": 0.001, "preference_fit": 0.5,
             "variety": 0.5, "cost": 0.02}.items())
     )
-    assert len(metrics["adequacy"]) == 2  # protein MIN + energy TARGET only
+    assert len(metrics["adequacy"]) == 2
     protein = next(r for r in metrics["adequacy"] if r["nutrient"] == "protein_g")
     assert protein["mean_daily_shortfall"] == pytest.approx(0.0)
     assert protein["worst_day_rel_shortfall_pct"] == 0.0
@@ -156,9 +141,6 @@ def test_plan_metrics_matches_problem_evaluate():
     assert energy["met_days_fraction"] == 0.0
     assert energy["worst_day_rel_shortfall_pct"] == pytest.approx(50.0)
 
-    # a hard-infeasible plan with a real protein shortfall:
-    # protein 3 x (10 + 5) = 45 (short 5/day, 10%), sodium 3 x (900 + 100) = 3000
-    # violates the 2000 mg MAX ceiling.
     bad = [["m_rice", "s_soup"]] * 21
     bad_metrics = plan_metrics(bad, env, ABLATION_POOL)
     _objs, bad_violations = evaluate(bad, env, ABLATION_POOL)
@@ -170,20 +152,15 @@ def test_plan_metrics_matches_problem_evaluate():
 
 
 def test_plan_metrics_pools_dimensionless_gaps_only():
-    """Pool relative gaps only; raw nutrient gaps have incompatible units."""
     env = _envelope()
     plan = [["m_protein", "s_veg"]] * 21
     metrics = plan_metrics(plan, env, ABLATION_POOL)
-    assert "mean_daily_shortfall" not in metrics  # raw pooled mix removed
-    # protein MIN 50: met every day (96 g/day) -> 0%; energy TARGET 1800:
-    # 2700 every day -> 50% every day. Pooled mean over the two aims:
+    assert "mean_daily_shortfall" not in metrics
     assert metrics["mean_daily_rel_shortfall_pct"] == pytest.approx(25.0)
-    # unit-bearing per-aim gaps are retained per aim, not pooled:
     energy = next(r for r in metrics["adequacy"] if r["nutrient"] == "energy_kcal")
     assert energy["mean_daily_shortfall"] == pytest.approx(900.0)
 
 
-# Repair
 def _no_day_duplicates(ev: CompositionEvaluator, ind: np.ndarray) -> bool:
     plan = ev.to_plan(ind)
     for day in range(7):
@@ -194,15 +171,11 @@ def _no_day_duplicates(ev: CompositionEvaluator, ind: np.ndarray) -> bool:
 
 
 def test_repair_individual_fixes_day_duplicates():
-    """Repair duplicates without invalid array axes or reselecting the duplicate."""
     env = _envelope()
     ev = CompositionEvaluator(env, ABLATION_POOL)
     main_pos = {d.dish_id: i for i, d in enumerate(ev.main_pool)}
     side_pos = {d.dish_id: i for i, d in enumerate(ev.side_pool)}
 
-    # every day repeats (m_protein, s_veg) x3 but satisfies both MAX
-    # ceilings, so only the repetition limit is violated. The old code
-    # raised AxisError before any repair; it must now converge.
     ind = np.zeros((ev.slots, 2), dtype=int)
     ind[:, 0] = main_pos["m_protein"]
     ind[:, 1] = side_pos["s_veg"]
@@ -213,9 +186,6 @@ def test_repair_individual_fixes_day_duplicates():
     assert ev.is_feasible_individual(fixed)
     assert _no_day_duplicates(ev, fixed)
 
-    # livelock variant: the duplicated main is the lowest-MAX-contribution
-    # candidate in its own pool (m_healthy: sodium 100 + potassium 100), so
-    # a replacement allowed to equal the duplicate never makes progress.
     ind2 = np.zeros((ev.slots, 2), dtype=int)
     ind2[:, 0] = main_pos["m_healthy"]
     ind2[:, 1] = side_pos["s_veg"]
@@ -228,15 +198,11 @@ def test_repair_individual_fixes_day_duplicates():
 
 
 def test_repair_individual_selects_a_duplicate_bearing_day():
-    """Repair duplicates on their own day, not a repetition-free MAX-worst day."""
     env = _envelope()
     ev = CompositionEvaluator(env, ABLATION_POOL)
     main_pos = {d.dish_id: i for i, d in enumerate(ev.main_pool)}
     side_pos = {d.dish_id: i for i, d in enumerate(ev.side_pool)}
 
-    # day 0: six distinct dishes, sodium 400+900+200+100+50+700 = 2350 >
-    # 2000 (the only MAX violation, on the most-violated day, no duplicate);
-    # days 1-6: MAX-compliant but repeat (m_protein, s_veg) x3.
     ind = np.zeros((ev.slots, 2), dtype=int)
     day0_mains = ["m_protein", "m_rice", "m_veg"]
     day0_sides = ["s_soup", "s_veg", "s_salty"]
@@ -256,16 +222,11 @@ def test_repair_individual_selects_a_duplicate_bearing_day():
 
 
 def test_repair_individual_fixes_max_violation_by_dish_replacement():
-    """Repair all six dish positions, subtracting the dish rather than its meal."""
     env = _envelope()
     ev = CompositionEvaluator(env, ABLATION_POOL)
     main_pos = {d.dish_id: i for i, d in enumerate(ev.main_pool)}
     side_pos = {d.dish_id: i for i, d in enumerate(ev.side_pool)}
 
-    # day 0: six distinct dishes (no repetition anywhere), sodium 2350 > the
-    # 2000 mg ceiling; days 1-6: repetition-free and compliant
-    # (mains m_healthy/m_veg/m_protein, sides s_veg/s_soup/s_salty ->
-    # sodium 1550, potassium 2050).
     ind = np.zeros((ev.slots, 2), dtype=int)
     day0_mains = ["m_protein", "m_rice", "m_veg"]
     day0_sides = ["s_soup", "s_veg", "s_salty"]
@@ -279,18 +240,16 @@ def test_repair_individual_fixes_max_violation_by_dish_replacement():
             ind[day * 3 + slot, 0] = main_pos[ok_mains[slot]]
             ind[day * 3 + slot, 1] = side_pos[ok_sides[slot]]
     _F, G, rep = ev.eval_single(ind)
-    assert not rep and (G > 0).any()  # pure MAX violation to repair
+    assert not rep and (G > 0).any()
 
     fixed = _repair_individual(ev, ind, max_iters=200)
     assert fixed is not None, "MAX repair did not converge"
     assert ev.is_feasible_individual(fixed)
-    # only dishes on day 0 changed; every other day is untouched
     for day in range(1, 7):
         assert np.array_equal(ind[day * 3:(day + 1) * 3],
                               fixed[day * 3:(day + 1) * 3])
 
 
-# Verdict
 def test_derive_selection_verdict_crafted_numbers():
     def pooled(sc_worst, adq_worst, sc_cost, adq_cost, feas=1.0):
         return {
@@ -305,29 +264,22 @@ def test_derive_selection_verdict_crafted_numbers():
     verdict, note = derive_selection_verdict(pooled(50.0, 40.0, 100.0, 105.0))
     assert verdict == "PASS" and note is None
 
-    # not strictly reduced -> FAIL naming the condition
     verdict, note = derive_selection_verdict(pooled(50.0, 50.0, 100.0, 105.0))
     assert verdict == "FAIL" and note is not None and "not strictly reduced" in note
 
-    # cost increase > 10% -> FAIL
     verdict, note = derive_selection_verdict(pooled(50.0, 40.0, 100.0, 115.0))
     assert verdict == "FAIL" and note is not None and "cost" in note
 
-    # feasibility below 100% -> FAIL
     verdict, note = derive_selection_verdict(pooled(50.0, 40.0, 100.0, 105.0, feas=0.8))
     assert verdict == "FAIL" and note is not None and "feasibility" in note
 
-    # no comparable rows -> FAIL
     verdict, note = derive_selection_verdict({})
     assert verdict == "FAIL" and note is not None and "no comparable" in note
 
 
-# Composition evaluator cross-check
 def test_composition_evaluator_cross_check_against_problem_evaluate():
     env = _envelope()
     ev = CompositionEvaluator(env, ABLATION_POOL)
-    # MAIN = allowed minus drink/dessert/kopitiam; SIDE = soup/healthy/cai_png
-    # or the vegetable tag — both non-empty on the stub pool.
     assert ev.size_m > 0 and ev.size_s > 0
     main_ids = {d.dish_id for d in ev.main_pool}
     side_ids = {d.dish_id for d in ev.side_pool}
@@ -353,8 +305,6 @@ def test_composition_evaluator_cross_check_against_problem_evaluate():
         checked += 1
     assert checked == 24
 
-    # repetition limit: a dish served as main AND side on the same day is
-    # flagged by the composition evaluator; problem.evaluate has no such rule
     shared = main_ids & side_ids
     assert shared, "expected MAIN/SIDE overlap to exercise the repetition check"
     did = min(shared)
@@ -364,7 +314,6 @@ def test_composition_evaluator_cross_check_against_problem_evaluate():
     ind[:, 0], ind[:, 1] = mi, si
     _F, _G, rep = ev.eval_single(ind)
     assert rep is True
-    # and a repetition-free plan is not flagged
     ind2 = np.zeros((21, 2), dtype=int)
     ind2[:, 0] = 0
     ind2[:, 1] = [i % ev.size_s for i in range(21)]
@@ -390,7 +339,6 @@ def test_composition_ga_keeps_a_feasible_front():
     for entry in ga["front"]:
         assert entry["feasible"] is True
         assert is_feasible(entry["plan"], env, ABLATION_POOL)
-        # role eligibility + per-day repetition limit hold
         for slot in entry["plan"]:
             main, side = slot
             assert main in {d.dish_id for d in ev.main_pool}
@@ -398,7 +346,6 @@ def test_composition_ga_keeps_a_feasible_front():
         for day in range(7):
             ids = [d for slot in entry["plan"][day * 3:(day + 1) * 3] for d in slot]
             assert len(ids) == len(set(ids)), "dish repeated within a day"
-    # front entries are directly consumable by the selection strategies
     from evaluation.ablation import _STRATEGIES
 
     for selector in _STRATEGIES.values():
@@ -406,14 +353,13 @@ def test_composition_ga_keeps_a_feasible_front():
         assert picked["feasible"] is True
 
 
-# Real-data smoke
 def test_ablation_smoke_real_data_two_patients():
     from backend.optim.real_data import load_dishes
     from evaluation.common import load_patients
 
     patients = load_patients()
     dishes = load_dishes()
-    subset = patients[:3]  # includes at least one eligible patient
+    subset = patients[:3]
     results = evaluate_ablation(
         subset, dishes, seeds=(42,), pop_size=12, n_gen=12,
         composition_patients=1, composition_pop=16, composition_gen=10,

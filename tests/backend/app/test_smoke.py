@@ -1,14 +1,3 @@
-"""Backend import, HTTP, and approval-gate smoke tests.
-
-Exercises imports and HTTP workflows over an in-process ASGI transport
-(httpx). Also asserts the approval-gate invariant: ``POST /plans`` returns 409
-for a PROPOSED envelope and only passes the gate once APPROVED.
-
-Standalone runs must use an isolated database, not the tracked default::
-
-    CARELOOP_APP_DATABASE_URL=<isolated-test-url> python -m backend.app.tests.test_smoke
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -21,8 +10,6 @@ BASE_URL = "http://testserver"
 
 
 def _request(method: str, path: str, **kwargs) -> httpx.Response:
-    """Issue a single request through an in-process ASGI transport."""
-
     async def _run() -> httpx.Response:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
@@ -53,7 +40,6 @@ def test_healthz() -> None:
 
 
 def test_get_patient_may_be_404() -> None:
-    # This ID is not required by the fixture contract; absence must return the structured error.
     resp = _request("GET", "/patients/p-1")
     assert resp.status_code in (200, 404), resp.text
     if resp.status_code == 404:
@@ -131,7 +117,6 @@ def test_approval_gate_blocks_until_approved() -> None:
     assert proposed.status_code == 200, proposed.text
     envelope_id = proposed.json()["envelope"]["envelope_id"]
 
-    # PROPOSED -> blocked by the gate with the documented 409 body.
     blocked = _request("POST", "/plans", json={"patient_id": "p-gate"})
     assert blocked.status_code == 409, blocked.text
     assert blocked.json() == {
@@ -139,7 +124,6 @@ def test_approval_gate_blocks_until_approved() -> None:
         "status": "PROPOSED",
     }
 
-    # Approval lets the request reach planning; this smoke check isolates the gate.
     approved = _request("POST", f"/envelopes/{envelope_id}/approve", json={})
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "APPROVED"
@@ -164,7 +148,6 @@ def test_edit_invalidates_approval() -> None:
     )
     assert edited.status_code == 200, edited.text
     assert edited.json()["status"] == "EDITED"
-    # EDITED is not APPROVED -> gate blocks again.
     blocked = _request("POST", "/plans", json={"patient_id": "p-edit"})
     assert blocked.status_code == 409, blocked.text
 
@@ -188,7 +171,6 @@ if __name__ == "__main__":
 
         raise SystemExit(pytest.main([__file__, "-v"]))
     except ImportError:
-        # Fallback: run test_* functions manually if pytest is unavailable.
         failures = 0
         tests = [
             (name, obj)

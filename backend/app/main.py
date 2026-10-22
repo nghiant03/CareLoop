@@ -1,5 +1,3 @@
-"""Assemble the HTTP app, startup warmup, and shared error responses."""
-
 from __future__ import annotations
 
 import logging
@@ -42,14 +40,12 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("CareLoop backend starting (version=%s)", __version__)
-    approval_mode()  # Invalid policy must fail startup before database access.
-    # Storage failures must prevent serving, not masquerade as a healthy startup.
-    release = selected_release()  # Configured knowledge failures must block startup too.
+    approval_mode()
+    release = selected_release()
     init_db()
     logger.info("knowledge source: %s", release.release_id if release else "development fixtures")
     try:
-        # Warm the KB only; BM25 is built on first retrieval. Log load failures
-        # without blocking startup; lazy endpoint loading can retry them.
+        # Fixture warmup can retry lazily after a load failure.
         from backend.app.core.kb_loader import get_kb
 
         stats = get_kb().stats()
@@ -70,7 +66,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Dev-permissive CORS. Tighten allow_origins before any deployment.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -84,7 +79,6 @@ app.add_middleware(
 async def _envelope_not_approved_handler(
     request: Request, exc: EnvelopeNotApprovedError
 ) -> JSONResponse:
-    """Render the approval-gate violation as the documented 409 body."""
     return JSONResponse(
         status_code=409,
         content={"error": "envelope_not_approved", "status": exc.status},
@@ -95,13 +89,7 @@ async def _envelope_not_approved_handler(
 async def _validation_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    """Render validation failures as the documented 422 body, JSON-safe.
-
-    JSON parsers can accept nonfinite ``Infinity`` and ``NaN`` input literals.
-    Response rendering rejects these values, turning the intended 422 into
-    a 500 unless they are stringified. Drop ``ctx`` because it may carry
-    non-serializable error objects.
-    """
+    """Stringify nonfinite inputs and drop unserializable validation context."""
     return JSONResponse(
         status_code=422,
         content={"error": "validation_error", "detail": [
@@ -111,7 +99,6 @@ async def _validation_handler(
 
 
 def _json_safe(value: Any):
-    """Recursively replace nonfinite floats with their string spelling."""
     if isinstance(value, float) and not math.isfinite(value):
         return str(value)
     if isinstance(value, dict):
@@ -153,7 +140,6 @@ async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
-
 app.include_router(patients.router)
 app.include_router(adherence.router)
 app.include_router(dishes.router)
@@ -179,20 +165,12 @@ def public_config() -> dict[str, str]:
 
 
 class ApprovalModeUpdate(BaseModel):
-    """Demo request selecting the approval policy for subsequent rule runs."""
-
     approval_mode: ApprovalMode
 
 
 @app.put("/config/approval-mode", tags=["meta"], summary="Switch the demo approval mode")
 def update_approval_mode(body: ApprovalModeUpdate) -> dict[str, str]:
-    """Select ``auto`` or ``clinician`` approval for subsequent rule runs.
-
-    This is an unauthenticated academic-demo control. The switch is
-    process-local and resets to ``CARELOOP_APPROVAL_MODE`` on restart. Existing
-    envelopes keep their status and actors; edits still require manual
-    re-approval and scope exclusions still apply in both modes.
-    """
+    """Change approval policy for subsequent runs without changing existing envelopes."""
     previous = approval_mode()
     selected = set_approval_mode(body.approval_mode)
     if selected != previous:
@@ -201,28 +179,20 @@ def update_approval_mode(body: ApprovalModeUpdate) -> dict[str, str]:
 
 
 class CalendarResponse(BaseModel):
-    """Server-local calendar metadata from one clock sample; no patient state."""
-
     today: date = Field(description="Server-local calendar date in YYYY-MM-DD format.")
     timezone: str = Field(description="System timezone name at the sampled instant, not necessarily an IANA ID.")
     utc_offset_minutes: float = Field(description="Server-local offset east of UTC in minutes at the sampled instant.")
 
 
 def _server_local_now() -> datetime:
-    """Sample the system clock once in the server's local timezone."""
     return datetime.now().astimezone()
 
 
 @app.get("/calendar", tags=["meta"], response_model=CalendarResponse, summary="Server-local calendar")
 def read_calendar() -> CalendarResponse:
-    """Return today's date under the same server-local policy as adherence.
-
-    The timezone label and UTC offset describe the same instant as the date.
-    This endpoint reads no database and does not configure a timezone policy.
-    """
     local_now = _server_local_now()
     utc_offset = local_now.utcoffset()
-    assert utc_offset is not None  # astimezone() always returns an aware datetime.
+    assert utc_offset is not None
     return CalendarResponse(
         today=local_now.date(),
         timezone=local_now.tzname() or "",

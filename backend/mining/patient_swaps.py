@@ -1,12 +1,4 @@
-"""Validate ranked dish swaps against an envelope and saved-plan context.
-
-Validate every replacement across the whole plan, including meal roles. Deltas
-describe saved-plan changes, not logged intake. Suggestions may use unapproved
-inputs for local evaluation, but do not authorize applying a swap.
-
-Helpers do not persist plans or approvals. The API gates application and saves
-the derived plan. ``_approval_safe_copy`` owns evaluation-copy behavior.
-"""
+"""Validate dish swaps against the whole saved plan."""
 
 from __future__ import annotations
 
@@ -41,13 +33,6 @@ class DishNotInPlanError(Exception):
 
 
 def plan_from_document(document: dict[str, Any]) -> Plan:
-    """Reconstruct the day-major solver ``Plan`` from a stored plan document.
-
-    Sort ``days[]`` by day number and group their slots as breakfast, lunch,
-    dinner. Missing meals remain empty; unknown meal labels go into dinner.
-    Skip slots without a dish ID, but do not validate catalogue membership.
-    Leave the document unchanged.
-    """
     days = document.get("days") or []
     plan: Plan = []
     for day in sorted(
@@ -71,7 +56,6 @@ def plan_from_document(document: dict[str, Any]) -> Plan:
 
 
 def affected_days_for(plan: Plan, dish_id: str) -> list[int]:
-    """0-based indices of the plan days in which ``dish_id`` occurs."""
     affected: list[int] = []
     for day in range(len(plan) // MEALS_PER_DAY):
         lo, hi = day * MEALS_PER_DAY, (day + 1) * MEALS_PER_DAY
@@ -81,14 +65,12 @@ def affected_days_for(plan: Plan, dish_id: str) -> list[int]:
 
 
 def _replace_in_plan(plan: Plan, dish_id: str, replacement: str) -> Plan:
-    """Every occurrence of ``dish_id`` becomes ``replacement`` (new plan)."""
     return [
         [replacement if d == dish_id else d for d in meal] for meal in plan
     ]
 
 
 def _replace_in_day(plan: Plan, day: int, dish_id: str, replacement: str) -> Plan:
-    """Replace every occurrence of ``dish_id`` within one day only."""
     lo, hi = day * MEALS_PER_DAY, (day + 1) * MEALS_PER_DAY
     modified = [list(meal) for meal in plan]
     for meal in modified[lo:hi]:
@@ -112,13 +94,7 @@ def _day_totals(plan: Plan, day: int, lookup: dict[str, Any]) -> dict[str, float
 
 
 def _approval_safe_copy(envelope: NutrientEnvelope) -> NutrientEnvelope:
-    """Return an APPROVED evaluation input without changing the supplied status.
-
-    Already-approved inputs are returned by identity; callers must not mutate
-    them. Other inputs receive a deep copy with local approval solely to satisfy
-    ``problem.evaluate``. That copy must not be stored or journalled. This does
-    not authorize applying a swap; the endpoint enforces readiness separately.
-    """
+    """Local approval is for evaluation only and must never be persisted."""
     if getattr(envelope, "status", None) == EnvelopeStatus.APPROVED:
         return envelope
     local = envelope.model_copy(deep=True)
@@ -129,11 +105,6 @@ def _approval_safe_copy(envelope: NutrientEnvelope) -> NutrientEnvelope:
 def _worst_aim_deviation_pct(
     day_totals: dict[int, dict[str, float]], envelope: NutrientEnvelope
 ) -> float:
-    """Worst MIN shortfall or absolute TARGET deviation as a percentage.
-
-    Pool only the supplied affected days. Exclude MAX ceilings because they are
-    hard constraints, not aims. Return 0.0 when no positive aim contributes.
-    """
     worst = 0.0
     for totals in day_totals.values():
         for constraint in envelope.targets:
@@ -155,18 +126,7 @@ def patient_substitutions(
     plan_document: dict[str, Any],
     dishes: list[Any],
 ) -> dict[str, Any]:
-    """Rank and validate substitute dishes against the supplied saved plan.
-
-    For positive ``k``, inspect up to ``k * 3`` v2-ranked candidates and return
-    at most ``k`` survivors. Replace every source occurrence and reject any
-    whole-plan hard violation or main/optional-side role mismatch, including
-    violations on unchanged days. Return affected-day nutrient deltas as
-    after minus before, and the price difference times replaced occurrences.
-
-    Raise ``KeyError`` for an unknown source or ``DishNotInPlanError`` when it
-    is absent from the plan. Local approval copies follow the module contract;
-    suggestions do not persist state or authorize applying a swap.
-    """
+    """Validate every replacement across the whole plan without authorizing application."""
     lookup = {d.dish_id: d for d in dishes}
     source = lookup.get(dish_id)
     if source is None:
@@ -191,7 +151,6 @@ def patient_substitutions(
         candidate_dish = lookup.get(candidate_id)
         if candidate_dish is None:
             continue
-        # Generic similarity ranking alone does not enforce the patient's exclusions.
         if exclusion_for(candidate_dish, validation_envelope) is not None:
             continue
 
@@ -218,7 +177,7 @@ def patient_substitutions(
             (candidate_dish.price_sgd - source.price_sgd) * occurrences, 4
         )
         item["passes_hard_checks"] = True
-        # Retain the public field name; TARGET deviations include overshoots.
+        # The legacy field also includes TARGET overshoots.
         item["worst_aim_shortfall_pct"] = _worst_aim_deviation_pct(after, envelope)
         validated.append(item)
         if len(validated) == k:
@@ -233,8 +192,6 @@ def patient_substitutions(
 
 @dataclass
 class SwapOutcome:
-    """Result of applying a patient swap to a stored plan."""
-
     modified_plan: Plan
     objectives: dict[str, float]
     violations: list[dict[str, Any]]
@@ -253,14 +210,7 @@ def apply_patient_swap(
     envelope: NutrientEnvelope,
     dishes: list[Any],
 ) -> SwapOutcome:
-    """Replace every occurrence of ``dish_id`` and re-check the whole plan.
-
-    Raises :class:`KeyError` when either dish is unknown to the dish pool and
-    :class:`DishNotInPlanError` when the source dish occurs nowhere in the
-    plan. Return hard-constraint and main/optional-side role failures in
-    ``violations`` for the caller to reject. Non-APPROVED inputs fail the
-    evaluator's gate. Neither the source document nor persistent state is changed.
-    """
+    """Validate the whole derived plan without mutating or persisting the source."""
     lookup = {d.dish_id: d for d in dishes}
     if dish_id not in lookup:
         raise KeyError(f"unknown dish_id: {dish_id}")

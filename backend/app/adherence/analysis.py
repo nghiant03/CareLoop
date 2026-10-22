@@ -1,4 +1,4 @@
-"""Analyse logged meals against a caller-supplied nutrient envelope."""
+"""Score logged meals against the supplied envelope."""
 
 from __future__ import annotations
 
@@ -12,14 +12,11 @@ from backend.optim.problem import exclusion_for
 from backend.optim.toy_data import NUTRIENT_KEYS
 from shared.envelope_schema import ConstraintKind, NutrientEnvelope, NutrientKind
 
-# Constraint classification tolerates deviation magnitudes.
 EPS = 1e-9
 
-# Minimum complete-day observations for trend estimation.
 _MIN_SERIES_LEN = 3
-# Slope magnitude required for a flag, in percentage points per elapsed day.
+# Slope threshold uses percentage points per elapsed day.
 _SLOPE_TRIGGER = 1.0
-# Alert threshold for worsening exposure.
 _ALERT_EXPOSURE_PCT = 25.0
 
 _UNITS: dict[str, str] = {
@@ -43,11 +40,7 @@ def day_totals(
     dish_ids: Iterable[str],
     dish_by_id: Mapping[str, Any],
 ) -> dict[str, float]:
-    """Sum one serving for each supplied dish ID, including repeated IDs.
-
-    Skip unknown IDs and return zero totals when none match. Serving quantities
-    are not applied.
-    """
+    """Unknown dishes are skipped. Quantities are not applied."""
     totals = {key: 0.0 for key in NUTRIENT_KEYS}
     for dish_id in dish_ids:
         dish = dish_by_id.get(dish_id)
@@ -59,19 +52,12 @@ def day_totals(
 
 
 def _pct(numerator: float, limit: float) -> float:
-    """Express a numerator as a percentage, using denominator 1e-9 when limit <= EPS."""
     denom = limit if limit > EPS else 1e-9
     return numerator / denom * 100.0
 
 
 def classify_constraint(nutrient: str, kind: ConstraintKind, limit: float, total: float) -> dict[str, Any]:
-    """Classify MAX excess as a hard violation and MIN/TARGET misses as soft gaps.
-
-    ``deviation`` is signed total minus limit. ``pct_deviation`` expresses
-    nonnegative exposure as a percentage of the limit: MAX excess, MIN shortfall,
-    or two-sided TARGET distance. Magnitudes at or below EPS leave status ``ok``
-    and exposure zero. Limits at or below EPS use a 1e-9 percentage denominator.
-    """
+    """Only MAX excess is a hard violation. MIN and TARGET misses are soft gaps."""
     unit = _UNITS.get(nutrient, "")
     row: dict[str, Any] = {
         "nutrient": nutrient,
@@ -103,7 +89,6 @@ def classify_constraint(nutrient: str, kind: ConstraintKind, limit: float, total
 
 
 def _completeness(entries: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
-    """Count each recognised meal slot once, regardless of its number of dishes."""
     meals_logged = len({e.get("meal") for e in entries if e.get("meal") in MEALS})
     return {
         "meals_logged": meals_logged,
@@ -119,12 +104,7 @@ def _contributors(
     dish_by_id: Mapping[str, Any],
     day_total: float,
 ) -> list[dict[str, Any]]:
-    """Return up to two logged dish entries ranked by serving-adjusted nutrient amount.
-
-    ``highest_first`` selects descending order for MAX rows. MIN/TARGET rows
-    use ascending order. Dish IDs break ties. Skip unknown dishes without
-    merging repeated IDs. Totals at or below EPS give each entry a zero percentage.
-    """
+    """Rank logged entries without merging repeated dish IDs."""
     per_dish: list[tuple[str, Any, float]] = []
     for entry in entries:
         dish = dish_by_id.get(entry.get("dish_id", ""))
@@ -154,19 +134,7 @@ def analyse_day(
     envelope: NutrientEnvelope,
     dish_by_id: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Analyse one day's intake against the supplied envelope.
-
-    Accept single-dish logs or meal logs with ``items``. Omitted quantities mean
-    one serving. Unknown dishes contribute no nutrients, exclusions, or ranked
-    contributors, but their meal slots still count toward completeness.
-
-    MAX breaches and excluded dishes are hard violations. MIN/TARGET misses are
-    soft gaps. Partial-day hard violations remain visible. Each result includes
-    totals, constraint rows, contributors, completeness, and envelope identity.
-
-    Callers select the envelope and enforce historical approval coverage. This
-    function records its ID and version without checking lifecycle status.
-    """
+    """Callers select historical approval coverage. Unknown dishes still count toward meal completeness."""
     meal_order = {m: i for i, m in enumerate(MEALS)}
     ordered = sorted(entries, key=lambda e: meal_order.get(e.get("meal", ""), 99))
     ordered = [dict(item, meal=entry.get("meal"))
@@ -228,13 +196,7 @@ def analyse_range(
     envelope: NutrientEnvelope,
     dish_by_id: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Analyse logged dates chronologically against one supplied envelope.
-
-    Omit dates without logs rather than treating them as zero intake. Return
-    classified ``days`` and their ``aggregate`` under ``aggregate_days`` policy.
-    Callers must split logs by effective envelope version before calling this
-    function when a window crosses historical approvals.
-    """
+    """Callers must split logs by effective envelope version."""
     by_date: dict[str, list[Mapping[str, Any]]] = {}
     for entry in logs:
         by_date.setdefault(entry["date"], []).append(entry)
@@ -248,17 +210,7 @@ def analyse_range(
 
 
 def aggregate_days(days: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregate classified days without changing their historical attribution.
-
-    Hard violations count on every logged day. Only complete days contribute
-    soft-gap counts and mean exposure. Per-nutrient counts count constraint rows,
-    not distinct days. Mean exposure averages all nutrient rows from complete
-    days, including different constraint kinds when a nutrient has multiple bounds.
-
-    Input days may use different envelope versions. Retain their classifications
-    rather than applying current targets again. Empty input yields zero counts,
-    empty nutrient summaries, and ``fraction_complete`` of 0.0.
-    """
+    """Count hard violations on all days. Only complete days contribute soft gaps."""
     hard_by_nutrient: dict[str, int] = {}
     soft_by_nutrient: dict[str, int] = {}
     exposure_sum: dict[str, float] = {}
@@ -296,10 +248,6 @@ def aggregate_days(days: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _theil_sen_slope(times: list[float], values: list[float]) -> float:
-    """Return the median pairwise slope over positive elapsed-day intervals.
-
-    Return 0.0 when no pair has a positive interval.
-    """
     n = len(values)
     slopes = [
         (values[j] - values[i]) / (times[j] - times[i])
@@ -311,7 +259,6 @@ def _theil_sen_slope(times: list[float], values: list[float]) -> float:
 
 
 def _day_offsets(dates: list[Any]) -> list[float]:
-    """Convert ISO dates to ordinal days, using the list index for each invalid date."""
     offsets: list[float] = []
     for i, raw in enumerate(dates):
         try:
@@ -325,19 +272,7 @@ def deviation_series(
     day_analyses: Iterable[Mapping[str, Any]],
     envelope: NutrientEnvelope,
 ) -> dict[str, dict[str, Any]]:
-    """Build chronologically ordered deviation points for each supplied constraint.
-
-    ``pct`` is signed total-minus-limit as a percentage of the limit. ``exposure``
-    measures MAX excess, MIN shortfall, or absolute TARGET distance. Limits at or
-    below EPS use a 1e-9 percentage denominator.
-
-    Single-constraint nutrients use their nutrient key. Multiple constraints use
-    ``<nutrient>:<kind>`` keys. Include incomplete-day points with their completeness
-    marker so ``trend_flags`` can exclude them. Missing markers default to complete.
-
-    Percentages are recomputed from totals and the supplied limits for every point.
-    Historical callers must split days by effective envelope version.
-    """
+    """Callers must split historical days by effective envelope version."""
     constraints = sorted(envelope.targets, key=lambda c: (c.nutrient.value, c.kind.value))
     constraint_count: dict[str, int] = {}
     for constraint in constraints:
@@ -390,18 +325,7 @@ def trend_flags(
     min_len: int = _MIN_SERIES_LEN,
     slope_trigger: float = _SLOPE_TRIGGER,
 ) -> list[dict[str, Any]]:
-    """Flag complete-day exposure trends exceeding the slope threshold.
-
-    Each series must supply points in ascending date order, as returned by
-    ``deviation_series``. The last complete point supplies the latest exposure 
-    for severity and the three-day projection.
-
-    ``slope_trigger`` is a magnitude in percentage points per elapsed day.
-    ``min_len`` counts only complete points. Missing completeness markers default
-    to complete for older callers. Worsening trends alert when latest or projected
-    exposure reaches ``_ALERT_EXPOSURE_PCT``. Other flags have review severity.
-    Results sort worsening first, then by decreasing absolute slope.
-    """
+    """Input points must be chronological. Only complete days enter trends."""
     flags: list[dict[str, Any]] = []
     for series_key in sorted(series):
         s = series[series_key]
@@ -444,11 +368,7 @@ def analyse_patient(
     envelope: NutrientEnvelope,
     dish_by_id: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Return classified days, aggregate statistics, deviation series, and trend flags.
-
-    Apply one supplied envelope to every logged date. Callers own historical
-    envelope selection and approval checks, as for ``analyse_day``.
-    """
+    """Apply one envelope to every logged date. Callers own approval coverage."""
     result = analyse_range(logs, envelope, dish_by_id)
     series = deviation_series(result["days"], envelope)
     return {

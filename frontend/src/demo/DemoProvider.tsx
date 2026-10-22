@@ -30,7 +30,6 @@ function readInitial(): Stored {
   };
 }
 
-/** Demo-only presentation state. Switching views is not authentication. */
 export default function DemoProvider({ children }: { children: ReactNode }) {
   const [initial] = useState(readInitial);
   const [view, setView] = useState<DemoView>(initial.view);
@@ -44,7 +43,6 @@ export default function DemoProvider({ children }: { children: ReactNode }) {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ view, patientId, reviewerName }));
     } catch {
-      // Storage may be unavailable (private mode); the session still works.
     }
   }, [view, patientId, reviewerName]);
 

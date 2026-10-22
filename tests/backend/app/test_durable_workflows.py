@@ -1,4 +1,3 @@
-"""Regression checks for durable clinical state and actual delivered workflows."""
 import json
 import os
 import subprocess
@@ -55,7 +54,6 @@ with TestClient(app) as c:
     assert output["old"]["targets"] == envelope["targets"]
     assert output["adherence"] == 200
     assert output["new"]["envelope"]["envelope_id"] != original
-    # This worker sees the other worker's write without a restart.
     assert api.get("/envelopes/latest", params={"patient_id": "P0001"}).json()["status"] == "PROPOSED"
 
 
@@ -78,7 +76,6 @@ def test_observation_drives_rules_and_review_without_changing_approval(api):
     envelope = api.get(f"/envelopes/{proposal['envelope_id']}").json()
     assert envelope["status"] == "PROPOSED"
     assert any(t["nutrient"] == "potassium_mg" and t["kind"] == "max" for t in envelope["targets"])
-    # Backdated observations must not replace the most recent value.
     api.post("/observations", json={"patient_id": "P0001", "metric": "serum_K_meq_L", "value": 4.,
                                    "unit": "mEq/L", "observed_at": (datetime.now(UTC).date() - timedelta(days=2)).isoformat()})
     assert api.get("/patients/P0001").json()["serum_K_meq_L"] == 6.5

@@ -1,5 +1,3 @@
-"""Markdown report renderer for the evaluation suite (deterministic output)."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -24,7 +22,6 @@ def _pct(rate: float | None) -> str:
 
 
 def _benchmark_headline_text(benchmark: dict[str, Any]) -> str:
-    """One-line benchmark summary naming the actual mean-HV winner from the data."""
     headline = benchmark.get("headline") or []
     if not headline:
         return "no benchmark rows available"
@@ -43,10 +40,7 @@ def _table(headers: list[str], rows: list[list[Any]]) -> str:
 
 
 def _ablation_rows(pooled: dict[str, Any]) -> list[list[Any]]:
-    # Historical artifacts (pre-2026-10) pooled the unit-mixed raw
-    # ``mean_daily_shortfall`` (kcal/g/mg averaged together); it is
-    # deliberately NOT rendered. They lack ``mean_daily_rel_shortfall_pct``,
-    # which renders as n/a rather than raising.
+    # Old mixed unit gaps render as unavailable rather than being relabeled.
     rows = []
     for name in ("scalar", "normalised", "adequacy_first"):
         p = pooled.get(name) or {}
@@ -66,7 +60,6 @@ def _ablation_rows(pooled: dict[str, Any]) -> list[list[Any]]:
 
 
 def _render_ablation(add, ablation: dict[str, Any], table, fmt) -> None:
-    """Render the ablation section (selection ablation, composition, exact reference)."""
     sel = ablation["selection_ablation"]
     config = sel["config"]
     add("## Objective/selection & meal-composition ablation")
@@ -120,7 +113,6 @@ def _render_ablation(add, ablation: dict[str, Any], table, fmt) -> None:
                 "(full rule in `evaluation/ablation.py` module docstring)."))
     add("")
 
-    # Composition
     comp = ablation["composition_ablation"]
     add("### Meal-composition ablation: 1-dish vs 2-dish (main + side) encoding")
     add("")
@@ -158,7 +150,6 @@ def _render_ablation(add, ablation: dict[str, Any], table, fmt) -> None:
         "annotations, not verified data.")
     add("")
 
-    # Exact reference
     exact = ablation["exact_reference"]
     add("### Exact-reference quality (scalar-selected plans, seed "
         f"{exact['seed']})")
@@ -198,7 +189,6 @@ def _render_ablation(add, ablation: dict[str, Any], table, fmt) -> None:
 
 
 def _render_external(add, external: dict[str, Any], table, fmt, pct) -> None:
-    """Render the external dataset evaluation section."""
     add("## External dataset evaluation (NHANES, MIMIC-IV, HealthBench)")
     add("")
     add(external["definition"])
@@ -486,7 +476,6 @@ def render_report(results: dict[str, Any]) -> str:
         "or `CARELOOP_DATASET_DIR/outputs/evaluation/`.")
     add("")
 
-    # Summary
     add("## Headline verdicts")
     add("")
     headline_rows: list[list[Any]] = []
@@ -563,7 +552,6 @@ def render_report(results: dict[str, Any]) -> str:
     add(_table(["Criterion", "Verdict", "Headline number"], headline_rows))
     add("")
 
-    # Traceability
     add("## Traceability")
     add("")
     add(traceability["definition"])
@@ -583,7 +571,6 @@ def render_report(results: dict[str, Any]) -> str:
         f"traceable.")
     add("")
 
-    # Conflict resolution
     add("## Conflict resolution")
     add("")
     add(conflicts["definition"])
@@ -600,7 +587,6 @@ def render_report(results: dict[str, Any]) -> str:
         f"{conflicts['verdict']}.**")
     add("")
 
-    # Constraint satisfaction
     add("## Constraint satisfaction")
     add("")
     add(satisfaction["definition"])
@@ -633,7 +619,6 @@ def render_report(results: dict[str, Any]) -> str:
         f"removal restores greedy feasibility it is listed as a blocker.")
     add("")
 
-    # Quality/runtime (optimiser benchmark)
     add("## Quality/runtime (optimiser benchmark)")
     add("")
     add(benchmark["definition"])
@@ -665,7 +650,6 @@ def render_report(results: dict[str, Any]) -> str:
     add(f"Verdict: **{benchmark['verdict']}** — {benchmark['verdict_note']}")
     add("")
 
-    # Groundedness (chat)
     add("## Groundedness (chat)")
     add("")
     add(groundedness["definition"])
@@ -717,15 +701,12 @@ def render_report(results: dict[str, Any]) -> str:
                [[r["criterion"], r["scale"], r["how_to_score"]] for r in groundedness["expert_review_rubric"]]))
     add("")
 
-    # Objective/selection & meal-composition ablation
     if ablation:
         _render_ablation(add, ablation, _table, _fmt)
 
-    # External dataset evaluation
     if external:
         _render_external(add, external, _table, _fmt, _pct)
 
-    # Limitations
     add("## Limitations & known caveats")
     add("")
     add("1. **Encoding: hard = MAX ceilings + exclusions only (PLAN.md module 4).** "

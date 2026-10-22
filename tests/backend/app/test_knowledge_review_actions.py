@@ -1,5 +1,3 @@
-"""HTTP replacements for the removed knowledge command-line workflow."""
-
 from fastapi.testclient import TestClient
 
 from backend.app.review_preview import create_review_app

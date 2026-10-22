@@ -1,5 +1,3 @@
-"""Expose grounded nutrition chat with patient and envelope identity checks."""
-
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -66,17 +64,7 @@ def _citation_brief(citation: dict[str, Any]) -> dict[str, Any]:
     },
 )
 def chat(req: ChatRequest) -> dict[str, Any]:
-    """Resolve one patient's context for grounded nutrition chat.
-
-    Prefer an explicit envelope over the patient's latest proposal. Use the
-    envelope's own patient for applicability and body weight. A missing profile
-    may fall back to the frozen snapshot only when the patient ID was inferred
-    from the envelope, not explicitly requested.
-
-    Reject unknown explicit IDs and mismatched identities. Envelopes may have
-    any lifecycle status, but only approved values become personal target guidance.
-    See ``docs/ARCHITECTURE.md`` for grounding, citation, refusal, and escalation.
-    """
+    """Resolve matching patient and envelope identities. Only approved values authorize personal guidance."""
     patient_id = req.patient_id
     envelope_obj = None
     if req.envelope_id is not None:

@@ -1,5 +1,3 @@
-"""Exercise authoring/review/publication against isolated databases, never live state."""
-
 import copy
 import json
 from concurrent.futures import ThreadPoolExecutor

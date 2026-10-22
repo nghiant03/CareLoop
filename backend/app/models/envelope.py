@@ -1,4 +1,4 @@
-"""Compatibility imports. Define and edit envelope models in ``shared/``."""
+"""Canonical envelope models live in shared."""
 
 from __future__ import annotations
 

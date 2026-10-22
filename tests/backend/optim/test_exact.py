@@ -1,9 +1,3 @@
-"""Cross-check exact single-dish enumeration against independent brute force.
-
-Use pytest for fixture injection. Also check diagnosis boundaries and the
-explicit exclusion of horizon variety from additive bounds.
-"""
-
 from __future__ import annotations
 
 import math
@@ -11,7 +5,6 @@ import os
 import sys
 import time
 
-# Resolve repository imports when pytest loads this module from its directory.
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
@@ -59,7 +52,7 @@ def _dish(did: str, energy: float, protein: float, sodium: float, price: float) 
             "protein_g": protein,
             "sodium_mg": sodium,
         },
-        tags=("pool",),  # shared tag so a single exclusion can empty the pool
+        tags=("pool",),
         price_sgd=price,
     )
 
@@ -104,7 +97,6 @@ def _feasible_envelope():
 
 
 def _impossible_envelope():
-    # sodium MAX 100 mg/day: even three lowest-sodium dishes total 600 mg.
     return _envelope(
         [
             NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=100.0, unit="mg"),
@@ -113,7 +105,6 @@ def _impossible_envelope():
 
 
 def _empty_pool_envelope():
-    # DIET_PATTERN "pool" matches the shared tag of every tiny dish.
     return _envelope(
         [
             NutrientConstraint(nutrient=NutrientKind.SODIUM_MG, kind=ConstraintKind.MAX, value=5000.0, unit="mg"),
@@ -143,7 +134,6 @@ def _one_day_dev(totals: dict[str, float], env) -> float:
 
 
 def _brute_force(env, pool: list[Dish], n_slots: int = 3):
-    """Exhaustive multiset enumeration with the same tie-break semantics."""
     lookup_size = len({d.dish_id for d in pool})
     denom = math.log(lookup_size) if lookup_size > 1 else 1.0
     data: dict[str, list[float]] = {
@@ -194,7 +184,7 @@ def _brute_force(env, pool: list[Dish], n_slots: int = 3):
         cands = sorted(
             (t, v) for v, t in zip(values, tuples) if v <= best_value + tol
         )
-        return cands[0]  # (ids_tuple, value)
+        return cands[0]
 
     return len(tuples), pick
 
@@ -229,7 +219,6 @@ def test_one_day_exact_matches_bruteforce_on_tiny_pool():
     assert exact["feasible_combo_count"] > 0
     assert exact["pool_size"] == len(pool)
     assert exact["n_slots"] == MEALS_PER_DAY
-    # sanity: the min-cost day must really be the cheapest feasible multiset
     cheapest = min(d.price_sgd for d in pool)
     assert abs(exact["best"]["cost"]["value"] - 3 * cheapest) < 1e-9
 
@@ -281,7 +270,6 @@ def test_solver_feasible_result_shape_unchanged():
     assert result["violation_count"] == 0
     assert len(result["plan"]) == 7 * MEALS_PER_DAY
     assert set(result["objectives"]) == set(OBJECTIVE_NAMES)
-    # the success path must NOT gain infeasibility bookkeeping
     assert "infeasibility_status" not in result
     assert "exact_reference" not in result
     assert result.get("infeasibility_reason") is None
@@ -291,11 +279,10 @@ def test_plan_vs_exact_gaps_nonnegative_and_variety_excluded():
     env = _feasible_envelope()
     exact = one_day_exact(env, TINY_POOL)
     best_cost_day = exact["best"]["cost"]["dish_ids"]
-    # one dish per slot: the day's multiset spread over the 3 meal slots
     day = [[dish_id] for dish_id in best_cost_day]
     plan = day * 7
     _, violations = evaluate(plan, env, TINY_POOL)
-    assert not violations  # repeating a feasible day stays feasible
+    assert not violations
 
     report = plan_vs_exact(env, TINY_POOL, plan)
     assert report["n_days"] == 7
@@ -308,10 +295,8 @@ def test_plan_vs_exact_gaps_nonnegative_and_variety_excluded():
         assert all(g >= -1e-9 for g in entry["gaps"]), (name, entry)
         assert entry["mean_gap"] >= -1e-9
         assert abs(entry["seven_day_lower_bound"] - 7.0 * entry["exact_one_day_best"]) < 1e-9
-    # the plan repeats the exact min-cost day, so its cost gap is exactly 0
     cost_entry = report["objectives"]["cost"]
     assert all(abs(g) < 1e-9 for g in cost_entry["gaps"])
-    # the disclosure must forbid presenting the partial baseline as a full optimum
     assert "all four objectives" in report["disclosure"]
 
 
@@ -337,8 +322,6 @@ def test_real_data_performance_smoke():
 
 
 def test_solver_continues_when_precheck_falsely_fails(monkeypatch):
-    """Precheck is only a sufficient infeasibility condition: when exact
-    enumeration contradicts a failed precheck, solve() must CONTINUE."""
     import numpy as np
 
     import backend.optim.solver as solver_mod
@@ -353,7 +336,6 @@ def test_solver_continues_when_precheck_falsely_fails(monkeypatch):
     monkeypatch.setattr(
         solver_mod,
         "_pymoo_front",
-        # a feasible front member: charlie_c (index 2 in dish_id order) x 21
         lambda ev, seed, pop, gen, method="nsga2": [np.zeros(21, dtype=int) + 2],
     )
     result = solver_mod.solve(env, TINY_POOL, seed=1, pop_size=8, n_gen=4)
@@ -362,8 +344,6 @@ def test_solver_continues_when_precheck_falsely_fails(monkeypatch):
 
 
 def test_solver_reports_search_exhausted_when_heuristics_fail(monkeypatch):
-    """A feasible day exists but search + repair + greedy deliver nothing:
-    the diagnosis must say search_exhausted, NOT proven_infeasible."""
     import numpy as np
 
     import backend.optim.solver as solver_mod
@@ -374,7 +354,6 @@ def test_solver_reports_search_exhausted_when_heuristics_fail(monkeypatch):
     monkeypatch.setattr(
         solver_mod,
         "_pymoo_front",
-        # every slot = bravo_b (sodium 500 x3 = 1500 > 1100 MAX): infeasible
         lambda ev, seed, pop, gen, method="nsga2": [np.ones(21, dtype=int)],
     )
     monkeypatch.setattr(solver_mod, "repair_plan", lambda ev, idx, seed=0: None)

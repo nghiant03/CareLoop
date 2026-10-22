@@ -1,5 +1,3 @@
-"""Build deterministic explanation views without I/O or clinical-state changes."""
-
 from __future__ import annotations
 
 import re
@@ -9,7 +7,6 @@ from shared.provenance import citation_for
 
 __all__ = ["clinician_explanation", "patient_explanation"]
 
-# Patient-facing nutrient labels; _NUTRIENT_ORDER controls display order.
 _PLAIN_LABELS = {
     "sodium_mg": "sodium",
     "potassium_mg": "potassium",
@@ -28,8 +25,6 @@ _NUTRIENT_ORDER = [
     "carbs_g", "fiber_g", "sat_fat_g", "fat_g", "sugar_g",
 ]
 
-# Nutrient mentions identify display overlaps, not exact target provenance.
-# Patterns cover fixture aliases ("Na ceiling") and engine tokens ("sodium_mg").
 _NUTRIENT_SUMMARY_PATTERNS = {
     "sodium_mg": re.compile(r"sodium|\bna\b", re.IGNORECASE),
     "potassium_mg": re.compile(r"potassium|\bk\b", re.IGNORECASE),
@@ -51,15 +46,12 @@ def _nutrients_in_text(text: str) -> list[str]:
         for nutrient in _NUTRIENT_ORDER
         if _NUTRIENT_SUMMARY_PATTERNS[nutrient].search(lowered)
     ]
-    # "saturated fat" mentions must not be misread as total-fat constraints.
     if "sat_fat_g" in found and "fat_g" in found:
         found.remove("fat_g")
     return found
 
 _CONFLICT_PREFIX = "CONFLICT"
 
-# Citation marker recorded by core/envelope_lifecycle.edit for clinician
-# replacements; guideline rules never carry it.
 _CLINICIAN_EDIT_RULE_ID = "CLINICIAN-EDIT"
 
 _PLAIN_AVOID = {
@@ -76,8 +68,6 @@ def _format_amount(value: Any, unit: str) -> str:
     except (TypeError, ValueError):
         return f"{value} {unit}".strip()
     if unit == "mg" and num >= 1000 and num % 10 == 0:
-        # Grams render only when exact to hundredths of a gram: rounding
-        # must never loosen (or tighten) a stated MAX ceiling or MIN floor.
         grams = num / 1000.0
         text = f"{grams:.2f}".rstrip("0").rstrip(".")
         return f"{text} g"
@@ -89,11 +79,9 @@ def _format_amount(value: Any, unit: str) -> str:
 def _target_citation(
     target: dict[str, Any], fired_rules: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
-    """Use exact provenance, or matching legacy actions when provenance is absent."""
     provenance = target.get("provenance")
     if provenance:
-        # Stale provenance cannot author a changed value. Do not borrow a trace
-        # citation when explicit provenance disagrees with the target.
+        # Stale explicit provenance cannot borrow a matching legacy citation.
         if any(provenance.get(key) != target.get(key) for key in ("nutrient", "kind", "value", "unit")):
             return None
         return provenance.get("citation")
@@ -101,18 +89,7 @@ def _target_citation(
 
 
 def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
-    """Structured clinician/audit explanation of an envelope.
-
-    ``envelope`` is the NutrientEnvelope dict; ``trace`` is the RuleFire list
-    (same shapes as ``rules/example_trace.json``). Returns:
-
-    * ``fired_rules`` — id, priority, guideline link, patient/action summary;
-    * ``conflicts_resolved`` — resolutions explicitly recorded by CONFLICT rules;
-    * ``priority_overlaps`` — inferred nutrient mentions ordered by priority,
-      not evidence of a constraint being overridden;
-    * ``constraints`` — resulting targets with per-constraint citations;
-    * ``exclusions`` — hard exclusions with citations.
-    """
+    """Mention overlap is display metadata rather than evidence of a resolved conflict."""
     fired_rules = [dict(f) for f in (trace or [])]
 
     fired_view = sorted(
@@ -144,7 +121,6 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
                 }
             )
 
-    # Mention overlap is not a recorded conflict: MIN and MAX may coexist.
     priority_overlaps: list[dict[str, Any]] = []
     by_nutrient: dict[str, list[dict[str, Any]]] = {}
     for fired in fired_rules:
@@ -219,7 +195,6 @@ def clinician_explanation(envelope: dict, trace: list[dict]) -> dict:
 
 
 def _target_phrases(targets: list[dict[str, Any]]) -> list[dict[str, str]]:
-    """One plain-language line per nutrient, merging min+max into a range."""
     grouped: dict[str, dict[str, Any]] = {}
     for target in targets:
         nutrient = target.get("nutrient")
@@ -259,15 +234,7 @@ def _target_phrases(targets: list[dict[str, Any]]) -> list[dict[str, str]]:
 
 
 def patient_explanation(envelope: dict, plan: dict | None = None) -> dict:
-    """Plain-language patient view of an envelope.
-
-    Render daily targets, avoid-choices, and why-bullets without rule IDs.
-    Why-bullets follow per-target provenance: clinician-edited targets are
-    attributed to the care team's decision, never to a guideline whose
-    retained rule produced a different value. Legacy targets require a matching
-    trace action, not a nutrient mention. Callers must gate personal guidance:
-    unapproved inputs still expose target numbers alongside an approval note.
-    """
+    """Callers must gate personal guidance because unapproved inputs still expose target numbers."""
     targets = list(envelope.get("targets") or [])
     fired_rules = list(envelope.get("fired_rules") or [])
     grouped: dict[str, dict[str, Any]] = {}
@@ -292,7 +259,7 @@ def patient_explanation(envelope: dict, plan: dict | None = None) -> dict:
                     break
             else:
                 source_groups.append((citation, [target]))
-        # Merge bounds only when the same source authored both of them.
+        # Merge bounds only when both have the same authoring source.
         for citation, source_targets in source_groups:
             line = _target_phrases(source_targets)[0]
             if citation.get("rule_id") == _CLINICIAN_EDIT_RULE_ID:

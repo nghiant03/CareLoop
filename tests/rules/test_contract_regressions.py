@@ -1,5 +1,3 @@
-"""Regression fences for rule inputs, native state and shared reader contracts."""
-
 from concurrent.futures import ThreadPoolExecutor
 
 import clips
@@ -64,7 +62,7 @@ def test_equal_priority_kind_policy(kind, expected):
     assert winner["value"] == expected
     assert winner["rule_id"] == ("A" if kind == "min" else "B")
     if kind != "min":
-        assert "C" not in losses  # equal values merge, regardless of rule ID
+        assert "C" not in losses
     high_priority = {**candidates[0], "priority": 99, "value": 150, "rule_id": "Z"}
     winners, _ = engine._resolve_conflicts(candidates + [high_priority])
     assert winners[("sodium_mg", kind)]["value"] == 150
@@ -74,7 +72,6 @@ def test_concurrent_native_runs_match_serial_outputs(monkeypatch):
     patients = [patient(patient_id=f"PAR-{n}", weight_kg=50 + n,
                         serum_K_meq_L=4.2 if n % 2 else 5.8) for n in range(24)]
     expected = [engine.run_rules(p) for p in patients]
-    # Exercise lazy initialization as well as interleaved per-patient operations.
     monkeypatch.setattr(engine, "_ENV", None)
     with ThreadPoolExecutor(max_workers=8) as pool:
         assert list(pool.map(engine.run_rules, patients)) == expected
@@ -155,7 +152,6 @@ def test_http_lab_spellings_are_equivalent_and_keep_fresh_identity(clinical_test
     assert first["envelope_id"] != second["envelope_id"]
     for key in ["patient_snapshot", "status", "scope_eligible", "fired_rules"]:
         assert first[key] == second[key]
-    # Provenance follows each fresh proposal identity, not the input spelling.
     for envelope in [first, second]:
         for target in envelope["targets"]:
             if target["provenance"]:

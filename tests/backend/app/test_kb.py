@@ -1,5 +1,3 @@
-"""Check catalogue queries, historical KB snapshots, and SQL immutability guards."""
-
 from __future__ import annotations
 
 import json
@@ -16,7 +14,6 @@ from backend.datasets.paths import dataset_path
 RULES_PATH = dataset_path("rules.json")
 DISHES_PATH = dataset_path("dishes.json")
 
-# Timestamps pinned by the tests so point-in-time snapshots are deterministic.
 T1 = "2026-10-01T00:00:00+00:00"
 T2 = "2026-10-08T00:00:00+00:00"
 
@@ -30,8 +27,6 @@ def kb() -> Iterator[KBGraph]:
 
 def test_load_real_content_counts(kb: KBGraph) -> None:
     stats = kb.stats()
-    # Keep a minimum rule-coverage check without fixing the growing rule count;
-    # dish/profile counts must match the benchmark corpus exactly.
     assert stats["node_counts"]["Rule"] >= 50
     assert stats["node_counts"]["Dish"] == 214
     assert stats["node_counts"]["NutrientProfile"] == 214
@@ -72,7 +67,6 @@ def test_rules_for_nutrient(kb: KBGraph) -> None:
     assert "CKD-2024-SODIUM-2000" in rule_ids
     assert "DASH-2025-SODIUM-2300" in rule_ids
     assert "ADA-2026-SODIUM-2300" in rule_ids
-    # Ordered by priority DESC: the CKD p90 rule must come before DASH p70.
     assert rule_ids.index("CKD-2024-SODIUM-2000") < rule_ids.index(
         "DASH-2025-SODIUM-2300"
     )
@@ -87,7 +81,6 @@ def test_dishes_meeting_max(kb: KBGraph) -> None:
     assert dishes, "expected some dishes under 200 mg sodium"
     for dish in dishes:
         assert dish["profile"]["sodium_mg"] <= 200
-    # Closest-to-ceiling first (deterministic ordering).
     sodiums = [d["profile"]["sodium_mg"] for d in dishes]
     assert sodiums == sorted(sodiums, reverse=True)
 
@@ -111,7 +104,6 @@ def test_graph_snapshot(kb: KBGraph) -> None:
     rule_node = g.nodes["rule:CKD-2024-SODIUM-2000"]
     assert rule_node["label"] == "Rule"
     assert rule_node["priority"] == 90
-    # Rule --CITES--> Section --(reverse of HAS_SECTION)--> Guideline chain.
     cites = list(g.edges(("rule:CKD-2024-SODIUM-2000"), keys=True))
     assert any(key == "CITES" for _, _, key in cites)
     assert any(key == "PRODUCES" for _, _, key in cites)
@@ -124,7 +116,6 @@ def test_version_edit_and_point_in_time() -> None:
         assert old is not None
         assert old["version"] == 1
 
-        # Tighten the rule: 2000 -> 1800 mg ceiling, issued at T2.
         edited = json.loads(json.dumps(old))
         edited["actions"] = [
             {**a, "value": 1800}
@@ -135,7 +126,6 @@ def test_version_edit_and_point_in_time() -> None:
         new_version = kb.append_rule(edited, valid_from=T2)
         assert new_version == 2
 
-        # Current read sees the new value; explicit version read sees the old.
         current = kb.get_rule("CKD-2024-SODIUM-2000")
         assert current is not None
         assert current["version"] == 2
@@ -146,14 +136,12 @@ def test_version_edit_and_point_in_time() -> None:
         assert historical is not None
         assert historical["version"] == 1
         assert historical["constraints"][0]["value"] == 2000
-        assert historical["valid_to"] == T2  # closed by the new version
+        assert historical["valid_to"] == T2
 
-        # History is complete and ordered.
         history = kb.node_history("rule:CKD-2024-SODIUM-2000")
         assert [h["version"] for h in history] == [1, 2]
         assert history[0]["props"]["priority"] == 90
 
-        # Point-in-time graphs: T1 shows the old ceiling, T2 the new one.
         g1 = kb.graph(version=T1)
         v1 = g1.nodes["constraint:CKD-2024-SODIUM-2000:sodium_mg:max"]["value"]
         assert v1 == 2000
@@ -175,8 +163,6 @@ def test_append_only_no_content_row_updates() -> None:
                 action["value"] = 1500
         kb.append_rule(edited, valid_from=T2)
 
-        # Every history row is still present with byte-identical content; the
-        # only permitted change is the closing `valid_to` on the old version.
         after = kb.node_history("rule:CKD-2024-SODIUM-2000")
         assert [h["version"] for h in after] == [1, 2]
         assert after[0]["props"] == before[0]["props"]
@@ -186,16 +172,13 @@ def test_append_only_no_content_row_updates() -> None:
         assert after[0]["valid_from"] == before[0]["valid_from"]
         assert after[0]["valid_to"] == T2
 
-        # A raw UPDATE of node content must abort (SQL trigger).
         with pytest.raises(Exception, match="append-only"):
             kb._conn.execute(
                 "UPDATE nodes SET props = '{}' WHERE logical_id = 'rule:CKD-2024-SODIUM-2000'"
             )
-        # Edges are fully immutable — any UPDATE aborts.
         with pytest.raises(Exception, match="append-only"):
             kb._conn.execute("UPDATE edges SET rel_type = 'X'")
 
-        # The failed updates did not corrupt anything.
         current = kb.get_rule("CKD-2024-SODIUM-2000")
         assert current is not None
         assert current["priority"] == 90

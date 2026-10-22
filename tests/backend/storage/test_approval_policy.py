@@ -1,5 +1,3 @@
-"""Policy orchestration tests without a live database or external fixtures."""
-
 import pytest
 
 from backend.app.api import rules
@@ -152,7 +150,7 @@ def test_approval_mode_endpoint_switches_public_config(runtime_mode, monkeypatch
     from backend.app import main
 
     monkeypatch.setenv("CARELOOP_APPROVAL_MODE", "auto")
-    client = TestClient(main.app)  # No lifespan: this route reads no storage.
+    client = TestClient(main.app)
     response = client.put("/config/approval-mode", json={"approval_mode": "clinician"})
     assert response.status_code == 200 and response.json() == {"approval_mode": "clinician"}
     assert main.public_config() == {"approval_mode": "clinician"}

@@ -1,5 +1,3 @@
-"""Tests for the dish catalogue endpoints."""
-
 from fastapi.testclient import TestClient
 
 from backend.app.main import app

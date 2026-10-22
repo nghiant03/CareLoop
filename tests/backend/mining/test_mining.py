@@ -1,8 +1,3 @@
-"""Tests for backend.mining: clustering, substitutions, trends.
-
-Run from the repo root:  .venv/bin/python -m pytest backend/mining -q
-"""
-
 import json
 
 import pytest
@@ -36,7 +31,6 @@ class TestClustering:
         assert len(result["labels"]) == len(patients) == 20
         assert set(result["labels"]) == set(result["profiles"])
         assert -1.0 <= result["silhouette"] <= 1.0
-        # every patient accounted for exactly once across profiles
         assert sum(prof["size"] for prof in result["profiles"].values()) == 20
         for prof in result["profiles"].values():
             assert set(prof["means"]) == set(result["feature_names"])
@@ -55,15 +49,12 @@ class TestSubstitutions:
     def test_nutrient_distance_identical_and_extremes(self, dishes):
         a = dishes[0]
         assert substitutions.nutrient_distance(a, a) == 0.0
-        # distance is symmetric
         b = dishes[50]
         d_ab = substitutions.nutrient_distance(a, b)
         assert d_ab == pytest.approx(substitutions.nutrient_distance(b, a))
         assert 0.0 <= d_ab <= 6 ** 0.5 + 1e-9
 
     def test_v2_uses_renal_weighted_distance(self, dishes):
-        """The v2 composite's nutrient term is
-        the renal-weighted distance (Na/K/P ×2), not the plain euclidean."""
         dish = next(d for d in dishes if d["dish_id"] == "SG0001")
         results = substitutions.suggest_substitutions("SG0001", k=5, version=2, dishes=dishes)
         assert results
@@ -74,8 +65,6 @@ class TestSubstitutions:
             )
 
     def test_renal_weighting_changes_ranking(self, dishes):
-        """The renal weighting must actually matter: for some query dish the
-        plain and renal-weighted distances order candidates differently."""
         differing = 0
         by_id = {d["dish_id"]: d for d in dishes}
         for dish in dishes:
@@ -141,8 +130,6 @@ class TestSubstitutions:
         assert a == b
 
     def test_healthier_prior_prefers_lower_minerals(self, dishes):
-        """Among near-distance candidates, v2 should not systematically pick
-        the mineral-heaviest option."""
         salty = max(dishes, key=lambda d: d["sodium_mg"])
         results = substitutions.suggest_substitutions(salty["dish_id"], k=5, version=2, dishes=dishes)
         picked = {r["dish_id"] for r in results}
@@ -158,7 +145,6 @@ class TestSubstitutions:
     def test_k_respected_with_small_pool(self, dishes):
         dessert = next(d for d in dishes if d["category"] == "dessert")
         results = substitutions.suggest_substitutions(dessert["dish_id"], k=10, version=2, dishes=dishes)
-        # The compatible category pool bounds the number returned, even for large k.
         assert 0 < len(results) <= 10
 
 
@@ -175,14 +161,12 @@ def _synthetic_patient(pid: str, values_newest_first: list[float], analyte: str 
 
 class TestTrends:
     def test_flags_known_rising_patient(self, patients):
-        """P0016 has a clearly rising PO4 series in the synthetic data."""
         flags = trends.detect_trends(patients)
         assert flags, "dataset contains rising patients; none flagged"
         p0016 = [f for f in flags if f["patient_id"] == "P0016" and f["analyte"] == "PO4"]
         assert p0016, "P0016 PO4 should be flagged"
         assert p0016[0]["slope_per_month"] > 0.05
         assert p0016[0]["severity"] in {"review", "urgent"}
-        # a genuinely rising series is confirmed by the EWMA check
         assert p0016[0]["ewma_slope_per_month"] > 0.05
 
     def test_flag_shape_and_values_are_oldest_first(self, patients):
@@ -194,19 +178,11 @@ class TestTrends:
             }
             assert f["analyte"] in {"K", "PO4"}
             assert f["severity"] in {"review", "urgent"}
-            # values returned oldest->newest: last element == current serum
             patient = next(p for p in patients if p["patient_id"] == f["patient_id"])
             serum = patient["serum_K_meq_L"] if f["analyte"] == "K" else patient["serum_PO4_mg_dL"]
             assert f["values"][-1] == pytest.approx(serum)
 
     def test_plateau_downgraded_by_ewma(self):
-        """Hybrid de-escalation: a series that rose and
-        then flattened is still flagged by the full-window Theil-Sen rule,
-        but the recent-regime EWMA slope no longer satisfies the flag rule,
-        so severity is downgraded to review with a reason saying why."""
-        # oldest-first: 4.6 -> 5.2 over 2 months, then essentially flat.
-        # Theil-Sen slope +0.0667 (> 0.05 trigger) and latest 5.05 >= 5.0
-        # alert level -> would be "urgent" under the old rule.
         plateau = _synthetic_patient("SYN-PLATEAU", [5.05, 5.1, 5.15, 5.2, 4.9, 4.6])
         flags = trends.detect_trends([plateau])
         assert len(flags) == 1
@@ -219,8 +195,6 @@ class TestTrends:
         assert "EWMA" in f["reason"]
 
     def test_flagged_by_both_keeps_urgent(self):
-        """A series rising fast right up to the present is flagged by both
-        Theil-Sen and EWMA and keeps severity 'urgent'."""
         rising = _synthetic_patient("SYN-K", [5.6, 5.5, 5.35, 5.2, 5.1, 5.0])
         flags = trends.detect_trends([rising])
         assert len(flags) == 1
@@ -250,7 +224,6 @@ class TestTrends:
         assert flags[0]["severity"] == "review"
 
     def test_orientation_descending_offsets(self):
-        """months_offset_ago descending to 0 means data is already oldest-first."""
         patient = {
             "patient_id": "SYN-OLD",
             "months_offset_ago": [5, 4, 3, 2, 1, 0],
@@ -262,7 +235,6 @@ class TestTrends:
         assert flags[0]["slope_per_month"] == pytest.approx(0.1, abs=0.01)
 
     def test_orientation_ascending_offsets_reversed(self):
-        """months_offset_ago ascending from 0 (dataset convention) is newest-first."""
         patient = {
             "patient_id": "SYN-NEW",
             "months_offset_ago": [0, 1, 2, 3, 4, 5],

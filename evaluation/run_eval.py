@@ -1,16 +1,4 @@
-"""Evaluation orchestrator: runs Tier-1 contract checks and Tier-2 benchmarks/external studies.
-
-All generated outputs (``results.json`` and ``EVALUATION.md``) are written
-outside the code checkout under ``artifact_dir("evaluation")`` (default
-``CARELOOP_DATASET_DIR/outputs/evaluation/``, override ``CARELOOP_ARTIFACT_DIR``).
-Never write reports or raw data inside the repository.
-
-Usage::
-
-    .venv/bin/python -m evaluation.run            # full two-tier suite
-    .venv/bin/python -m evaluation.run --quick    # reduced optimiser/NHANES budget
-    .venv/bin/python -m evaluation.run --rerun-benchmark
-"""
+"""Run evaluations and write external artifacts."""
 
 from __future__ import annotations
 
@@ -42,24 +30,19 @@ __all__ = ["main", "run_suite"]
 
 
 def _run_vcs(command: list[str]) -> str | None:
-    """Run a VCS command in ROOT; ``None`` on failure or missing executable."""
     import subprocess
 
     try:
         proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
     except OSError:
-        return None  # executable missing or not executable
+        return None
     if proc.returncode != 0:
         return None
     return proc.stdout.strip() or None
 
 
 def _source_revision() -> str:
-    """Best-effort source revision: jj first, then git, else an explicit marker.
-
-    The revision is report metadata, so an unavailable VCS must never abort
-    the suite — that would discard every already-computed criterion result.
-    """
+    """Missing VCS metadata must not discard computed evaluation results."""
     revision = _run_vcs(
         ["jj", "--ignore-working-copy", "log", "-r", "@",
          "--no-graph", "-T", "commit_id"]
@@ -74,7 +57,6 @@ def run_suite(
     optimiser_kwargs: dict[str, Any] | None = None,
     max_nhanes_subjects: int | None = 600,
 ) -> dict[str, Any]:
-    """Run Tier-1 contract gates and Tier-2 empirical/external evaluations."""
     from backend.optim.real_data import load_dishes
 
     optimiser_kwargs = optimiser_kwargs or {}
@@ -159,11 +141,6 @@ def run_suite(
 
 
 def ablation_kwargs(optimiser_kwargs: dict[str, Any]) -> dict[str, Any]:
-    """Map the shared optimiser budget onto the ablation evaluation parameters.
-
-    Seeds stay at the fixed paired triple (42, 43, 44); pop/gen follow the
-    suite budget so ``--quick`` reduces the ablation run as well.
-    """
     kwargs: dict[str, Any] = {}
     if "pop_size" in optimiser_kwargs:
         kwargs["pop_size"] = optimiser_kwargs["pop_size"]

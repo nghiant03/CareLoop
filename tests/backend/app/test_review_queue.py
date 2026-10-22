@@ -1,9 +1,3 @@
-"""Check review workflows and date-effective envelope attribution.
-
-Backdate fixture approvals with ``journal_envelope`` so historical logs resolve
-to the intended versions, independently of today's clock.
-"""
-
 from __future__ import annotations
 
 import json
@@ -30,11 +24,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.fixture(scope="module", autouse=True)
 def _mount_review_router():
-    """Attach the review router only if the imported app lacks its queue route.
-
-    Normal application imports already include it; standalone test app setups
-    may omit the route.
-    """
     from backend.app.api import review as review_module
     from backend.app.main import app
 
@@ -45,7 +34,6 @@ def _mount_review_router():
 
 @pytest.fixture(autouse=True)
 def _isolated_stores():
-    """Fresh logs/journal/review rows + snapshot envelope store per test."""
     snapshot = dict(ENVELOPE_STORE)
     store.clear()
     persistence.clear_all()
@@ -86,9 +74,6 @@ def _hand_built_envelope(patient_id: str, sodium_max: float) -> NutrientEnvelope
 
 
 def test_history_scores_each_day_against_its_envelope_version(client) -> None:
-    """approve -> log day A -> edit + re-approve -> log day B: day A must be
-    scored against the pre-edit sodium ceiling, day B against the post-edit
-    one, with per-day envelope id/version attribution."""
     run = client.post("/rules/run", json={"patient_id": "P0001"})
     assert run.status_code == 200, run.text
     envelope = run.json()["envelope"]
@@ -102,15 +87,13 @@ def test_history_scores_each_day_against_its_envelope_version(client) -> None:
 
     day_a = _today(offset_days=-3)
     day_b = _today()
-    # Backdate the v1 approval so the journal covers day A (the rules run and
-    # the approval both journal at "today" by default).
+    # Backdate approval so historical logs have coverage.
     envelope = get_envelope(envelope_id)
     assert envelope is not None
     persistence.journal_envelope(envelope, event="APPROVED", effective_at=day_a)
 
     assert _log(client, "P0001", day_a, "lunch", "SG0001").status_code == 201
 
-    # Clinician tightens the sodium ceiling and re-approves (version 2).
     edit = client.post(
         f"/envelopes/{envelope_id}/edit",
         json={
@@ -135,21 +118,18 @@ def test_history_scores_each_day_against_its_envelope_version(client) -> None:
     assert set(by_date) == {day_a, day_b}
     day_a_row, day_b_row = by_date[day_a], by_date[day_b]
 
-    # Same envelope id, two versions; each day attributed to its own version.
     assert day_a_row["envelope_id"] == envelope_id
     assert day_b_row["envelope_id"] == envelope_id
     assert {day_a_row["envelope_version"], day_b_row["envelope_version"]} == {1, 2}
     assert day_a_row["envelope_version"] == 1
     assert day_b_row["envelope_version"] == 2
 
-    # The limits actually applied differ per day.
     sodium_a = next(r for r in day_a_row["nutrients"] if r["nutrient"] == "sodium_mg")
     sodium_b = next(r for r in day_b_row["nutrients"] if r["nutrient"] == "sodium_mg")
     assert sodium_a["limit"] == pytest.approx(original_sodium_max)
     assert sodium_b["limit"] == pytest.approx(1.0)
     assert sodium_a["limit"] != sodium_b["limit"]
 
-    # Attribution metadata on the response.
     versions = body["envelope_versions_used"]
     assert len(versions) == 2
     assert {v["version"] for v in versions} == {1, 2}
@@ -160,7 +140,6 @@ def test_history_scores_each_day_against_its_envelope_version(client) -> None:
     assert days_by_version[2] == [day_b]
     assert body["unattributed_days"] == []
 
-    # Deviation endpoint: multi-version window -> prefixed, disambiguated keys.
     dev = client.get("/adherence/P0001/deviation", params={"days": 14})
     assert dev.status_code == 200, dev.text
     series = dev.json()["series"]
@@ -173,8 +152,6 @@ def test_history_scores_each_day_against_its_envelope_version(client) -> None:
 
 
 def test_single_envelope_response_keeps_legacy_shape(client) -> None:
-    """With only one effective envelope the responses keep the exact legacy
-    key set (plus the additive attribution fields) and plain series keys."""
     envelope = _hand_built_envelope("P0002", sodium_max=100_000.0)
     assert _log(client, "P0002", _today(), "lunch", "SG0001").status_code == 201
 
@@ -209,7 +186,6 @@ def test_single_envelope_response_keeps_legacy_shape(client) -> None:
         "notice", "window", "series", "flags",
         "envelope_versions_used", "unattributed_days",
     }
-    # single-envelope case: plain series keys, no "<envelope_id>::" prefix
     assert all("::" not in key for key in dev_body["series"])
     assert set(dev_body["series"]) == {"sodium_mg"}
     for flag in dev_body["flags"]:
@@ -223,9 +199,7 @@ def _queue(client, **params):
 
 
 def test_queue_hard_violation_day_item_is_deterministic(client) -> None:
-    """A non-compliant day derives a ``hard_violation_day`` item; repeating
-    the derivation maps to the same review id (no duplicates)."""
-    _hand_built_envelope("P0007", sodium_max=1.0)  # any dish violates
+    _hand_built_envelope("P0007", sodium_max=1.0)
     assert _log(client, "P0007", _today(), "lunch", "SG0001").status_code == 201
 
     first = _queue(client, patient_id="P0007")
@@ -240,19 +214,16 @@ def test_queue_hard_violation_day_item_is_deterministic(client) -> None:
     assert item["reason"]
     assert item["payload"]["date"] == _today()
     assert item["payload"]["compliant"] is False
-    # contributors ride along in the day payload
     assert any(
         row.get("contributors") for row in item["payload"]["nutrients"]
     )
 
     second = _queue(client, patient_id="P0007")
-    assert second["items"] == first["items"]  # deterministic ids, no dupes
+    assert second["items"] == first["items"]
     assert persistence.get_review_item(item["review_id"]) is not None
 
 
 def test_queue_lab_trend_item_for_fixture_patient(client) -> None:
-    """Patients from data/patients.json with a rising lab series get a
-    ``lab_trend`` item keyed ``lab@<patient_id>:<analyte>``."""
     from backend.datasets.paths import dataset_path
     raw = json.loads(dataset_path("patients.json").read_text())
     patients = raw["patients"] if isinstance(raw, dict) else raw
@@ -272,18 +243,14 @@ def test_queue_lab_trend_item_for_fixture_patient(client) -> None:
 
 
 def test_closed_loop_flag_acknowledge_action_proposal_observation(client) -> None:
-    """Closed clinical loop: worsening sodium trend -> queue item ->
-    acknowledge -> recorded action -> linked PROPOSED envelope proposal ->
-    subsequent clinical observation."""
     envelope = _hand_built_envelope("P0009", sodium_max=100.0)
 
-    # Three consecutive days of increasingly salty lunches -> worsening flag.
     from backend.optim.real_data import load_dishes
 
     by_sodium = sorted(load_dishes(), key=lambda d: d.nutrient("sodium_mg"))
     picks = [by_sodium[0], by_sodium[len(by_sodium) // 2], by_sodium[-1]]
     for i, dish in enumerate(picks):
-        day = _today(offset_days=i - 2)  # today-2, today-1, today
+        day = _today(offset_days=i - 2)
         assert _log(client, "P0009", day, "lunch", dish.dish_id).status_code == 201
         for meal in ("breakfast", "dinner"):
             assert _log(client, "P0009", day, meal, by_sodium[0].dish_id).status_code == 201
@@ -300,7 +267,6 @@ def test_closed_loop_flag_acknowledge_action_proposal_observation(client) -> Non
     assert item["payload"]["contributors"], "flag payload carries contributors"
     review_id = item["review_id"]
 
-    # Acknowledge (idempotent).
     ack = client.post(f"/review/{review_id}/acknowledge")
     assert ack.status_code == 200, ack.text
     assert ack.json()["status"] == "ACKNOWLEDGED"
@@ -309,7 +275,6 @@ def test_closed_loop_flag_acknowledge_action_proposal_observation(client) -> Non
     assert ack_again.status_code == 200, ack_again.text
     assert ack_again.json()["status"] == "ACKNOWLEDGED"
 
-    # The open queue no longer lists it; the audit endpoint does.
     open_body = _queue(client, patient_id="P0009", status="open")
     assert review_id not in [i["review_id"] for i in open_body["items"]]
     acked_view = client.get(
@@ -318,7 +283,6 @@ def test_closed_loop_flag_acknowledge_action_proposal_observation(client) -> Non
     assert acked_view.status_code == 200, acked_view.text
     assert review_id in [i["review_id"] for i in acked_view.json()["items"]]
 
-    # Record the clinician's action -> item becomes actioned.
     action = client.post(
         f"/review/{review_id}/action", json={"action": "contacted_dietitian"}
     )
@@ -327,14 +291,12 @@ def test_closed_loop_flag_acknowledge_action_proposal_observation(client) -> Non
     assert acted["status"] == "ACTION_RECORDED"
     assert acted["action"]["action"] == "contacted_dietitian"
     assert acted["action"]["recorded_at"]
-    # body validation: extra fields forbidden
     bad = client.post(
         f"/review/{review_id}/action",
         json={"action": "x", "unexpected": True},
     )
     assert bad.status_code == 422
 
-    # Sequential re-derivation preserves the recorded action despite a persistent condition.
     open_again = _queue(client, patient_id="P0009", status="open")
     assert review_id not in [i["review_id"] for i in open_again["items"]]
     actioned_view = client.get(
@@ -342,7 +304,6 @@ def test_closed_loop_flag_acknowledge_action_proposal_observation(client) -> Non
     )
     assert review_id in [i["review_id"] for i in actioned_view.json()["items"]]
 
-    # Proposal: same code path as POST /rules/run -> linked PROPOSED envelope.
     proposal = client.post(f"/review/{review_id}/proposal")
     assert proposal.status_code == 200, proposal.text
     proposal_body = proposal.json()
@@ -355,7 +316,6 @@ def test_closed_loop_flag_acknowledge_action_proposal_observation(client) -> Non
     assert created.status_code == 200, created.text
     assert created.json()["status"] == "PROPOSED"
 
-    # Subsequent observation closes the clinical loop.
     obs = client.post(
         "/observations",
         json={
@@ -397,8 +357,7 @@ def test_review_items_endpoint_lists_persisted_history(client) -> None:
     listed = items.json()
     assert listed["count"] == body["count"]
     created = [i["created_at"] for i in listed["items"]]
-    assert created == sorted(created)  # chronological
-    # every persisted item carries the full public shape
+    assert created == sorted(created)
     for item in listed["items"]:
         assert set(item) == {
             "review_id", "patient_id", "source", "key", "kind", "severity",

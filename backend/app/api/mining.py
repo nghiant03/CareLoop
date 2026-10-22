@@ -1,5 +1,3 @@
-"""Expose lab trend flags, dish substitutions, and patient-aware meal swaps."""
-
 from __future__ import annotations
 
 import json
@@ -50,12 +48,10 @@ def _load_patients() -> list[dict]:
 
 @lru_cache(maxsize=1)
 def _dish_index() -> dict[str, Any]:
-    """Return catalogue dishes keyed by ID, caching the index within the process."""
     return {dish.dish_id: dish for dish in load_dishes()}
 
 
 def _envelope_notice(envelope: Any) -> tuple[bool, str | None]:
-    """Return whether comparisons are informational-only and any approval warning."""
     status = envelope.status.value
     if status == "APPROVED":
         return False, None
@@ -67,11 +63,6 @@ def _envelope_notice(envelope: Any) -> tuple[bool, str | None]:
 
 
 def _json_safe_violations(violations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return copies with non-finite violation magnitudes replaced by ``None``.
-
-    Only float values in ``amount``, ``actual``, and ``limit`` are sanitized.
-    Leave input rows and other fields unchanged.
-    """
     safe = []
     for violation in violations or []:
         cleaned = dict(violation)
@@ -87,7 +78,6 @@ def _json_safe_violations(violations: list[dict[str, Any]]) -> list[dict[str, An
 
 @router.get("/trends", summary="Rising K+/PO4 trend flags across the cohort")
 def trends() -> dict:
-    """Return cohort potassium/phosphate lab flags in ``flags`` and their ``count``."""
     from backend.app.api.patients import get_patient, list_patient_ids
 
     flags = detect_trends(
@@ -109,18 +99,7 @@ def substitutions(
     ),
     plan_id: str | None = Query(default=None, description="Exact saved plan to preview"),
 ) -> dict:
-    """Return up to ``k`` generic substitutions or patient-specific swap previews.
-
-    Omit ``patient_id`` for generic suggestions. ``plan_id`` is then ignored.
-    Patient previews use the latest envelope and the selected or latest saved plan.
-    They satisfy whole-plan hard constraints and meal roles. Results include
-    affected days, nutrient deltas, and cost deltas. Unapproved previews are informational
-    and do not authorize applying a swap.
-
-    Return HTTP 404 for unknown dishes, missing envelopes, or selected plans that
-    are missing or belong to another patient. Return HTTP 409 when no latest plan
-    exists or the source dish is absent from the plan.
-    """
+    """Preview swaps against the whole saved plan without authorizing application."""
     if patient_id is None:
         try:
             results = suggest_substitutions(dish_id, k=k, version=2)
@@ -198,19 +177,7 @@ class SwapApplyRequest(BaseModel):
 
 @router.post("/swaps/apply", summary="Apply a patient-aware meal swap")
 def apply_swap(req: SwapApplyRequest) -> dict[str, Any]:
-    """Return a derived plan with every ``dish_id`` occurrence replaced.
-
-    Use the selected or latest saved plan without changing the source. The latest
-    envelope must be approved, scope-eligible, and have targets. Whole-plan hard
-    constraint or meal-role violations return HTTP 422 without saving a new plan.
-
-    Return HTTP 404 for unknown dishes, missing envelopes, or selected plans that
-    are missing or belong to another patient. Return HTTP 409 when the envelope
-    is not ready, no latest plan exists, or the source dish is absent from the plan.
-
-    Results include ``derived_from`` and ``applied_swap`` even if saving fails.
-    A missing response ``plan_id`` does not prove the derived plan was not saved.
-    """
+    """Apply a validated swap to a new plan without changing the source."""
     from backend.app.core import persistence
     from backend.app.core.plan_storage import try_save_plan_document
 
@@ -282,7 +249,6 @@ def apply_swap(req: SwapApplyRequest) -> dict[str, Any]:
             },
         )
 
-    # Reuse generation mapping to preserve the response shape and original-aim adequacy scoring.
     document = map_plan_result(
         {
             "plan": outcome.modified_plan,

@@ -1,5 +1,3 @@
-"""Operator deployment bootstraps without a release and never serves clinical routes."""
-
 import json
 
 import pytest

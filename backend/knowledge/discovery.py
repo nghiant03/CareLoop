@@ -1,9 +1,3 @@
-"""Use an LLM to propose review-only nutrition rules from operator-selected sources.
-
-Discovery requires no manifest or hashes and has no guideline-specific patterns.
-Candidates are evidence-linked review artifacts, never executable rulebooks.
-"""
-
 from __future__ import annotations
 
 import json
@@ -23,15 +17,11 @@ DEFAULT_PROMPT = Path(__file__).with_name("prompts") / "discover_rules.md"
 
 
 class DiscoveryClient(Protocol):
-    """Provider-neutral boundary; a future adapter owns transport and JSON parsing."""
-
     def extract_candidates(self, *, instructions: str, source_text: str) -> dict:
-        """Return a document containing a ``candidates`` list."""
         ...
 
 
 def load_discovery_prompt(prompt_file: Path | None = None) -> str:
-    """Load editable instructions separately from extraction logic."""
     instructions = (prompt_file or DEFAULT_PROMPT).read_text(encoding="utf-8")
     if not instructions.strip():
         raise ValueError("Discovery instructions must not be empty")
@@ -39,7 +29,6 @@ def load_discovery_prompt(prompt_file: Path | None = None) -> str:
 
 
 def _read_source(path: Path) -> str:
-    """Read a local PDF, HTML, Markdown or text document without a manifest."""
     suffix = path.suffix.lower()
     if suffix == ".pdf":
         payload = path.read_bytes()
@@ -67,7 +56,7 @@ def _read_source(path: Path) -> str:
 
 
 def _text_chunks(text: str):
-    """Bound model requests with overlapping text windows, not medical patterns."""
+    """Overlap text windows to bound requests without source specific patterns."""
     start = 0
     while start < len(text):
         end = min(start + CHUNK_CHARS, len(text))
@@ -78,7 +67,6 @@ def _text_chunks(text: str):
 
 
 def _quote_evidence(quote: str, text: str) -> dict:
-    """Locate model quotes in the extracted text, preserving original whitespace."""
     match = re.search(r"\s+".join(re.escape(word) for word in quote.split()), text)
     if match is None:
         raise ValueError("Candidate quote was not found in the source text")
@@ -89,7 +77,7 @@ def _quote_evidence(quote: str, text: str) -> dict:
 
 
 def _related_rules(rules_document: dict, nutrient: str) -> list[dict]:
-    """Show same-nutrient rules without assuming their patient scopes overlap."""
+    """Matching nutrients do not establish overlapping patient scopes."""
     related = []
     for rule in rules_document["rules"]:
         actions = [action for action in rule["actions"]
@@ -103,7 +91,6 @@ def _related_rules(rules_document: dict, nutrient: str) -> list[dict]:
 
 def propose_rules(text: str, source: dict, rules_document: dict, client: DiscoveryClient,
                   instructions: str | None = None) -> dict:
-    """Extract candidates using only the LLM; baseline rules are comparison-only."""
     if not isinstance(rules_document, dict) or rules_document.get("dsl_version") != "1.0":
         raise ValueError("Discovery requires a CareLoop DSL 1.0 baseline rulebook")
     rules = rules_document.get("rules")
@@ -157,7 +144,6 @@ def propose_rules(text: str, source: dict, rules_document: dict, client: Discove
 def discover_rules(sources: list[Path], rules_document: dict, client: DiscoveryClient,
                    source_urls: list[str | None] | None = None, *,
                    instructions: str | None = None, source_names: list[str] | None = None) -> dict:
-    """Extract from any explicitly selected guideline files, with no static fallback."""
     if not sources:
         raise ValueError("Select at least one guideline source")
     if source_urls is not None and len(source_urls) != len(sources):
@@ -183,7 +169,6 @@ def discover_rules(sources: list[Path], rules_document: dict, client: DiscoveryC
 
 
 def write_discovery_report(report: dict, out_dir: Path | None = None) -> Path:
-    """Write an external run directory without hashes or overwriting existing work."""
     destination = (out_dir or artifact_dir("knowledge-discovery") / uuid4().hex).expanduser().resolve()
     checkout = Path(__file__).resolve().parents[2]
     if destination == checkout or checkout in destination.parents:
@@ -217,7 +202,6 @@ _ALLOWED_KINDS = {"MIN", "MAX", "TARGET"}
 
 
 def verify_quote_in_source(quote: str, source_text: str) -> bool:
-    """Verify that ``quote`` is a non-empty, whitespace-normalized verbatim substring of ``source_text``."""
     if not isinstance(quote, str) or not isinstance(source_text, str):
         return False
     norm_quote = " ".join(quote.split())
@@ -234,13 +218,7 @@ def extract_rules(
     *,
     instructions: str | None = None,
 ) -> list[dict]:
-    """Validate source-quoted, review-only proposals returned by any LLM adapter.
-
-    Every returned candidate must supply a verbatim ``quote`` verified against
-    ``source_text`` (preventing zero-quote or hallucinated extractions), a
-    recognized nutrient and constraint kind, and a finite positive numeric value.
-    All candidates remain ``NEEDS_REVIEW`` with ``automatic_activation_allowed=False``.
-    """
+    """Accept only source quoted candidates with finite positive values. Candidates remain pending review."""
     instructions = instructions if instructions is not None else load_discovery_prompt()
     if not instructions.strip():
         raise ValueError("Discovery instructions must not be empty")
@@ -308,14 +286,6 @@ def _strip_html(raw_html: str) -> str:
 
 
 def evaluate_cross_guideline_ground_truth(research_dir: Path, rules_document: dict) -> dict:
-    """Evaluate extracted and baseline rules against independent held-out external guidelines.
-
-    Uses held-out clinical guidelines not used to author the KDIGO 2024 rules:
-    1. KDIGO 2022 Diabetes in CKD & ADA–KDIGO 2022 Consensus Report (PDFs)
-    2. KDIGO 2017 CKD-MBD Guideline Update (PDF)
-    3. ADA Medical Nutrition Therapy Consensus (PMC6540072 HTML) & NHLBI DASH (PDF)
-    4. OpenFDA Official Structured Product Labeling (`openfda_drug_labels.json` + FDA PDFs)
-    """
     raw_root = research_dir / "raw" if (research_dir / "raw").exists() else research_dir
     g_dir = raw_root / "guidelines"
 
@@ -340,7 +310,6 @@ def evaluate_cross_guideline_ground_truth(research_dir: Path, rules_document: di
         except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             return ""
 
-    # 1. Held-out KDIGO 2022 Diabetes Management in CKD PDF
     kdigo_2022_txt = _pdf_text(g_dir / "kdigo_2022_diabetes_ckd.pdf")
     if kdigo_2022_txt:
         has_prot = bool(re.search(r"0\.8\s*g/kg", kdigo_2022_txt, re.IGNORECASE))
@@ -357,7 +326,6 @@ def evaluate_cross_guideline_ground_truth(research_dir: Path, rules_document: di
             "relative_bound_difference_pct": 0.0,
         })
 
-    # 2. Held-out ADA–KDIGO 2022 Consensus Report PDF
     ada_kdigo_txt = _pdf_text(g_dir / "ada_kdigo_2022_consensus.pdf")
     if ada_kdigo_txt:
         has_08_prot = bool(re.search(r"0\.8\s*g/kg", ada_kdigo_txt, re.IGNORECASE))
@@ -374,7 +342,6 @@ def evaluate_cross_guideline_ground_truth(research_dir: Path, rules_document: di
             "relative_bound_difference_pct": 0.0,
         })
 
-    # 3. Held-out KDIGO 2017 CKD-MBD Guideline Update PDF
     ckd_mbd_txt = _pdf_text(g_dir / "kdigo_2017_ckd_mbd.pdf")
     if ckd_mbd_txt:
         has_po4 = bool(re.search(r"phosphat|phosphorus", ckd_mbd_txt, re.IGNORECASE))
@@ -390,7 +357,6 @@ def evaluate_cross_guideline_ground_truth(research_dir: Path, rules_document: di
             "relative_bound_difference_pct": 0.0,
         })
 
-    # 4. Held-out ADA–KDIGO 2022 / NHLBI DASH General Sodium & Fiber Recommendations
     dash_txt = _pdf_text(g_dir / "nhlbi_dash.pdf")
     if ada_kdigo_txt or dash_txt:
         combined_txt = f"{ada_kdigo_txt} {dash_txt}"
@@ -407,7 +373,6 @@ def evaluate_cross_guideline_ground_truth(research_dir: Path, rules_document: di
             "relative_bound_difference_pct": 0.0,
         })
 
-    # 5. Held-out NHLBI DASH Guide PDF
     if dash_txt:
         has_dash_na = bool(re.search(r"2,?300\s*mg", dash_txt)) and bool(re.search(r"1,?500\s*mg", dash_txt))
         concordance_checks.append({
@@ -422,7 +387,6 @@ def evaluate_cross_guideline_ground_truth(research_dir: Path, rules_document: di
             "relative_bound_difference_pct": 0.0,
         })
 
-    # 6. Held-out OpenFDA Official Drug Labels JSON + FDA Lasix/Coumadin PDFs
     openfda_path = g_dir / "openfda_drug_labels.json"
     fda_verified: list[dict] = []
     if openfda_path.exists():

@@ -1,5 +1,3 @@
-"""Check exact-value citation authorship and patient-rule applicability in chat."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -28,7 +26,6 @@ def kb():
 
 
 def _ada_sodium_row() -> dict:
-    """Fired-rule row for ADA-2026-SODIUM-2300 (as the engine emits it)."""
     return {
         "rule_id": "ADA-2026-SODIUM-2300",
         "action_summary": "set sodium_mg max = 2300 mg/d",
@@ -44,7 +41,6 @@ def _ada_sodium_row() -> dict:
 
 
 def _clinician_edit_row(value: int = 1800) -> dict:
-    """CLINICIAN-EDIT trace row (mirrors core/envelope_lifecycle.edit)."""
     return {
         "rule_id": "CLINICIAN-EDIT",
         "action_summary": (
@@ -77,10 +73,6 @@ def _kdigo_sodium_row() -> dict:
 
 
 def test_edited_sodium_cites_clinician_edit_first(kb) -> None:
-    """P0001-style case: T2D patient, sodium MAX edited to 1800 mg by the
-    clinician and the envelope re-approved. The answer must quote 1.8 g and
-    cite the clinician-edit provenance first; the original guideline rule is
-    context at most. CKD rules must not be cited for a T2D-only patient."""
     envelope = {
         "envelope_id": "ENV-P0001-001",
         "patient_id": "P0001",
@@ -104,15 +96,11 @@ def test_edited_sodium_cites_clinician_edit_first(kb) -> None:
     rule_ids = [c["rule_id"] for c in result["citations"]]
     assert rule_ids, "answered answer must carry citations"
     assert rule_ids[0] == "CLINICIAN-EDIT", rule_ids
-    # CKD rules must not be cited for a T2D-only patient.
     assert "CKD-2024-SODIUM-2000" not in rule_ids
     assert rule_ids[0] != "ADA-2026-SODIUM-2300"
 
 
 def test_edited_sodium_via_api_cites_clinician_edit_first() -> None:
-    """Full loop through the API: rules/run -> clinician edit (1800 mg) ->
-    re-approve -> chat. The chat answer must quote 1.8 g with the
-    CLINICIAN-EDIT citation first and no inapplicable CKD guideline."""
     with TestClient(app) as client:
         body = client.post("/rules/run", json={"patient_id": "P0019"}).json()
         envelope_id = body["envelope"]["envelope_id"]
@@ -152,8 +140,6 @@ def test_edited_sodium_via_api_cites_clinician_edit_first() -> None:
 
 
 def test_unedited_constraint_still_cites_guideline_rule(kb) -> None:
-    """Without a clinician edit the constraint's provenance is the guideline
-    rule that fired: the first citation stays the guideline rule."""
     envelope = {
         "envelope_id": "ENV-P0005-001",
         "patient_id": "P0005",
@@ -199,13 +185,11 @@ def _numeric_rule(field: str, op: str, value) -> dict:
         ("eq", 5.0, 5.1, False),
         ("between", [18.0, 25.0], 20.0, True),
         ("between", [18.0, 25.0], 30.0, False),
-        # Unknown sentinel / missing lab never satisfies the test.
         ("ge", 5.0, -1.0, False),
         ("ge", 5.0, None, False),
     ],
 )
 def test_rule_applies_to_patient_numeric_ops(op, value, num, expected) -> None:
-    """Every numeric operator accepts matches and rejects unknown labs."""
     patient = {"patient_id": "PX", "serum_K_meq_L": num}
     assert answers._rule_applies_to_patient(_numeric_rule("serum_K_meq_L", op, value), patient) is expected
 
@@ -216,7 +200,6 @@ def test_rule_applies_to_patient_unknown_op_rejected() -> None:
 
 
 def _hyperk_potassium_row() -> dict:
-    """Fired-rule row for HYPERK-2024-POTASSIUM-2400 (as the engine emits it)."""
     return {
         "rule_id": "HYPERK-2024-POTASSIUM-2400",
         "action_summary": "set potassium_mg max = 2400 mg/d",
@@ -232,7 +215,6 @@ def _hyperk_potassium_row() -> dict:
 
 
 def test_hyperkalaemia_potassium_rule_cited_for_high_serum_k(kb) -> None:
-    """A matching 5.45 mEq/L lab keeps the hyperkalaemia rule citable."""
     envelope = {
         "envelope_id": "ENV-P0006-001",
         "patient_id": "P0006",
@@ -260,9 +242,6 @@ def test_hyperkalaemia_potassium_rule_cited_for_high_serum_k(kb) -> None:
     rule_ids = [c["rule_id"] for c in result["citations"]]
     assert rule_ids, "answered answer must carry citations"
     assert "HYPERK-2024-POTASSIUM-2400" in rule_ids
-    # The hyperkalaemia rule is the applicable anchor, so its verbatim quote
-    # is quoted in the answer prose.
     assert "restrict dietary potassium in hyperkalaemia" in result["answer"]
-    # Rules that do not apply to this patient are never cited.
     assert "CKD-2024-POTASSIUM-INDIV" not in rule_ids
     assert "DASH-2025-POTASSIUM-4700" not in rule_ids

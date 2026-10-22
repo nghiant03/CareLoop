@@ -1,5 +1,3 @@
-"""External datasets never fall back to source-tree seeds or create files."""
-
 from pathlib import Path
 
 import pytest

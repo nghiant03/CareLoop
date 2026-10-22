@@ -1,18 +1,4 @@
-"""Compare guaranteed search, raw search, and baselines on catalogue dishes.
-
-Run with ``.venv/bin/python -m backend.optim.benchmark``. Write per-run CSV
-and Markdown summaries to ``artifacts/optim/benchmark_results.{csv,md}``
-(root override: ``CARELOOP_ARTIFACT_DIR``). Set
-``CARELOOP_BENCH_SMOKE=1`` for reduced budgets and separate smoke artifacts.
-
-Hypervolume uses per-envelope bounds pooled across all feasible main-phase
-fronts, shared with the tuning sweep. The reference point is 1.1 in each
-normalized objective. Runs without feasible plans score zero.
-
-Raw runs expose violations before repair. Algorithm configuration and MOEA/D's
-constraint limitation are documented in ``solver._build_pymoo_algorithm`` and
-``solver._run_pymoo``.
-"""
+"""Compare guaranteed and raw search against shared bounds."""
 
 from __future__ import annotations
 
@@ -39,20 +25,17 @@ CSV_PATH = os.path.join(_HERE, "benchmark_results.csv")
 MD_PATH = os.path.join(_HERE, "benchmark_results.md")
 
 SMOKE = os.environ.get("CARELOOP_BENCH_SMOKE") == "1"
-if SMOKE:  # smoke artifacts land in separate files so full results survive
+if SMOKE:
     CSV_PATH = os.path.join(_HERE, "benchmark_results_smoke.csv")
     MD_PATH = os.path.join(_HERE, "benchmark_results_smoke.md")
 
 SEEDS = [1, 2, 3, 4, 5]
-if SMOKE:  # smoke: single seed so the test-suite regeneration check stays fast
+if SMOKE:
     SEEDS = [1]
 POP_SIZE = 40
 N_GEN = 80
-# Guaranteed pymoo methods (through the solver's feasibility guarantee)...
 PYMOO_METHODS = ["nsga2", "nsga3", "moead", "age", "sms"]
-# ...each also run raw (honest violation rate), plus the original baselines.
 RAW_METHODS = [f"{m}-raw" for m in PYMOO_METHODS] + ["ga", "greedy", "random"]
-# Display / report order for the full comparison table.
 METHOD_ORDER = PYMOO_METHODS + [f"{m}-raw" for m in PYMOO_METHODS] + [
     "ga", "greedy", "random"
 ]
@@ -131,10 +114,8 @@ def main() -> int:
         print("WARNING: pymoo unavailable — NSGA-II rows will use the GA fallback engine")
         print("WARNING: pymoo comparison methods (nsga3/moead/age/sms) require pymoo")
 
-    # rows: list of (row_dict, F_matrix)
     entries: list[tuple[dict, np.ndarray]] = []
 
-    # Compare all methods over the same envelope/seed pairs.
     n_envs = len(envelopes)
     n_runs = n_envs * len(SEEDS) * (len(PYMOO_METHODS) * 2 + 3)
     print("=" * 78)
@@ -178,8 +159,6 @@ def main() -> int:
                     f"  runtime={result['runtime_ms']:>8.1f} ms"
                 )
 
-    # Per-envelope normalisation bounds over ALL feasible fronts (main phase,
-    # guaranteed AND raw — one shared yardstick per envelope).
     bounds: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     for env_name in envelopes:
         env_Fs = [F for (row, F) in entries if row["envelope"] == env_name and len(F)]
@@ -187,7 +166,6 @@ def main() -> int:
             np.zeros(len(OBJECTIVE_NAMES)), np.ones(len(OBJECTIVE_NAMES))
         )
 
-    # Sweep NSGA-II budgets against the main comparison's normalization bounds.
     if not SMOKE:
         print("=" * 78)
         print("Phase 2: NSGA-II pop x gen sweep — 4 envelopes x 1 seed x 9 configs")
@@ -295,7 +273,6 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
     )
     lines.append("")
 
-    # Headline summary per method
     lines.append("## Summary (main phase: 4 envelopes x 5 seeds, pop=40, gen=80)")
     lines.append("")
     lines.append(
@@ -313,7 +290,6 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
         )
     lines.append("")
 
-    # Per-envelope x method mean HV
     lines.append("## Mean hypervolume per envelope")
     lines.append("")
     lines.append("| envelope | " + " | ".join(methods_present) + " |")
@@ -330,7 +306,6 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
         lines.append(f"| {env_name} | " + " | ".join(cells) + " |")
     lines.append("")
 
-    # Sweep table
     if sweep_rows:
         lines.append("## NSGA-II pop x gen sweep (1 seed, HV vs main-phase bounds)")
         lines.append("")
@@ -385,7 +360,6 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
             f"(mean HV {knee['hv']:.4f}, {knee['ms']:.0f} ms/solve)."
         )
 
-    # Algorithm choice across the guaranteed comparison set.
     def _stats(method: str) -> dict:
         rs = [r for r in main_rows if r["method"] == method]
         return {
@@ -422,8 +396,7 @@ def _write_report(entries, bounds, runtime_total: float) -> None:
                 "that they report honest hard-constraint violation rates and "
                 "skip the repair step that guarantees the delivered plan."
             )
-    # Report HV ranking without changing production: runtime is measured, but
-    # no deployment-switch criterion has been agreed.
+    # Ranking does not change the production algorithm.
         if nsga2_stat and best_guar["method"] != "nsga2" and best_guar["hv"] > nsga2_stat["hv"]:
             ratio = best_guar["ms"] / max(nsga2_stat["ms"], 1e-9) if nsga2_stat else float("inf")
             lines.append(

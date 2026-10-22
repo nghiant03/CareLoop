@@ -1,5 +1,3 @@
-"""Separate append-only knowledge journal in PostgreSQL."""
-
 from __future__ import annotations
 
 import json
@@ -55,7 +53,6 @@ class KnowledgeRelease:
 
 
 def load_release(database: str | Path, release_id: str) -> KnowledgeRelease:
-    """Read only a published, reviewed snapshot and verify its canonical hashes."""
     _identity(release_id)
     with KnowledgeStore(database)._connection() as conn:
         row = conn.execute("""
@@ -73,20 +70,13 @@ def load_release(database: str | Path, release_id: str) -> KnowledgeRelease:
 
 
 class KnowledgeStore:
-    """Append-only draft revisions, revision-bound review, and immutable publication.
-
-    Actor names are operator attestations, not authenticated identities. Database
-    roles are the operator security boundary.
-    Immutability does not protect against privileged database administrators.
-    """
-
     def __init__(self, database: str | Path):
         if not is_postgres(database):
             raise ValueError("Knowledge storage requires a PostgreSQL URL; SQLite is no longer supported")
         self.database = str(database)
 
     def initialize(self) -> None:
-        """Verify schema; only the separate admin migration may create it."""
+        """Verify schema without creating it."""
         with PostgresConnection(self.database, "knowledge", readonly=True):
             pass
 

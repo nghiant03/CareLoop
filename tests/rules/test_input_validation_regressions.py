@@ -1,5 +1,3 @@
-"""HTTP rule-input validation must precede native execution and persistence."""
-
 import json
 
 import pytest

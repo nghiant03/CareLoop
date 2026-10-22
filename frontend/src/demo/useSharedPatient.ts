@@ -2,13 +2,6 @@ import { useEffect, useRef } from 'react';
 import type { Patient } from '../types';
 import { useDemo } from './context';
 
-/**
- * Follow the demo-wide patient selection with a screen's own selection handler.
- *
- * The screen keeps ownership of its reset/load logic; this hook only invokes it
- * when the shared patient differs from the screen's current patient. Without a
- * provider (isolated tests) it does nothing.
- */
 export function useSharedPatient(
   patients: Patient[],
   currentPatientId: string | null | undefined,

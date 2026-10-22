@@ -1,14 +1,4 @@
-"""Compare clustering, lab-trend estimators, and substitution rankings.
-
-Run with ``.venv/bin/python -m backend.mining.comparison`` to write
-ignored ``artifacts/mining/COMPARISON.md`` and ``comparison_results.json``.
-Fixed seeds and shared production input helpers make
-comparisons repeatable within the same numerical environment.
-
-Historical scorers remain explicit alternatives, not replicas of production.
-Synthetic trend scenarios test detection and false alarms. Fixture patient
-series illustrate behavior but do not establish clinical validity.
-"""
+"""Compare clustering and trend detection and substitution methods."""
 
 from __future__ import annotations
 
@@ -44,7 +34,7 @@ COMPARISON_MD_PATH = artifact_dir("mining") / "COMPARISON.md"
 SEED = 42
 STABILITY_SEEDS = (0, 1, 2, 3, 4)
 BOOTSTRAP_DRAWS = 10
-BOOTSTRAP_SIZE = 15  # of 20 patients
+BOOTSTRAP_SIZE = 15
 BOOTSTRAP_SEED = 7
 
 K_RANGE = (2, 6)
@@ -52,9 +42,7 @@ HDBSCAN_MIN_CLUSTER_SIZES = (3, 4, 5, 6)
 GMM_COVARIANCE_TYPES = ("diag", "full")
 
 
-
 def _f(value: float | None, nd: int = 3) -> str:
-    """Format a float for markdown; ``None`` -> n/a."""
     if value is None:
         return "n/a"
     return f"{value:.{nd}f}"
@@ -67,11 +55,7 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
     return f"{head}\n{sep}\n{body}"
 
 
-# Clustering comparison
-
-
 def _standardised_features(patients: list[dict]) -> tuple[np.ndarray, list[str]]:
-    """Reuse clustering.py's feature extraction + standardisation."""
     present = [
         name
         for name in clustering.FEATURE_NAMES
@@ -89,7 +73,6 @@ def _kmeans_labels(X: np.ndarray, config: dict, seed: int) -> np.ndarray:
 
 def _gmm_labels(X: np.ndarray, config: dict, seed: int) -> np.ndarray:
     with warnings.catch_warnings():
-        # tiny-n GMM fits can emit convergence warnings; irrelevant here
         warnings.simplefilter("ignore")
         gm = GaussianMixture(
             n_components=config["k"],
@@ -101,19 +84,12 @@ def _gmm_labels(X: np.ndarray, config: dict, seed: int) -> np.ndarray:
 
 
 def _hdbscan_labels(X: np.ndarray, config: dict, seed: int) -> np.ndarray:
-    # sklearn's HDBSCAN is deterministic; the seed is accepted for a uniform
-    # fitter signature and ignored.
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # sklearn FutureWarning re `copy`
+        warnings.simplefilter("ignore")
         return np.asarray(HDBSCAN(min_cluster_size=config["min_cluster_size"]).fit_predict(X))
 
 
 def _cluster_metrics(X: np.ndarray, labels: np.ndarray, drop_noise: bool) -> dict:
-    """Silhouette / Davies-Bouldin / Calinski-Harabasz for a labeling.
-
-    For HDBSCAN (``drop_noise=True``) noise points (label -1) are excluded
-    before scoring — the standard practice — and counted separately.
-    """
     labels = np.asarray(labels)
     noise = int((labels == -1).sum()) if drop_noise else 0
     if drop_noise:
@@ -146,7 +122,6 @@ def _mean_pairwise_ari(label_sets: list[np.ndarray]) -> float:
 def _bootstrap_stability(
     fitter, config: dict, X: np.ndarray, ref_labels: np.ndarray
 ) -> float:
-    """Mean ARI between the full-data fit and refits on random subsamples."""
     rng = np.random.default_rng(BOOTSTRAP_SEED)
     aris = []
     for _ in range(BOOTSTRAP_DRAWS):
@@ -184,9 +159,6 @@ def compare_clustering(patients: list[dict]) -> dict:
             {"config": cfg, **{k: v for k, v in m.items()}} for cfg, m, _ in scored
         ]
 
-        # pick best config: highest silhouette among usable configs; HDBSCAN
-        # falls back to the config with the fewest noise points if none is
-        # usable (fewer than 2 non-noise clusters).
         usable = [
             (cfg, m, labels)
             for cfg, m, labels in scored
@@ -202,11 +174,8 @@ def compare_clustering(patients: list[dict]) -> dict:
                 scored, key=lambda t: (t[1]["noise_points"], -t[1]["n_clusters"])
             )
 
-        # seed stability: refit with different random_state values
         seed_labels = [fitter(X, best_cfg, seed) for seed in STABILITY_SEEDS]
         seed_ari = _mean_pairwise_ari(seed_labels)
-        # bootstrap subsample stability (applies to every method, including
-        # the seed-invariant HDBSCAN)
         boot_ari = _bootstrap_stability(fitter, best_cfg, X, best_labels)
 
         chosen = dict(best_cfg)
@@ -230,7 +199,6 @@ def compare_clustering(patients: list[dict]) -> dict:
             "seed_invariant": name == "hdbscan",
         }
 
-    # cluster-count behaviour
     gmm_bic: dict[str, dict[int, float]] = {}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -322,17 +290,10 @@ def _clustering_verdict(results: dict) -> tuple[str, str]:
     return best, rationale[best]
 
 
-# Trend-estimator comparison
-
-
 def _ols_slope(y: list[float]) -> float:
     values = np.asarray(y, dtype=float)
     x = np.arange(len(values), dtype=float)
     return float(np.polyfit(x, values, 1)[0])
-
-
-# Reuse the production EWMA estimator so the study measures the same slope
-# used for trend de-escalation.
 
 
 ESTIMATORS: dict[str, Callable[[list[float]], float]] = {
@@ -343,11 +304,7 @@ ESTIMATORS: dict[str, Callable[[list[float]], float]] = {
 
 
 def _would_flag(series: list[float], slope: float, cfg: dict) -> bool:
-    """Apply the slope/projection rule to a monthly series with at least three points.
-
-    Unlike ``trends.detect_trends``, this study helper does not handle dated
-    urgent observations or assign EWMA-adjusted severity.
-    """
+    """This comparison omits dated urgent observations and EWMA severity."""
     if len(series) < trends._MIN_SERIES_LEN:
         return False
     latest = series[-1]
@@ -357,10 +314,6 @@ def _would_flag(series: list[float], slope: float, cfg: dict) -> bool:
     return bool(slope_trigger or crossing)
 
 
-# name -> (truth: should the FULL 6-month series be flagged?, monthly path)
-# False-truth scenarios double as false-positive probes measured at the end
-# of the window; `plateau` specifically tests whether an estimator keeps
-# crying wolf after a rise has stopped (adaptivity).
 _SCENARIOS: dict[str, dict] = {
     "flat": {"truth": False, "path": lambda i: 0.0},
     "rising_slow": {"truth": False, "path": lambda i: 0.03 * i},
@@ -371,10 +324,10 @@ _SCENARIOS: dict[str, dict] = {
 }
 
 _N_MONTHS = 6
-_BASE = 4.2  # K-like level, safely below the 5.5 flag threshold
+_BASE = 4.2
 _NOISE_SD = 0.05
 _REPS_TRUTH_TRUE = 100
-_REPS_FLAT = 200  # extra reps for a tighter FP estimate
+_REPS_FLAT = 200
 
 
 def _synthetic_series(scenario: str, rng: np.random.Generator) -> list[float]:
@@ -387,7 +340,6 @@ def _synthetic_series(scenario: str, rng: np.random.Generator) -> list[float]:
 def _first_detection_month(
     estimator, cfg: dict, series: list[float]
 ) -> int | None:
-    """Number of months of history at which the flag first fires (3..n)."""
     for t in range(trends._MIN_SERIES_LEN, len(series) + 1):
         prefix = series[:t]
         if _would_flag(prefix, estimator(prefix), cfg):
@@ -396,11 +348,9 @@ def _first_detection_month(
 
 
 def compare_trends(patients: list[dict]) -> dict:
-    cfg = trends._THRESHOLDS["K"]  # synthetic scenarios use K-like levels
+    cfg = trends._THRESHOLDS["K"]
 
-    # Synthetic scenarios
-    # stable per-scenario RNG seeds (never hash(): string hashing is
-    # randomised per process)
+    # Avoid hash because string hashing varies across processes.
     scenario_seeds = {
         scenario: SEED + 997 * i for i, scenario in enumerate(_SCENARIOS)
     }
@@ -425,8 +375,6 @@ def compare_trends(patients: list[dict]) -> dict:
                 "truth": spec["truth"],
                 "end_flag_rate": round(end_flagged / reps, 4),
                 "ever_flag_rate": round(ever_flagged / reps, 4),
-                # lead = months before the end of the window that the flag
-                # first fired (0 = only fires once the full window is seen)
                 "mean_lead_months": (
                     round(float(np.mean(leads)), 2) if leads else None
                 ),
@@ -457,7 +405,6 @@ def compare_trends(patients: list[dict]) -> dict:
             ),
         }
 
-    # Fixture patient series
     real: dict[str, dict] = {}
     slope_deltas: dict[str, list[float]] = {name: [] for name in ESTIMATORS}
     flag_sets: dict[str, set] = {}
@@ -510,7 +457,6 @@ def compare_trends(patients: list[dict]) -> dict:
 def _trends_verdict(results: dict) -> tuple[str, str]:
     def score(name: str) -> tuple[float, float]:
         s = results["synthetic"][name]
-        # reward true-positive detection and lead time, penalise false alarms
         return (
             s["detection_rate_true_positive"] - s["false_positive_rate_overall"],
             s["mean_lead_months_true_positive"] or 0.0,
@@ -556,15 +502,10 @@ def _trends_verdict(results: dict) -> tuple[str, str]:
     return best, text
 
 
-# Substitution comparison
-
-# Renal weights over substitutions.CORE_NUTRIENTS order:
-# (energy_kcal, protein_g, sodium_mg, potassium_mg, phosphorus_mg, carbs_g)
 RENAL_WEIGHTS: tuple[float, ...] = (1.0, 1.0, 2.0, 2.0, 2.0, 1.0)
 
 
 def _weighted_distance(dish_a: dict, dish_b: dict) -> float:
-    """Euclidean distance with Na/K/P weighted heavier (renal relevance)."""
     va = substitutions._normalised_vector(dish_a)
     vb = substitutions._normalised_vector(dish_b)
     return float(
@@ -573,14 +514,7 @@ def _weighted_distance(dish_a: dict, dish_b: dict) -> float:
 
 
 def _historical_v2_scores(query: dict, candidates: list[dict]) -> dict[str, float]:
-    """Score the study's historical unweighted composite (plain Euclidean term).
-
-    Production v2 ranks by renal-weighted distance. This historical study
-    alternative keeps the plain Euclidean nutrient term so the study compares
-    distinct nutrient-only, renal-weighted, and composite scorers rather than
-    duplicating production under two labels. The persisted ``v2_composite``
-    study key and column keep their original spelling for reproducibility.
-    """
+    """Retain the historical unweighted scorer and serialized key for reproducibility."""
     nds = [(c, substitutions.nutrient_distance(query, c)) for c in candidates]
     best = min(nd for _, nd in nds)
     scores: dict[str, float] = {}
@@ -614,7 +548,6 @@ _METRICS = ("v1_euclidean", "weighted_renal", "v2_composite")
 
 
 def _example_queries(dishes: list[dict]) -> list[dict]:
-    """Three representative, deterministically-selected query dishes."""
     hawker = max(
         (d for d in dishes if d["category"] == "hawker"), key=lambda d: d["sodium_mg"]
     )
@@ -642,7 +575,6 @@ def compare_substitutions(dishes: list[dict]) -> dict:
     for a, b in itertools.combinations(_METRICS, 2):
         taus = []
         for dish in queries:
-            # align the two score vectors over the same candidate order
             cand_ids = rankings[a][dish["dish_id"]]
             id_to_score_a = {
                 cid: i for i, cid in enumerate(rankings[a][dish["dish_id"]])
@@ -659,7 +591,6 @@ def compare_substitutions(dishes: list[dict]) -> dict:
             round(float(np.max(taus)), 4),
         ]
 
-    # qualitative examples: top-3 under each metric
     examples = []
     for dish in _example_queries(dishes):
         candidates = substitutions._candidates(dish, dishes)
@@ -736,7 +667,6 @@ def build_markdown(r: dict) -> str:
     )
     out.append("")
 
-    # Clustering
     c = r["clustering"]
     out.append("## 1. Clustering: k-means vs HDBSCAN vs GMM")
     out.append("")
@@ -831,7 +761,6 @@ def build_markdown(r: dict) -> str:
     out.append(f"**Verdict — {c['recommendation_method']}.** {c['recommendation']}")
     out.append("")
 
-    # Trends
     t = r["trends"]
     out.append("## 2. Trend detection: Theil-Sen vs OLS vs EWMA")
     out.append("")
@@ -923,7 +852,6 @@ def build_markdown(r: dict) -> str:
     out.append(f"**Verdict — {t['recommendation_method']}.** {t['recommendation']}")
     out.append("")
 
-    # Substitutions
     s = r["substitutions"]
     out.append("## 3. Substitution metrics: v1 euclidean vs renal-weighted vs historical composite")
     out.append("")
@@ -1011,7 +939,6 @@ def build_markdown(r: dict) -> str:
 
 
 def main(output_path: Path | None = None) -> int:
-    """Write new study artifacts without overwriting the published report by default."""
     results = run_comparison()
     markdown = build_markdown(results)
     destination = COMPARISON_MD_PATH if output_path is None else output_path
@@ -1033,7 +960,6 @@ def main(output_path: Path | None = None) -> int:
 
 
 def comparison_json(value):
-    """Encode numerical study results; undefined/nonfinite metrics are JSON null."""
     if isinstance(value, dict):
         return {str(key): comparison_json(item) for key, item in value.items()}
     if isinstance(value, (list, tuple, np.ndarray)):

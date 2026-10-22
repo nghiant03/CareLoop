@@ -1,11 +1,3 @@
-"""Code-only distributions and external-dataset smoke checks; never install packages.
-
-Building requires existing Hatchling tooling. CARELOOP_BUILD_PYTHONPATH can name
-available tool directories, including an unpacked local cache, without installation.
-The smoke process uses the existing runtime dependencies but imports CareLoop only
-from the extracted wheel, outside the checkout with its editable root removed.
-"""
-
 import json
 import os
 import subprocess
@@ -31,7 +23,6 @@ def test_resource_selection_is_explicit_and_state_is_excluded():
 
 @pytest.fixture
 def distributions(tmp_path):
-    """Build with available tooling into isolated temporary output, or report a skip."""
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
     env["PYTHONPATH"] = os.environ.get("CARELOOP_BUILD_PYTHONPATH", "")
     probe = subprocess.run([sys.executable, "-c", "import hatchling.build"],
@@ -91,7 +82,7 @@ def test_out_of_checkout_wheel_loads_rules_patients_dishes_and_kb(distributions,
 import json, sys
 from pathlib import Path
 installed, checkout = map(Path, sys.argv[1:])
-# Retain the current environment's dependencies, not its editable source root.
+# Exclude editable sources while retaining installed dependencies.
 sys.path[:] = [entry for entry in sys.path if Path(entry or '.').resolve() != checkout]
 sys.path.insert(0, str(installed))
 from rules import engine
@@ -120,7 +111,7 @@ print('CARELOOP_SMOKE=' + json.dumps({'dishes': len(dishes), 'proposal': proposa
     result = subprocess.run([sys.executable, "-I", "-c", script, str(installed), str(ROOT)],
                             cwd=work, env=env, capture_output=True, text=True, timeout=90, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    # Native shutdown diagnostics can follow the result; they are not its payload.
+    # Native shutdown diagnostics can follow the JSON payload.
     results = [line.removeprefix("CARELOOP_SMOKE=") for line in result.stdout.splitlines()
                if line.startswith("CARELOOP_SMOKE=")]
     assert len(results) == 1, result.stdout + result.stderr

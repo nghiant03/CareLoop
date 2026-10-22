@@ -1,10 +1,3 @@
-"""Quality/runtime: consume the existing optimiser benchmark artefacts.
-
-Read the existing benchmark CSV and Markdown rather than running search.
-``--rerun-benchmark`` regenerates them first. Include every recorded method
-and keep violation rates unrounded for verdict decisions.
-"""
-
 from __future__ import annotations
 
 import csv
@@ -38,7 +31,6 @@ def _summary_table(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
         if row["phase"] == "main":
             by_method[row["method"]].append(row)
     table = []
-    # Include every recorded method, not a fixed comparison subset.
     for method in sorted(by_method):
         runs = by_method[method]
         hvs = [float(r["hypervolume"]) for r in runs]
@@ -51,7 +43,6 @@ def _summary_table(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
             "runs": len(runs),
             "mean_hv": round(statistics.fmean(hvs), 4),
             "hv_std": round(statistics.pstdev(hvs), 4) if len(hvs) > 1 else 0.0,
-        # Rounding a nonzero rate to zero would incorrectly permit PASS.
             "violation_rate": sum(1 for v in violations if v > 0) / len(violations),
             "mean_runtime_ms": round(statistics.fmean(runtimes), 1),
             "mean_search_evaluations": statistics.fmean(float(r["evaluations"]) for r in runs) if all(r.get("evaluations") for r in runs) else None,
@@ -101,14 +92,7 @@ def _recommendation(path: Path = _MD_PATH) -> str:
 
 
 def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
-    """Derive the benchmark verdict and its explanation from the headline table.
-
-    The hypervolume winner has the highest mean HV across all method rows in
-    the benchmark artefact, not a hardcoded algorithm identity. PASS requires
-    that winner's exact, unrounded hard-constraint violation rate to be zero.
-    Any violating run makes the rate nonzero and the verdict FAIL: the
-    front-quality leader cannot then be recommended as-is.
-    """
+    """Use exact violation rates so rounding cannot turn failure into a pass."""
     if not headline:
         return ("FAIL",
                 "No main-phase benchmark rows were found in the artefact, so no method comparison could be derived.")
@@ -155,7 +139,6 @@ def verdict_from_headline(headline: list[dict[str, Any]]) -> tuple[str, str]:
 
 
 def evaluate_benchmark(rerun_benchmark: bool = False) -> dict[str, Any]:
-    """Headline optimiser benchmark table and recommendation."""
     csv_path, md_path = _CSV_PATH, _MD_PATH
     if rerun_benchmark:
         subprocess.run(

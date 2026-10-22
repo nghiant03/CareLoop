@@ -1,8 +1,3 @@
-"""API patient profiles and canonical envelope snapshots.
-
-The dataset generator's extended record lives in ``backend.datasets.patient``.
-"""
-
 from __future__ import annotations
 
 import math
@@ -16,13 +11,6 @@ __all__ = ["Patient", "PatientSummary"]
 
 
 class Patient(BaseModel):
-    """Extended patient record accepted by the patient API.
-
-    Extra keys are allowed so the synthetic generator can evolve its schema without
-    breaking the API. ``to_summary()`` projects down to the frozen envelope
-    contract.
-    """
-
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     patient_id: str
@@ -41,19 +29,12 @@ class Patient(BaseModel):
     @field_validator("weight_kg", "height_cm", "egfr", "serum_k_meq_l", "serum_po4_mg_dl")
     @classmethod
     def _require_finite(cls, value: float | None) -> float | None:
-        """Reject nonfinite clinical numerics.
-
-        Non-strict JSON parsers accept bare ``Infinity``/``NaN``; numeric
-        strings can also coerce to infinity. Bounds like ``gt=0`` alone admit
-        positive infinity, which is unsafe to persist or pass to the engine.
-        Readers of already-stored records do not pass through this validator.
-        """
+        """Numeric bounds alone admit positive infinity."""
         if value is not None and not math.isfinite(value):
             raise ValueError("must be a finite number")
         return value
 
     def to_summary(self) -> PatientSummary:
-        """Project this record onto the canonical envelope patient snapshot."""
         return PatientSummary(
             patient_id=self.patient_id,
             age=self.age,

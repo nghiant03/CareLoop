@@ -1,9 +1,3 @@
-"""Toy meal-search demo with a pure-Python fallback when pymoo is unavailable.
-
-Run with ``python -m backend.optim.spike_pymoo``. Print plan metrics and write
-front objectives to ``backend/optim/spike_pymoo.csv``.
-"""
-
 from __future__ import annotations
 
 import csv
@@ -11,7 +5,6 @@ import os
 import sys
 import time
 
-# Allow direct execution: `python backend/optim/spike_pymoo.py`.
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
@@ -60,7 +53,6 @@ CSV_PATH = str(artifact_dir("optim") / "spike_pymoo.csv")
 
 
 def build_sample_envelope() -> NutrientEnvelope:
-    """Toy APPROVED envelope: energy TARGET + sodium/protein MAX + protein MIN."""
     return NutrientEnvelope(
         envelope_id="env-toy-001",
         patient_id="p-toy",
@@ -264,7 +256,6 @@ def run_spike(
     seed: int = 42,
     save_csv_file: bool = True,
 ) -> dict:
-    """Run the spike and return the result dict (also used by the smoke test)."""
     if use_pymoo is None:
         use_pymoo = HAS_PYMOO
 

@@ -1,5 +1,3 @@
-"""Failure-path and serialized-reader regressions without artifact writes."""
-
 import json
 import subprocess
 from types import SimpleNamespace
@@ -78,7 +76,7 @@ def test_report_renders_actual_per_day_compliance_and_reads_old_metrics():
     assert table_row.split("|")[6].strip() == "True"
     patient["per_day_hard_compliant"] = False
     assert table_row.replace("True", "False") in render_report(results)
-    # Old pooled raw gaps have no recoverable common unit. Never relabel them.
+    # Historical raw gaps have no recoverable common unit.
     old = _ablation_rows({"scalar": {"mean_daily_shortfall": 123.0}})
     assert old[0][4] == "n/a"
     new = _ablation_rows({"scalar": {"mean_daily_rel_shortfall_pct": 12.5}})
@@ -90,5 +88,4 @@ def test_groundedness_name_retains_callable_compatibility_and_limits():
     response = {"answer": "An arbitrary dish assertion.", "claims": [
         {"text": "An arbitrary dish assertion.", "source": "dish", "chunk_id": "dish:example"}
     ]}
-    # The intentionally weaker metric checks source identity, not food facts.
     assert _claim_sources_consistent(response, None)

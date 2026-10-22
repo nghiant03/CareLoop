@@ -1,8 +1,4 @@
-"""Automatic one-shot deployment setup, not an operator command interface.
-
-Compose runs this task before either application surface. It creates empty schemas
-or checks existing ones; it never imports datasets, publishes knowledge or resets data.
-"""
+"""One shot deployment schema setup."""
 
 import logging
 

@@ -1,5 +1,3 @@
-"""Cross-surface regressions for exact constraint provenance and precision."""
-
 from pathlib import Path
 
 import pytest
@@ -68,7 +66,7 @@ def test_stale_explicit_provenance_is_not_replaced_by_trace(kb):
     assert clinician["constraints"][0]["citation"] is None
     assert clinician["constraints"][0]["provenance"]["value"] == 2000
     assert not any("sodium" in reason.lower() for reason in patient["why"])
-    assert chat["status"] == "answered"  # independent guideline guidance remains available
+    assert chat["status"] == "answered"
     assert not any(claim.get("source") == "envelope" for claim in chat["claims"])
     assert "1.8 g" not in chat["answer"]
     assert target["value"] == 1800

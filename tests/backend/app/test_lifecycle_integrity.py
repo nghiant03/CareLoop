@@ -1,5 +1,3 @@
-"""Transition, concurrency, and trace regressions using isolated durable state."""
-
 import json
 import os
 import subprocess

@@ -1,9 +1,4 @@
-"""Normalize downloaded evidence into an isolated research staging database.
-
-No live patient, knowledge, or approval journal is written. Research participants
-are not clinical patients; recalls have no fabricated dates or approval coverage.
-Missing nutrients remain null. Sources and native values accompany every record.
-"""
+"""Normalize research sources into a separate staging database."""
 import csv
 import io
 import json
@@ -46,11 +41,7 @@ SGFOODID_EXTENDED_COLS = {
 
 
 def parse_sgfoodid_num(raw_val: object) -> float | None:
-    """Parse a numeric value from SG FoodID CSV.
-
-    CRITICAL: ``'-'`` or ``' - '`` denotes an unassayed/missing nutrient,
-    NEVER ``0.0``. Coercing ``'-'`` to ``0.0`` is strictly forbidden.
-    """
+    """A dash means unassayed rather than zero."""
     if raw_val is None:
         return None
     text = str(raw_val).strip()
@@ -66,7 +57,6 @@ def parse_sgfoodid_num(raw_val: object) -> float | None:
 
 
 def load_sgfoodid_candidates(raw_root: Path | None = None) -> dict:
-    """Load and audit Singapore HPB FoodID (`sgfoodid_202607.zip`) without coercing missing values."""
     base = raw_root if raw_root is not None else (ROOT / "raw")
     archive = base / "singapore/sgfoodid_202607.zip"
     if not archive.exists():
@@ -177,7 +167,6 @@ def encode(value):
 
 
 class ArticleTables(HTMLParser):
-    """Keep source table cells verbatim, without guessing units or missing columns."""
     def __init__(self):
         super().__init__()
         self.tables = []

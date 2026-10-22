@@ -1,16 +1,10 @@
-"""Reference CLIPS templates and pure fact-rendering helpers.
-
-Mapping helpers remain importable without clipspy. Callers own environments and
-load templates explicitly. These reference shapes are not ``rules.engine``'s
-active templates. Python assembly supplies nested citations and provenance.
-"""
+"""Reference CLIPS templates and fact rendering."""
 
 from __future__ import annotations
 
 import re
 from typing import Any
 
-# Guard native-library loading so pure mapping helpers remain importable without CLIPS.
 try:  # pragma: no cover - exercised only when clipspy is installed
     import clips  # type: ignore
 
@@ -20,8 +14,6 @@ except Exception:  # noqa: BLE001  # ImportError, or any native-library load err
     CLIPS_AVAILABLE = False
 
 
-# Enum-like slots use symbols; free-text fields use strings. Nutrient/kind/unit
-# tokens follow the shared schema, while unknown numeric labs use -1.0.
 FACTS_DEFTEMPLATE = r"""
 ;; ------------------------------------------------------------------
 ;; CareLoop patient fact — mirrors shared.envelope_schema.PatientSummary
@@ -101,19 +93,13 @@ FACTS_DEFTEMPLATE = r"""
 
 
 def _sym(value: Any) -> str:
-    """Replace spaces with underscores; this is not general CLIPS input escaping."""
+    """Space replacement is not general CLIPS escaping."""
     text = str(value).strip().replace(" ", "_")
     return text
 
 
 def patient_fact(patient: Any) -> str:
-    """Build a CLIPS ``(patient ...)`` fact string from a PatientSummary-like object.
-
-    Read CLIPS field names, including ``serum_K_meq_L`` and ``serum_PO4_mg_dL``,
-    from a dict or object. Pass canonical models as ``model_dump(by_alias=True)``
-    because their Python lab attributes use different names. Missing numeric fields
-    become ``-1.0``. Values must be trusted: quoted fields are not escaped.
-    """
+    """Use wire aliases for models. Quoted input values must be trusted because they are not escaped."""
     if isinstance(patient, dict):
         get = patient.get
     else:
@@ -144,7 +130,6 @@ def patient_fact(patient: Any) -> str:
 
 def nutrient_constraint_fact(nutrient: str, kind: str, value: float, unit: str,
                              rule_id: str, priority: int) -> str:
-    """Build a reference constraint fact from trusted tokens and an unescaped rule ID."""
     return (
         "(nutrient-constraint "
         f"(nutrient {_sym(nutrient)}) "
@@ -157,11 +142,7 @@ def nutrient_constraint_fact(nutrient: str, kind: str, value: float, unit: str,
 
 
 def exclusion_fact(kind: str, value: str, reason: str, rule_id: str, priority: int) -> str:
-    """Build a reference exclusion fact from trusted values.
-
-    Replace double quotes in the reason with apostrophes. Other quoted fields
-    and backslashes are not escaped. This is not a general input serializer.
-    """
+    """Only reason quotes are replaced. Other quoted values must be trusted."""
     safe_reason = reason.replace('"', "'")
     return (
         "(exclusion-flag "
@@ -174,17 +155,12 @@ def exclusion_fact(kind: str, value: str, reason: str, rule_id: str, priority: i
 
 
 def load_templates(env: Any) -> None:
-    """Compile the CareLoop deftemplates into a live ``clips.Environment``.
-
-    The caller owns the environment. Missing clipspy raises RuntimeError.
-    """
     if not CLIPS_AVAILABLE:
         raise RuntimeError(
             "clipspy is not installed. Install it (pip install clipspy) before "
             "loading CLIPS templates; the rest of the rule spec is usable without it."
         )
-    # Each reference template ends with a standalone closing parenthesis.
-    # Environment.build accepts one construct, not the complete template block.
+    # Environment build accepts one construct at a time.
     for construct in re.findall(r"^\(deftemplate .*?^\)", FACTS_DEFTEMPLATE, re.MULTILINE | re.DOTALL):
         env.build(construct)
 

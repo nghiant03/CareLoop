@@ -1,11 +1,4 @@
-"""Select approval authority without bypassing lifecycle or scope checks.
-
-``CARELOOP_APPROVAL_MODE`` supplies the startup default. The academic demo can
-switch the effective mode at runtime; the override is process-local, is not
-persisted and resets to the configured default on restart. Switching is an
-unauthenticated demo control, not an authority decision, and it never changes
-existing envelopes: it only selects the policy for subsequent rule runs.
-"""
+"""Select approval policy for subsequent rule runs."""
 
 import os
 import threading
@@ -21,7 +14,6 @@ _runtime_override: ApprovalMode | None = None
 
 
 def configured_approval_mode() -> ApprovalMode:
-    """Return the validated startup default from ``CARELOOP_APPROVAL_MODE``."""
     mode = os.environ.get("CARELOOP_APPROVAL_MODE", "auto")
     if mode not in APPROVAL_MODES:
         raise ValueError("CARELOOP_APPROVAL_MODE must be auto or clinician")
@@ -29,18 +21,14 @@ def configured_approval_mode() -> ApprovalMode:
 
 
 def approval_mode() -> ApprovalMode:
-    """Default to the academic demo; reject invalid configuration before writes.
-
-    The configured value is validated even while a runtime override is active,
-    so invalid configuration still fails startup and rule runs.
-    """
+    """Validate configured policy even while a process local override is active."""
     configured = configured_approval_mode()
     with _override_lock:
         return _runtime_override or configured
 
 
 def set_approval_mode(mode: str) -> ApprovalMode:
-    """Select the effective mode for subsequent rule runs in this process."""
+    """Change policy only for subsequent rule runs in this process."""
     global _runtime_override
     if mode not in APPROVAL_MODES:
         raise ValueError("approval mode must be auto or clinician")
@@ -51,7 +39,6 @@ def set_approval_mode(mode: str) -> ApprovalMode:
 
 
 def reset_approval_mode() -> ApprovalMode:
-    """Drop the runtime override and return to the configured default."""
     global _runtime_override
     with _override_lock:
         _runtime_override = None

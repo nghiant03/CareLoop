@@ -1,16 +1,3 @@
-"""Deterministic selection of a headline plan from feasible front entries.
-
-Supply a nonempty list of feasible entries with ``plan`` and ``objectives``,
-plus the original approved envelope, not a solver-relaxed copy. These functions
-do not validate approval or feasibility. Empty entry lists raise ValueError.
-The selected entry is returned by identity; mutating it also changes the
-supplied front.
-
-All strategies break score ties on the plan's flattened dish-ID tuple. Relative
-deviations fall back to absolute gaps when an aim is nonpositive. Inputs are
-unchanged; entries with identical keys retain input order.
-"""
-
 from __future__ import annotations
 
 from .problem import (
@@ -24,19 +11,16 @@ _UNMET_TOL = 1e-9
 
 
 def _flat_ids(entry: dict) -> tuple[str, ...]:
-    """Deterministic tie-break key: the plan's flattened dish-id tuple."""
     return tuple(d for meal in entry["plan"] for d in meal)
 
 
 def _relative(num: float, aim: float) -> float:
-    """``num / aim`` with an absolute fallback when ``aim <= 0``."""
     if aim > 0:
         return num / aim
     return float(num)
 
 
 def _relative_day_deviation(totals: dict[str, float], envelope) -> float:
-    """Mean over constraints of the relative deviation for one day."""
     constraints = list(envelope.targets)
     if not constraints:
         return 0.0
@@ -48,22 +32,17 @@ def _relative_day_deviation(totals: dict[str, float], envelope) -> float:
             total += _relative(abs(value - aim), aim)
         elif c.kind == ConstraintKind.MIN:
             total += _relative(max(0.0, aim - value), aim)
-        else:  # MAX
+        else:
             total += _relative(max(0.0, value - aim), aim)
     return total / len(constraints)
 
 
 def scalar_selection(entries: list[dict], envelope, dishes: list[Dish]) -> dict:
-    """Minimise scalar_score, breaking ties by flattened dish IDs."""
     return min(entries, key=lambda e: (scalar_score(e["objectives"]), _flat_ids(e)))
 
 
 def normalised_selection(entries: list[dict], envelope, dishes: list[Dish]) -> dict:
-    """Minimise mean relative deviation over days and envelope constraints.
-
-    Use TARGET distance, MIN shortfall, and MAX excess. Nonpositive aims use
-    absolute gaps. See the module contract for input requirements and tie-breaks.
-    """
+    """Nonpositive aims use absolute gaps."""
     def key(entry: dict) -> tuple:
         daily = daily_totals(entry["plan"], dishes)
         if not daily:
@@ -76,13 +55,7 @@ def normalised_selection(entries: list[dict], envelope, dishes: list[Dish]) -> d
 
 
 def adequacy_first_selection(entries: list[dict], envelope, dishes: list[Dish]) -> dict:
-    """Minimise the worst MIN/TARGET gap before counting unmet day-aim pairs.
-
-    Key: ``(worst relative aim deviation, unmet day-aim count,
-    scalar_score, flattened dish IDs)``. MIN uses shortfall. TARGET uses
-    two-sided distance. A relative gap > 1e-9 counts as unmet. Nonpositive
-    aims use absolute gaps. MAX ceilings are excluded.
-    """
+    """Rank worst relative aim deviation before unmet aim count and scalar score."""
     def key(entry: dict) -> tuple:
         daily = daily_totals(entry["plan"], dishes)
         worst = 0.0
@@ -90,12 +63,12 @@ def adequacy_first_selection(entries: list[dict], envelope, dishes: list[Dish]) 
         for totals in daily:
             for c in envelope.targets:
                 if c.kind == ConstraintKind.MAX:
-                    continue  # ceilings are hard constraints, not adequacy aims
+                    continue
                 aim = float(c.value)
                 value = totals[c.nutrient.value]
                 if c.kind == ConstraintKind.MIN:
                     shortfall = max(0.0, aim - value)
-                else:  # TARGET: absolute deviation includes overshoot
+                else:
                     shortfall = abs(value - aim)
                 rel = _relative(shortfall, aim)
                 worst = max(worst, rel)

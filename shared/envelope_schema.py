@@ -1,4 +1,4 @@
-"""Canonical envelope, patient-snapshot, and rule-trace data contracts."""
+"""Canonical envelope and patient snapshot contracts."""
 
 from __future__ import annotations
 
@@ -10,8 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class EnvelopeStatus(str, Enum):
-    """Lifecycle states of a nutrient envelope."""
-
     PROPOSED = "PROPOSED"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
@@ -19,7 +17,7 @@ class EnvelopeStatus(str, Enum):
 
 
 class ConstraintKind(str, Enum):
-    """Daily constraint semantics: soft TARGET/MIN aims and hard MAX ceilings."""
+    """Only MAX is hard. MIN and TARGET are soft aims."""
 
     TARGET = "target"
     MIN = "min"
@@ -60,8 +58,6 @@ class CitationSource(BaseModel):
 
 
 class ConstraintProvenance(BaseModel):
-    """Author and citation for one exact constraint value in an envelope version."""
-
     model_config = ConfigDict(extra="forbid")
 
     nutrient: NutrientKind
@@ -89,7 +85,6 @@ _CANONICAL_UNITS = {
 
 
 def _add_unit_schema(schema: dict) -> None:
-    """Mirror the Python unit validator without duplicating its nutrient map."""
     schema["allOf"] = [
         {"if": {"properties": {"nutrient": {"const": nutrient.value}},
                 "required": ["nutrient"]},
@@ -99,8 +94,6 @@ def _add_unit_schema(schema: dict) -> None:
 
 
 class NutrientConstraint(BaseModel):
-    """Daily nutrient aim or ceiling, validated in its nutrient's canonical unit."""
-
     model_config = ConfigDict(extra="forbid", json_schema_extra=_add_unit_schema)
 
     nutrient: NutrientKind
@@ -119,8 +112,6 @@ class NutrientConstraint(BaseModel):
 
 
 class ExclusionFlag(BaseModel):
-    """Hard exclusions carried by an envelope, from rules or clinician edits."""
-
     model_config = ConfigDict(extra="forbid")
 
     kind: ExclusionKind
@@ -130,7 +121,7 @@ class ExclusionFlag(BaseModel):
 
 
 class RuleFire(BaseModel):
-    """Decision-trace row; a fired rule may lose a conflict and not set the final bound."""
+    """A fired rule may lose a conflict without setting the final bound."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -143,12 +134,7 @@ class RuleFire(BaseModel):
 
 
 class PatientSummary(BaseModel):
-    """Frozen rule inputs, not a live profile.
-
-    Version 1 snapshots may omit BMI/pregnancy/HbA1c; None means unrecorded, not
-    evidence of absence. New engine snapshots emit version 2 with these inputs.
-    Reading old snapshots does not upgrade them or reconstruct missing values.
-    """
+    """Frozen rule inputs. Missing historical values remain unrecorded rather than absent."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -171,11 +157,7 @@ class PatientSummary(BaseModel):
 
 
 class NutrientEnvelope(BaseModel):
-    """Clinical constraints and decision history; lifecycle services own transitions.
-
-    Missing ``scope_eligible`` currently defaults to True, including on legacy
-    snapshots. This model does not infer scope exclusions from status or notes.
-    """
+    """Missing scope eligibility defaults to true. Lifecycle services own transitions."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -206,5 +188,4 @@ class NutrientEnvelope(BaseModel):
     knowledge_source_hashes: dict[str, str] = Field(default_factory=dict, description="Canonical content hashes for the published knowledge snapshot")
 
     def is_ready_for_optimisation(self) -> bool:
-        """Whether approval, scope eligibility, and nonempty targets permit live planning."""
         return self.status == EnvelopeStatus.APPROVED and self.scope_eligible and bool(self.targets)

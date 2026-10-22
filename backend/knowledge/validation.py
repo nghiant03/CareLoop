@@ -1,4 +1,4 @@
-"""Validate executable knowledge shape, not the clinical accuracy of its sources."""
+"""Validate executable knowledge structure."""
 
 from __future__ import annotations
 
@@ -43,12 +43,6 @@ def _strings(value: Any, field: str, *, nonempty: bool = False) -> None:
 
 
 def validate_documents(rules_document: dict, dishes: list[dict]) -> dict:
-    """Reject unsupported DSL, duplicate IDs, incomplete nutrients and unsafe scope regressions.
-
-    Missing optional guideline URLs/quotes and unverified catalogue values are
-    disclosed, not silently upgraded. This is not source verification, clinical
-    approval, or a complete rule-behaviour regression suite.
-    """
     canonical_json([rules_document, dishes])
     if not isinstance(rules_document, dict) or rules_document.get("dsl_version") != "1.0":
         raise ValueError("rules document must declare supported dsl_version '1.0'")

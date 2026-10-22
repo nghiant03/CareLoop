@@ -1,5 +1,3 @@
-"""Comparison re-runs must preserve the external benchmark report snapshot."""
-
 import json
 from pathlib import Path
 

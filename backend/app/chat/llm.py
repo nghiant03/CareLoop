@@ -1,11 +1,3 @@
-"""Chat adapter boundary with an offline template implementation.
-
-``build_adapter`` always returns TemplateLLM. Provider/model resolution is
-metadata only, not an active hosted or Ollama connection. Future adapters must
-preserve the grounding contract; the answer pipeline does not enforce it on
-their generated text.
-"""
-
 from __future__ import annotations
 
 import json
@@ -28,20 +20,13 @@ __all__ = [
 
 @runtime_checkable
 class LLMAdapter(Protocol):
-    """Adapter expected to preserve facts and citations in already-grounded text."""
+    """Preserve facts and citations from grounded input."""
 
     def generate(self, prompt: str, context: dict[str, Any] | None = None) -> str:
-        """Produce a completion for ``prompt`` grounded in ``context``."""
         ...  # pragma: no cover
 
 
 class TemplateLLM:
-    """Deterministic, offline template adapter.
-
-    Returns the prompt followed by supplied context key/value lines. No network
-    calls or generated facts are involved.
-    """
-
     name = "template-llm"
 
     def generate(self, prompt: str, context: dict[str, Any] | None = None) -> str:
@@ -53,12 +38,6 @@ class TemplateLLM:
 
 
 class OpenAICompatLLM:
-    """OpenAI-compatible ``/v1/chat/completions`` client.
-
-    Supports any OpenAI-compatible endpoint (OpenAI, vLLM, SGLang, Ollama ``/v1``,
-    LiteLLM) for structured JSON extraction and grounded answer generation.
-    """
-
     name = "openai-compat-llm"
 
     def __init__(
@@ -138,7 +117,6 @@ def build_openai_compat_adapter(
     model: str | None = None,
     timeout: float = 60.0,
 ) -> OpenAICompatLLM:
-    """Construct an :class:`OpenAICompatLLM` from explicit args or environment."""
     environ = env if env is not None else os.environ
     choice = choose_llm(environ)
     resolved_base = (
@@ -169,16 +147,11 @@ def build_openai_compat_adapter(
 def build_adapter(
     env: dict[str, str] | None = None,
 ) -> tuple[LLMAdapter, dict[str, Any]]:
-    """Return ``(TemplateLLM, info)`` regardless of the resolved provider.
-
-    ``info["resolved"]`` reports configuration from ``llm_choice.choose_llm``.
-    ``info["active"]`` identifies the template adapter serving completions.
-    """
+    """Resolved provider metadata does not change the active template adapter."""
     choice = choose_llm(env if env is not None else os.environ)
     return TemplateLLM(), {"resolved": asdict(choice), "active": TemplateLLM.name}
 
 
 def active_adapter_info(env: dict[str, str] | None = None) -> dict[str, Any]:
-    """Metadata only (no adapter construction) for /healthz-style reporting."""
     choice = choose_llm(env if env is not None else os.environ)
     return {"resolved": asdict(choice), "active": TemplateLLM.name}

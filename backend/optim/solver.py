@@ -1,14 +1,4 @@
-"""Single-dish search with canonical validation, repair, and exact failure diagnosis.
-
-Production NSGA-II uses pymoo when available, otherwise a hand-rolled GA.
-Guaranteed pymoo-method runs return a hard-feasible plan or an empty diagnosed
-result. Bounded repair/construction can miss feasible plans; exact one-day
-enumeration distinguishes search exhaustion from proven single-dish infeasibility.
-
-Raw pymoo mode and benchmark baselines may return violating plans. The exact
-reference does not prove infeasibility for main/side composition. See ``solve``
-for method/selection contracts and ``exact_reference`` for proof assumptions.
-"""
+"""Single dish search with repair and exact failure diagnosis."""
 
 from __future__ import annotations
 
@@ -54,9 +44,7 @@ except Exception as exc:  # noqa: BLE001
     HAS_PYMOO = False
     PYMOO_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
-# Extra pymoo algorithms for the benchmark comparison.  Kept in a *separate*
-# guarded block so a broken optional dependency (e.g. AGEMOEA needs numba)
-# can never break the production NSGA-II path above.
+# Optional comparison dependencies must not break production NSGA II.
 REF_DIRS_4OBJ = None
 try:  # pragma: no cover - depends on environment
     from pymoo.algorithms.moo.age import AGEMOEA
@@ -66,7 +54,6 @@ try:  # pragma: no cover - depends on environment
     from pymoo.decomposition.pbi import PBI
     from pymoo.util.ref_dirs import get_reference_directions
 
-    # Das-Dennis: 35 directions for four objectives, near the benchmark pop=40.
     if HAS_PYMOO:
         REF_DIRS_4OBJ = get_reference_directions("das-dennis", 4, n_partitions=4)
     HAS_PYMOO_EXTRAS = HAS_PYMOO
@@ -75,9 +62,6 @@ except Exception as exc:  # noqa: BLE001
     HAS_PYMOO_EXTRAS = False
     PYMOO_EXTRAS_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
-# Methods that run through the pymoo front search (NSGA-II + the benchmark
-# comparison set).  All of them share the hard feasibility guarantee in
-# ``solve()`` unless ``guarantee=False`` is passed explicitly (raw mode).
 PYMOO_METHODS = ("nsga2", "nsga3", "moead", "age", "sms")
 
 
@@ -105,13 +89,7 @@ def _build_pymoo_problem(ev: FastEvaluator, with_constraints: bool = True):
 
 
 def _build_pymoo_algorithm(method: str, pop_size: int):
-    """Instantiate the pymoo algorithm for ``method``.
-
-    Shared sampling, crossover, and mutation isolate survival differences.
-    NSGA-III and MOEA/D use 35 Das-Dennis directions. MOEA/D's population
-    follows that count, not ``pop_size``. SMSEMOA uses the supplied population
-    budget to bound hypervolume-contribution cost.
-    """
+    """MOEA/D population follows the reference direction count rather than pop_size."""
     sampling = IntegerRandomSampling()
     crossover = SBX(prob=0.9, eta=15)
     mutation = PM(eta=20)
@@ -133,7 +111,6 @@ def _build_pymoo_algorithm(method: str, pop_size: int):
             eliminate_duplicates=True,
         )
     if method == "moead":
-        # MOEA/D: population size is len(ref_dirs) = 35 (not pop_size).
         return MOEAD(
             ref_dirs=REF_DIRS_4OBJ,
             n_neighbors=15,
@@ -172,15 +149,7 @@ def _pymoo_front(
     ev: FastEvaluator, seed: int, pop_size: int, n_gen: int, method: str = "nsga2",
     termination=None,
 ) -> list[np.ndarray]:
-    """Run a pymoo algorithm and return the non-dominated plans as index arrays.
-
-    MOEA/D's pymoo implementation cannot represent inequality constraints, so
-    it runs on the unconstrained view of the same problem (objectives
-    unchanged, hard-constraint vector dropped) — infeasible members can then
-    dominate feasible ones inside its decomposition; the guarantee wrapper in
-    ``solve()`` still fences the *reported* plan.  This is noted in the
-    benchmark report.
-    """
+    """MOEA/D drops inequalities during search. The guarantee still validates the reported plan."""
     problem = _build_pymoo_problem(ev, with_constraints=(method != "moead"))
     algorithm = _build_pymoo_algorithm(method, pop_size)
     res = minimize(problem, algorithm, termination or ("n_gen", n_gen), seed=seed, verbose=False)
@@ -192,11 +161,7 @@ def _pymoo_front(
 
 
 def ga_search(envelope, dishes, seed: int = 42, pop_size: int = 40, n_gen: int = 80) -> dict:
-    """Simple generational GA: roulette selection, uniform crossover, flip mutation.
-
-    Deliberately *not* NSGA-II: it scalarises objectives and treats constraint
-    violations as a lexicographic penalty, so it cannot spread a Pareto front.
-    """
+    """Scalar ranking does not spread a Pareto front."""
     t0 = time.perf_counter()
     ev = FastEvaluator(envelope, dishes)
     if ev.size == 0 or ev.slots == 0:
@@ -220,7 +185,6 @@ def ga_search(envelope, dishes, seed: int = 42, pop_size: int = 40, n_gen: int =
 
     for _gen in range(n_gen):
         scored.sort(key=lambda t: (t[2], t[3], t[4]))
-        # Roulette weights favour low rank (fewer/smaller violations first).
         weights = [float(pop_size - r) for r in range(len(scored))]
         total = sum(weights)
 
@@ -243,7 +207,6 @@ def ga_search(envelope, dishes, seed: int = 42, pop_size: int = 40, n_gen: int =
                     child[j] = rng.randrange(ev.size)
             return child
 
-        # Elitism: carry the two best individuals.
         next_pop = [scored[0][0].copy(), scored[1][0].copy()]
         while len(next_pop) < pop_size:
             p1 = scored[select()][0]
@@ -263,7 +226,6 @@ def ga_search(envelope, dishes, seed: int = 42, pop_size: int = 40, n_gen: int =
 
 
 def greedy_search(envelope, dishes, seed: int = 0) -> dict:
-    """Feasibility-aware greedy construction with cross-day variety pressure."""
     t0 = time.perf_counter()
     ev = FastEvaluator(envelope, dishes)
     if ev.size == 0:
@@ -282,7 +244,6 @@ def random_search(envelope, dishes, seed: int = 0, n_iter: int = 300) -> dict:
 
 
 def _entry(ev: FastEvaluator, idx: np.ndarray) -> dict:
-    """Canonical evaluation of a pool plan (source of truth for reporting)."""
     plan = ev.idx_to_plan(idx)
     objectives, violations = evaluate(plan, ev.envelope, ev.dishes)
     return {
@@ -297,7 +258,6 @@ def _entry(ev: FastEvaluator, idx: np.ndarray) -> dict:
 def _diagnosis(
     envelope, dishes, reason: str, runtime_ms: float, allowed_count: int
 ) -> dict:
-    """Explicit infeasibility result — never a silently broken plan."""
     return {
         "method": "diagnosis",
         "engine": "infeasible",
@@ -324,7 +284,6 @@ def _diagnosis(
 
 
 def _exact_reference_summary(exact: dict) -> dict:
-    """Compact ``one_day_exact`` summary embedded in diagnosed results."""
     return {
         "feasible_day": exact["feasible_day"],
         "feasible_combo_count": exact["feasible_combo_count"],
@@ -335,13 +294,7 @@ def _exact_reference_summary(exact: dict) -> dict:
 def _diagnose_with_exact(
     envelope, dishes, reason: str, runtime_ms: float, allowed_count: int
 ) -> dict:
-    """Attach an exact single-dish diagnosis to search failure.
-
-    ``proven_infeasible`` means no feasible day exists. ``search_exhausted``
-    means one exists but heuristics delivered no canonical-feasible plan.
-    Daily EPS excess may accumulate beyond horizon EPS. Proof assumptions and
-    composition limits belong to ``exact_reference``.
-    """
+    """Exact diagnosis covers single dish encoding rather than main and side composition."""
     exact = one_day_exact(envelope, dishes)
     diag = _diagnosis(envelope, dishes, reason, runtime_ms, allowed_count)
     diag["infeasibility_status"] = (
@@ -358,17 +311,7 @@ def _guarantee(
     engine: str,
     selection=None,
 ) -> tuple[dict | None, str, list[dict]]:
-    """Find a feasible entry via bounded repair/construction, or return None.
-
-    ``selection``: optional ``(entries, envelope, dishes) -> entry`` callable
-    used to pick the headline plan from the feasible entries instead of the
-    default ``min(..., key=scalar_score)`` (see ``backend.optim.selection``).
-    ``None`` uses scalar score. A custom selector must return one of the supplied
-    feasible entries without mutating it; the callback result is not revalidated.
-
-    Returns ``(best_entry, engine_label, feasible_entries)`` or ``(None, ...)``
-    when no feasible plan could be reached.
-    """
+    """Custom selectors must return an unchanged supplied feasible entry. Their result is not revalidated."""
     feasible = [e for e in entries if e["feasible"]]
     if feasible:
         if selection is not None:
@@ -377,7 +320,6 @@ def _guarantee(
             best = min(feasible, key=lambda e: scalar_score(e["objectives"]))
         return best, engine, feasible
 
-    # 1) repair the least-violating candidate
     if entries:
         repair_candidate = min(
             entries,
@@ -399,7 +341,6 @@ def _guarantee(
                     feasible.append(entry)
                     return entry, f"{engine}+repair", feasible
 
-    # 2) greedy-constructed feasible plan
     gidx = greedy_feasible_plan(ev, seed=seed)
     if gidx is not None:
         entry = _entry(ev, gidx)
@@ -421,35 +362,14 @@ def solve(
     selection=None,
     termination=None,
 ) -> dict:
-    """Search one dish per slot and return plan metrics, front entries, or a diagnosis.
-
-    ``method`` selects production ``"nsga2"``, pymoo benchmark comparisons
-    ``"nsga3"`` / ``"moead"`` / ``"age"`` / ``"sms"``, or raw benchmark
-    baselines ``"ga"`` / ``"greedy"`` / ``"random"``. Unavailable optional
-    comparison algorithms raise ``RuntimeError`` with the import error.
-    ``"nsga2"`` retains its GA fallback.
-
-    ``guarantee`` applies only to pymoo-family methods, including the NSGA-II
-    fallback. True enables repair/construction and explicit empty-plan failure.
-    False selects the least-violating/best-scalar raw entry. Baseline methods
-    remain raw regardless of this option. Failed prechecks are confirmed by exact
-    enumeration before either path; passing a precheck does not prove feasibility.
-
-    ``selection``: optional ``(entries, envelope, dishes) -> entry`` callable
-    used instead of the default ``min(..., key=scalar_score)`` when picking the
-    headline plan from the feasible front in ``_guarantee`` (see
-    ``backend.optim.selection``).  ``None`` (default) keeps the current
-    scalar-score ordering. The callback must return an unchanged supplied entry;
-    its result is not revalidated. ``termination`` is forwarded to pymoo search
-    only, not fallback GA or baseline methods.
-    """
+    """Guarantees apply only to pymoo family methods. Baselines stay raw and custom selectors must preserve entries."""
     t0 = time.perf_counter()
     allowed = allowed_dishes(envelope, dishes)
 
     ok, reason = feasibility_precheck(envelope, dishes)
     if not ok:
-        assert reason is not None  # Failed prechecks always supply a diagnosis.
-        # Confirm precheck failure exactly before reporting infeasibility.
+        assert reason is not None
+        # Confirm failed prechecks exactly before reporting infeasibility.
         exact = one_day_exact(envelope, dishes)
         if not exact["feasible_day"]:
             diag = _diagnosis(
@@ -463,7 +383,6 @@ def solve(
 
     if method in PYMOO_METHODS:
         if method != "nsga2" and not HAS_PYMOO_EXTRAS:
-            # Preserve NSGA-II's fallback while surfacing optional-method import errors.
             reason = PYMOO_EXTRAS_IMPORT_ERROR or PYMOO_IMPORT_ERROR
             raise RuntimeError(
                 f"method {method!r} requires the pymoo comparison algorithms "
@@ -475,7 +394,6 @@ def solve(
             idxs = _pymoo_front(ev, seed, pop_size, n_gen, method=method, **options)
             evaluations = getattr(idxs, "evaluations", 0)
         elif method == "nsga2":
-            # Production fallback: hand-rolled GA when pymoo is unavailable.
             engine = "fallback-ga"
             raw = ga_search(envelope, dishes, seed=seed, pop_size=pop_size, n_gen=n_gen)
             evaluations = raw["evaluations"]
@@ -487,9 +405,6 @@ def solve(
         entries = [_entry(ev, i) for i in idxs]
 
         if not guarantee:
-            # Raw mode: report the raw front untouched.  Headline plan is the
-            # least-violating / best-scalar member (same ranking the raw
-            # baselines use), so honest violation rates are measurable.
             engine = "pymoo-raw"
             if entries:
                 best = min(

@@ -1,9 +1,3 @@
-"""Check catalogue search, canonical/vector agreement, and solver guarantees.
-
-Run with pytest or ``.venv/bin/python backend/optim/test_real.py``. Benchmark
-regeneration uses smoke outputs so full artifacts remain untouched.
-"""
-
 from __future__ import annotations
 
 import csv
@@ -14,7 +8,6 @@ import sys
 import tempfile
 import time
 
-# Allow direct execution: `python backend/optim/test_real.py`.
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
@@ -57,7 +50,7 @@ _ENVELOPES = build_benchmark_envelopes()
 _DISHES = load_dishes()
 
 
-DISH_COUNT = 214  # 190 manual_curation + 24 curated_renal_replenishment
+DISH_COUNT = 214
 
 
 def test_real_pool_loads_214_dishes():
@@ -101,7 +94,6 @@ def test_fast_evaluator_matches_canonical_evaluate():
         assert np.allclose(
             f, [objectives[k] for k in OBJECTIVE_NAMES], atol=1e-9
         ), (f, objectives)
-        # constraint counts must agree exactly (EPS handled identically)
         assert int((g > 0).sum()) == len(violations), (g, violations)
 
 
@@ -142,7 +134,6 @@ def test_run_tiny_budget_still_feasible():
 def test_run_uses_real_dataset_by_default():
     env = _ENVELOPES["t2d_only"]
     result = run(env, seed=42, pop_size=10, n_gen=5)
-    # t2d_only excludes only 'dessert' (7 dishes) -> 207 allowed of 214
     assert result["allowed_dish_count"] == 207
     ids = {d for meal in result["plan"] for d in meal}
     real_ids = {d.dish_id for d in _DISHES}
@@ -150,9 +141,6 @@ def test_run_uses_real_dataset_by_default():
 
 
 def test_infeasible_envelope_returns_diagnosis():
-    # Sodium MAX of 0 mg/day is provably impossible (the lowest-sodium dish in
-    # the pool carries 1 mg — the curated banana — so the least possible day
-    # is 3 mg > 0).
     env = _ENVELOPES["ckd_strict"].model_copy(
         update={
             "envelope_id": "env-test-impossible",
@@ -170,15 +158,13 @@ def test_infeasible_envelope_returns_diagnosis():
     assert result["feasible"] is False
     assert result["engine"] == "infeasible"
     assert result.get("infeasibility_reason")
-    assert result["plan"] == []  # never a silently broken plan
+    assert result["plan"] == []
     assert CONTRACT_KEYS.issubset(result.keys())
 
 
 def test_exclusions_shrink_pool_as_expected():
     from shared.envelope_schema import ExclusionKind
 
-    # data/README.md Tags defines deep_fried by recipe/components, not fat.
-    # Pin catalogue membership independently of allowed_dishes' matcher.
     expected_deep_fried = {
         "SG0003", "SG0004", "SG0009", "SG0010", "SG0012", "SG0060",
         "SG0061", "SG0062", "SG0070", "SG0072", "SG0078", "SG0083",
@@ -195,7 +181,6 @@ def test_exclusions_shrink_pool_as_expected():
     assert len(all_ids) == len(_DISHES) == DISH_COUNT
     assert {d.dish_id for d in _DISHES if d.category == "deep_fried" or "deep_fried" in d.tags} == expected_deep_fried
     assert {d.dish_id for d in _DISHES if "coconut milk" in d.ingredients} == expected_coconut_milk
-    # Nutrient tags have a different documented meaning: K >= 700 mg/serving.
     assert {d.dish_id for d in _DISHES if "high_potassium" in d.tags} == expected_high_potassium
     assert {d.dish_id for d in _DISHES if d.nutrient("potassium_mg") >= 700} == expected_high_potassium
 
@@ -209,7 +194,6 @@ def test_exclusions_shrink_pool_as_expected():
     strict_ids = {d.dish_id for d in strict_pool}
     assert strict_ids == all_ids - expected_excluded
     assert strict_ids.isdisjoint(expected_excluded)
-    # 25 cooking-role + 13 ingredient matches overlap on Laksa/Curry Noodles.
     assert expected_deep_fried & expected_coconut_milk == {"SG0009", "SG0010"}
     assert len(strict_pool) == len(strict_ids) == DISH_COUNT - 36 == 178
 
@@ -227,7 +211,6 @@ def test_exclusions_shrink_pool_as_expected():
     assert hyperk_ids < strict_ids < all_ids
     assert len(hyperk_pool) == len(hyperk_ids) == DISH_COUNT - 40 == 174
 
-    # Fried components count; grilled satay, braised pork and baked fish do not.
     assert {"SG0060", "SG0113", "SG0120"} <= expected_deep_fried
     assert {"SG0011", "SG0153", "SG0214"} <= hyperk_ids
     for dish_id in ("SG0060", "SG0030"):
@@ -236,8 +219,7 @@ def test_exclusions_shrink_pool_as_expected():
     _, violations = evaluate([["SG0137"], [], []], env_hk, _DISHES)
     assert any(v["type"] == "exclusion" and v["dish_id"] == "SG0137" for v in violations)
 
-    # This benchmark uses literal high_potassium, not the rulebook >500 mg
-    # category. The 540 mg banana stays here but must leave that semantic pool.
+    # Literal high potassium differs from the rulebook threshold.
     assert by_id["SG0202"].nutrient("potassium_mg") == 540
     assert "high_potassium" not in by_id["SG0202"].tags
     assert "SG0202" in hyperk_ids
@@ -250,7 +232,6 @@ def test_exclusions_shrink_pool_as_expected():
 
 
 def test_semantic_exclusion_mapping_filters_real_pool():
-    """Rulebook semantic exclusions must match their intended catalogue predicates."""
     from backend.optim.envelopes import ckd_strict
     from shared.envelope_schema import ExclusionFlag, ExclusionKind
 
@@ -273,14 +254,12 @@ def test_semantic_exclusion_mapping_filters_real_pool():
 
     total = len(_DISHES)
     cat, diet = ExclusionKind.DISH_CATEGORY, ExclusionKind.DIET_PATTERN
-    # Documented semantic thresholds must bite on the real pool's tails.
     assert pool_with_single_exclusion(cat, "high_potassium_foods") < total - 20, (
         "semantic K threshold must exclude the high-K tail"
     )
     assert pool_with_single_exclusion(cat, "phosphate_additive_processed") < total - 5
     assert pool_with_single_exclusion(cat, "sugar_sweetened_beverage") < total - 10
     assert pool_with_single_exclusion(diet, "high_glycaemic_load") < total - 10
-    # Unknown values keep literal-only behaviour (no accidental matches).
     assert pool_with_single_exclusion(cat, "nonexistent_category_xyz") == total
 
 
@@ -289,7 +268,6 @@ _HERE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def test_new_algorithms_guaranteed_feasible_and_finite():
-    """Every comparison method through solve() stays feasible with finite objectives."""
     env = _ENVELOPES["t2d_only"]
     for method in NEW_METHODS:
         result = solve(env, _DISHES, seed=11, pop_size=40, n_gen=10, method=method)
@@ -321,7 +299,6 @@ def test_raw_mode_returns_untouched_front_and_default_still_guaranteed():
     assert raw["front_size"] >= 1
     assert len(raw["plan"]) == 21
     assert all(math.isfinite(v) for v in raw["objectives"].values())
-    # The guarantee path remains available and effective for the same method.
     guaranteed = solve(env, _DISHES, seed=2, pop_size=40, n_gen=10, method="nsga3")
     assert guaranteed["feasible"] is True
     assert guaranteed["violation_count"] == 0
@@ -329,7 +306,6 @@ def test_raw_mode_returns_untouched_front_and_default_still_guaranteed():
 
 
 def test_production_api_run_defaults_unchanged():
-    """api.run keeps the NSGA-II + guarantee default (no method injection)."""
     env = _ENVELOPES["t2d_only"]
     result = run(env, seed=42, pop_size=10, n_gen=5)
     assert result["feasible"] is True
@@ -340,7 +316,6 @@ def test_production_api_run_defaults_unchanged():
 
 
 def test_benchmark_artifacts_regen_and_parse():
-    """Smoke-mode regeneration works and full artifacts stay parseable."""
     with tempfile.TemporaryDirectory(prefix="careloop-benchmark-") as directory:
         smoke_csv = os.path.join(directory, "optim", "benchmark_results_smoke.csv")
         smoke_md = os.path.join(directory, "optim", "benchmark_results_smoke.md")
@@ -371,7 +346,6 @@ def test_benchmark_artifacts_regen_and_parse():
         assert "## Recommendation" in smoke_md_text
         assert "nsga3" in smoke_md_text and "sms" in smoke_md_text
 
-    # Published snapshots stay separate from regenerated run outputs.
     from backend.datasets.paths import dataset_dir
     full_csv = str(dataset_dir() / "benchmarks/benchmark_results.csv")
     full_md = str(dataset_dir() / "benchmarks/benchmark_results.md")

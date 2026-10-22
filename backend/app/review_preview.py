@@ -1,8 +1,4 @@
-"""Local operator knowledge workspace, isolated from all clinical workflows.
-
-Names remain attestations, not authentication. Serve only on loopback. All writes
-require a process-bound request token; no schema setup occurs in this application.
-"""
+"""Operator knowledge workspace."""
 
 import base64
 import binascii
@@ -86,7 +82,6 @@ class DiscoveryRequest(OperatorRequest):
 
 
 def create_review_app(*, discovery_client: DiscoveryClient | None = None) -> FastAPI:
-    """Start the operator surface against an already prepared knowledge database."""
     @asynccontextmanager
     async def lifespan(app):
         if os.environ.get("CARELOOP_KNOWLEDGE_RELEASE"):
@@ -95,7 +90,7 @@ def create_review_app(*, discovery_client: DiscoveryClient | None = None) -> Fas
         if not url:
             raise ValueError("knowledge workspace requires a knowledge PostgreSQL URL")
         store = KnowledgeStore(url)
-        store.initialize()  # Checks only; the deployment setup task creates schemas.
+        store.initialize()  # Deployment setup owns schema creation.
         app.state.store = store
         app.state.token = secrets.token_urlsafe(32)
         app.state.discovery_client = discovery_client
@@ -123,7 +118,7 @@ def create_review_app(*, discovery_client: DiscoveryClient | None = None) -> Fas
             origin = request.headers.get("origin")
             if origin and (urlsplit(origin).scheme, urlsplit(origin).netloc) != (request.url.scheme, request.url.netloc):
                 return JSONResponse(status_code=403, content={"detail": "Cross-origin operator requests are not allowed"})
-            # Bound both declared and streamed bodies before JSON validation.
+            # Bound streamed bodies as well as declared lengths.
             received = bytearray()
             async for chunk in request.stream():
                 received.extend(chunk)

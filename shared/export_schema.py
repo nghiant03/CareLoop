@@ -1,8 +1,4 @@
-"""Export the canonical model's serialization schema using wire aliases.
-
-``python -m shared.export_schema`` prints the schema. Use ``--output`` for an
-explicit export; no generated mirror is kept in the source tree.
-"""
+"""Export the canonical schema using wire aliases."""
 
 import argparse
 import json

@@ -1,5 +1,3 @@
-"""Hand-built APPROVED benchmark fixtures, not clinical approvals or advice."""
-
 from __future__ import annotations
 
 from shared.envelope_schema import (
@@ -53,7 +51,6 @@ def _envelope(
 
 
 def ckd_strict() -> NutrientEnvelope:
-    """CKD stage 3-4: Na <= 2000, K <= 2600, P <= 900, protein 55-85 g."""
     return _envelope(
         envelope_id="env-bench-ckd-strict",
         patient_id="p-bench-ckd",
@@ -78,7 +75,6 @@ def ckd_strict() -> NutrientEnvelope:
 
 
 def ckd_hyperkalemia() -> NutrientEnvelope:
-    """CKD with K+ 5.4 mmol/L: potassium ceiling tightened to 2000 mg."""
     env = ckd_strict()
     return env.model_copy(
         update={
@@ -114,7 +110,6 @@ def ckd_hyperkalemia() -> NutrientEnvelope:
 
 
 def t2d_htn() -> NutrientEnvelope:
-    """T2D + hypertension: carbs/sugar ceilings plus the Na ceiling."""
     return _envelope(
         envelope_id="env-bench-t2d-htn",
         patient_id="p-bench-t2dhtn",
@@ -137,7 +132,6 @@ def t2d_htn() -> NutrientEnvelope:
 
 
 def t2d_only() -> NutrientEnvelope:
-    """T2D only: milder ceilings, no renal limits."""
     return _envelope(
         envelope_id="env-bench-t2d-only",
         patient_id="p-bench-t2d",
@@ -160,7 +154,6 @@ def t2d_only() -> NutrientEnvelope:
 
 
 def build_benchmark_envelopes() -> dict[str, NutrientEnvelope]:
-    """The four representative envelopes, keyed by short profile name."""
     return {
         "ckd_strict": ckd_strict(),
         "ckd_hyperkalemia": ckd_hyperkalemia(),

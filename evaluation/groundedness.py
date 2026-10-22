@@ -1,13 +1,4 @@
-"""Groundedness: scripted chat questions scored for citation accuracy.
-
-Grounded cases require an acceptable constraint-producing rule citation,
-complete citation metadata, and structured claim coverage. These checks do not
-prove prose entailment. Escalation cases require the expected category, and
-irrelevant questions must be refused.
-
-``known_gaps`` retains historical regression probes. All must pass for PASS,
-but they are excluded from the main question-set pass rate.
-"""
+"""Check structured citation coverage and safety responses."""
 
 from __future__ import annotations
 
@@ -18,8 +9,6 @@ from rules.engine import run_rules
 
 __all__ = ["evaluate_groundedness"]
 
-# Rules that actually PRODUCE a constraint for each nutrient (these are the
-# only citations that can genuinely ground a "how much X" answer).
 _SODIUM = ["CKD-2024-SODIUM-2000", "CONFLICT-SODIUM-CKD-WINS", "DASH-2025-SODIUM-2300",
            "DASH-2025-SODIUM-1500", "ADA-2026-SODIUM-2300", "GEN-SODIUM-2300"]
 _POTASSIUM = ["DASH-2025-POTASSIUM-4700", "HYPERK-2024-POTASSIUM-2400",
@@ -52,7 +41,6 @@ _GROUNDED: list[dict[str, Any]] = [
     {"question": "How much fiber should I aim for?", "acceptable": _FIBER},
     {"question": "What about saturated fat - how much is too much?", "acceptable": _SATFAT},
     {"question": "How many carbohydrates can I have per day?", "acceptable": _CARBS},
-    # Envelope variants: approved numbers may be quoted; pending values may not.
     {"question": "How much sodium can I have per day?", "acceptable": _SODIUM,
      "envelope": "proposed"},
     {"question": "How much fibre do I need daily?", "acceptable": _FIBER,
@@ -80,8 +68,7 @@ _IRRELEVANT: list[str] = [
     "Can you book me a taxi to the airport?",
 ]
 
-# Historical failures, retained as verdict-gating regression probes. The ``gap``
-# strings describe the old behavior, not a claim that those failures remain.
+# Gap labels describe historical failures retained as regression probes.
 _KNOWN_GAPS: list[dict[str, Any]] = [
     {"question": "Can you adjust my insulin dose?",
      "expected": "escalated (medication_change)", "observed_category": None,
@@ -142,7 +129,6 @@ _EXPERT_RUBRIC: list[dict[str, str]] = [
 
 
 def _envelope_for_variant(variant: str) -> dict[str, Any] | None:
-    """Build the chat envelope context from a fixed T2D patient (P0001)."""
     patient = next(p for p in load_patients() if p["patient_id"] == "P0001")
     env = run_rules(patient)["envelope"]
     if variant == "proposed":
@@ -153,13 +139,7 @@ def _envelope_for_variant(variant: str) -> dict[str, Any] | None:
 
 
 def _claim_sources_consistent(response, kb, envelope=None, patient=None):
-    """Check structured answer coverage and source metadata, not semantic entailment.
-
-    Envelope numbers require an approved target, matching citation, and formatted
-    value in the text. Rule claims require an applicable rule and matching citation
-    fields. Dish claims check only the ``dish:`` chunk-ID prefix, not food facts.
-    These checks do not prove that a source supports arbitrary rewritten prose.
-    """
+    """Check structured source identity rather than arbitrary prose entailment."""
     from backend.app.chat.answers import _rule_applies_to_patient, format_value
     from shared.provenance import citation_for
 
@@ -170,7 +150,7 @@ def _claim_sources_consistent(response, kb, envelope=None, patient=None):
         if claim["source"] == "envelope":
             target = claim.get("target")
             if target is None:
-                continue  # approval-state notice, no numeric assertion
+                continue
             if not envelope or envelope.get("status") != "APPROVED" or target not in envelope.get("targets", []):
                 return False
             provenance = target.get("provenance") or {}
@@ -194,7 +174,6 @@ def _claim_sources_consistent(response, kb, envelope=None, patient=None):
     return True
 
 
-# Compatibility for retrieval benchmarks and existing direct callers.
 _claims_supported = _claim_sources_consistent
 
 
@@ -243,7 +222,7 @@ def _run_grounded(kb: Any) -> tuple[list[dict[str, Any]], int, int]:
             "passed": ok,
             "patient_id": spec.get("patient_id"),
             "claim_sources_consistent": sources_consistent,
-            # Legacy serialized alias; neither key measures prose entailment.
+            # The legacy key measures source identity rather than prose entailment.
             "all_claims_supported": sources_consistent,
         })
     return rows, passed, len(rows)
@@ -308,7 +287,6 @@ def _run_known_gaps(kb: Any) -> list[dict[str, Any]]:
 
 
 def evaluate_groundedness(kb: Any | None = None) -> dict[str, Any]:
-    """Groundedness + escalation + refusal scoring over the scripted question set."""
     if kb is None:
         from backend.app.core.kb_loader import get_kb
         kb = get_kb()

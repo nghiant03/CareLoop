@@ -1,5 +1,3 @@
-"""Check durable workflow records through fresh SQLite handles and HTTP clients."""
-
 from __future__ import annotations
 
 import json
@@ -88,10 +86,8 @@ def test_plan_save_and_fresh_handle_roundtrip() -> None:
     assert stored is not None
     assert stored["plan_id"] == plan_id
     assert stored["saved_at"]
-    # identical document round-trip (plan_id/saved_at are the storage overlay)
     assert {k: v for k, v in stored.items() if k not in ("plan_id", "saved_at")} == document
 
-    # A fresh transaction reads the same durable row.
     with persistence._connect() as conn:
         row = conn.execute(
             "SELECT * FROM plans WHERE plan_id = ?", (plan_id,)
@@ -102,7 +98,6 @@ def test_plan_save_and_fresh_handle_roundtrip() -> None:
     assert row["kb_version"] == "kb-test-1"
     assert json.loads(row["document_json"]) == document
 
-    # IDs advance while earlier rows remain stored.
     second = persistence.save_plan(
         patient_id=patient_id,
         envelope_id="ENV-P9999-001",
@@ -114,7 +109,7 @@ def test_plan_save_and_fresh_handle_roundtrip() -> None:
     assert second != plan_id and second.startswith("PLAN-P9999-")
 
     summaries = persistence.list_plans(patient_id)
-    assert [s["plan_id"] for s in summaries] == [second, plan_id]  # newest first
+    assert [s["plan_id"] for s in summaries] == [second, plan_id]
     assert summaries[0]["feasible"] is False
     assert summaries[0]["violation_count"] == 1
     latest = persistence.latest_plan_for_patient(patient_id)
@@ -123,7 +118,6 @@ def test_plan_save_and_fresh_handle_roundtrip() -> None:
 
 
 def test_plans_api_list_get_and_restart(client) -> None:
-    # full wired flow: rules -> approve -> POST /plans
     body = _run_rules(client, "P0001")
     envelope = body["envelope"]
     approved = client.post(
@@ -138,10 +132,8 @@ def test_plans_api_list_get_and_restart(client) -> None:
     plan_id = plan["plan_id"]
     assert plan_id.startswith("PLAN-P0001-")
     assert plan["saved_at"]
-    # the ORIGINAL approved envelope's id/version is persisted
     assert plan["envelope_id"] == envelope["envelope_id"]
 
-    # list summaries through the API
     listed = client.get("/plans", params={"patient_id": "P0001"})
     assert listed.status_code == 200, listed.text
     payload = listed.json()
@@ -151,13 +143,11 @@ def test_plans_api_list_get_and_restart(client) -> None:
     assert all(set(row) >= {"plan_id", "patient_id", "envelope_id", "created_at"}
                for row in payload["plans"])
 
-    # A new client lifespan reads the plan from PostgreSQL.
     with TestClient(app) as fresh_client:
         reread = fresh_client.get(f"/plans/{plan_id}")
     assert reread.status_code == 200, reread.text
-    assert reread.json() == plan  # identical document after client recreation
+    assert reread.json() == plan
 
-    # unknown plan id -> documented 404 body
     missing = client.get("/plans/PLAN-P0001-NOPE")
     assert missing.status_code == 404
     assert missing.json()["detail"]["error"] == "plan_not_found"
@@ -173,7 +163,6 @@ def test_meal_log_upsert_persistence_and_ordering() -> None:
     for entry in (a, b, c):
         assert set(entry) == {"patient_id", "date", "meal", "dish_id", "logged_at"}
 
-    # upsert: the newest log for the same slot replaces the previous dish
     replaced = store.put_log(patient_id, _today(0), "lunch", "SG0004")
     assert store.get_log(patient_id, _today(0), "lunch") == replaced
     saved = store.get_log(patient_id, _today(0), "lunch")
@@ -182,7 +171,6 @@ def test_meal_log_upsert_persistence_and_ordering() -> None:
     assert store.get_log(patient_id, _today(0), "breakfast") == b
     assert store.get_log(patient_id, _today(0), "snack") is None
 
-    # chronological: date ASC, then breakfast/lunch/dinner
     logs = store.list_logs(patient_id)
     assert [(entry["date"], entry["meal"]) for entry in logs] == [
         (_today(-1), "dinner"),
@@ -190,7 +178,6 @@ def test_meal_log_upsert_persistence_and_ordering() -> None:
         (_today(0), "lunch"),
     ]
 
-    # inclusive date bounds
     window = store.list_logs(patient_id, date_from=_today(0), date_to=_today(0))
     assert [(entry["date"], entry["meal"]) for entry in window] == [
         (_today(0), "breakfast"),
@@ -201,7 +188,6 @@ def test_meal_log_upsert_persistence_and_ordering() -> None:
     assert store.count_logs(patient_id) == 3
     assert store.count_logs() >= 3
 
-    # persistence across a fresh handle
     with persistence._connect() as conn:
         row = conn.execute(
             "SELECT COUNT(*) FROM meal_logs WHERE patient_id = ?", (patient_id,)
@@ -220,7 +206,6 @@ def test_journal_via_api_effective_envelope(client) -> None:
     envelope = body["envelope"]
     proposed_id = envelope["envelope_id"]
 
-    # the fresh proposal was journalled
     approved = client.post(
         f"/envelopes/{proposed_id}/approve",
         json={"clinician_id": "dr-tan", "note": "journal test"},
@@ -233,11 +218,10 @@ def test_journal_via_api_effective_envelope(client) -> None:
         for row in persistence.list_envelope_history(patient_id)
         if row["envelope_id"] in (proposed_id, approved_id)
     ]
-    assert [row["status"] for row in rows] == ["PROPOSED", "APPROVED"]  # ordered
+    assert [row["status"] for row in rows] == ["PROPOSED", "APPROVED"]
     assert rows[0]["version"] == rows[1]["version"]
     assert rows[1]["snapshot"]["patient_id"] == patient_id
 
-    # the envelope effective TODAY is the (latest) APPROVED one, reconstructed
     effective = persistence.envelope_effective_at(patient_id, _today())
     assert effective is not None
     assert effective.status is EnvelopeStatus.APPROVED
@@ -245,7 +229,6 @@ def test_journal_via_api_effective_envelope(client) -> None:
     assert effective.targets, "reconstructed envelope must carry its targets"
     assert effective.envelope_id == approved_id
 
-    # a date before the first proposal for this patient -> nothing in force
     assert persistence.envelope_effective_at(patient_id, "2000-01-01") is None
 
 
@@ -262,18 +245,14 @@ def test_journal_ordering_and_tie_break() -> None:
         second, event="approved", effective_at="2026-06-01"
     )
 
-    # before any proposal -> None
     assert persistence.envelope_effective_at(patient_id, "2026-01-09") is None
-    # Proposals never establish historical approved coverage.
     assert persistence.envelope_effective_at(patient_id, "2026-01-10") is None
     assert persistence.envelope_effective_at(
         patient_id, "2026-03-01"
     ) is None
-    # from the second effective date onwards -> the approved envelope
     assert persistence.envelope_effective_at(patient_id, "2026-06-01") == second
     assert persistence.envelope_effective_at(patient_id, _today()) == second
 
-    # same effective date -> newest journal row wins
     third = _hand_envelope(
         patient_id, "ENV-JTEST-003", status=EnvelopeStatus.APPROVED, sodium_max=1500.0
     )
@@ -313,7 +292,7 @@ def test_observation_store_roundtrip_chronological() -> None:
         first["observation_id"],
         third["observation_id"],
         second["observation_id"],
-    ]  # chronological by observed_at, not insertion order
+    ]
     assert rows[0]["metric"] == "serum_K_meq_L"
     assert rows[0]["value"] == pytest.approx(5.4)
 
@@ -345,7 +324,6 @@ def test_observations_api(client) -> None:
         row["observation_id"] for row in payload["observations"]
     ]
 
-    # unknown patient -> documented 404 body
     missing = client.post(
         "/observations",
         json={"patient_id": "P_NOPE", "metric": "egfr", "value": 50.0, "unit": "x"},
@@ -357,7 +335,6 @@ def test_observations_api(client) -> None:
         == 404
     )
 
-    # metric whitelist + extra="forbid" -> 422
     bad_metric = client.post(
         "/observations",
         json={
@@ -380,7 +357,6 @@ def test_observations_api(client) -> None:
     )
     assert extra_field.status_code == 422
 
-    # invalid observed_at -> 422 invalid_observed_date
     bad_date = client.post(
         "/observations",
         json={
@@ -456,7 +432,6 @@ def test_review_item_roundtrip() -> None:
     assert actioned["linked_envelope_id"] == "ENV-P9995-002"
     assert persistence.get_review_item(review_id) == actioned
 
-    # unknown ids -> None
     assert persistence.get_review_item("REV-NOPE-999") is None
     assert persistence.acknowledge_review_item("REV-NOPE-999") is None
     assert persistence.record_review_action("REV-NOPE-999", action="x") is None
@@ -466,10 +441,9 @@ def test_adherence_store_delegates_to_persistence() -> None:
     patient_id = "P9994"
     persistence.delete_logs_for_patient(patient_id)
     store.put_log(patient_id, _today(), "lunch", "SG0007")
-    # the adherence facade and the persistence layer see the same row
     assert store.get_log(patient_id, _today(), "lunch") == persistence.get_log(
         patient_id, _today(), "lunch"
     )
-    store.clear()  # wipes every patient's logs, like the old dict store
+    store.clear()
     assert store.count_logs() == 0
     assert persistence.count_logs() == 0

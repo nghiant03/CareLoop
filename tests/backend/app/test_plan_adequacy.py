@@ -1,8 +1,3 @@
-"""Check plan adequacy against original aims, not solver-relaxed floors.
-
-Use small dish fixtures for exact gaps and the HTTP workflow for response coverage.
-"""
-
 from __future__ import annotations
 
 from backend.app.core.plan_service import map_plan_result, prepare_envelope_for_pool
@@ -55,7 +50,6 @@ def _envelope(patient_id: str, targets: list[NutrientConstraint]) -> NutrientEnv
 
 
 def _plan(days: list[list[list[str]]]) -> list[list[str]]:
-    """Day-major flat slot list from per-day slot lists (3 meals per day)."""
     plan: list[list[str]] = []
     for day in days:
         assert len(day) == 3
@@ -72,10 +66,6 @@ def _fiber_entry(adequacy: list[dict]) -> dict:
 
 
 def test_relaxed_min_reports_original_aim_and_relaxed_floor() -> None:
-    """Fibre MIN 25 g/d relaxed to 24 g/d (pool tops out at 8 g/dish):
-    adequacy keeps aim 25, discloses relaxed_aim 24, and reports the
-    shortfall against the ORIGINAL aim even though the plan fully meets
-    the relaxed floor."""
     dishes = [_dish("fibre_ceiling", fiber_g=8.0)]
     envelope = _envelope(
         "adeq-a",
@@ -86,7 +76,7 @@ def test_relaxed_min_reports_original_aim_and_relaxed_floor() -> None:
     solved, relaxed = prepare_envelope_for_pool(envelope, dishes)
     assert relaxed and relaxed[0]["requested"] == 25.0 and relaxed[0]["relaxed_to"] == 24.0
 
-    plan = _plan([[["fibre_ceiling"]] * 3] * 7)  # 24 g fibre/day = relaxed floor
+    plan = _plan([[["fibre_ceiling"]] * 3] * 7)
     out = map_plan_result(_result(plan), envelope, dishes, relaxed_constraints=relaxed, solved_envelope=solved)
 
     assert out["feasible"] is True
@@ -105,8 +95,6 @@ def test_relaxed_min_reports_original_aim_and_relaxed_floor() -> None:
         "total_days": 7,
         "relaxed_aim": 24.0,
     }
-    # The solved envelope is met every day, yet the approved aim is not:
-    # exactly the blind spot adequacy closes.
     assert entry["met_days"] == 0 and entry["total_days"] == 7
 
 
@@ -123,9 +111,8 @@ def test_fully_met_min_has_zero_shortfall_and_no_relaxed_aim() -> None:
         ],
     )
     solved, relaxed = prepare_envelope_for_pool(envelope, dishes)
-    assert relaxed == []  # 30 g/day achievable, nothing relaxed
+    assert relaxed == []
 
-    # Day 1 hits the aim exactly (7+7+6=20); day 2 overshoots (30).
     plan = _plan(
         [
             [["protein_mid"], ["protein_mid"], ["protein_low"]],
@@ -175,7 +162,6 @@ def test_adequacy_excludes_max_and_keeps_envelope_order() -> None:
             NutrientConstraint(nutrient=NutrientKind.PROTEIN_G, kind=ConstraintKind.TARGET, value=15.0, unit="g"),
         ],
     )
-    # Day 1: 3 g fibre / 15 g protein; day 2: 4 g fibre / 20 g protein.
     plan = _plan(
         [
             [["mixed"], ["mixed"], ["mixed"]],
@@ -187,7 +173,6 @@ def test_adequacy_excludes_max_and_keeps_envelope_order() -> None:
     assert [a["nutrient"] for a in out["adequacy"]] == ["fiber_g", "protein_g"]
     fiber, protein = out["adequacy"]
     assert fiber["kind"] == "min" and protein["kind"] == "target"
-    # Worst day is the LOWEST total (1-based index), not day 2.
     assert fiber["worst_day"] == 1 and fiber["worst_daily"] == 3.0
     assert fiber["mean_daily"] == 3.5
     assert protein["worst_day"] == 2 and protein["worst_daily"] == 20.0
@@ -233,11 +218,9 @@ def test_api_plan_response_includes_adequacy(client) -> None:
             "total_days",
             "relaxed_aim",
         }
-        assert entry["kind"] in ("min", "target")  # MAX ceilings excluded
+        assert entry["kind"] in ("min", "target")
         assert entry["total_days"] == 7
         assert 1 <= entry["worst_day"] <= 7
-    # Composite (multi-dish) meals meet the original fibre floor on every
-    # planned day, so adequacy reports no relaxed aim or shortfall.
     fiber = next(a for a in adequacy if a["nutrient"] == "fiber_g")
     assert fiber["relaxed_aim"] is None
     assert fiber["shortfall"] == fiber["shortfall_pct"] == 0

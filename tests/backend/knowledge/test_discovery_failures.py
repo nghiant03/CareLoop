@@ -1,5 +1,3 @@
-"""Source/provider failures never trigger a static-pattern fallback."""
-
 import subprocess
 from types import SimpleNamespace
 

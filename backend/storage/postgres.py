@@ -1,9 +1,4 @@
-"""Small PostgreSQL boundary for the existing storage queries and row contracts.
-
-SQL remains parameterized. JSON snapshots stay TEXT to preserve their exact
-payload/hash contract; relational columns carry lookup and workflow state.
-Runtime verifies schema versions but never creates or migrates tables.
-"""
+"""Pooled PostgreSQL transactions with explicit write reservations."""
 
 from __future__ import annotations
 
@@ -20,19 +15,13 @@ from psycopg_pool import ConnectionPool
 
 _POOLS: dict[str, ConnectionPool] = {}
 _POOL_LOCK = Lock()
-# Preserve the existing write-reservation semantics across processes/hosts.
-# This conservative first migration serializes writers per database domain,
-# not readers. Finer-grained locking needs its own contention/regression study.
+# Serialize writers per database while leaving readers independent.
 _WRITE_LOCKS = {"clinical": 1129070593, "knowledge": 1129070594}
 _SQL_TOKENS = re.compile(r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|--[^\n]*|/\*.*?\*/|\?", re.DOTALL)
 
 
 def database_url(component: str) -> str | None:
-    """Read a plain PostgreSQL URL; reject ambiguous or malformed settings.
-
-    Retired SQLite and secret-file settings are rejected, not ignored, so
-    existing storage is never silently abandoned.
-    """
+    """Reject retired storage settings rather than silently abandon existing data."""
     if component not in _WRITE_LOCKS:
         raise ValueError("database component must be clinical or knowledge")
     prefix = "CARELOOP_APP" if component == "clinical" else "CARELOOP_KNOWLEDGE"
@@ -52,17 +41,11 @@ def is_postgres(value: str | Path) -> bool:
 
 
 def bind_sql(sql: str) -> str:
-    """Adapt repository qmark value placeholders, excluding quoted SQL/comments.
-
-    This is not a SQLite dialect translator. Only the storage layer's portable
-    SQL is accepted; schema migration SQL is authored/executed separately.
-    """
+    """Adapt value placeholders without translating SQL dialects."""
     return _SQL_TOKENS.sub(lambda match: "%s" if match[0] == "?" else match[0], sql.replace("%", "%%"))
 
 
 class StorageRow(dict):
-    """Support the existing named/positional row reads without changing payloads."""
-
     def __getitem__(self, key):
         return tuple(self.values())[key] if isinstance(key, int) else super().__getitem__(key)
 
@@ -93,20 +76,14 @@ def check_schema(connection, component: str) -> None:
 
 
 class PostgresConnection:
-    """Pooled transaction with explicit write reservations and optional read-only mode.
-
-    Write reservations take a database-scoped transaction advisory lock.
-    All mutations take the same lock before executing,
-    including single-statement updates that might race a check-and-append.
-    Nothing retries an ambiguous commit automatically.
-    """
+    """All writes share a database scoped advisory lock. Ambiguous commits are never retried automatically."""
 
     def __init__(self, url: str, component: str, *, readonly: bool = False):
         self.component, self.readonly = component, readonly
         self._reserved = False
         self._closed = False
         self._context = _pool(url).connection()
-        # The pool's row_factory guarantees StorageRow; psycopg_pool types it as Connection.
+        # The pool guarantees StorageRow but exposes a broader static type.
         self.raw: Connection[StorageRow] = self._context.__enter__()  # pyrefly: ignore[bad-assignment]
         try:
             check_schema(self.raw, component)
@@ -120,7 +97,6 @@ class PostgresConnection:
 
     @property
     def in_transaction(self) -> bool:
-        # Report the write reservation, not an implicit read transaction.
         return self._reserved
 
     def reserve_write(self):
@@ -134,7 +110,7 @@ class PostgresConnection:
         operation = sql.lstrip().split(None, 1)[0].upper()
         if operation in {"INSERT", "UPDATE", "DELETE"}:
             self.reserve_write()
-        # SQL text is built from internal constants; values always bind via params.
+        # SQL text uses internal constants and values stay parameterized.
         if params is None:
             return self.raw.execute(sql)  # pyrefly: ignore[no-matching-overload]
         return self.raw.execute(bind_sql(sql), params)  # pyrefly: ignore[bad-argument-type]

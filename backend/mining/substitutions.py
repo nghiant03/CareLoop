@@ -1,9 +1,3 @@
-"""Rank category-compatible dish substitutes, without enforcing patient constraints.
-
-v1 uses normalized nutrient distance. v2 adds renal weighting and ranking bonuses.
-``suggest_substitutions`` defines score fields and compatibility behavior.
-"""
-
 from __future__ import annotations
 
 import json
@@ -26,13 +20,11 @@ CORE_NUTRIENTS = (
     "carbs_g",
 )
 
-# Generic lower-mineral-load prior; patient-specific ceilings and exclusions are checked elsewhere.
 _MINERALS = ("sodium_mg", "potassium_mg", "phosphorus_mg")
 
-# CORE_NUTRIENTS order: Na/K/P count double.
+# Sodium and potassium and phosphorus count double.
 RENAL_WEIGHTS: tuple[float, ...] = (1.0, 1.0, 2.0, 2.0, 2.0, 1.0)
 
-# Apply the mineral-load prior only within _NEAR_TOLERANCE of the best distance.
 _MINERAL_LOAD_WEIGHT = 0.20
 _NEAR_TOLERANCE = 0.25
 _CATEGORY_BONUS = 0.10
@@ -40,7 +32,6 @@ _CUISINE_BONUS = 0.03
 _HPB_BONUS = 0.01
 _VERIFIED_BONUS = 0.01
 
-# Limit substitutes to compatible meal or beverage/snack categories.
 _COMPATIBLE_CATEGORIES: dict[str, frozenset[str]] = {
     "hawker": frozenset({"hawker", "cai_png"}),
     "cai_png": frozenset({"cai_png", "hawker"}),
@@ -54,7 +45,7 @@ _COMPATIBLE_CATEGORIES: dict[str, frozenset[str]] = {
 
 
 def load_dishes(path: str | None = None) -> list[dict]:
-    """Return cached catalogue dicts; callers must not mutate the shared list or entries."""
+    """Cached catalogue records are shared and must not be mutated."""
     release = selected_release() if path is None else None
     return _load_catalogue(str(path or DATA_PATH), release.dishes_json if release else None)
 
@@ -80,10 +71,7 @@ def _nutrient_bounds() -> dict[str, tuple[float, float]]:
 
 
 def _normalised_vector(dish: dict) -> tuple[float, ...]:
-    """Normalise against cached catalogue bounds; catalogue values lie in [0, 1].
-
-    External values are not clamped and may fall outside that interval.
-    """
+    """External values are not clamped to catalogue bounds."""
     vec = []
     for n in CORE_NUTRIENTS:
         lo, hi = _nutrient_bounds()[n]
@@ -93,19 +81,11 @@ def _normalised_vector(dish: dict) -> tuple[float, ...]:
 
 
 def nutrient_distance(dish_a: dict, dish_b: dict) -> float:
-    """Euclidean distance between two dishes over min-max normalised
-    core nutrients. Catalogue values have range [0, sqrt(len(CORE_NUTRIENTS))].
-    """
     va, vb = _normalised_vector(dish_a), _normalised_vector(dish_b)
     return float(sum((a - b) ** 2 for a, b in zip(va, vb)) ** 0.5)
 
 
 def renal_nutrient_distance(dish_a: dict, dish_b: dict) -> float:
-    """Renal-weighted euclidean distance over min-max normalised core
-    nutrients: sodium/potassium/phosphorus have weight 2 for renal relevance;
-    everything else has weight 1. Catalogue values have range
-    [0, sqrt(sum(RENAL_WEIGHTS))] = [0, 3]; external values may exceed it.
-    """
     va, vb = _normalised_vector(dish_a), _normalised_vector(dish_b)
     return float(
         sum(w * (a - b) ** 2 for w, a, b in zip(RENAL_WEIGHTS, va, vb)) ** 0.5
@@ -113,7 +93,7 @@ def renal_nutrient_distance(dish_a: dict, dish_b: dict) -> float:
 
 
 def _mineral_load(dish: dict) -> float:
-    """Mean normalised mineral load, not a patient-specific measure of healthfulness."""
+    """Generic mineral load is not a patient specific health measure."""
     vals = [_normalised_vector(dish)[i] for i, n in enumerate(CORE_NUTRIENTS) if n in _MINERALS]
     return sum(vals) / len(vals)
 
@@ -124,8 +104,6 @@ def _candidates(dish: dict, dishes: list[dict]) -> list[dict]:
 
 
 def _verification_bonus(dish: dict) -> float:
-    """Continuous hpb/verified ranking bonus, applied to every scored
-    candidate — not only to resolve exact ties."""
     return (_HPB_BONUS if dish.get("hpb_id") else 0.0) + (
         _VERIFIED_BONUS if dish.get("verified") else 0.0
     )
@@ -149,20 +127,7 @@ def suggest_substitutions(
     version: int = 2,
     dishes: list[dict] | None = None,
 ) -> list[dict]:
-    """Suggest up to ``k`` substitute dishes for ``dish_id``.
-
-    v1 ranks by plain nutrient distance. v2 doubles Na/K/P weights and adds
-    category, cuisine, and verification bonuses. Its mineral-load prior applies
-    only near the best raw distance, not just on ties.
-
-    Exclude the source and incompatible categories. Deduplicate by dish ID and
-    sort by ascending ``ranking_score``. Legacy ``distance`` aliases that score,
-    which may be negative. ``nutrient_distance`` is the raw version-specific metric.
-
-    Supplied dishes replace lookup, not cached normalization bounds. Unknown
-    sources raise KeyError. Unsupported versions raise ValueError when scored.
-    k <= 0 returns no suggestions.
-    """
+    """Legacy distance aliases the ranking score which may be negative. Supplied dishes retain cached normalization bounds."""
     dishes = dishes if dishes is not None else load_dishes()
     by_id = {d["dish_id"]: d for d in dishes}
     if dish_id not in by_id:

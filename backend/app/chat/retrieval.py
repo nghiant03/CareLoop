@@ -1,11 +1,4 @@
-"""Okapi BM25 retrieval over current rule and dish chunks.
-
-Rule chunks include citation text, actions, notes, and nutrient synonyms;
-dish chunks include per-serving nutrient summaries. Queries expand everyday
-nutrient names and use stopword-filtered tokens. Ranking and citation metadata
-feed the answer pipeline; retrieval alone does not establish claim support.
-Method comparisons and gate calibration are in ``RETRIEVAL_BENCH.md``.
-"""
+"""BM25 retrieval over current rule and dish chunks."""
 
 from __future__ import annotations
 
@@ -20,13 +13,9 @@ from backend.app.kb.graph_store import KBGraph
 
 __all__ = ["MIN_SCORE", "Chunk", "KBIndex", "build_index", "retrieve"]
 
-# The answer pipeline accepts supporting hits strictly above this BM25 score.
-# Stopword filtering prevents irrelevant overlap from defeating the refusal gate;
-# threshold calibration depends on this tokenizer. See RETRIEVAL_BENCH.md.
+# Gate calibration depends on stopword filtering.
 MIN_SCORE = 2.0
 
-# Plain-language synonyms appended to chunk/query text so BM25 matches
-# everyday phrasing ("salt", "calories", "fibre") to canonical nutrients.
 _NUTRIENT_SYNONYMS: dict[str, str] = {
     "sodium_mg": "sodium salt na mg",
     "potassium_mg": "potassium k mg",
@@ -51,7 +40,6 @@ IndexSource = Union[KBGraph, "KBIndex"]
 
 
 def _tokenize(text: str) -> list[str]:
-    """Lowercase alphanumeric tokens without English stopwords; shared with benchmarks."""
     return [
         token
         for token in re.findall(r"[a-z0-9]+", text.lower())
@@ -106,8 +94,6 @@ def _dish_text(dish: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 
 
 class KBIndex:
-    """BM25 (Okapi) index over KB rule + dish chunks."""
-
     def __init__(self, kb: KBGraph) -> None:
         self.chunks: list[Chunk] = []
         for rule in kb.rules():
@@ -162,12 +148,6 @@ class KBIndex:
         return " ".join(expanded)
 
     def retrieve(self, query: str, k: int = 5) -> list[dict[str, Any]]:
-        """Return the top-``k`` chunks ranked by BM25 score.
-
-        Each hit is the chunk dict plus a ``score`` field. Chunks with score 0
-        (no vocabulary overlap) are omitted. Ranking is deterministic:
-        ties are broken by ``chunk_id``.
-        """
         if not query.strip():
             return []
         scores = self._bm25.get_scores(_tokenize(self._expand_query(query)))
@@ -191,11 +171,7 @@ _CACHE: WeakKeyDictionary[KBGraph, KBIndex] = WeakKeyDictionary()
 
 
 def build_index(kb: KBGraph) -> KBIndex:
-    """Return the index cached by KBGraph identity, building it on first use.
-
-    Graph updates do not invalidate this snapshot; rebuild the graph or clear
-    the cache before expecting new chunks to participate in retrieval.
-    """
+    """Graph identity keys the cache. In place graph updates do not invalidate it."""
     index = _CACHE.get(kb)
     if index is None:
         index = KBIndex(kb)
@@ -204,5 +180,4 @@ def build_index(kb: KBGraph) -> KBIndex:
 
 
 def retrieve(kb: KBGraph, query: str, k: int = 5) -> list[dict[str, Any]]:
-    """Convenience one-shot retrieval against a knowledge base."""
     return build_index(kb).retrieve(query, k=k)

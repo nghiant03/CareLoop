@@ -141,7 +141,7 @@ export default function ClinicianReviewScreen() {
 
   const handleGenerate = async () => {
     if (!selectedPatient || envelopeLoading || actionLoading || savingEdit || isEditOpen) return;
-    requests.start('latest'); // Invalidate any in-flight latest lookup.
+    requests.start('latest');
     const isCurrent = requests.start('envelope');
     setEnvelopeLoading(true);
     setActionLoading(false);

@@ -1,7 +1,3 @@
-"""Download public research sources; retain failures and SHA-256 provenance.
-
-Local staging only. Never writes clinical state, approves rules, or uses credentials.
-"""
 import concurrent.futures
 import gzip
 import hashlib
@@ -16,15 +12,11 @@ from backend.datasets.paths import dataset_dir
 
 ROOT = dataset_dir() / "research"
 SOURCES = {
-    # BPXO/BPQ/DIQ/KIQ_U/RXQ_RX provide the hypertension, diabetes, dialysis and
-    # medication inputs used by the external rule-engine evaluation.
     **{f"nhanes/{name}.{ext}": f"https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/{name}.{ext}"
        for name in ("DEMO_L", "BMX_L", "DR1IFF_L", "DR2IFF_L", "DR1TOT_L", "DR2TOT_L", "BIOPRO_L", "ALB_CR_L", "GHB_L",
                     "BPXO_L", "BPQ_L", "DIQ_L", "KIQ_U_L", "RXQ_RX_L")
        for ext in ("xpt", "htm")},
-    # Physician-consensus HealthBench conversations (MIT licence) with physician rubrics.
     "healthbench/consensus.jsonl": "https://openaipublic.blob.core.windows.net/simple-evals/healthbench/consensus_2025-05-09-20-00-46.jsonl",
-    # Clinical practice guidelines and structured regulatory drug labels (PDF, OA HTML, OpenFDA JSON).
     "guidelines/kdigo_2024_ckd.pdf": "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf",
     "guidelines/kdigo_2022_diabetes_ckd.pdf": "https://kdigo.org/wp-content/uploads/2022/10/KDIGO-2022-Clinical-Practice-Guideline-for-Diabetes-Management-in-CKD.pdf",
     "guidelines/ada_kdigo_2022_consensus.pdf": "https://kdigo.org/wp-content/uploads/2018/03/ADA-KDIGO-Consensus-Report-Diabetes-CKD-Diabetes-Care-2022.pdf",
@@ -39,19 +31,12 @@ SOURCES = {
     ),
     "guidelines/fda_lasix_label.pdf": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2012/016273s066lbl.pdf",
     "guidelines/fda_coumadin_label.pdf": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2017/009218s017lbl.pdf",
-    # Singapore food composition (SG FoodID 2,689-item export) and published meal study.
     "singapore/sgfoodid_202607.zip": "https://www.kaggle.com/api/v1/datasets/download/adisongoh/comprehensive-food-nutritional-information",
     "singapore/meal_study.html": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8304763/",
-    # USDA FoodData Central index + Foundation/FNDDS archives.
     "usda/download_index.html": "https://fdc.nal.usda.gov/download-datasets/",
-    # MIMIC-IV Clinical Database Demo 2.2 (PhysioNet).
     "mimic/demo.zip": "https://physionet.org/static/published-projects/mimic-iv-demo/mimic-iv-clinical-database-demo-2.2.zip",
-    # eICU-CRD demo 2.0.1 (open access, ~2,500 ICU stays): multi-center longitudinal
-    # lab/medication/diagnosis source cross-validating MIMIC-IV trajectories.
     **{f"eicu/{name}.csv.gz": f"https://physionet.org/files/eicu-crd-demo/2.0.1/{name}.csv.gz"
        for name in ("patient", "lab", "medication", "diagnosis", "pastHistory")},
-    # UCI ML repository: 101,766 hospital diabetes encounters with medications and A1c,
-    # plus an independent physician-diagnosed CKD cohort (N=400, kidney_disease.csv).
     "uci/diabetes_130_us_hospitals.zip": "https://archive.ics.uci.edu/static/public/296/diabetes+130-us+hospitals+for+years+1999-2008.zip",
     "uci/chronic_kidney_disease.zip": "https://www.kaggle.com/api/v1/datasets/download/mansoordaku/ckdisease",
 }
@@ -96,7 +81,6 @@ def download(item):
                 accept_ranges = (response.headers.get("Accept-Ranges") or "").lower() == "bytes"
                 final_url = response.url
                 if accept_ranges and expected_len and expected_len > 2_000_000:
-                    # Close initial stream and fetch in parallel 1 MB byte ranges
                     pass
                 else:
                     with temporary.open("wb") as output:

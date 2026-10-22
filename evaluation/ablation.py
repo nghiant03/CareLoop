@@ -1,17 +1,4 @@
-"""Paired selection ablation, experimental composition, and exact reference.
-
-Reuse each patient/seed front across selection strategies and score original
-aims. Local approval copies never write clinical state. ``adequacy_rows`` owns
-gap semantics and ``derive_selection_verdict`` owns PASS conditions.
-
-Experimental composition requires one main and one side per meal, with no
-daily dish repetition. It differs from production's optional-side search.
-Heuristic roles, unverified nutrients, and doubled dish counts limit comparisons.
-Composition results are informational and receive no verdict.
-
-Exact-reference bounds cover single-dish additive quantities, not horizon
-variety, a four-objective optimum, or composition infeasibility.
-"""
+"""Paired selection and composition comparisons with exact references."""
 
 from __future__ import annotations
 
@@ -57,12 +44,11 @@ __all__ = [
     "plan_metrics",
 ]
 
-# Reuse each patient/seed front across all three strategies for paired comparisons.
 SEEDS: tuple[int, ...] = (42, 43, 44)
 
-_EPS = 1e-9            # mirrors plan_service / selection epsilon
-_OPTIMUM_GAP_TOL = 1e-6  # "hits the per-day additive optimum" gap tolerance
-_COST_CAP = 0.10       # verdict condition 4: pooled mean cost increase <= 10%
+_EPS = 1e-9
+_OPTIMUM_GAP_TOL = 1e-6
+_COST_CAP = 0.10
 
 STRATEGY_NAMES: tuple[str, ...] = ("scalar", "normalised", "adequacy_first")
 _STRATEGIES = {
@@ -71,7 +57,7 @@ _STRATEGIES = {
     "adequacy_first": adequacy_first_selection,
 }
 
-# Catalogue role heuristics, not verified recipe annotations.
+# Catalogue roles are heuristic.
 MAIN_EXCLUDED_CATEGORIES = frozenset({"drink", "dessert", "kopitiam"})
 SIDE_CATEGORIES = frozenset({"soup", "healthy", "cai_png"})
 SIDE_TAG = "vegetable"
@@ -104,7 +90,7 @@ def _mean(values: list) -> float | None:
 
 
 def _approve(envelope_model: Any) -> Any:
-    """Locally approve an evaluation copy without writing application state."""
+    """Approve only a local evaluation copy without writing state."""
     return envelope_model.model_copy(update={
         "status": "APPROVED",
         "approved_by": "evaluation-suite (simulated clinician approval)",
@@ -113,16 +99,7 @@ def _approve(envelope_model: Any) -> Any:
 
 
 def adequacy_rows(daily: list[dict[str, float]], envelope: Any) -> list[dict[str, Any]]:
-    """Score each original MIN/TARGET aim in envelope order, excluding MAX.
-
-    MIN gaps are shortfalls. TARGET gaps include overshoots. The worst day has
-    the largest gap, and a gap <= _EPS meets the aim. Relative worst-gap
-    percentage is zero for aims <= _EPS. Legacy ``shortfall`` keys cover both
-    gap types, matching ``plan_service``.
-
-    Raw gaps retain nutrient units and cannot be pooled across aims. Use
-    ``mean_daily_rel_shortfall_pct`` for dimensionless cross-aim averages.
-    """
+    """Legacy shortfall keys include TARGET overshoots. Pool only dimensionless relative gaps."""
     rows: list[dict[str, Any]] = []
     for constraint in envelope.targets:
         kind = constraint.kind.value
@@ -155,12 +132,6 @@ def adequacy_rows(daily: list[dict[str, float]], envelope: Any) -> list[dict[str
 
 
 def plan_metrics(plan: list[list[str]], envelope: Any, dishes: list[Dish]) -> dict[str, Any]:
-    """Canonical metrics for one selected plan vs the ORIGINAL approved aims.
-
-    Hard feasibility is recomputed with the canonical ``problem.evaluate``
-    (violations == 0); adequacy comes from :func:`adequacy_rows` over
-    ``daily_totals``.
-    """
     objectives, violations = evaluate(plan, envelope, dishes)
     daily = daily_totals(plan, dishes)
     rows = adequacy_rows(daily, envelope)
@@ -196,7 +167,6 @@ _METRIC_FIELDS = (
 
 
 def _pool_strategy_metrics(strategy_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Pooled mean metrics over all (patient, seed) rows of one strategy."""
     out: dict[str, Any] = {
         "rows": len(strategy_rows),
         "feasibility_rate": (
@@ -208,14 +178,11 @@ def _pool_strategy_metrics(strategy_rows: list[dict[str, Any]]) -> dict[str, Any
         key = field if field.startswith("mean_") else f"mean_{field}"
         out[key] = _mean([r.get(field) for r in strategy_rows])
     out["mean_front_size"] = _mean([r.get("front_size") for r in strategy_rows])
-    # Keep runtime per row; exclude wall-clock measurements from determinism checks.
     return out
 
 
-# Paired selection ablation
 def solve_guarded(envelope: Any, dishes: list[Dish], seed: int, pop_size: int,
                   n_gen: int) -> dict[str, Any]:
-    """``solver.solve`` with the production NSGA-II configuration."""
     from backend.optim.solver import solve
 
     return solve(envelope, dishes, seed=seed, method="nsga2",
@@ -229,12 +196,6 @@ def evaluate_selection_ablation(
     pop_size: int = 40,
     n_gen: int = 80,
 ) -> tuple[dict[str, Any], dict[tuple[str, int], dict[str, Any]]]:
-    """Return ``(summary, internals)`` for paired front selection.
-
-    Serialize pooled metrics, patient adequacy rows, and paired deltas in
-    ``summary``. Keep ``internals[(patient_id, seed)]`` fronts, scalar plans,
-    and infeasibility status in-process for composition and exact-reference phases.
-    """
     from shared.envelope_schema import NutrientEnvelope
 
     per_patient: list[dict[str, Any]] = []
@@ -269,7 +230,7 @@ def evaluate_selection_ablation(
             seed_row: dict[str, Any] = {
                 "seed": seed,
                 "front_size": len(front),
-                "solver_runtime_s": round(runtime_s, 3),  # wall-clock, not deterministic
+                "solver_runtime_s": round(runtime_s, 3),
                 "engine": result.get("engine"),
             }
             internals[(approved.patient_id, seed)] = {
@@ -343,7 +304,6 @@ def evaluate_selection_ablation(
 
 
 def _paired_delta_rows(per_patient: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Per-(patient, seed) paired deltas vs the scalar baseline."""
     rows: list[dict[str, Any]] = []
     for patient in per_patient:
         for seed_row in patient.get("seeds") or []:
@@ -387,7 +347,6 @@ def _aggregate_deltas(delta_rows: list[dict[str, Any]]) -> dict[str, dict[str, A
 
 
 def per_patient_deltas(delta_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Per-patient mean paired deltas (compact table for the report)."""
     by_patient: dict[str, dict[str, list[float]]] = {}
     for row in delta_rows:
         bucket = by_patient.setdefault(row["patient_id"], {})
@@ -407,17 +366,6 @@ def derive_selection_verdict(
     pooled: dict[str, dict[str, Any]],
     cost_cap: float = _COST_CAP,
 ) -> tuple[str, str | None]:
-    """Derive the selection-ablation verdict from the pooled numbers.
-
-    PASS requires all four conditions:
-
-    * Comparable rows exist for both strategies.
-    * ``adequacy_first`` feasibility rate equals 1.0.
-    * Its pooled mean worst-day relative shortfall is strictly below scalar's.
-    * Its pooled mean cost is at most ``cost_cap`` above scalar's; default 10%.
-
-    Every failed condition is named in the note.
-    """
     adq = pooled.get("adequacy_first") or {}
     sc = pooled.get("scalar") or {}
     if not adq.get("rows") or not sc.get("rows"):
@@ -447,14 +395,8 @@ def derive_selection_verdict(
     return "PASS", None
 
 
-# Experimental two-dish composition
 class CompositionEvaluator:
-    """Evaluate arrays shaped ``(n_days * 3, 2)``: MAIN index, then SIDE index.
-
-    Objectives, MAX ordering, and EPS tolerance match ``problem.evaluate``.
-    A separate per-day repetition check forbids duplicate dish IDs. That rule
-    belongs to this experimental encoding, not the canonical evaluator.
-    """
+    """Experimental repetition limits are separate from canonical nutrient constraints."""
 
     def __init__(self, envelope: Any, dishes: list[Dish], n_days: int = 7):
         self.envelope = envelope
@@ -469,7 +411,7 @@ class CompositionEvaluator:
             if d.category in SIDE_CATEGORIES or SIDE_TAG in d.tags
         ]
         self.fallback_used = False
-        if not mains:  # documented widening: never silently drop the phase
+        if not mains:
             mains = list(pool)
             self.fallback_used = True
         if not sides:
@@ -484,11 +426,11 @@ class CompositionEvaluator:
         self.size_m = len(mains)
         self.size_s = len(sides)
 
-        # A dish eligible for both roles must count once in variety/repetition checks.
+        # A dish eligible for both roles counts once in repetition checks.
         gpos = {d.dish_id: i for i, d in enumerate(dishes)}
         self.gid_m = np.array([gpos[d.dish_id] for d in mains], dtype=int)
         self.gid_s = np.array([gpos[d.dish_id] for d in sides], dtype=int)
-        self.full_size = len(dishes)  # problem._obj_variety denominator base
+        self.full_size = len(dishes)
 
         self.nut_m = np.array(
             [[d.nutrient(k) for k in NUTRIENT_KEYS] for d in mains], dtype=float
@@ -524,7 +466,6 @@ class CompositionEvaluator:
         self.n_constraints = len(self.max_daily) * (n_days + 1)
 
     def to_plan(self, individual: np.ndarray) -> list[list[str]]:
-        """Decode an individual into n_days * MEALS_PER_DAY two-dish meals."""
         ind = np.asarray(individual, dtype=int)
         return [
             [self.main_pool[ind[s, 0]].dish_id, self.side_pool[ind[s, 1]].dish_id]
@@ -532,7 +473,6 @@ class CompositionEvaluator:
         ]
 
     def plan_to_individual(self, plan: list[list[str]]) -> np.ndarray:
-        """Encode a 2-dish plan; raises ValueError on role/pool violations."""
         if len(plan) != self.slots or any(len(slot) != 2 for slot in plan):
             raise ValueError(
                 f"expected {self.slots} slots of exactly 2 dishes (main, side)"
@@ -549,30 +489,17 @@ class CompositionEvaluator:
         return ind
 
     def eval_batch(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Evaluate a batch ``(P, slots, 2)``.
-
-        Return ``(F, G, repetition)``:
-
-        * ``F``, shape ``(P, 4)``, mirrors ``problem.evaluate`` objectives in
-          OBJECTIVE_NAMES order.
-        * ``G``, shape ``(P, n_constraints)``, contains canonical shifted MAX
-          violations. ``G <= 0`` means satisfied, with the same EPS tolerance
-          as ``FastEvaluator.g_vector``.
-        * ``repetition``, shape ``(P,)``, contains boolean flags for violations
-          of the composition encoding's per-day repetition limit.
-        """
         X = np.asarray(X, dtype=int)
         if X.ndim != 3 or X.shape[1:] != (self.slots, 2):
             raise ValueError(f"expected shape (P, {self.slots}, 2), got {X.shape}")
         P = X.shape[0]
         K = len(NUTRIENT_KEYS)
 
-        slot_nut = self.nut_m[X[:, :, 0]] + self.nut_s[X[:, :, 1]]  # (P, slots, K)
+        slot_nut = self.nut_m[X[:, :, 0]] + self.nut_s[X[:, :, 1]]
         daily = slot_nut.reshape(P, self.n_days, MEALS_PER_DAY, K).sum(axis=2)
 
         F = np.zeros((P, len(OBJECTIVE_NAMES)))
 
-        # 1. nutrient_target_deviation (mean over days; same terms as problem)
         dev = np.zeros(P)
         for _col, value in self.targets:
             dev += np.abs(daily[:, :, _col] - value).sum(axis=1)
@@ -583,18 +510,16 @@ class CompositionEvaluator:
         F[:, 0] = dev / self.n_days if self.n_days else 0.0
 
         n_dishes = 2 * self.slots
-        # 2. preference_fit: -mean tag-preference over all 2*slots dishes
         pref_total = (
             self.pref_m[X[:, :, 0]].sum(axis=1)
             + self.pref_s[X[:, :, 1]].sum(axis=1)
         )
         F[:, 1] = -pref_total / n_dishes if n_dishes else 0.0
 
-        # 3. variety over global dish ids (identical formula to problem)
         gids = np.concatenate(
             [self.gid_m[X[:, :, 0]][:, :, None],
              self.gid_s[X[:, :, 1]][:, :, None]], axis=2
-        )  # (P, slots, 2)
+        )
         flat = gids.reshape(P, n_dishes)
         offsets = flat + np.arange(P)[:, None] * self.full_size
         counts = np.bincount(
@@ -614,14 +539,12 @@ class CompositionEvaluator:
         distinct_ratio = distinct / min(self.full_size, n_dishes) if n_dishes else distinct
         F[:, 2] = -(0.5 * norm_entropy + 0.5 * distinct_ratio)
 
-        # 4. cost
         F[:, 3] = (
             self.price_m[X[:, :, 0]].sum(axis=1)
             + self.price_s[X[:, :, 1]].sum(axis=1)
         )
 
-        # Hard MAX constraints (daily + horizon), shifted by -EPS so
-        # G <= 0 matches problem.evaluate's EPS tolerance.
+        # Subtract EPS to match canonical feasibility tolerance.
         parts: list[np.ndarray] = []
         for _col, limit in self.max_daily:
             parts.append(np.maximum(0.0, daily[:, :, _col] - limit) - EPS)
@@ -631,7 +554,6 @@ class CompositionEvaluator:
             parts.append(horizon[:, None])
         G = np.concatenate(parts, axis=1) if parts else np.zeros((P, 0))
 
-        # Composition repetition limit: no dish id twice within the same day.
         day_gids = gids.reshape(P, self.n_days, 2 * MEALS_PER_DAY)
         sorted_day = np.sort(day_gids, axis=2)
         repetition = (sorted_day[:, :, 1:] == sorted_day[:, :, :-1]).any(axis=2).any(axis=1)
@@ -648,25 +570,14 @@ class CompositionEvaluator:
 
 def _greedy_individual(ev: CompositionEvaluator, rng: random.Random,
                        tries: int = 40) -> np.ndarray | None:
-    """Try to build an ``ev.n_days`` individual one day at a time.
-
-    Validate the completed individual against daily and horizon MAX ceilings
-    and the per-day repetition limit. Daily and horizon checks share the same
-    EPS tolerance, so tolerance-feasible days can still fail the horizon check.
-
-    Score candidates by the day's MAX violation magnitude after adding them.
-    Break ties by the candidate's largest contribution to a constrained nutrient,
-    then seeded random jitter for diversity. Return ``None`` if no full feasible
-    individual is found within ``tries`` attempts; failure is not an
-    infeasibility proof.
-    """
+    """Check the full horizon after daily construction. Heuristic failure is not an infeasibility proof."""
     main_pos = {int(g): i for i, g in enumerate(ev.gid_m)}
     side_pos = {int(g): i for i, g in enumerate(ev.gid_s)}
     for _attempt in range(tries):
         ind = np.zeros((ev.slots, 2), dtype=int)
         ok = True
         for day in range(ev.n_days):
-            used: set[int] = set()  # repetition limit is per DAY
+            used: set[int] = set()
             day_nut = np.zeros((2 * MEALS_PER_DAY, len(NUTRIENT_KEYS)))
             picks: list[tuple[int, int]] = []
             for pos in range(2 * MEALS_PER_DAY):
@@ -714,17 +625,6 @@ def _greedy_individual(ev: CompositionEvaluator, rng: random.Random,
 
 def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
                        max_iters: int = 200) -> np.ndarray | None:
-    """Local-search repair: replace one dish at a time on the worst day.
-
-    Repetition is repaired first, on a day that actually contains a
-    duplicate: one offending dish is swapped for the lowest-contribution
-    unused candidate from the same pool. Main slots draw from the MAIN pool
-    and side slots from the SIDE pool. Replacements cannot duplicate a global
-    dish id within the day. For the most-violated day, try every single-dish
-    replacement and take the one minimising the day's total MAX violation
-    magnitude. Return ``None`` after ``max_iters``
-    iterations without reaching feasibility.
-    """
     ind = np.asarray(individual, dtype=int).copy()
     K = len(NUTRIENT_KEYS)
     for _iteration in range(max_iters):
@@ -737,19 +637,18 @@ def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
         for col, limit in ev.max_daily:
             over = np.maximum(over, daily[:, col] - limit)
         day = int(np.argmax(over))
-        # Slot-major dish positions alternate MAIN, SIDE within each day.
         day_gids = np.stack(
             [ev.gid_m[ind[:, 0]], ev.gid_s[ind[:, 1]]], axis=1
         ).reshape(ev.n_days, 2 * MEALS_PER_DAY)
         if rep:
-            # The most MAX-violated day may be repetition-free.
+            # The worst nutrient day may have no repetition.
             sorted_day = np.sort(day_gids, axis=1)
             dup_day = (sorted_day[:, 1:] == sorted_day[:, :-1]).any(axis=1)
             if not dup_day[day]:
                 dup_days = np.flatnonzero(dup_day)
                 day = int(dup_days[int(np.argmax(over[dup_days]))])
             flat = day_gids[day]
-            # Bincount positions are global dish IDs, not positions in flat.
+            # Bincount positions use global dish IDs.
             dup_id = int(np.flatnonzero(
                 np.bincount(flat, minlength=ev.full_size) > 1
             )[0])
@@ -757,7 +656,6 @@ def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
             is_main = pos % 2 == 0
             nut = ev.nut_m if is_main else ev.nut_s
             gid = ev.gid_m if is_main else ev.gid_s
-            # Exclude even the duplicated ID: reselecting it cannot repair repetition.
             allowed_ids = set(flat.tolist())
             contribution = nut[:, [col for col, _ in ev.max_daily]].sum(axis=1)
             for cand in np.argsort(contribution, kind="stable"):
@@ -765,18 +663,17 @@ def _repair_individual(ev: CompositionEvaluator, individual: np.ndarray,
                     ind[day * MEALS_PER_DAY + pos // 2, 0 if is_main else 1] = int(cand)
                     break
             continue
-        # single-dish replacement search on the most-violated day
         day_start = day * MEALS_PER_DAY
         day_total = slot_nut[day_start:day_start + MEALS_PER_DAY].sum(axis=0)
         limits = np.array([limit for _, limit in ev.max_daily])
         cols = [col for col, _ in ev.max_daily]
         best: tuple | None = None
         for pos in range(2 * MEALS_PER_DAY):
-            slot, role = divmod(pos, 2)  # role 0 = main, role 1 = side
+            slot, role = divmod(pos, 2)
             nut = ev.nut_m if role == 0 else ev.nut_s
             gid = ev.gid_m if role == 0 else ev.gid_s
             used_ids = set(day_gids[day].tolist())
-            # subtract only the dish being replaced, not its whole meal
+            # Subtract the replaced dish rather than its whole meal.
             current = nut[int(ind[day_start + slot, role])]
             totals = (day_total - current + nut)[:, cols]
             mag = np.maximum(0.0, totals - limits).sum(axis=1)
@@ -803,17 +700,7 @@ def composition_ga(
     tournament_k: int = 3,
     repair_iters: int = 200,
 ) -> dict[str, Any]:
-    """Search the two-dish encoding with scalar-ranked tournaments.
-
-    Swap whole main/side pairs with probability 0.5 per slot. Mutation may
-    resample either dish in 1–3 slots. Carry the two best feasible elites.
-
-    Initialization may include infeasible random candidates. Find or repair at
-    least one feasible seed, or return an empty front. Generations replace
-    infeasible offspring with feasible parents. The returned ``front`` contains
-    deduplicated feasible individuals, not a Pareto-filtered subset. Its entries
-    supply ``plan``, ``objectives``, and ``feasible`` for front-selection helpers.
-    """
+    """The front contains deduplicated feasible candidates rather than a Pareto filtered subset."""
     rng = random.Random(seed)
     if ev.size_m == 0 or ev.size_s == 0:
         return {"front": [], "note": "empty MAIN/SIDE pool", "generations": 0,
@@ -841,7 +728,6 @@ def composition_ga(
         attempts += 1
         cand = random_individual()
         if not pop:
-            # no feasible seed yet: repair random candidates until one lands
             fixed = _repair_individual(ev, cand, max_iters=repair_iters)
             if fixed is not None:
                 pop.append(fixed)
@@ -851,7 +737,6 @@ def composition_ga(
         pop = [random_individual()]
 
     _, _, _, feasible, scalars = assess(pop)
-    # Try repairs in scalar-objective order; an empty front remains a valid failure result.
     if not feasible.any():
         for idx in np.argsort(scalars):
             fixed = _repair_individual(ev, pop[int(idx)], max_iters=repair_iters)
@@ -885,19 +770,14 @@ def composition_ga(
     generations = 0
     for _gen in range(n_gen):
         generations += 1
-        # elitism: carry the two best feasible individuals untouched
         feas_idx = [i for i in range(len(pop)) if feasible[i]]
         elites = [pop[i].copy() for i in
                   sorted(feas_idx, key=lambda i: float(scalars[i]))[:2]]
         children: list[np.ndarray] = list(elites)
         while len(children) < pop_size:
             p1, p2 = tournament(), tournament()
-            # uniform slot-swap crossover: per slot the whole (main, side)
-            # pair swaps with probability 0.5
             mask = np.array([rng.random() < 0.5 for _ in range(ev.slots)])
             child = np.where(mask[:, None], p1, p2).astype(int)
-            # slot-resample mutation: 1-3 random slots, main and/or side
-            # index resampled uniformly
             for slot in rng.sample(range(ev.slots), rng.randint(1, 3)):
                 if rng.random() < 0.5:
                     child[slot, 0] = rng.randrange(ev.size_m)
@@ -905,7 +785,6 @@ def composition_ga(
                     child[slot, 1] = rng.randrange(ev.size_s)
             children.append(child)
         _F2, _G2, _rep2, feasible2, _scalars2 = assess(children)
-        # reject infeasible offspring: replace them with feasible parents
         parent_pool = [pop[i] for i in feas_idx] or [pop[0]]
         for i in range(pop_size):
             if feasible2[i]:
@@ -918,7 +797,6 @@ def composition_ga(
             if f:
                 remember(ind)
 
-    # final front: deduplicated feasible individuals (population + archive)
     front_individuals: list[np.ndarray] = list(archive.values())
     entries = []
     for ind in front_individuals:
@@ -941,7 +819,6 @@ def composition_ga(
 
 def eligible_patients(patients: list[dict[str, Any]], limit: int | None = None
                       ) -> list[dict[str, Any]]:
-    """Eligible (non-REJECTED) patients, optionally limited to the first N."""
     out: list[dict[str, Any]] = []
     for patient in patients:
         engine_result = run_rules(patient)
@@ -963,12 +840,7 @@ def evaluate_composition_ablation(
     max_patients: int = 8,
     repair_iters: int = 200,
 ) -> dict[str, Any]:
-    """Compare the 2-dish (main + side) encoding against the 1-dish encoding.
-
-    Uses the SAME fronts the selection phase produced (paired: identical
-    solve, identical three selections).  Informational only — see
-    :data:`_COMPOSITION_NOTE`.
-    """
+    """Reuse selection fronts for paired comparisons. Composition receives no verdict."""
     from shared.envelope_schema import NutrientEnvelope
 
     subset = eligible_patients(patients, limit=max_patients)
@@ -1069,7 +941,6 @@ def evaluate_composition_ablation(
     }
 
 
-# Exact-reference comparison
 def evaluate_exact_reference(
     per_patient: list[dict[str, Any]],
     internals: dict[tuple[str, int], dict[str, Any]],
@@ -1077,11 +948,6 @@ def evaluate_exact_reference(
     approved_by_patient: dict[str, Any],
     seed: int,
 ) -> dict[str, Any]:
-    """Per-patient exact-reference gaps for the scalar-selected plan.
-
-    ``approved_by_patient`` maps patient_id -> APPROVED envelope.  Uses the
-    scalar-selected plan of ``seed`` from the selection phase.
-    """
     from backend.optim.exact_reference import plan_vs_exact
 
     rows: list[dict[str, Any]] = []
@@ -1163,7 +1029,6 @@ def evaluate_ablation(
     composition_gen: int = 60,
     composition_seed: int | None = None,
 ) -> dict[str, Any]:
-    """Selection ablation -> composition ablation -> exact reference."""
     from shared.envelope_schema import NutrientEnvelope
 
     patients = patients if patients is not None else load_patients()

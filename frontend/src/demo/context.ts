@@ -8,13 +8,11 @@ export const VIEW_HOME: Record<DemoView, string> = { clinician: '/', patient: '/
 export const PATIENT_ROUTES = new Set(['/plan', '/adherence', '/chat']);
 
 export interface DemoState {
-  /** False when no provider is mounted (isolated screen tests); shared state is then inert. */
   managed: boolean;
   view: DemoView;
   setView: (view: DemoView) => void;
   patientId: string | null;
   setPatientId: (patientId: string | null) => void;
-  /** Free-text actor label sent with review actions; an attestation, not an identity. */
   reviewerName: string;
   setReviewerName: (name: string) => void;
   approvalMode: ApprovalModeState;

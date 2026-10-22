@@ -1,17 +1,9 @@
-"""Dish data contract and self-contained toy pool for optimiser tests and demos.
-
-Nutrient keys match ``NutrientKind``. ``load_dishes`` expects nested nutrient
-JSON and falls back to the toy pool for missing files. Use ``real_data.load_dishes``
-for the flat production catalogue.
-"""
-
 from __future__ import annotations
 
 import json
 import os
 from dataclasses import dataclass
 
-# Canonical nutrient keys (mirror NutrientKind).
 NUTRIENT_KEYS: tuple[str, ...] = (
     "energy_kcal",
     "protein_g",
@@ -28,11 +20,7 @@ NUTRIENT_KEYS: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class Dish:
-    """Per-serving nutrients and matchable metadata for one dish.
-
-    Attributes are frozen, but the nested nutrients mapping is mutable; callers
-    sharing records must not mutate it. price_sgd is the price of one serving.
-    """
+    """Frozen records still contain a mutable nutrient mapping."""
 
     dish_id: str
     name: str
@@ -45,7 +33,6 @@ class Dish:
     verified: bool = False
 
     def nutrient(self, key: str) -> float:
-        """Return a nutrient value, defaulting to 0.0 when absent."""
         return float(self.nutrients.get(key, 0.0))
 
 
@@ -74,8 +61,6 @@ def _nut(
         "sugar_g": sugar_g,
     }
 
-
-# Lard and deep-fried dishes exercise the spike envelope's exclusions.
 
 TOY_DISHES: list[Dish] = [
     Dish(
@@ -154,14 +139,7 @@ TOY_DISHES: list[Dish] = [
 
 
 def load_dishes(path: str | None = None) -> list[Dish]:
-    """Return the toy pool by default, or read nested nutrient JSON.
-
-    Missing files also return a shallow copy of the toy pool. Existing files
-    require a list of rows with ``dish_id``, ``name``, ``category``, and a
-    ``nutrients`` mapping. Ingredients, tags, and price_sgd are optional.
-    Missing nutrient keys default to zero. Rows without a nutrient mapping
-    raise ValueError; use ``real_data.load_dishes`` for the flat catalogue.
-    """
+    """Missing files use the toy pool. Production flat catalogues use real_data instead."""
     if path is None:
         return list(TOY_DISHES)
     if not os.path.exists(path):

@@ -1,10 +1,4 @@
-"""Clinical rules compiled to CLIPS, then assembled into envelope and trace dicts.
-
-CLIPS chooses fired rules. Python scales per-kg values, resolves conflicts, and
-suppresses scope-rejected targets. ``rules/ENGINE.md`` owns priority/tie policy.
-``run_rules`` serializes the shared environment and returns canonical schema
-dicts without persistence. Import is allowed without clipspy, execution is not.
-"""
+"""Compile clinical rules to CLIPS and assemble envelope traces."""
 
 from __future__ import annotations
 
@@ -17,7 +11,6 @@ from typing import Any
 
 from backend.knowledge.runtime import selected_release
 
-# CLIPS is required when running rules; keep module import available without it.
 try:
     import clips  # type: ignore
 
@@ -32,16 +25,13 @@ from backend.datasets.paths import dataset_path
 
 _RULES_PATH = dataset_path("rules.json")
 
-# Fixed trace/proposal clock for deterministic engine output; storage stamps live proposals.
+# Storage replaces the fixed engine clock for live proposals.
 _CLOCK = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
 
 _MULTISLOT_FIELDS = {"diagnoses", "meds"}
 _NUMERIC_FIELDS = {"age", "weight_kg", "bmi", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL", "hba1c_pct"}
-# slots where -1.0 means "unknown" — comparisons must fail on unknown labs
 _UNKNOWN_GUARDED = {"bmi", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL", "hba1c_pct"}
 
-# Nutrients whose rulebook values are per-kg coefficients and must be scaled
-# by patient weight during assembly (documented in ENGINE.md).
 _PER_KG_NUTRIENTS = {"energy_kcal", "protein_g"}
 
 _UNITS = {
@@ -99,14 +89,11 @@ _TEMPLATES = [
 ]
 
 
-
 def _sym(value: Any) -> str:
-    """Render a value as a CLIPS-safe symbol token."""
     return re.sub(r"[^A-Za-z0-9_\-]", "_", str(value).strip().replace(" ", "_"))
 
 
 def _esc(text: Any) -> str:
-    """Escape a Python string for embedding in a CLIPS quoted string."""
     return str(text).replace("\\", "\\\\").replace('"', "'")
 
 
@@ -123,12 +110,11 @@ def _stringify(value: Any) -> str:
 
 
 def _num(value: Any) -> float:
-    """Coerce a lab/vital to float; unknown/NaN -> -1.0 sentinel."""
     try:
         f = float(value)
     except (TypeError, ValueError):
         return -1.0
-    return -1.0 if math.isnan(f) else f  # NaN -> unknown
+    return -1.0 if math.isnan(f) else f
 
 
 def _ruleset() -> list[dict]:
@@ -141,7 +127,6 @@ def _ruleset() -> list[dict]:
             with open(_RULES_PATH, "r", encoding="utf-8") as fh:
                 _RULESET = json.load(fh)["rules"]
     return _RULESET
-
 
 
 def _condition_to_clips(cond: dict) -> str:
@@ -169,7 +154,7 @@ def _condition_to_clips(cond: dict) -> str:
         var = f"?{field}"
         parts: list[str] = []
         if field in _UNKNOWN_GUARDED:
-            parts.append(f"(>= {var} 0.0)")  # -1.0 sentinel must not satisfy tests
+            parts.append(f"(>= {var} 0.0)")
         if op == "between":
             lo, hi = value
             parts += [f"(>= {var} {_fmt(lo)})", f"(<= {var} {_fmt(hi)})"]
@@ -201,7 +186,7 @@ def _actions_to_clips(rule: dict) -> list[str]:
                 f'(value "{_esc(act["value"])}") (reason "{_esc(act.get("reason", ""))}") '
                 f'(rule_id "{_esc(rid)}") (priority {prio})))'
             )
-        elif kind in ("assert", "flag"):  # "flag" is a synonym of "assert"
+        elif kind in ("assert", "flag"):
             out.append(
                 f'(assert (clinical-flag (key {_sym(act["key"])}) '
                 f'(value "{_esc(_stringify(act["value"]))}") '
@@ -228,12 +213,7 @@ _RULESET: list[dict] | None = None
 
 
 def _get_env() -> Any:
-    """Return the shared mutable environment, compiling rules on first use.
-
-    Callers must hold ``_ENV_LOCK``; this helper does not acquire it.
-    ``run_rules`` serializes initialization, execution, and cleanup under that
-    lock. Raise RuntimeError when clipspy is unavailable or a rule fails to compile.
-    """
+    """The caller must hold the environment lock through initialization and execution."""
     global _ENV
     if _ENV is None:
         if clips is None or not CLIPS_AVAILABLE:
@@ -247,19 +227,14 @@ def _get_env() -> Any:
         for rule in _ruleset():
             try:
                 env.build(_rule_to_defrule(rule))
-            except Exception as exc:  # surface which rule failed to compile
+            except Exception as exc:
                 raise RuntimeError(f"CLIPS failed to compile rule {rule['rule_id']}: {exc}") from exc
         _ENV = env
     return _ENV
 
 
-
 def normalize_patient_labs(patient: dict) -> dict:
-    """Copy lab aliases to wire names; an explicit wire name takes precedence.
-
-    Preserve both input spellings. This matches the shared model's alias priority,
-    including an explicit null wire value overriding a populated Python spelling.
-    """
+    """An explicit wire alias wins even when its value is null."""
     normalized = dict(patient)
     for wire, python_name in (("serum_K_meq_L", "serum_k_meq_l"),
                               ("serum_PO4_mg_dL", "serum_po4_mg_dl")):
@@ -269,7 +244,6 @@ def normalize_patient_labs(patient: dict) -> dict:
 
 
 def _prepare(patient: dict) -> dict:
-    """Normalize for CLIPS; reject missing, nonfinite or nonpositive weight."""
     patient = normalize_patient_labs(patient)
     try:
         weight = float(patient.get("weight_kg", 0))
@@ -290,8 +264,7 @@ def _prepare(patient: dict) -> dict:
         "serum_PO4_mg_dL": _num(patient.get("serum_PO4_mg_dL")),
         "meds": [str(m) for m in (patient.get("meds") or [])],
         "bmi": _num(patient.get("bmi")),
-        # The rulebook keys the pregnancy scope gate on ``pregnant``; the data
-        # layer also encodes pregnancy as a diagnosis — accept both.
+        # Pregnancy may be recorded as a flag or diagnosis.
         "pregnant": bool(patient.get("pregnant")) or ("pregnancy" in diagnoses),
         "hba1c_pct": _num(patient.get("hba1c_pct")),
     }
@@ -315,7 +288,6 @@ def _patient_fact(p: dict) -> str:
         f"(pregnant {'yes' if p['pregnant'] else 'no'}) "
         f"(hba1c_pct {p['hba1c_pct']}))"
     )
-
 
 
 def _harvest(env: Any) -> tuple[list[dict], list[dict], list[dict], set[str]]:
@@ -359,7 +331,6 @@ def _harvest(env: Any) -> tuple[list[dict], list[dict], list[dict], set[str]]:
     return constraints, exclusions, flags, fired
 
 
-
 def _scale(nutrient: str, value: float, weight_kg: float) -> float:
     if nutrient in _PER_KG_NUTRIENTS and weight_kg > 0:
         return round(value * weight_kg, 2)
@@ -367,13 +338,7 @@ def _scale(nutrient: str, value: float, weight_kg: float) -> float:
 
 
 def _resolve_conflicts(constraints: list[dict]) -> tuple[dict, dict[str, list[str]]]:
-    """Pick one winner per (nutrient, kind); record losing rules for the trace.
-
-    Highest priority wins. Equal-priority MAX uses the lower ceiling, MIN the
-    higher soft floor, and TARGET the lower soft aim. Lowest rule ID breaks any
-    remaining tie. TARGET ordering is deterministic, not a stricter hard bound.
-    Identical values are merges and are not marked superseded.
-    """
+    """Higher priority wins. Tied MAX uses the lower ceiling and MIN the higher floor. TARGET uses the lower aim."""
     groups: dict[tuple[str, str], list[dict]] = {}
     for c in constraints:
         groups.setdefault((c["nutrient"], c["kind"]), []).append(c)
@@ -394,7 +359,7 @@ def _resolve_conflicts(constraints: list[dict]) -> tuple[dict, dict[str, list[st
             if loser["rule_id"] == win["rule_id"]:
                 continue
             if (loser["nutrient"], loser["kind"], loser["value"]) == (win["nutrient"], win["kind"], win["value"]):
-                continue  # same value from another rule: merge, not override
+                continue
             losses.setdefault(loser["rule_id"], []).append(
                 f"superseded by {win['rule_id']} on {nutrient} {kind} "
                 f"(final value {win['value']:g} {_UNITS[nutrient]})"
@@ -451,7 +416,7 @@ def _action_summary(rule: dict, prep: dict) -> str:
                         f"{round(value * weight, 2):g} {_UNITS[nutrient]}/d (weight {weight:g} kg)"
                     )
                 else:
-                    # Keep the per-kg marker so unscaled coefficients cannot read as daily doses.
+                    # Retain per kilogram units so coefficients cannot read as daily doses.
                     pieces.append(
                         f"set {nutrient} {constraint_kind} = {value:g} {per} "
                         f"(weight unknown; not scaled)"
@@ -460,7 +425,7 @@ def _action_summary(rule: dict, prep: dict) -> str:
                 pieces.append(f"set {nutrient} {constraint_kind} = {value:g} {_UNITS[nutrient]}/d")
         elif action_type == "exclude":
             pieces.append(f"exclude {act['kind']} '{act['value']}'")
-        else:  # assert / flag
+        else:
             pieces.append(f"assert {act['key']}={_stringify(act['value'])}")
     return "; ".join(pieces)
 
@@ -469,12 +434,7 @@ _ENV_LOCK = RLock()
 
 
 def validate_rulebook(rules: list[dict]) -> None:
-    """Compile an isolated candidate and check representative scope/suppression cases.
-
-    Does not change the live environment or establish clinical correctness. Call
-    after structural DSL validation; this guards publication against removing
-    existing scope exclusions, not every possible patient/rule interaction.
-    """
+    """Compile an isolated candidate and check representative scope regressions without changing the live engine."""
     if clips is None or not CLIPS_AVAILABLE:
         raise RuntimeError("clipspy is required to validate knowledge publication")
     candidate = clips.Environment()
@@ -492,7 +452,7 @@ def validate_rulebook(rules: list[dict]) -> None:
                  ("ketoacid-risk", {"hba1c_pct": 10.0})]
         for label, overrides in cases:
             candidate.reset()
-            # Return a symbol, not a retained Python Fact wrapper tied to this temporary environment.
+            # Do not retain a Fact wrapper tied to the temporary environment.
             candidate.eval(f"(progn (assert {_patient_fact(_prepare({**base, **overrides}))}) TRUE)")
             candidate.run()
             blocked = candidate.eval(
@@ -508,15 +468,7 @@ def validate_rulebook(rules: list[dict]) -> None:
 
 
 def run_rules(patient: dict) -> dict:
-    """Return a PROPOSED or scope-rejected envelope and its complete firing trace.
-
-    Returns ``{"envelope": <NutrientEnvelope-compatible dict>,
-               "trace": [<RuleFire-compatible dicts>]}``.
-    The placeholder envelope ID/time are replaced when stored as a live proposal.
-    Access to the shared CLIPS environment is serialized here, including lazy
-    initialization and cleanup after failures. Weight must be finite and positive
-    or ValueError is raised before execution. No state is persisted or approved.
-    """
+    """Serialize access to the shared CLIPS environment. Storage assigns live proposal identity and time."""
     ruleset = _ruleset()
     by_id = {r["rule_id"]: r for r in ruleset}
     prep = _prepare(patient)
@@ -531,7 +483,6 @@ def run_rules(patient: dict) -> dict:
         finally:
             env.reset()
 
-    # Record missing scope labs as cautions, without fabricating a fired exclusion.
     for rule in ruleset:
         rid = rule["rule_id"]
         if not rid.startswith("SCOPE-") or rid in fired_ids:
@@ -560,7 +511,6 @@ def run_rules(patient: dict) -> dict:
         for (nutrient, kind), c in sorted(winners.items())
     ]
 
-    # Deduplicate exclusions by kind/value, preferring higher priority.
     def _excl_better(a: dict, b: dict) -> bool:
         if a["priority"] != b["priority"]:
             return a["priority"] > b["priority"]
@@ -593,7 +543,7 @@ def run_rules(patient: dict) -> dict:
     suppressed = bool(suppressed_rules)
     status = "REJECTED" if (out_of_scope or suppressed) else "PROPOSED"
     if status == "REJECTED":
-        targets = []  # no auto envelope for out-of-scope / clinician-review cases
+        targets = []
 
     trace: list[dict[str, Any]] = []
     for rid in sorted(fired_ids, key=lambda r: (-by_id[r]["priority"], r)):

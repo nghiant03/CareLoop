@@ -1,19 +1,4 @@
-"""Exact feasibility and additive-objective reference for single-dish days.
-
-Enumerate all allowed one-day dish multisets. Slot order does not affect hard
-constraints. No feasible day proves single-dish horizon infeasibility, not
-main/side infeasibility. A feasible day is only necessary: repeating an excess
-within daily EPS may exceed horizon EPS. ``problem.evaluate`` gates delivery.
-
-``best`` minimizes each additive daily quantity: nutrient deviation, raw tag
-preference sum, and cost. The preference minimum is not the production optimum,
-which maximizes that sum through a negative-mean objective. ``best_scalar``
-optimizes the one-day objective vector, not the horizon vector. Neither result
-establishes a four-objective horizon optimum because variety spans the horizon.
-
-Ties use sorted dish-ID tuples. The three-slot path precomputes pair sums and
-vectorizes the third-dish search. Other slot counts use chunked enumeration.
-"""
+"""Exact reference for single dish days and additive objectives."""
 
 from __future__ import annotations
 
@@ -43,11 +28,9 @@ _ADDITIVE_OBJECTIVES: tuple[str, ...] = (
     "cost",
 )
 
-# Objective ties use this relative tolerance with an absolute floor of the
-# same size; tied candidates are separated lexicographically.
 _TIE_RTOL = 1e-9
 
-_CHUNK = 20_000  # generic-path chunk size (n_slots != 3, small pools only)
+_CHUNK = 20_000
 
 
 def _tie_tol(a: float, b: float) -> float:
@@ -55,7 +38,6 @@ def _tie_tol(a: float, b: float) -> float:
 
 
 def _constraint_cols(envelope) -> tuple[list[tuple[int, float]], list[tuple[int, float]], list[tuple[int, float]]]:
-    """Split envelope targets into (target, min, max) as (column, value)."""
     col = {k: i for i, k in enumerate(NUTRIENT_KEYS)}
     tg: list[tuple[int, float]] = []
     mn: list[tuple[int, float]] = []
@@ -72,21 +54,15 @@ def _constraint_cols(envelope) -> tuple[list[tuple[int, float]], list[tuple[int,
 
 
 def _variety_table(lookup_size: int, n_slots: int) -> np.ndarray:
-    """Per-distinct-count ``problem._obj_variety`` value for a fixed day size.
-
-    For an ``n_slots``-dish day the entropy depends only on how the ``n_slots``
-    servings split across the ``d`` distinct dishes; this table indexes the
-    possible splits by ``d - 1`` for the 3-slot geometry (where the split is
-    uniquely determined by ``d``).
-    """
+    """Distinct count uniquely determines entropy only for the three slot geometry."""
     denom = math.log(lookup_size) if lookup_size > 1 else 1.0
     ratio_denom = min(lookup_size, n_slots)
     if n_slots != 3:
         raise ValueError("variety table only defined for the 3-slot day geometry")
     entropies = {
-        1: 0.0,                       # (3,)      -> p = 1
-        2: -(2 / 3 * math.log(2 / 3) + 1 / 3 * math.log(1 / 3)),  # (2, 1)
-        3: math.log(3.0),             # (1, 1, 1)
+        1: 0.0,
+        2: -(2 / 3 * math.log(2 / 3) + 1 / 3 * math.log(1 / 3)),
+        3: math.log(3.0),
     }
     out = []
     for d in (1, 2, 3):
@@ -108,12 +84,7 @@ def _empty_result(n_slots: int, pool_size: int) -> dict:
 
 
 def _track(best: tuple | None, values: np.ndarray, tuples: list[tuple]) -> tuple | None:
-    """Running (value, index_tuple) best with tolerance tie-break.
-
-    ``values`` must align with ``tuples``, which must already be in ascending
-    lexicographic order. Return the updated best, retaining the supplied best
-    when no candidate exists. Return ``None`` if neither supplies a candidate.
-    """
+    """Candidate tuples must already be in ascending lexical order."""
     if values.size == 0:
         return best
     vmin = float(values.min())
@@ -127,7 +98,6 @@ def _track(best: tuple | None, values: np.ndarray, tuples: list[tuple]) -> tuple
         pos = int(np.argmax(values <= vmin + tol))
         return (vmin, tuples[pos])
     if vmin <= bval + tol:
-        # Tied with the running best: keep the lexicographically smaller tuple.
         pos = int(np.argmax(values <= bval + tol))
         cand = tuples[pos]
         if cand < btup:
@@ -136,13 +106,7 @@ def _track(best: tuple | None, values: np.ndarray, tuples: list[tuple]) -> tuple
 
 
 def one_day_exact(envelope, dishes: list[Dish], n_slots: int = MEALS_PER_DAY) -> dict:
-    """Exhaustive one-day enumeration (see the module docstring).
-
-    Returns a dict with ``feasible_day``, ``feasible_combo_count``,
-    ``pool_size``, ``n_slots``, ``best`` (per additive objective:
-    ``{"dish_ids": [...], "value": float}``) and ``best_scalar``.  When no
-    feasible day exists the ``value``/``dish_ids`` fields are ``None``/empty.
-    """
+    """Enumerate single dish days without proving a full horizon objective optimum."""
     pool = sorted(allowed_dishes(envelope, dishes), key=lambda d: d.dish_id)
     ids = [d.dish_id for d in pool]
     lookup_size = len({d.dish_id for d in dishes})
@@ -188,19 +152,13 @@ def one_day_exact(envelope, dishes: list[Dish], n_slots: int = MEALS_PER_DAY) ->
 
 
 def _enumerate_three(nut, pref, price, tg, mn, mx, weight, lookup_size):
-    """Fast path for the production 3-slot day geometry.
-
-    Pair sums are precomputed once on the upper triangle (multiset pairs
-    ``i <= j``); the outer loop runs over the third index ``k >= j`` and the
-    MAX filters plus objective evaluation run in bulk on the surviving pairs.
-    """
     p = nut.shape[0]
     cols_needed = sorted({col for col, _ in tg} | {col for col, _ in mn} | {col for col, _ in mx})
     pos_in_needed = {col: i for i, col in enumerate(cols_needed)}
-    nn = nut[:, cols_needed]  # P x Cn (only constraint-relevant columns)
+    nn = nut[:, cols_needed]
 
-    ii, jj = np.triu_indices(p)  # row-major, so (i, j) ascending lexicographic
-    pair_n = nn[ii] + nn[jj]  # M x Cn: nn[i] + nn[j] for the multiset pairs i <= j
+    ii, jj = np.triu_indices(p)  # Upper triangle order is lexicographic.
+    pair_n = nn[ii] + nn[jj]
     pair_pref = (pref[:, None] + pref[None, :])[ii, jj]
     pair_price = (price[:, None] + price[None, :])[ii, jj]
     eq_ij = ii == jj
@@ -221,7 +179,7 @@ def _enumerate_three(nut, pref, price, tg, mn, mx, weight, lookup_size):
             continue
         count += idxs.size
 
-        sel_n = pair_n[idxs] + nut[k, cols_needed]  # S x Cn day totals
+        sel_n = pair_n[idxs] + nut[k, cols_needed]
         dev = None
         for col, value in tg:
             term = np.abs(sel_n[:, pos_in_needed[col]] - value)
@@ -255,11 +213,6 @@ def _enumerate_three(nut, pref, price, tg, mn, mx, weight, lookup_size):
 
 
 def _enumerate_generic(nut, pref, price, tg, mn, mx, weight, lookup_size, n_slots):
-    """Chunked generic path for ``n_slots != 3`` (small analysis pools only).
-
-    Enumerates ``combinations_with_replacement`` index multisets in chunks and
-    vectorises the constraint filter and objective evaluation per chunk.
-    """
     p = nut.shape[0]
     cols_needed = sorted({col for col, _ in tg} | {col for col, _ in mn} | {col for col, _ in mx})
     pos_in_needed = {col: i for i, col in enumerate(cols_needed)}
@@ -275,11 +228,10 @@ def _enumerate_generic(nut, pref, price, tg, mn, mx, weight, lookup_size, n_slot
     state: dict[str, Any] = {"dev": None, "pref": None, "cost": None, "scalar": None, "count": 0}
 
     def _flush(chunk: list[tuple[int, ...]]) -> None:
-        """Filter + score one chunk, updating the running bests in place."""
         if not chunk:
             return
         arr = np.array(chunk, dtype=int)
-        totals = nut[arr].sum(axis=1)  # C x K
+        totals = nut[arr].sum(axis=1)
         feas = np.ones(len(arr), dtype=bool)
         for col, limit in max_cols:
             feas &= totals[:, col] <= limit + EPS
@@ -337,36 +289,12 @@ def _enumerate_generic(nut, pref, price, tg, mn, mx, weight, lookup_size, n_slot
 
 
 def prove_infeasible(envelope, dishes: list[Dish]) -> bool:
-    """True iff exhaustive one-day enumeration finds NO feasible day.
-
-    Because every hard constraint is per-day and each slot holds exactly one
-    dish, this is an EXACT infeasibility proof for the single-dish
-    encoding: no 7-day plan can exist when no feasible day exists.
-    """
+    """No feasible day proves infeasibility only for the single dish encoding."""
     return not one_day_exact(envelope, dishes)["feasible_day"]
 
 
 def plan_vs_exact(envelope, dishes: list[Dish], plan) -> dict:
-    """Per-day additive objectives of ``plan`` vs the exact one-day optimum.
-
-    Recomputes the delivered plan's per-day additive quantities with the
-    ``problem`` helpers and compares them with :func:`one_day_exact`:
-
-    * ``gaps`` — per day, ``day_value - exact_one_day_best``. Gaps are >= 0 for
-      feasible single-dish plans in the reference encoding. This is not
-      guaranteed for broader compositions, which the reference does not enumerate.
-    * ``mean_gap`` — mean of the daily gaps;
-    * ``seven_day_lower_bound`` — ``7 x per-day best``, an exact lower bound on
-      the 7-day SUM of the additive quantity. Cost is summed over the horizon;
-      nutrient deviation is a daily mean, so only its horizon objective bound
-      divides this value by seven. Raw preference sums are not the normalized
-      preference objective.
-
-    ``variety`` is NOT per-day decomposable (it is defined over the whole
-    horizon) and is explicitly excluded — the reported bounds cover deviation,
-    raw preference sum and cost ONLY and must not be presented as an exact
-    optimum for all four objectives.
-    """
+    """Additive day bounds exclude horizon variety and broader compositions."""
     if len(plan) % MEALS_PER_DAY != 0:
         raise ValueError(
             f"plan length {len(plan)} is not a multiple of MEALS_PER_DAY={MEALS_PER_DAY}"

@@ -1,12 +1,4 @@
-"""Catalogue loading, vector evaluation, and single-dish feasibility heuristics.
-
-Load flat catalogue records into ``Dish`` objects. ``FastEvaluator`` mirrors
-canonical evaluation for single-dish plans drawn from the allowed pool.
-
-Construction and repair work one day at a time. Daily excess within EPS can
-accumulate beyond horizon EPS, so callers must validate the full plan before
-delivery. Bounded heuristic failure is not an infeasibility proof.
-"""
+"""Catalogue loading and vectorized single dish evaluation."""
 
 from __future__ import annotations
 
@@ -38,18 +30,14 @@ from backend.datasets.paths import dataset_path
 
 DEFAULT_DISHES_PATH = str(dataset_path("dishes.json"))
 
-# Derive vector weights in canonical objective order to match scalar_score.
+# Match the canonical scalar objective ordering.
 _SCALAR_WEIGHT_VEC = np.array(
     [SCALAR_WEIGHTS[name] for name in OBJECTIVE_NAMES], dtype=float
 )
 
 
 def _synthetic_price(row: dict) -> float:
-    """Deterministic placeholder price.
-
-    Missing catalogue prices use an energy/protein-derived SGD proxy so the cost
-    objective is not constant. It is not a verified market price.
-    """
+    """Missing prices use an energy and protein proxy."""
     energy = float(row.get("energy_kcal", 0.0) or 0.0)
     protein = float(row.get("protein_g", 0.0) or 0.0)
     return round(2.5 + 0.004 * energy + 0.02 * protein, 2)
@@ -82,13 +70,6 @@ def _load_cached(path: str, release_json: str | None = None) -> tuple[Dish, ...]
 
 
 def load_dishes(path: str | None = None) -> list[Dish]:
-    """Load the pinned release catalogue, or development fixtures/explicit files.
-
-    Returns a fresh list of cached Dish records keyed by absolute path. Records
-    are frozen but their nested nutrient mappings must not be mutated. File edits
-    are not detected until cache invalidation or process restart. Missing files
-    raise FileNotFoundError; use ``toy_data.load_dishes`` for a toy fallback.
-    """
     if path is None:
         release = selected_release()
         if release is not None:
@@ -98,14 +79,7 @@ def load_dishes(path: str | None = None) -> list[Dish]:
 
 
 class FastEvaluator:
-    """Fast objective/constraint evaluation for plans over the allowed pool.
-
-    For one allowed dish per slot, objective definitions, MAX ordering, and EPS
-    tolerance match ``problem.evaluate``. ``test_real.py`` cross-checks them.
-    Constraint vectors shift excesses by -EPS for pymoo's ``G <= 0`` convention.
-    Indices must address this evaluator's allowed pool and match its horizon.
-    Approval and structural validity are caller preconditions, not checked here.
-    """
+    """Indices address the allowed pool. Callers enforce approval and structural validity."""
 
     def __init__(self, envelope, dishes: list[Dish], n_days: int = DAYS):
         self.envelope = envelope
@@ -129,7 +103,6 @@ class FastEvaluator:
             for c in envelope.targets
             if c.kind == ConstraintKind.MAX
         ]
-        # Soft terms (steer the deviation objective; never hard constraints):
         self._min_daily = [
             (col[c.nutrient.value], float(c.value))
             for c in envelope.targets
@@ -175,9 +148,6 @@ class FastEvaluator:
             daily = self.daily_totals(idx)
         idx = np.asarray(idx, dtype=int)
 
-        # 1. nutrient_target_deviation: mean over days of the deviation from
-        #    the envelope's nutrient band (TARGET distance, MIN shortfall,
-        #    MAX excess) — identical to problem._obj_target_deviation.
         dev = 0.0
         for col, value in self._targets:
             dev += float(np.abs(daily[:, col] - value).sum())
@@ -187,11 +157,9 @@ class FastEvaluator:
             dev += float(np.maximum(0.0, daily[:, col] - value).sum())
         deviation = dev / self.n_days if self.n_days else 0.0
 
-        # 2. preference_fit
         n = idx.size
         preference = -float(self._pref[idx].mean()) if n else 0.0
 
-        # 3. variety (identical formula to problem._obj_variety)
         if n:
             counts = np.bincount(idx, minlength=self.size)
             nz = counts[counts > 0].astype(float)
@@ -204,18 +172,11 @@ class FastEvaluator:
         else:
             variety = 0.0
 
-        # 4. cost
         cost = float(self._price[idx].sum()) if n else 0.0
 
         return np.array([deviation, preference, variety, cost])
 
     def g_vector(self, daily: np.ndarray) -> np.ndarray:
-        """Canonical HARD-constraint vector; ``G <= 0`` == satisfied.
-
-        Follow ``problem.constraint_layout``'s daily/horizon MAX ordering.
-        Subtract ``EPS`` from each excess to preserve the canonical tolerance.
-        MIN/TARGET aims and structural violations have no vector entries.
-        """
         parts: list[np.ndarray] = []
         for col, limit in self._max_daily:
             over = np.maximum(0.0, daily[:, col] - limit) - EPS
@@ -245,13 +206,6 @@ class FastEvaluator:
         return float(_SCALAR_WEIGHT_VEC @ f)
 
     def day_violation(self, totals: np.ndarray) -> tuple[int, float]:
-        """(violation_count, violation_magnitude) for one day's nutrient totals.
-
-        HARD constraints only: daily MAX ceilings.  MIN floors are soft (they
-        steer the greedy heuristic and the deviation objective) and never
-        count here. Horizon slots are not checked per day; they live in
-        ``g_vector`` and the canonical evaluator.
-        """
         count = 0
         mag = 0.0
         for col, limit in self._max_daily:
@@ -263,14 +217,7 @@ class FastEvaluator:
 
 
 def feasibility_precheck(envelope, dishes: list[Dish], n_days: int = DAYS):
-    """Reject obvious single-dish infeasibility without proving existence.
-
-    Returns ``(ok, reason)``.  HARD constraints only (MAX ceilings): a failing
-    precheck means the allowed pool is provably too narrow — empty pool, or a
-    MAX below the least-possible 3-dish day.  MIN floors are soft objective
-    terms and never fail the precheck. Passing is necessary, not sufficient:
-    independent nutrient minima need not be jointly attainable by one day.
-    """
+    """Passing is necessary but not sufficient for single dish feasibility."""
     pool = allowed_dishes(envelope, dishes)
     if not pool:
         return False, "exclusions remove every dish from the pool (0 allowed dishes)"
@@ -280,7 +227,7 @@ def feasibility_precheck(envelope, dishes: list[Dish], n_days: int = DAYS):
         key = c.nutrient.value
         values = nut[:, col[key]]
         if c.kind == ConstraintKind.MAX:
-            least = 3.0 * float(values.min())  # best (smallest) possible day
+            least = 3.0 * float(values.min())
             if least > float(c.value) + EPS:
                 return False, (
                     f"hard MAX {key} <= {c.value} impossible: the three lowest-{key} "
@@ -294,7 +241,6 @@ def _greedy_pick_day(
     used: dict[int, int] | None = None,
     rng: random.Random | None = None,
 ) -> np.ndarray:
-    """Build one day greedily: feasibility-first heuristic score per slot."""
     used = used or {}
     running = np.zeros(ev._nut.shape[1])
     chosen: list[int] = []
@@ -317,9 +263,9 @@ def _greedy_pick_day(
                     score += 5.0 * (limit - best_possible)
             score += 0.05 * ev._price[j]
             score += 0.2 * (-ev._pref[j])
-            score += 0.15 * used.get(j, 0)  # mild cross-day variety pressure
+            score += 0.15 * used.get(j, 0)
             if rng is not None and rng.random() < 0.05:
-                score += rng.random() * 0.1  # tiny exploration, seeded => stable
+                score += rng.random() * 0.1
             if best_score is None or score < best_score:
                 best_score = score
                 best_j = j
@@ -332,7 +278,6 @@ def _greedy_pick_day(
 
 
 def _repair_day(ev: FastEvaluator, day_idx: np.ndarray, max_passes: int = 6):
-    """Hill-climb one day to feasibility via single-slot replacement."""
     day_idx = day_idx.copy()
     totals = ev._nut[day_idx].sum(axis=0)
     count, mag = ev.day_violation(totals)
@@ -364,11 +309,7 @@ def _repair_day(ev: FastEvaluator, day_idx: np.ndarray, max_passes: int = 6):
 def _build_feasible_day(
     ev: FastEvaluator, seed: int, day: int, used: dict[int, int]
 ) -> np.ndarray | None:
-    """Greedily build and repair one day; ``None`` if the heuristic finds none.
-
-    A successful build increments ``used`` in place; failure leaves it unchanged.
-    Failure is not an infeasibility proof.
-    """
+    """Success updates usage counts. Failure leaves them unchanged and proves nothing."""
     rng = random.Random((seed * 1_000_003 + day * 97 + 13) & 0xFFFFFFFF)
     day_idx = _greedy_pick_day(ev, used=dict(used), rng=rng)
     count, _mag = ev.day_violation(ev._nut[day_idx].sum(axis=0))
@@ -383,22 +324,12 @@ def _build_feasible_day(
 
 
 def greedy_feasible_plan(ev: FastEvaluator, seed: int = 0) -> np.ndarray | None:
-    """Construct an ``ev.n_days`` candidate satisfying daily MAX checks.
-
-    Daily and horizon checks share the same EPS tolerance, so accumulated daily
-    excess can still violate a horizon ceiling. Callers must validate the full
-    candidate with the canonical evaluator before delivery.
-
-    Return ``None`` when bounded greedy retries fail to build a day. These
-    retries may miss feasible plans. The solver's exact diagnostic distinguishes
-    search exhaustion from proven single-dish infeasibility.
-    """
+    """Daily tolerance can accumulate beyond the horizon tolerance. Validate the full candidate before delivery."""
     used: dict[int, int] = {}
     days: list[np.ndarray] = []
     for day in range(ev.n_days):
         day_idx = _build_feasible_day(ev, seed, day, used)
         if day_idx is None:
-            # Retry with fresh randomness a couple of times before giving up.
             for attempt in range(3):
                 day_idx = _build_feasible_day(ev, seed + 101 * (attempt + 1), day, used)
                 if day_idx is not None:
@@ -412,16 +343,7 @@ def greedy_feasible_plan(ev: FastEvaluator, seed: int = 0) -> np.ndarray | None:
 def repair_plan(
     ev: FastEvaluator, idx: np.ndarray, seed: int = 0
 ) -> np.ndarray | None:
-    """Repair an arbitrary pool candidate against daily MAX ceilings.
-
-    Try hill-climbing first to retain the optimiser's work, then fall back to a
-    greedy rebuild for stubborn days. Return a repaired copy, leaving ``idx``
-    unchanged, or ``None`` if these heuristics fail to find a feasible day.
-    Accumulated daily EPS excess can still violate a horizon ceiling. Callers
-    must validate the full candidate with the canonical evaluator before delivery.
-    Only the solver's exact diagnostic can establish single-dish infeasibility;
-    heuristic failure alone is search exhaustion.
-    """
+    """Return a repaired copy or no candidate. Heuristic failure is not an infeasibility proof."""
     idx = np.asarray(idx, dtype=int).copy()
     used: dict[int, int] = {}
     for i in idx:

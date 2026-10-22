@@ -1,29 +1,4 @@
-"""External dataset evaluation (Tier 2 empirical benchmark).
-
-Evaluates CareLoop's rule engine, adherence classifier, longitudinal lab-trend
-detector, and chat grounding/escalation pipeline on external public datasets
-staged under ``CARELOOP_DATASET_DIR/research/raw/``:
-
-1. **NHANES 2021–2023 clinical cohort** (``nhanes/*.xpt``): race-free 2021
-   CKD-EPI eGFR, anthropometry, biochemistry, blood pressure, and clinical
-   questionnaires across real participants -> rule-engine crash resistance,
-   100% citation traceability, exact provenance authorship, scope-gate
-   enforcement, and empirical conflict-resolution frequencies.
-2. **NHANES 2021–2023 two-day 24-hour dietary recalls** (``DR1TOT_L.xpt``,
-   ``DR2TOT_L.xpt``): real daily nutrient intakes of T2D / HTN / CKD stages 3–4
-   participants scored against their CareLoop rule-derived envelopes via
-   ``classify_constraint`` -> empirical baseline population hard-ceiling
-   exceedance and soft-floor shortfall rates.
-3. **MIMIC-IV Clinical Database Demo 2.2** (``mimic/demo.zip``): 100 real
-   patients with timestamped serum potassium/phosphate trajectories and
-   hospital prescriptions -> ``detect_trends`` empirical flag distribution,
-   planted-regime sensitivity/specificity/EWMA de-escalation benchmark, and
-   medication-interaction rule (``MED-*``) coverage.
-4. **OpenAI HealthBench Consensus** (``healthbench/consensus.jsonl``): 3,671
-   physician-annotated clinical conversations -> unseen emergency-referral
-   triage sensitivity (`emergent` / `conditionally-emergent` / `non-emergent`)
-   and nutrition-query citation grounding consistency.
-"""
+"""Evaluate rules and planning against external datasets."""
 
 from __future__ import annotations
 
@@ -138,7 +113,7 @@ _ELIGIBLE_DISEASE_STRATA = (
 
 
 def ckd_epi_2021(scr_mg_dl: float, age_years: float, sex: str) -> float:
-    """Race-free 2021 CKD-EPI creatinine equation (Inker et al., NEJM 2021)."""
+    """Race free CKD EPI creatinine equation from Inker and colleagues in NEJM 2021."""
     kappa = 0.7 if sex == "F" else 0.9
     alpha = -0.241 if sex == "F" else -0.302
     female_factor = 1.012 if sex == "F" else 1.0
@@ -191,24 +166,23 @@ def _stratum_for(p: dict[str, Any]) -> str:
 
 
 def _kdigo_ga_risk_category(egfr: float, uacr_mg_g: float) -> str:
-    """Held-out KDIGO 2024 GxA heat-map prognosis category (low, moderate, high, very_high)."""
     if egfr >= 60.0:
         if uacr_mg_g < 30.0:
             return "low"
         if uacr_mg_g <= 300.0:
             return "moderate"
         return "high"
-    if egfr >= 45.0:  # G3a
+    if egfr >= 45.0:
         if uacr_mg_g < 30.0:
             return "moderate"
         if uacr_mg_g <= 300.0:
             return "high"
         return "very_high"
-    if egfr >= 30.0:  # G3b
+    if egfr >= 30.0:
         if uacr_mg_g < 30.0:
             return "high"
         return "very_high"
-    return "very_high"  # G4-G5
+    return "very_high"
 
 
 def _evaluate_nhanes_biomarker_and_clustering(
@@ -216,7 +190,6 @@ def _evaluate_nhanes_biomarker_and_clustering(
     dr1: Any,
     dr2: Any,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Evaluate external biomarker construct validity and held-out KDIGO GxA risk clustering."""
     import numpy as np
     from sklearn.cluster import KMeans
     from sklearn.metrics import (
@@ -281,7 +254,6 @@ def _evaluate_nhanes_biomarker_and_clustering(
         },
     }
 
-    # Held-out KDIGO 2024 GxA risk category external clustering benchmark
     cluster_rows = [
         c for c in selected
         if c.get("egfr") is not None
@@ -331,7 +303,6 @@ def _evaluate_nhanes_plan_adequacy(
     pop_size: int = 20,
     n_gen: int = 40,
 ) -> dict[str, Any]:
-    """Evaluate 7-day meal-plan adequacy across weight-stratified real NHANES participants."""
     from backend.app.core.plan_service import plan_meals
     from backend.optim.real_data import load_dishes
 
@@ -504,8 +475,6 @@ def _evaluate_nhanes(
             "meds": [],
         })
 
-    # Priority inclusion of all renal, boundary, electrolyte-alert, and scope-gate
-    # subjects, then deterministic fill across remaining strata up to max_subjects.
     if max_subjects is not None and len(all_candidates) > max_subjects:
         priority: list[dict[str, Any]] = []
         remainder: list[dict[str, Any]] = []
@@ -541,7 +510,6 @@ def _evaluate_nhanes(
     eligible_count = 0
     rejected_count = 0
 
-    # Dietary recall adherence tracking across cardiometabolic/renal subjects
     recall_subjects = 0
     recall_days = 0
     recall_days_with_hard_violation = 0
@@ -596,7 +564,6 @@ def _evaluate_nhanes(
             if exclusion_supported(e, trace):
                 traceable_items += 1
 
-        # Evaluate 24-hour dietary recalls for scope-eligible disease-cohort subjects
         if env["status"] != "REJECTED" and set(cand["diagnoses"]) & {"T2D", "HTN", "CKD_stage_3", "CKD_stage_4"}:
             seqn = cand["seqn"]
             subj_has_recall = False
@@ -723,13 +690,7 @@ def _evaluate_nhanes(
 def _evaluate_mimic_prefix_forecast(
     mimic_patients: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Rolling 3-observation prefix forecast of future clinical threshold crossing.
-
-    For every patient series with >= 4 distinct lab dates where the initial
-    3-observation prefix is below the clinical threshold (K+ < 5.0 mEq/L or
-    PO4 < 4.5 mg/dL), run ``detect_trends`` on the 3-point prefix and evaluate
-    whether a subsequent lab observation in the series crosses the threshold.
-    """
+    """Forecast later threshold crossings from the first three below threshold observations."""
     specs = (
         ("K", "serum_K_meq_L", 5.0),
         ("PO4", "serum_PO4_mg_dL", 4.5),
@@ -804,7 +765,6 @@ def _evaluate_mimic_prefix_forecast(
 
 
 def _evaluate_mining_benchmarks() -> dict[str, Any]:
-    """Run noisy physiological trend regimes, cohort clustering, and substitution benchmarks."""
     from backend.mining import substitutions
     from backend.mining.comparison import (
         compare_clustering,
@@ -971,7 +931,6 @@ def _evaluate_mimic(raw_root: Path) -> dict[str, Any]:
     prefix_forecast = _evaluate_mimic_prefix_forecast(mimic_patients)
     mining_benchmarks = _evaluate_mining_benchmarks()
 
-    # Controlled planted-regime check anchored on MIMIC initial baseline values
     baseline_k = [
         obs["value"]
         for p in mimic_patients
@@ -1119,9 +1078,6 @@ def _evaluate_healthbench(raw_root: Path, kb: Any = None) -> dict[str, Any]:
     em_prec = (em_tp / (em_tp + em_fp)) if (em_tp + em_fp) else 0.0
     em_f1 = (2 * em_prec * em_rec / (em_prec + em_rec)) if (em_prec + em_rec) else 0.0
 
-    # Whole-word nutrient/electrolyte prompts across the full consensus corpus:
-    # evaluate dietary query recall vs. non-dietary clinical/lab false-answer rate
-    # and unconditioned CKD-rule over-application on non-CKD dietary questions.
     nutri_counts: Counter[str] = Counter()
     nutri_answered = 0
     nutri_citations_complete = 0
@@ -1286,7 +1242,6 @@ def _evaluate_healthbench(raw_root: Path, kb: Any = None) -> dict[str, Any]:
 
 
 def _solve_day_milp_oracle(envelope: NutrientEnvelope, dishes: list[Any], mode: str = "cost") -> float | None:
-    """Solve exact one-day global optimum via Mixed-Integer Linear Programming (HiGHS)."""
     import numpy as np
     from scipy.optimize import Bounds, LinearConstraint, milp
 
@@ -1301,7 +1256,7 @@ def _solve_day_milp_oracle(envelope: NutrientEnvelope, dishes: list[Any], mode: 
     mins = [c for c in envelope.targets if c.kind == ConstraintKind.MIN]
     maxs = [c for c in envelope.targets if c.kind == ConstraintKind.MAX]
 
-    # Variables: [x_0..x_{n-1}, d_pos_0..d_pos_{T-1}, d_neg_0..d_neg_{T-1}, s_min_0..s_min_{M-1}]
+    # Variables hold dish counts then positive and negative TARGET slacks then MIN slacks.
     n_t = len(targets)
     n_m = len(mins)
     total_vars = n + 2 * n_t + n_m
@@ -1325,14 +1280,12 @@ def _solve_day_milp_oracle(envelope: NutrientEnvelope, dishes: list[Any], mode: 
     lhs: list[float] = []
     rhs: list[float] = []
 
-    # 1. Exactly MEALS_PER_DAY servings
     r_slots = np.zeros(total_vars, dtype=float)
     r_slots[:n] = 1.0
     rows.append(r_slots)
     lhs.append(float(MEALS_PER_DAY))
     rhs.append(float(MEALS_PER_DAY))
 
-    # 2. Hard MAX ceilings: sum_i A_{k,i} x_i <= U_k + EPS
     for mc in maxs:
         r_max = np.zeros(total_vars, dtype=float)
         key = mc.nutrient.value
@@ -1342,7 +1295,6 @@ def _solve_day_milp_oracle(envelope: NutrientEnvelope, dishes: list[Any], mode: 
         lhs.append(-np.inf)
         rhs.append(float(mc.value) + EPS)
 
-    # 3. TARGET slacks: sum_i A_{t,i} x_i - d_pos_t + d_neg_t == tau_t
     for t_idx, tc in enumerate(targets):
         r_t = np.zeros(total_vars, dtype=float)
         key = tc.nutrient.value
@@ -1354,7 +1306,6 @@ def _solve_day_milp_oracle(envelope: NutrientEnvelope, dishes: list[Any], mode: 
         lhs.append(float(tc.value))
         rhs.append(float(tc.value))
 
-    # 4. MIN slacks: sum_i A_{m,i} x_i + s_min_m >= L_m
     for m_idx, mnc in enumerate(mins):
         r_m = np.zeros(total_vars, dtype=float)
         key = mnc.nutrient.value
@@ -1378,7 +1329,6 @@ def _solve_day_milp_oracle(envelope: NutrientEnvelope, dishes: list[Any], mode: 
 
 
 def _evaluate_milp_and_sgfoodid(raw_root: Path) -> dict[str, Any]:
-    """Evaluate exact MILP global optima (HiGHS) and SG FoodID catalogue / counterfactual substitutions."""
     from backend.datasets.research_transform import load_sgfoodid_candidates
     from backend.mining.substitutions import load_dishes as load_mining_dishes
     from backend.mining.substitutions import suggest_substitutions
@@ -1411,7 +1361,6 @@ def _evaluate_milp_and_sgfoodid(raw_root: Path) -> dict[str, Any]:
             "deviation_abs_discrepancy": round(dev_diff, 8),
         })
 
-    # Counterfactual substitution violation-resolution oracle across high-risk dishes
     mining_by_id = {d["dish_id"]: d for d in mining_dishes}
     sub_specs = (
         ("sodium_mg", 700.0),
@@ -1473,7 +1422,6 @@ def _evaluate_milp_and_sgfoodid(raw_root: Path) -> dict[str, Any]:
 
 
 def _evaluate_eicu(raw_root: Path) -> dict[str, Any]:
-    """Evaluate longitudinal lab trend forecasting and MED-* rules on eICU Collaborative Research Database Demo 2.0.1."""
     eicu_dir = raw_root / "eicu"
     req = ("patient.csv.gz", "lab.csv.gz", "medication.csv.gz")
     if not all((eicu_dir / name).exists() for name in req):
@@ -1514,7 +1462,6 @@ def _evaluate_eicu(raw_root: Path) -> dict[str, Any]:
                 continue
             if not math.isfinite(fval) or fval <= 0:
                 continue
-            # Group into 12-hour clinical observation windows so distinct serial ICU draws are preserved
             bucket = offset_min // 720
             by_subj_day[sid][(metric, bucket)].append(fval)
 
@@ -1604,7 +1551,6 @@ def _evaluate_eicu(raw_root: Path) -> dict[str, Any]:
 
 
 def _evaluate_uci_cohorts(raw_root: Path) -> dict[str, Any]:
-    """Evaluate CareLoop rules and unsupervised clustering on UCI CKD (N=400) and UCI Diabetes 130-US Hospitals."""
     import numpy as np
     from sklearn.cluster import KMeans
     from sklearn.metrics import (
@@ -1777,7 +1723,6 @@ def evaluate_external(
     plan_pop_size: int = 20,
     plan_n_gen: int = 40,
 ) -> dict[str, Any]:
-    """Run external empirical evaluations over NHANES, MIMIC-IV, eICU, UCI, SG FoodID, MILP, and HealthBench."""
     from backend.datasets.paths import dataset_path
     from backend.knowledge.discovery import evaluate_cross_guideline_ground_truth
 

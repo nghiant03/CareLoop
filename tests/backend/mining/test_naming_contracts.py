@@ -1,5 +1,3 @@
-"""Internal naming corrections leave public ranking and historical study keys intact."""
-
 from backend.mining import comparison, substitutions
 
 

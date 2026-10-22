@@ -1,5 +1,3 @@
-"""Failure, retry-identity, and quantity-boundary regressions."""
-
 from __future__ import annotations
 
 import os
@@ -42,7 +40,6 @@ def test_retry_uses_exact_identity_after_unrelated_proposal(lenient_client, monk
 
 
 def test_rejected_proposal_partial_success_is_recoverable(lenient_client, monkeypatch):
-    # eGFR owns rejection independently of fixture diagnosis vocabulary.
     observed = lenient_client.post("/observations", json={
         "patient_id": "P0002", "metric": "egfr", "value": 10,
         "unit": "mL/min/1.73m2",
@@ -80,7 +77,6 @@ def test_pending_attempt_reuses_the_committed_snapshot():
     assert patient is not None
     with persistence.begin_review_proposal(review_id):
         first = run_rules_service(patient)["envelope"]
-    # A second attempt reaches persistence after the first stored its identity.
     with persistence.begin_review_proposal(review_id):
         second = run_rules_service({**patient, "weight_kg": 99})["envelope"]
     assert second.model_dump() == first.model_dump()
@@ -97,13 +93,13 @@ def test_proposal_finalization_overlap_preserves_newer_pending(lenient_client, m
     def _interleaved_finalize(completing_review_id, envelope_id):
         completions.append(envelope_id)
         if len(completions) == 1:
-            # A is paused before finalization; B recovers/finalizes A's E1.
+            # Pause the first completion while a retry finalizes its proposal.
             responses["B"] = lenient_client.post(f"/review/{review_id}/proposal")
             assert responses["B"].status_code == 200
-            # C starts after B succeeded, persists fresh E2, then fails to link.
+            # A newer attempt saves another proposal but fails to link it.
             responses["C"] = lenient_client.post(f"/review/{review_id}/proposal")
             assert responses["C"].status_code == 500
-            return original(completing_review_id, envelope_id)  # A resumes.
+            return original(completing_review_id, envelope_id)  # Resume the older completion.
         if len(completions) == 3:
             raise RuntimeError("C linkage failure")
         return original(completing_review_id, envelope_id)
@@ -130,7 +126,7 @@ def test_proposal_finalization_overlap_preserves_newer_pending(lenient_client, m
     assert retry_c.json()["review_item"]["linked_envelope_id"] == completions[2]
     history = persistence.list_envelope_history("P0002")
     assert {row["envelope_id"] for row in history} == {completions[0], completions[2]}
-    assert len(history) == 2  # No E3 was minted by C's retry.
+    assert len(history) == 2
 
 
 def test_proposal_finalization_same_id_is_idempotent(client):
@@ -142,7 +138,7 @@ def test_proposal_finalization_same_id_is_idempotent(client):
     history = persistence.list_envelope_history("P0002")
     assert persistence.finalize_review_proposal(review_id, envelope_id) == before
     assert persistence.finalize_review_proposal(review_id, envelope_id) == before
-    assert persistence.get_review_item(review_id) == before  # Timestamp unchanged.
+    assert persistence.get_review_item(review_id) == before
     assert persistence.list_envelope_history("P0002") == history
     assert persistence.finalize_review_proposal("missing-review", envelope_id) is None
 
@@ -169,7 +165,6 @@ def test_proposal_finalization_preserves_clinician_action(lenient_client, monkey
     with pytest.raises(persistence.ReviewProposalConflictError):
         original(review_id, intervening_envelope_id)
     assert persistence.get_review_item(review_id) == intervening["row"]
-    # Generic clinician actions deliberately retain their replacement contract.
     replacement = persistence.record_review_action(review_id, "resolved", note="new decision")
     assert replacement is not None
     assert replacement["action"]["action"] == "resolved"
@@ -201,7 +196,6 @@ def test_acknowledge_after_stale_open_read_preserves_action(client):
     assert stale is not None
     assert stale["status"] == "OPEN"
     persistence.record_review_action(review_id, "contacted", note="new action")
-    # This is the interleaving formerly vulnerable to the API's stale OPEN check.
     response = client.post(f"/review/{review_id}/acknowledge")
     assert response.status_code == 200
     assert response.json()["status"] == "ACTION_RECORDED"

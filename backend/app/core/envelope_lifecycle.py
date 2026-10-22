@@ -1,11 +1,4 @@
-"""Clinician transitions over durable, revision-checked envelope snapshots.
-
-Transitions persist and return deep copies, leaving inputs unchanged. Writes
-advance ``lifecycle_revision`` and check it against durable state. A supplied
-``expected_revision`` must also match the input or raise ``EnvelopeConflictError``.
-Reload and review after conflicts. Without a client token, loading a fresh input
-cannot detect changes since the client's earlier view.
-"""
+"""Apply revision checked envelope transitions."""
 
 from datetime import UTC, datetime
 
@@ -41,11 +34,7 @@ def _require_eligible(envelope: NutrientEnvelope) -> None:
 
 def approve(envelope: NutrientEnvelope, *, approved_by: str, notes: str | None = None,
             expected_revision: int | None = None) -> NutrientEnvelope:
-    """Persist an APPROVED copy with reviewer and UTC approval time.
-
-    Raise ``EnvelopeScopeError`` for rejected, scope-ineligible, or targetless
-    inputs. ``notes=None`` preserves existing notes. Content version is unchanged.
-    """
+    """Persist a revision checked copy without changing the content version."""
     updated = _transition_copy(envelope, expected_revision)
     _require_eligible(updated)
     if not updated.targets:
@@ -62,13 +51,7 @@ def edit(envelope: NutrientEnvelope, *, edited_by: str,
          targets: list[NutrientConstraint] | None = None,
          exclusions: list[ExclusionFlag] | None = None, notes: str | None = None,
          expected_revision: int | None = None) -> NutrientEnvelope:
-    """Persist an EDITED copy, clear approval, and increment the content version.
-
-    Raise ``EnvelopeScopeError`` for rejected or scope-ineligible inputs. ``None``
-    preserves a field. Supplied lists replace it in full, including empty lists.
-    Every call appends a clinician-edit trace, even for notes-only edits.
-    Replacement targets receive clinician provenance.
-    """
+    """Every edit clears approval. Replacement targets receive clinician provenance."""
     updated = _transition_copy(envelope, expected_revision)
     _require_eligible(updated)
     if targets is not None:
@@ -97,7 +80,7 @@ def edit(envelope: NutrientEnvelope, *, edited_by: str,
         patient_summary=f"clinician edit by {edited_by}", action_summary=action,
         priority=0, citation=citation,
     ))
-    # A replacement's values belong to the clinician, not the original guideline.
+    # Replacement values belong to the clinician rather than the original guideline.
     if targets is not None:
         attach_provenance(updated, author=edited_by, citation=citation)
     return put_envelope(updated)
@@ -105,11 +88,7 @@ def edit(envelope: NutrientEnvelope, *, edited_by: str,
 
 def reject(envelope: NutrientEnvelope, *, reason: str | None = None,
            expected_revision: int | None = None) -> NutrientEnvelope:
-    """Persist a REJECTED copy and clear approval without changing content version.
-
-    A nonempty reason replaces notes. Any input status or scope eligibility is
-    accepted.
-    """
+    """Clear approval without changing the content version."""
     updated = _transition_copy(envelope, expected_revision)
     updated.status = EnvelopeStatus.REJECTED
     updated.approved_by = None

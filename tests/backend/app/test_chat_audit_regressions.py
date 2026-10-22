@@ -1,5 +1,3 @@
-"""Boundary regressions for chat identity, legacy units, and claim grounding."""
-
 from types import SimpleNamespace
 from unittest.mock import Mock
 

@@ -1,5 +1,3 @@
-"""Expose clinical observation recording and patient observation history."""
-
 from __future__ import annotations
 
 import math
@@ -38,16 +36,7 @@ def _require_patient(patient_id: str) -> None:
 
 @router.post("", status_code=201, summary="Record a clinical observation")
 def create_observation(req: ObservationRequest) -> dict[str, Any]:
-    """Record and return one observation without editing or approving an envelope.
-
-    ``observed_at`` is the measurement date and defaults to today. ``recorded_at``
-    is the UTC receipt time. Values must be finite and nonnegative. Unknown
-    patients return HTTP 404. Invalid values or unsupported units return HTTP 422.
-
-    Normalize unit spelling without converting values. eGFR ``mL/min`` means
-    an already body-surface-area-indexed value, recorded as ``mL/min/1.73m2``.
-    Do not submit absolute, unindexed measurements under that shorthand.
-    """
+    """Record a measurement without changing envelopes. Unit normalization does not convert values."""
     _require_patient(req.patient_id)
     units = {
         "serum_K_meq_L": {"meq/l": "mEq/L", "mmol/l": "mEq/L"},
@@ -86,11 +75,6 @@ def create_observation(req: ObservationRequest) -> dict[str, Any]:
 def list_observations_endpoint(
     patient_id: str = Query(...),
 ) -> dict[str, Any]:
-    """Return ``patient_id``, ``count``, and observations ordered oldest first.
-
-    Order by measurement date, then receipt time. Patients without observations
-    receive an empty list. Unknown patients return HTTP 404.
-    """
     _require_patient(patient_id)
     observations = persistence.list_observations(patient_id)
     return {

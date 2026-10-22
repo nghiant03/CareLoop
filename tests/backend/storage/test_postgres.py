@@ -1,5 +1,3 @@
-"""PostgreSQL contracts; integration uses disposable databases from root fixtures."""
-
 from concurrent.futures import ThreadPoolExecutor
 
 import psycopg

@@ -1,5 +1,3 @@
-"""Expose patient creation and profile reads with current observations."""
-
 from __future__ import annotations
 
 import json
@@ -19,13 +17,12 @@ from backend.datasets.paths import dataset_path
 
 PATIENTS_FILE = dataset_path("patients.json")
 
-# Cache fixtures only so saved profiles and observations stay current.
+# Cache fixtures only so saved profiles and observations remain current.
 _SEED_PATIENTS: dict[str, dict[str, Any]] = {}
 _SEEDS_LOADED = False
 
 
 def _normalise(raw: Any) -> dict[str, dict[str, Any]]:
-    """Index patient records from a list, wrapped list, or ID-keyed mapping."""
     if isinstance(raw, dict):
         raw = raw.get("patients", raw)
     if isinstance(raw, list):
@@ -47,18 +44,12 @@ def _load_seeds_once() -> None:
         try:
             _SEED_PATIENTS.update(_normalise(json.loads(PATIENTS_FILE.read_text())))
         except (json.JSONDecodeError, OSError):
-            # Durable profiles remain available even if fixture loading fails.
             pass
     _SEEDS_LOADED = True
 
 
 def _ui_view(record: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy with UI defaults and current lab aliases.
-
-    Default missing ``id``, ``name``, and ``diagnoses`` fields. Canonical lab
-    values override ``serum_k`` and ``serum_po4`` so stale aliases cannot mask
-    newer observations. Preserve other existing fields and leave the input unchanged.
-    """
+    """Canonical labs override stale UI aliases."""
     view = dict(record)
     patient_id = str(record.get("patient_id", ""))
     view.setdefault("id", patient_id)
@@ -76,12 +67,7 @@ def _ui_view(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_patient(patient_id: str) -> dict[str, Any] | None:
-    """Return a profile with its latest observed values, or ``None`` if unknown.
-
-    Prefer a saved profile over a fixture. Include nonfuture observations in
-    chronological order. The latest measurement wins for each metric, with
-    receipt time breaking date ties. Leave the stored profile unchanged.
-    """
+    """Prefer saved profiles and nonfuture observations without mutating storage."""
     _load_seeds_once()
     record = persistence.saved_patients().get(patient_id) or _SEED_PATIENTS.get(patient_id)
     if record is None:
@@ -96,14 +82,12 @@ def get_patient(patient_id: str) -> dict[str, Any] | None:
 
 
 def list_patient_ids() -> list[str]:
-    """Return sorted, distinct IDs from fixture and saved profiles."""
     _load_seeds_once()
     return sorted(set(_SEED_PATIENTS) | set(persistence.saved_patients()))
 
 
 @router.get("", summary="List patients")
 def list_patients() -> dict[str, Any]:
-    """Return ``count`` and patient profiles sorted by ID, with current values and UI fields."""
     _load_seeds_once()
     patients = [
         _ui_view(patient)
@@ -115,10 +99,6 @@ def list_patients() -> dict[str, Any]:
 
 @router.get("/{patient_id}", summary="Get a patient by id")
 def read_patient(patient_id: str) -> dict[str, Any]:
-    """Return a profile with current observed values and UI fields.
-
-    Unknown patients return HTTP 404 ``patient_not_found``.
-    """
     record = get_patient(patient_id)
     if record is None:
         raise HTTPException(
@@ -130,11 +110,7 @@ def read_patient(patient_id: str) -> dict[str, Any]:
 
 @router.post("", status_code=201, summary="Create a synthetic patient")
 def create_patient(patient: Patient) -> dict[str, Any]:
-    """Create and return a new patient profile.
-
-    Existing fixture or saved IDs return HTTP 409 ``patient_exists`` without
-    replacing the profile. Repeated requests also return a conflict, not success.
-    """
+    """Create only. Existing IDs return a conflict without replacing profiles."""
     _load_seeds_once()
     record = patient.model_dump(by_alias=True, exclude_none=True)
     patient_id = record["patient_id"]

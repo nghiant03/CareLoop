@@ -1,5 +1,3 @@
-"""Cited nutrition answers, retrieval, and safety escalation."""
-
 from backend.app.chat.answers import answer, detect_nutrients, format_value
 from backend.app.chat.escalation import check
 from backend.app.chat.llm import LLMAdapter, TemplateLLM, build_adapter

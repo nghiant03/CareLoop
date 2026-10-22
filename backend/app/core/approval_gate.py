@@ -1,9 +1,4 @@
-"""Gate live planning on approval, scope eligibility, and nonempty targets.
-
-Path dependencies load by envelope ID. Body dependencies gate the patient's
-latest proposal. Failures become HTTP 409 ``envelope_not_approved`` responses.
-Live reads use the PostgreSQL journal, not the compatibility cache.
-"""
+"""Authorize planning from durable approved envelopes."""
 
 from __future__ import annotations
 
@@ -34,8 +29,6 @@ __all__ = [
 
 
 class EnvelopeNotApprovedError(Exception):
-    """Raised when approval, scope eligibility, or nonempty targets are missing."""
-
     def __init__(self, envelope: NutrientEnvelope) -> None:
         self.envelope = envelope
         self.status = envelope.status.value
@@ -51,12 +44,7 @@ _STORE_LOCK = Lock()
 
 
 def put_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) -> NutrientEnvelope:
-    """Persist and cache the supplied envelope, returning that same object.
-
-    Mutations and stale-revision conflicts follow ``persistence.store_envelope``;
-    ``new_proposal`` assigns a fresh identity and proposal time. Callers needing
-    an unchanged input must copy it first. Cache publication follows the write.
-    """
+    """Persist before publishing the cache. The supplied object may be mutated."""
     from backend.app.core import persistence
 
     with _STORE_LOCK:
@@ -66,27 +54,17 @@ def put_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) -> N
 
 
 def get_envelope(envelope_id: str) -> NutrientEnvelope | None:
-    """Return an envelope by id, or ``None``."""
     return next((env for env in list_envelopes() if env.envelope_id == envelope_id), None)
 
 
 def list_envelopes() -> list[NutrientEnvelope]:
-    """Return fresh durable snapshots ordered by their latest journal row.
-
-    Updating an existing identity moves it later in this order.
-    """
     from backend.app.core import persistence
 
     return persistence.current_envelopes()
 
 
 def find_latest_envelope_for_patient(patient_id: str) -> NutrientEnvelope | None:
-    """Return the most recently proposed envelope for a patient, if any.
-
-    Order by ``proposed_at``, not content version or approval time. On equal
-    proposal timestamps, retain the first candidate in latest-journal-row order.
-    A newer unapproved proposal takes precedence over an older approval.
-    """
+    """Order by proposal time. A newer pending proposal takes precedence over an approval."""
     candidates = [env for env in list_envelopes() if env.patient_id == patient_id]
     if not candidates:
         return None
@@ -94,10 +72,6 @@ def find_latest_envelope_for_patient(patient_id: str) -> NutrientEnvelope | None
 
 
 def assert_approved(envelope: NutrientEnvelope) -> NutrientEnvelope:
-    """Return the input if APPROVED, scope-eligible, and carrying nutrient targets.
-
-    Raise :class:`EnvelopeNotApprovedError` if any condition fails.
-    """
     if not envelope.is_ready_for_optimisation():
         raise EnvelopeNotApprovedError(envelope)
     return envelope
@@ -106,7 +80,6 @@ def assert_approved(envelope: NutrientEnvelope) -> NutrientEnvelope:
 def get_envelope_or_404(
     envelope_id: str = Path(..., description="Envelope id"),
 ) -> NutrientEnvelope:
-    """Dependency: load an envelope by path id or raise 404."""
     envelope = get_envelope(envelope_id)
     if envelope is None:
         raise HTTPException(status_code=404, detail="envelope_not_found")
@@ -116,25 +89,17 @@ def get_envelope_or_404(
 def require_approved_envelope(
     envelope: NutrientEnvelope = Depends(get_envelope_or_404),
 ) -> NutrientEnvelope:
-    """Dependency: enforce the approval gate on an ``{envelope_id}`` path param."""
     return assert_approved(envelope)
 
 
 class PlanRequest(BaseModel):
-    """Body for ``POST /plans`` — identifies the patient to plan for."""
-
     patient_id: str
 
 
 def require_approved_envelope_for_patient(
     req: PlanRequest,
 ) -> NutrientEnvelope:
-    """Dependency: require planning readiness of the patient's latest proposal.
-
-    ``req`` is parsed from the request body by FastAPI; the endpoint declares the
-    same model. A newer pending proposal blocks planning even if an older
-    envelope was approved.
-    """
+    """A newer pending proposal blocks planning despite an older approval."""
     envelope = find_latest_envelope_for_patient(req.patient_id)
     if envelope is None:
         raise HTTPException(
@@ -148,5 +113,4 @@ def require_approved_envelope_for_patient(
 
 
 def utcnow() -> datetime:
-    """Timezone-aware UTC now (helper shared by endpoints)."""
     return datetime.now(UTC)

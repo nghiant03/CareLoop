@@ -1,5 +1,3 @@
-"""Server-local calendar contract without process-global timezone changes."""
-
 from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import Mock
 

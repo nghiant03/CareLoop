@@ -1,12 +1,4 @@
-"""Standalone versioned-graph prototype, separate from the application's KBGraph.
-
-Nodes and relationships retain JSON payload versions with valid_from/valid_to
-intervals. Appending closes the current interval and inserts a new row; NetworkX
-materializes current state on demand. This is one time axis, not bitemporal
-storage. The default database is ``~/.local/state/careloop/careloop_graph.sqlite3``.
-
-Demo: ``python -m backend.app.core.graph_versioning``.
-"""
+"""Standalone versioned graph prototype."""
 
 from __future__ import annotations
 
@@ -34,7 +26,6 @@ def _utcnow() -> str:
 
 
 def _split_ref(ref: NodeRef) -> tuple[str, str]:
-    """Normalise ``(label, id)`` or ``"label:id"`` into a tuple."""
     if isinstance(ref, tuple):
         label, node_id = ref
         return label, node_id
@@ -45,8 +36,6 @@ def _split_ref(ref: NodeRef) -> tuple[str, str]:
 
 
 class GraphStore:
-    """Versioned SQLite graph that appends payload versions and closes intervals."""
-
     def __init__(self, db_path: str | Path = DEFAULT_DB_PATH) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -99,7 +88,6 @@ class GraphStore:
         payload: dict[str, Any] | None = None,
         version: int | None = None,
     ) -> int:
-        """Append a new version of a node; returns the version number."""
         node_key = f"{label}:{node_id}"
         now = _utcnow()
         payload_json = json.dumps(payload or {}, sort_keys=True)
@@ -131,7 +119,6 @@ class GraphStore:
         payload: dict[str, Any] | None = None,
         version: int | None = None,
     ) -> int:
-        """Append a new version of a directed relationship; returns version."""
         src_label, src_id = _split_ref(src)
         dst_label, dst_id = _split_ref(dst)
         src_key = f"{src_label}:{src_id}"
@@ -170,7 +157,6 @@ class GraphStore:
 
 
     def get_current(self, label: str, node_id: str) -> dict[str, Any] | None:
-        """Return the current version of a node, or ``None``."""
         node_key = f"{label}:{node_id}"
         with self._connect() as conn:
             row = conn.execute(
@@ -184,7 +170,6 @@ class GraphStore:
         return self._node_row(row) if row else None
 
     def history(self, label: str, node_id: str) -> list[dict[str, Any]]:
-        """Return every version of a node, oldest first."""
         node_key = f"{label}:{node_id}"
         with self._connect() as conn:
             rows = conn.execute(
@@ -232,7 +217,6 @@ class GraphStore:
 
 
     def materialise_current(self) -> nx.MultiDiGraph:
-        """Build a NetworkX graph of the current-state subgraph."""
         graph = nx.MultiDiGraph()
         for node in self.current_nodes():
             graph.add_node(
@@ -254,7 +238,7 @@ class GraphStore:
         return graph
 
     def close(self) -> None:
-        """No-op: connections are short-lived per operation."""
+        """Connections close after each operation."""
 
 
 def _demo(db_path: str | Path | None = None) -> None:

@@ -1,5 +1,3 @@
-"""Regressions for proposal concurrency, finite targets, and raw plan decisions."""
-
 import pytest
 from pydantic import ValidationError
 
@@ -32,7 +30,6 @@ def test_proposal_computation_preserves_competing_clinician_action(client, monke
     assert persistence.get_review_item(review_id) == competing["row"]
     assert persistence.list_envelope_history("P0002") == []
 
-    # A deliberate request after the action is still allowed to create a proposal.
     monkeypatch.setattr(review, "run_rules_service", original)
     assert client.post(f"/review/{review_id}/proposal").status_code == 200
     assert len(persistence.list_envelope_history("P0002")) == 1

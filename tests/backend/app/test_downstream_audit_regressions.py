@@ -1,9 +1,3 @@
-"""Regressions for KB history, catalogue recovery, adherence, and explanations.
-
-Synthetic fixtures establish failure-path preconditions without changing stored
-clinical history or depending on catalogue rankings that can change.
-"""
-
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar, get_type_hints
@@ -302,7 +296,6 @@ def test_edited_legacy_values_cannot_borrow_guideline_mentions():
                               "action_summary": "set sodium_mg max = 1800 mg/d",
                               "citation": {"rule_id": "CLINICIAN-EDIT", "guideline": "clinician override"}})
     assert patient_explanation(env)["why"] == ["Your care team set: keep sodium under 1.8 g a day."]
-    # Explicit but stale provenance is not superseded by a convenient trace match.
     env["targets"][0]["provenance"] = {**env["targets"][0], "value": 2000, "citation": guideline}
     assert patient_explanation(env)["why"] == []
 
@@ -337,8 +330,7 @@ def test_p0006_exclusion_blocks_candidate_that_enters_ranking(client, monkeypatc
     response = client.post("/rules/run", json={"patient_id": "P0006"})
     assert response.status_code == 200
     env = NutrientEnvelope.model_validate(response.json()["envelope"])
-    # Remove competing nutrient failures only in this local evaluation fixture;
-    # the real patient exclusions remain the property under test.
+    # Remove competing nutrient failures only from this local fixture.
     for target in env.targets:
         if target.kind.value == "max":
             target.value = 1_000_000

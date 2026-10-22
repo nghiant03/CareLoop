@@ -1,13 +1,3 @@
-"""Baseline search strategies for the CareLoop meal optimiser.
-
-Search methods share ``_result``'s plan, objective, violation, front, and runtime
-fields. ``feasible`` requires both hard compliance and actual meal delivery.
-The pure-Python NSGA-II approximation uses constraint dominance.
-
-Bounded exhaustive search is a baseline, not the exact reference. Use
-``exact_reference.one_day_exact`` for exhaustive single-dish verdicts.
-"""
-
 from __future__ import annotations
 
 import itertools
@@ -40,13 +30,7 @@ def _make_result(
     front: list[dict] | None = None,
     front_size: int = 0,
 ) -> dict:
-    """Assemble the standard result dict, gating ``feasible`` on delivery.
-
-    The canonical evaluator intentionally accepts empty meal geometry (zero
-    dishes violate nothing), so an empty plan must be reported here as an
-    explicit search failure rather than a feasible result: delivery success
-    requires meals in addition to hard-constraint satisfaction.
-    """
+    """Hard compliance alone does not establish meal delivery."""
     objectives, violations = evaluate(plan, envelope, dishes)
     if not any(meal for meal in plan):
         violations.append(
@@ -83,12 +67,6 @@ def _decode(indices, pool: list[str]) -> list[list[str]]:
 
 
 def _repair_plan(envelope, dishes, plan, pool, max_passes: int = 8) -> list[list[str]]:
-    """Local-search repair: single-slot swaps that lexicographically reduce
-    ``(violation_count, violation_magnitude, scalar_score)``.
-
-    Search stops after ``max_passes`` or when no improving swap exists. This
-    heuristic can stop infeasible; it is not a complete feasibility constructor.
-    """
     objectives, violations = evaluate(plan, envelope, dishes)
     current = (len(violations), violation_magnitude(violations), scalar_score(objectives))
     for _ in range(max_passes):
@@ -133,7 +111,6 @@ def random_search(
 
 
 def _greedy_score(totals, meals_done, envelope, dish, pool_max) -> float:
-    """Lower is better. Penalises MAX overruns, optimistic MIN shortfalls."""
     penalty = 0.0
     for c in envelope.targets:
         key = c.nutrient.value
@@ -142,7 +119,6 @@ def _greedy_score(totals, meals_done, envelope, dish, pool_max) -> float:
             if over > 0:
                 penalty += over * 10.0
             else:
-                # Gently prefer headroom rather than eating the whole ceiling.
                 penalty += 0.02 * totals[key] / max(c.value, 1.0)
         elif c.kind == ConstraintKind.MIN:
             remaining = MEALS_PER_DAY - meals_done
@@ -180,12 +156,11 @@ def greedy_search(
                 if best_score is None or score < best_score:
                     best_score = score
                     best_dish = did
-            assert best_dish is not None  # The allowed pool is nonempty.
+            assert best_dish is not None
             plan.append([best_dish])
             for k in NUTRIENT_KEYS:
                 running[k] += lookup[best_dish].nutrient(k)
 
-    # Local search: try every single-slot swap, keep lexicographic improvements.
     objectives, violations = evaluate(plan, envelope, dishes)
     evaluations += 1
     current = _rank_key(objectives, violations)
@@ -214,11 +189,7 @@ def greedy_search(
 def exhaustive_search(
     envelope, dishes, max_combos: int = 100_000, seed: int = 0
 ) -> dict:
-    """Score at most ``max_combos`` one-day combinations and repeat the best day.
-
-    ``search_complete`` is False when the cap truncates enumeration. This
-    baseline does not optimize horizon variety or prove truncated-search failure.
-    """
+    """Capped enumeration is not an infeasibility proof."""
     t0 = time.perf_counter()
     pool = [d.dish_id for d in allowed_dishes(envelope, dishes)]
     if not pool:
@@ -242,8 +213,6 @@ def exhaustive_search(
     full_plan = [meal[:] for _ in range(DAYS) for meal in (best_day or [])]
     runtime = (time.perf_counter() - t0) * 1000.0
     result = _make_result("exhaustive", full_plan, envelope, dishes, evaluations, runtime)
-    # Nothing to enumerate is vacuously complete; otherwise the enumeration is
-    # complete only when the cap did not stop it early.
     result["search_complete"] = evaluations >= len(pool) ** MEALS_PER_DAY
     return result
 
@@ -255,12 +224,6 @@ def _dominates(a: tuple, b: tuple) -> bool:
 
 
 def _cdominates(a: tuple, b: tuple) -> bool:
-    """Constraint-dominance on vectors ``(violation_count, magnitude, *objectives)``.
-
-    Feasible beats infeasible. Rank two infeasible plans by violation count,
-    then magnitude. Apply objective Pareto dominance only when both are feasible
-    or their violation count and magnitude tie.
-    """
     a_feasible = a[0] <= 0.0
     b_feasible = b[0] <= 0.0
     if a_feasible and not b_feasible:
@@ -408,8 +371,6 @@ def nsga2_fallback(
     fronts = _fast_nondominated_sort(vectors)
     front0 = fronts[0] if fronts else []
 
-    # Pick the most promising individual (fewest violations, then smallest
-    # magnitude, then best scalar), repair it, and use it as the returned plan.
     ranked = sorted(
         range(len(pop)),
         key=lambda i: (
@@ -439,7 +400,6 @@ def nsga2_fallback(
                 "feasible": len(violations) == 0,
             }
         )
-    # Ensure the repaired plan is represented in the front record.
     repaired_objectives, repaired_violations = evaluate(repaired_plan, envelope, dishes)
     if best_ind is None or tuple(best_ind) not in seen or repaired_violations != info(best_ind)[1]:
         front_entries.append(

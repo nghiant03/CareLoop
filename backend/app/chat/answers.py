@@ -1,9 +1,4 @@
-"""Compose cited nutrition answers from applicable KB rules and envelope context.
-
-Personal targets require APPROVED envelopes. Patient requests with REJECTED
-envelopes are refused. Templates are deterministic and include citations.
-Optional LLM rephrasing is not checked for grounding.
-"""
+"""Compose cited answers from applicable rules and approved targets."""
 
 from __future__ import annotations
 
@@ -22,34 +17,26 @@ __all__ = [
     "format_value",
 ]
 
-# Supporting-text limit excludes the primary envelope or rule answer.
 MAX_ANSWER_PROSE_PARTS = 3
 
-# Trace row format: ``set <nutrient> <kind> = <coef> <unit>/kg/d`` with no
-# ``-> <scaled>`` clause (weight was unknown at generation time).
 _UNSCALED_COEFFICIENT_ROW = re.compile(
     r"set (?P<nutrient>\w+) (?P<kind>\w+) = (?P<value>-?[\d.]+) (?P<unit>\w+)/kg/d"
 )
 
-# Keep in sync with rules.engine: per-kg values are not daily doses.
+# Keep per kilogram handling aligned with the rule engine.
 _PER_KG_NUTRIENTS = {"energy_kcal", "protein_g"}
 
-# Internal bookkeeping rules cannot anchor patient-facing citations.
 _INTERNAL_RULE_PREFIXES = ("CONFLICT-", "SAFETY-")
 
-# Prevents clinician-authored values from claiming guideline authorship.
 _CLINICIAN_EDIT_RULE_ID = "CLINICIAN-EDIT"
 
-# Mirrors rules/engine.py condition-field sets.
 _MULTISLOT_CONDITION_FIELDS = {"diagnoses", "meds"}
 _NUMERIC_CONDITION_FIELDS = {
     "age", "weight_kg", "bmi", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL",
     "hba1c_pct",
 }
-# Missing labs are -1.0 sentinels and must never satisfy a numeric test.
 _UNKNOWN_GUARDED_FIELDS = {"bmi", "egfr", "serum_K_meq_L", "serum_PO4_mg_dL", "hba1c_pct"}
 
-# Number-free responses for non-approved / declined envelopes.
 _PENDING_REVIEW_SENTENCE = (
     "A nutrition plan has been drawn up for you, but it has not been approved "
     "by your clinician yet, so I can't quote your personal targets. Please "
@@ -79,7 +66,7 @@ _COMPILED_NUTRIENTS = {
     for nutrient, patterns in _NUTRIENT_PATTERNS.items()
 }
 
-# Prefer saturated fat before total fat when a question matches both.
+# Match saturated fat before total fat.
 _NUTRIENT_ORDER = [
     "sodium_mg", "potassium_mg", "phosphorus_mg", "protein_g", "energy_kcal",
     "fiber_g", "sat_fat_g", "carbs_g", "fat_g", "sugar_g",
@@ -100,7 +87,6 @@ _PLAIN_LABELS = {
 
 
 def detect_nutrients(question: str) -> list[str]:
-    """Canonical nutrients mentioned in ``question``, in ``_NUTRIENT_ORDER``."""
     lowered = question.lower()
     found = []
     for nutrient in _NUTRIENT_ORDER:
@@ -110,17 +96,12 @@ def detect_nutrients(question: str) -> list[str]:
 
 
 def format_value(value: Any, unit: str) -> str:
-    """Format a value for display without lossy rounding.
-
-    Milligram values convert to grams only when the conversion is exact, so a
-    MAX ceiling cannot round down and a MIN floor cannot round up.
-    """
+    """Convert units only when exact so rounding cannot change a stated bound."""
     try:
         num = float(value)
     except (TypeError, ValueError):
         return str(value)
     if unit == "mg" and num >= 1000 and num % 10 == 0:
-        # Multiples of 10 mg are exact in hundredths of a gram.
         grams = num / 1000.0
         text = f"{grams:.2f}".rstrip("0").rstrip(".")
         return f"{text} g"
@@ -150,13 +131,7 @@ def _citation_of_rule(rule: dict[str, Any]) -> dict[str, Any]:
 def _rule_applies_to_patient(
     rule: dict[str, Any], patient: dict[str, Any] | None
 ) -> bool:
-    """Best-effort re-evaluation of a rulebook rule's conditions for a patient.
-
-    Handles diagnosis/medication membership, pregnancy equality, and numeric
-    comparisons. Missing numeric values and NaN fail; guarded fields also reject
-    negative unknown sentinels. Pregnancy diagnoses count as pregnancy.
-    Without patient context, all rules are treated as applicable.
-    """
+    """Without patient context all rules are treated as applicable."""
     if not patient:
         return True
     diagnoses = {str(d) for d in (patient.get("diagnoses") or [])}
@@ -184,7 +159,7 @@ def _rule_applies_to_patient(
                 num = float(patient.get(field, 0))
             except (TypeError, ValueError):
                 return False
-            if math.isnan(num):  # NaN -> unknown
+            if math.isnan(num):
                 return False
             if field in _UNKNOWN_GUARDED_FIELDS and num < 0:
                 return False
@@ -223,12 +198,6 @@ def _anchor_rule(
     role: str = "patient",
     patient: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """First applicable rule for the first detected nutrient with an eligible anchor.
-
-    Nutrient order takes precedence; rules within each nutrient are sorted by
-    decreasing priority then rule ID. Patient-role anchors exclude internal
-    CONFLICT/SAFETY rules. Return None when no eligible rule exists.
-    """
     for nutrient in nutrients:
         for rule in kb.rules_for_nutrient(nutrient):
             if role == "patient" and str(rule.get("rule_id", "")).startswith(
@@ -247,15 +216,11 @@ def _status_of(envelope: dict[str, Any]) -> str:
 
 
 def _target_is_unscaled_per_kg(envelope: dict[str, Any], target: dict[str, Any]) -> bool:
-    """Detect an unscaled per-kg target from its matching source trace.
-
-    Raw rows contain ``/kg/d`` without a ``-> <scaled>`` value. Match the
-    current target, not an obsolete rule value. Clinician edits are daily doses.
-    """
+    """Match the current target rather than an obsolete rule value."""
     nutrient = target.get("nutrient", "")
     if nutrient not in _PER_KG_NUTRIENTS:
         return False
-    # Legacy clinician doses may equal a coefficient without being per-kg.
+    # Clinician doses may equal a coefficient without being per kilogram.
     citation = _target_citation(target, envelope.get("fired_rules") or [])
     if not citation or citation.get("rule_id") == _CLINICIAN_EDIT_RULE_ID:
         return False
@@ -272,7 +237,6 @@ def _target_is_unscaled_per_kg(envelope: dict[str, Any], target: dict[str, Any])
             continue
         if "->" in summary:
             continue
-        # A raw row must match the selected source, value, and base unit.
         for match in _UNSCALED_COEFFICIENT_ROW.finditer(summary):
             if (match.group("nutrient") != nutrient or match.group("kind") != kind
                     or match.group("unit") != target.get("unit")):
@@ -287,11 +251,7 @@ def _target_is_unscaled_per_kg(envelope: dict[str, Any], target: dict[str, Any])
 
 
 def _target_citation(target: dict[str, Any], fired_rules: list[dict[str, Any]]):
-    """Resolve explicit exact-target provenance, or legacy trace if absent.
-
-    Explicit but stale provenance is a failed attribution, not permission to
-    borrow a convenient matching legacy source.
-    """
+    """Explicit stale provenance must not fall back to a convenient legacy citation."""
     from shared.provenance import citation_for
 
     provenance = target.get("provenance")
@@ -327,7 +287,6 @@ def _envelope_context(
     kind = target.get("kind", "")
 
     if status != "APPROVED":
-        # Unapproved envelope context supplies a notice, never personal target numbers.
         sentence = (
             _PENDING_REVIEW_SENTENCE
             if status in ("PROPOSED", "EDITED")
@@ -367,7 +326,6 @@ def _envelope_context(
     else:
         sentence = f"Your clinician-approved plan sets {core}."
 
-    # A general envelope citation cannot establish who authored this value.
     citation = _target_citation(target, envelope.get("fired_rules") or [])
     if citation and not all(citation.get(key) for key in ("rule_id", "guideline", "section")):
         citation = None
@@ -400,10 +358,7 @@ def _rule_sentence(rule: dict[str, Any], role: str) -> str:
 def _constraint_sentences(
     rule: dict[str, Any], role: str, weight_kg: float | None = None
 ) -> list[str]:
-    """Render constraints, scaling per-kg values only with a positive weight.
-
-    Without weight, retain the "per kg of body weight" qualifier.
-    """
+    """Retain per kilogram units when no positive weight is available."""
     sentences = []
     for constraint in rule.get("constraints", []):
         nutrient = constraint.get("nutrient")
@@ -464,7 +419,6 @@ def _dish_sentences(hits: list[dict[str, Any]], role: str) -> list[str]:
 def _patient_weight(
     patient: dict[str, Any] | None, envelope: dict[str, Any] | None
 ) -> float | None:
-    """Best-available body weight (kg) for per-kg rendering."""
     weight: Any = (patient or {}).get("weight_kg")
     if weight is None and envelope:
         snapshot = envelope.get("patient_snapshot") or {}
@@ -484,18 +438,7 @@ def answer(
     llm: LLMAdapter | None = None,
     patient: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Compose an answered, refused, or escalated response without changing clinical state.
-
-    Every result carries ``status`` (``answered`` | ``refused`` | ``escalated``),
-    ``question``, ``answer``, ``citations``, ``escalation``, ``envelope``,
-    ``retrieval``, and ``role``. Answered results also carry structured ``claims``;
-    refused/escalated results omit that key. ``role="clinician"`` keeps rule IDs
-    inline in the text. The patient view hides them from prose but retains
-    citation IDs.
-    ``patient`` supplies applicability context and weight for per-kg rendering.
-    The template path is deterministic. An optional ``llm`` may transform the
-    final text; this function does not verify that transformation's grounding.
-    """
+    """Compose grounded responses. Optional LLM rephrasing is not revalidated."""
     esc = escalation.check(question)
     if esc["escalate"]:
         return {
@@ -509,7 +452,6 @@ def answer(
             "role": role,
         }
 
-    # Patient-role scope refusal follows escalation and does not expose guideline content.
     if role == "patient" and envelope is not None and _status_of(envelope) == "REJECTED":
         return {
             "status": "refused",
@@ -527,11 +469,9 @@ def answer(
     hits = retrieval.build_index(kb).retrieve(question, k=5)
     best_score = hits[0]["score"] if hits else 0.0
     nutrients = detect_nutrients(question)
-    # Do not use personal target numbers to answer an unrelated question.
     relevant = bool(nutrients) or best_score > retrieval.MIN_SCORE
     env_ctx = _envelope_context(envelope, nutrients, weight_kg) if relevant else None
-    # An approved personal value with no traceable citation is withheld; the
-    # independent guideline anchor below never lends its citation to the number.
+    # A guideline anchor cannot lend its citation to an untraceable personal value.
     if env_ctx is not None and env_ctx["approved"] and not env_ctx["citation"]:
         env_ctx = None
 
@@ -539,7 +479,6 @@ def answer(
     citations: list[dict[str, Any]] = []
     claims: list[dict[str, Any]] = []
 
-    # Prefer the current profile for rule applicability, then the frozen snapshot.
     applicability_patient = patient or (envelope or {}).get("patient_snapshot")
 
     if env_ctx is not None:
@@ -551,7 +490,6 @@ def answer(
                        "envelope_id": (envelope or {}).get("envelope_id"),
                        "version": (envelope or {}).get("version"), "citation": env_ctx["citation"]})
 
-    # General guideline anchors do not depend on personal-target approval.
     anchor = (
         _anchor_rule(kb, nutrients, role, applicability_patient)
         if nutrients
@@ -562,8 +500,6 @@ def answer(
         question, re.IGNORECASE,
     ))
     if nutrients and anchor is None and env_ctx is None and not food_content_question:
-        # Food composition is distinct from intake guidance. A personal intake
-        # answer needs a relevant constraint, not an unrelated retrieval citation.
         hits, best_score = [], 0.0
     if anchor is not None:
         sentences = [_rule_sentence(anchor, role), *_constraint_sentences(anchor, role, weight_kg)[:2]]
@@ -624,7 +560,6 @@ def answer(
 
     envelope_summary = None
     if envelope:
-        # Lifecycle state is independent of which targets the question matched.
         approved = _status_of(envelope) == "APPROVED"
         envelope_summary = {
             "envelope_id": envelope.get("envelope_id"),

@@ -1,9 +1,3 @@
-"""Conflict resolution: scripted conflict cases with expected outcomes.
-
-Check envelopes and traces against the priority and tie policies in
-``rules/ENGINE.md``.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -20,7 +14,6 @@ from rules.engine import run_rules
 __all__ = ["conflict_cases", "evaluate_conflicts"]
 
 Check = Callable[[dict[str, Any], list[dict[str, Any]]], bool]
-
 
 
 def _fixture(patient_id: str, weight: float, diagnoses: list[str], *,
@@ -43,7 +36,6 @@ def _fixture(patient_id: str, weight: float, diagnoses: list[str], *,
 
 
 def conflict_cases() -> list[dict[str, Any]]:
-    """The scripted conflict-case table.  Each check is (expectation, predicate)."""
     return [
         {
             "name": "CKD4 + HTN + T2D: sodium max 2000 (KDIGO 90 beats DASH 2300 / ADA 2300)",
@@ -213,7 +205,6 @@ def conflict_cases() -> list[dict[str, Any]]:
 
 
 def evaluate_conflicts() -> dict[str, Any]:
-    """Run every conflict case; record engine verdicts and pass/fail per check."""
     cases = []
     total_checks = 0
     passed_checks = 0

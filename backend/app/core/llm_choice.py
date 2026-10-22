@@ -1,11 +1,3 @@
-"""Resolve provider metadata without constructing clients or checking availability.
-
-Chat priority: ``CARE_LOOP_LLM_BACKEND`` override, OpenAI key, Google key,
-then Ollama. Unknown backend names fall back to Ollama. ``CARE_LOOP_LLM_MODEL``
-overrides the model only. Embeddings resolve independently of API keys.
-``chat/llm.py`` selects the adapter that actually serves requests.
-"""
-
 from __future__ import annotations
 
 import os
@@ -46,11 +38,6 @@ class LLMChoice:
 
 
 def choose_embedding(env: Mapping[str, str] | None = None) -> EmbeddingChoice:
-    """Resolve local_st for backend aliases local_st/st/sentence-transformers.
-
-    Otherwise resolve Ollama with CARE_LOOP_EMBED_MODEL or nomic-embed-text.
-    No client is constructed and provider availability is not checked.
-    """
     config = _effective_env(env)
     backend = config.get("CARE_LOOP_LLM_BACKEND", "").strip().lower()
     if backend in {"local_st", "sentence-transformers", "st"}:
@@ -69,7 +56,6 @@ def choose_embedding(env: Mapping[str, str] | None = None) -> EmbeddingChoice:
 
 
 def choose_llm(env: Mapping[str, str] | None = None) -> LLMChoice:
-    """Resolve the chat LLM per the documented priority."""
     config = _effective_env(env)
     backend = config.get("CARE_LOOP_LLM_BACKEND", "").strip().lower()
     override_model = config.get("CARE_LOOP_LLM_MODEL", "").strip()
@@ -108,7 +94,6 @@ def choose_llm(env: Mapping[str, str] | None = None) -> LLMChoice:
 
 
 def describe_choices(env: Mapping[str, str] | None = None) -> dict[str, dict]:
-    """Return both resolved choices as plain dicts (useful for /healthz/debug)."""
     return {
         "embedding": asdict(choose_embedding(env)),
         "llm": asdict(choose_llm(env)),

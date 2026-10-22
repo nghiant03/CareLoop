@@ -1,5 +1,3 @@
-"""Chat OpenAPI metadata without changing response validation."""
-
 from typing import Any
 
 from fastapi import FastAPI

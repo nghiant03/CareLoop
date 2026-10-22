@@ -1,16 +1,9 @@
-"""Check selection strategies on feasible fronts with hand-checkable trade-offs.
-
-Raw scalar scoring favors the cheap plan. Relative and adequacy-first scoring
-favor the adequate plan. Use pytest for fixture injection.
-"""
-
 from __future__ import annotations
 
 import os
 import sys
 from typing import Any
 
-# Resolve repository imports when pytest loads this module from its directory.
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
@@ -70,18 +63,14 @@ def _envelope():
 
 
 def _day(dish_ids: list[str]) -> list[list[str]]:
-    """One day of single-dish slots from a 3-dish multiset."""
     return [[did] for did in dish_ids]
 
 
 def _entries() -> list[dict]:
     env = _envelope()
     specs = {
-        # protein 90 >= 60, energy 1800 == TARGET, sodium 1200 <= 2000; 3 x 8.0
         "adequate": ["protein_plate", "protein_plate", "protein_plate"],
-        # protein 28 (short 32), energy 1800, sodium 1300; 2 x 2.0 + 3.0
         "cheap": ["cheap_rice", "cheap_rice", "veg_plate"],
-        # protein 68, energy 1600 (dev 200), sodium 1100; 2 x 8.0 + 3.0
         "middle": ["protein_plate", "protein_plate", "veg_plate"],
     }
     entries = []
@@ -144,18 +133,13 @@ def test_all_strategies_return_a_front_entry():
 
 
 def test_solve_selection_kwarg_overrides_default_scalar_choice(monkeypatch):
-    """solve(selection=...) must actually change the delivered plan: with the
-    same two-entry front, the default picks 'cheap' while the normalised
-    strategy picks 'adequate'."""
     import numpy as np
 
     import backend.optim.solver as solver_mod
 
     env = _envelope()
-    # FastEvaluator pool order = SELECTION_POOL order:
-    # protein_plate=0, veg_plate=1, cheap_rice=2
-    cheap_idx = np.array(([2, 2, 1] * 7), dtype=int)      # 'cheap' entry
-    adequate_idx = np.array(([0, 0, 0] * 7), dtype=int)   # 'adequate' entry
+    cheap_idx = np.array(([2, 2, 1] * 7), dtype=int)
+    adequate_idx = np.array(([0, 0, 0] * 7), dtype=int)
     monkeypatch.setattr(solver_mod, "HAS_PYMOO", True)
     monkeypatch.setattr(
         solver_mod,
@@ -176,7 +160,6 @@ def test_solve_selection_kwarg_overrides_default_scalar_choice(monkeypatch):
 
 
 def ev_idx_to_plan_local(idx, dishes) -> list[list[str]]:
-    """Helper mirroring FastEvaluator.idx_to_plan (original pool order)."""
     pool_ids = [d.dish_id for d in dishes]
     return [[pool_ids[int(i)]] for i in idx]
 
@@ -187,8 +170,6 @@ def test_adequacy_key_ranks_shortfall_then_count_then_scalar():
     env = _envelope()
     entries = _entries()
     by_name = {e["name"]: e for e in entries}
-    # hand-checked lexicographic keys: adequate (0,0,...) < middle (0.111,7,..)
-    # < cheap (0.533,7,...) — worst-day shortfall dominates unmet count.
     picked = adequacy_first_selection(
         [by_name["cheap"], by_name["middle"], by_name["adequate"]], env, SELECTION_POOL
     )
@@ -196,13 +177,11 @@ def test_adequacy_key_ranks_shortfall_then_count_then_scalar():
     picked = adequacy_first_selection([by_name["cheap"], by_name["middle"]], env, SELECTION_POOL)
     assert _by_name(picked) == "middle"
 
-    # Same worst deviation, but only one day misses energy instead of seven.
     fewer_unmet = {"plan": by_name["middle"]["plan"][:3] + by_name["adequate"]["plan"][3:]}
     fewer_unmet["objectives"], violations = evaluate(fewer_unmet["plan"], env, SELECTION_POOL)
     assert not violations
     assert adequacy_first_selection([by_name["middle"], fewer_unmet], env, SELECTION_POOL) is fewer_unmet
 
-    # Equal worst deviation and unmet count: cheaper equivalent dishes win.
     discounted = replace(SELECTION_POOL[0], dish_id="discount_protein", price_sgd=0)
     pool = SELECTION_POOL + [discounted]
     cheaper: dict[str, Any] = {"plan": [["discount_protein" if did == "protein_plate" else did for did in meal]

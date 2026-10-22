@@ -1,5 +1,3 @@
-"""New evaluation runs must not rewrite published evidence snapshots."""
-
 import json
 import os
 from pathlib import Path
@@ -30,7 +28,6 @@ def test_evaluation_cli_default_and_explicit_output(monkeypatch, tmp_path):
     explicit = tmp_path / "selected"
     assert run_eval.main(["--out-dir", str(explicit)]) == 0
     assert (explicit / "results.json").exists()
-    # Reject any output directory inside the repository checkout
     in_repo = run_eval.ROOT / "evaluation"
     try:
         run_eval.main(["--out-dir", str(in_repo)])

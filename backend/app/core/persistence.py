@@ -1,14 +1,4 @@
-"""Durable PostgreSQL clinical storage.
-
-PostgreSQL uses CARELOOP_APP_DATABASE_URL and pooled
-transactions. Its schema is migrated explicitly, never during runtime startup.
-
-Database write reservations protect ID allocation and lifecycle checks across
-workers through transaction advisory locks.
-IDs can be reused only after minted rows are
-removed. Use ``store_envelope`` for live writes. ``journal_envelope`` seeds
-history without revision checks.
-"""
+"""Durable clinical storage in PostgreSQL."""
 
 from __future__ import annotations
 
@@ -57,7 +47,7 @@ __all__ = [
 
 _REVIEW_PROPOSAL: ContextVar[tuple[str, str | None] | None] = ContextVar("review_proposal", default=None)
 
-# Serialise local writes; advisory reservations protect checks across workers.
+# Local locks complement cross worker advisory reservations.
 _LOCK = Lock()
 
 _MEAL_ORDER = ("breakfast", "lunch", "dinner")
@@ -72,7 +62,6 @@ def _today() -> str:
 
 
 def _connect() -> PostgresConnection:
-    """Open a schema-checked PostgreSQL transaction; never create runtime schema."""
     url = database_url("clinical")
     if url is None:
         raise ValueError("Configure CARELOOP_APP_DATABASE_URL")
@@ -80,18 +69,12 @@ def _connect() -> PostgresConnection:
 
 
 def init_db() -> None:
-    """Verify the explicitly migrated PostgreSQL schema."""
     conn = _connect()
     conn.close()
 
 
 def _mint_id(conn: PostgresConnection, table: str, prefix: str, column: str) -> str:
-    """Mint the next ``<prefix><NNN>`` ID under the caller's write transaction.
-
-    Reserve writes before scanning existing numeric suffixes. Normal workflows
-    retain those rows, so IDs are not reused unless test cleanup deletes them.
-    """
-    # Acquire the write reservation before reading ids, including across workers.
+    """The caller must reserve writes before reading existing IDs."""
     if not conn.in_transaction:
         conn.reserve_write()
     seq = 0
@@ -115,9 +98,6 @@ def _mint_id(conn: PostgresConnection, table: str, prefix: str, column: str) -> 
     return candidate
 
 
-# Plans
-
-
 def save_plan(
     patient_id: str,
     envelope_id: str,
@@ -132,11 +112,6 @@ def save_plan(
     document: dict[str, Any] | None = None,
     created_at: str | None = None,
 ) -> str:
-    """Persist one generated meal plan; returns the minted plan id.
-
-    ``document`` stores the full response as JSON; ``get_plan`` adds storage
-    identity and time when reading it. ``created_at`` defaults to UTC now.
-    """
     created_at = created_at or _utcnow()
     with _LOCK, _connect() as conn:
         plan_id = _mint_id(conn, "plans", f"PLAN-{patient_id}-", "plan_id")
@@ -182,12 +157,7 @@ def _plan_summary(row: StorageRow) -> dict[str, Any]:
 
 
 def get_plan(plan_id: str) -> dict[str, Any] | None:
-    """Full stored plan document (``None`` when the id is unknown).
-
-    The returned mapping is the stored response document plus ``plan_id`` and
-    ``saved_at`` (the storage timestamp). When no verbatim document was stored,
-    the document is reconstructed from the column fields.
-    """
+    """Storage identity overlays the saved response document."""
     with _connect() as conn:
         row = conn.execute(
             "SELECT * FROM plans WHERE plan_id = ?", (plan_id,)
@@ -214,7 +184,6 @@ def get_plan(plan_id: str) -> dict[str, Any] | None:
 
 
 def list_plans(patient_id: str | None = None) -> list[dict[str, Any]]:
-    """Stored plan summaries (newest first), optionally for one patient."""
     sql = "SELECT * FROM plans"
     params: tuple[Any, ...] = ()
     if patient_id is not None:
@@ -227,7 +196,6 @@ def list_plans(patient_id: str | None = None) -> list[dict[str, Any]]:
 
 
 def latest_plan_for_patient(patient_id: str) -> dict[str, Any] | None:
-    """The most recently stored plan summary for a patient, if any."""
     with _connect() as conn:
         row = conn.execute(
             "SELECT * FROM plans WHERE patient_id = ? "
@@ -235,9 +203,6 @@ def latest_plan_for_patient(patient_id: str) -> dict[str, Any] | None:
             (patient_id,),
         ).fetchone()
     return _plan_summary(row) if row is not None else None
-
-
-# Meal logs
 
 
 def put_log(
@@ -248,12 +213,7 @@ def put_log(
     logged_at: str | None = None,
     items: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Replace a meal slot, defaulting its receipt time to UTC now.
-
-    Nonempty ``items`` replace the complete item list. None or an empty list
-    clears stored items and retains the single ``dish_id`` representation.
-    This storage helper does not validate dates, quantities, or dish membership.
-    """
+    """An empty item list clears items and retains the single dish representation."""
     entry = {
         "patient_id": patient_id,
         "date": date,
@@ -278,7 +238,6 @@ def put_log(
 
 
 def get_log(patient_id: str, date: str, meal: str) -> dict[str, Any] | None:
-    """Return the log for one slot, or ``None``."""
     with _connect() as conn:
         row = conn.execute(
             "SELECT * FROM meal_logs WHERE patient_id = ? AND date = ? AND meal = ?",
@@ -301,10 +260,6 @@ def list_logs(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> list[dict[str, Any]]:
-    """All logs for a patient, ordered by date then meal order.
-
-    ``date_from`` / ``date_to`` are inclusive ISO date bounds.
-    """
     sql = "SELECT * FROM meal_logs WHERE patient_id = ?"
     params: list[Any] = [patient_id]
     if date_from is not None:
@@ -338,7 +293,6 @@ def list_logs(
 
 
 def delete_logs_for_patient(patient_id: str) -> int:
-    """Remove every log for a patient; returns the number deleted."""
     with _LOCK, _connect() as conn:
         cur = conn.execute(
             "DELETE FROM meal_logs WHERE patient_id = ?", (patient_id,)
@@ -348,7 +302,6 @@ def delete_logs_for_patient(patient_id: str) -> int:
 
 
 def count_logs(patient_id: str | None = None) -> int:
-    """Count stored meal slots, optionally for one patient, not individual dishes."""
     sql = "SELECT COUNT(*) AS n FROM meal_logs"
     params: tuple[Any, ...] = ()
     if patient_id is not None:
@@ -360,38 +313,20 @@ def count_logs(patient_id: str | None = None) -> int:
 
 
 def clear_logs() -> None:
-    """Delete every patient's meal logs; use only with an isolated database."""
+    """Use only with an isolated database."""
     with _LOCK, _connect() as conn:
         conn.execute("DELETE FROM meal_logs")
         conn.commit()
 
 
-# Envelope journal
-
-
 class EnvelopeConflictError(Exception):
-    """The caller's lifecycle snapshot has been superseded; reload before retrying."""
-
     def __init__(self, envelope_id: str):
         self.envelope_id = envelope_id
         super().__init__(f"Envelope {envelope_id} changed; reload before retrying.")
 
 
 def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) -> None:
-    """Append a snapshot only if its lifecycle revision is still current.
-
-    The write reservation covers the revision check and insert across workers.
-    Stale updates raise ``EnvelopeConflictError`` without appending a snapshot.
-    Mutates the supplied object: new proposals receive an ID/time, updates
-    restore durable scope eligibility, missing provenance is attached, and the
-    lifecycle revision advances after commit. No unchanged-copy guarantee is
-    made on other write failures; callers needing one must copy before calling.
-
-    Inside ``begin_review_proposal``, a new snapshot and its exact pending
-    review identity commit together. An already-pending attempt is reused;
-    another action recorded during computation raises ReviewProposalConflictError
-    before a snapshot is appended.
-    """
+    """Mutate the supplied snapshot under a revision checked write reservation. Pending review identity commits with it."""
     with _LOCK, _connect() as conn:
         conn.reserve_write()
         proposal_attempt = _REVIEW_PROPOSAL.get() if new_proposal else None
@@ -405,7 +340,6 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
                 raise ValueError("review proposal patient mismatch or missing review item")
             action = json.loads(review["action_json"]) if review["action_json"] else {}
             if action.get("action") == "proposal_pending" and action.get("envelope_id"):
-                # A concurrent attempt already committed this exact proposal.
                 saved = conn.execute(
                     "SELECT snapshot_json FROM envelope_journal WHERE envelope_id = ? "
                     "ORDER BY id DESC LIMIT 1", (action["envelope_id"],)
@@ -430,7 +364,7 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
         if current is not None:
             if current.lifecycle_revision != envelope.lifecycle_revision:
                 raise EnvelopeConflictError(envelope.envelope_id)
-            # Eligibility belongs to the proposal, not to clinician-editable fields.
+            # Scope eligibility belongs to the proposal rather than editable fields.
             envelope.scope_eligible = current.scope_eligible
         revision = (current.lifecycle_revision if current else 0) + 1
         from shared.provenance import attach_provenance
@@ -446,8 +380,6 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
              envelope.version, envelope.status.value, json.dumps(snapshot), _today()),
         )
         if review_id is not None:
-            # The exact retry identity and its snapshot commit together, including
-            # scope-rejected proposals. Unrelated rule runs cannot be recovered.
             conn.execute(
                 "UPDATE review_items SET action_json = ? WHERE review_id = ?",
                 (json.dumps({"action": "proposal_pending", "envelope_id": envelope.envelope_id,
@@ -457,10 +389,6 @@ def store_envelope(envelope: NutrientEnvelope, *, new_proposal: bool = False) ->
 
 
 def current_envelopes() -> list[NutrientEnvelope]:
-    """Fresh latest snapshot per id, in ascending last-journal-row order.
-
-    Disk is authoritative across workers; an update changes an identity's order.
-    """
     with _connect() as conn:
         rows = conn.execute(
             "SELECT snapshot_json FROM envelope_journal WHERE id IN "
@@ -470,12 +398,7 @@ def current_envelopes() -> list[NutrientEnvelope]:
 
 
 def save_patient(record: dict[str, Any]) -> None:
-    """Replace-or-insert (upsert) a patient profile by ``patient_id``.
-
-    Deliberate replacement path for internal callers. The HTTP create
-    endpoint is create-only (``insert_patient``) so retries cannot silently
-    overwrite stored clinical profile data.
-    """
+    """Internal replacement path. HTTP creation uses insert_patient instead."""
     with _connect() as conn:
         conn.execute(
             "INSERT INTO patients VALUES (?, ?) ON CONFLICT(patient_id) "
@@ -485,12 +408,6 @@ def save_patient(record: dict[str, Any]) -> None:
 
 
 def insert_patient(record: dict[str, Any]) -> bool:
-    """Insert a new patient profile; ``False`` when the id already exists.
-
-    Create-only counterpart to ``save_patient``. The primary-key insert
-    itself detects the conflict, so concurrent workers cannot both create
-    the same patient id.
-    """
     try:
         with _connect() as conn:
             conn.execute(
@@ -513,16 +430,7 @@ def journal_envelope(
     event: str | None = None,
     effective_at: str | None = None,
 ) -> int:
-    """Seed a history row without checking or advancing the lifecycle revision.
-
-    Intended for historical test fixtures, not live transitions; use
-    ``store_envelope`` for revision-checked writes. Accepts a model or dumped
-    mapping, stores its full snapshot, and returns the journal row ID.
-
-    ``event`` defaults to status. ``effective_at`` defaults to the server's
-    local date; timestamps are accepted, but coverage filtering uses their
-    first ten characters as the calendar date.
-    """
+    """Seed historical fixtures without lifecycle checks. Live writes use store_envelope."""
     if isinstance(envelope, dict):
         envelope = NutrientEnvelope.model_validate(envelope)
     snapshot = envelope.model_dump(by_alias=True, mode="json")
@@ -561,12 +469,7 @@ def journal_envelope(
 def envelope_effective_at(
     patient_id: str, iso_date: str
 ) -> NutrientEnvelope | None:
-    """Reconstruct the envelope effective for ``patient_id`` on ``iso_date``.
-
-    The latest journalled APPROVED snapshot whose ``effective_at`` calendar date is
-    less than or equal to ``iso_date`` wins (ties broken by the newest journal
-    row). Returns ``None`` when no envelope was in force yet.
-    """
+    """Use the latest approval effective on the logged date. Journal order breaks date ties."""
     with _connect() as conn:
         row = conn.execute(
             """
@@ -583,7 +486,6 @@ def envelope_effective_at(
 
 
 def list_envelope_history(patient_id: str) -> list[dict[str, Any]]:
-    """All journal rows for a patient, oldest first, snapshots parsed."""
     with _connect() as conn:
         rows = conn.execute(
             "SELECT * FROM envelope_journal WHERE patient_id = ? ORDER BY id ASC",
@@ -604,9 +506,6 @@ def list_envelope_history(patient_id: str) -> list[dict[str, Any]]:
     ]
 
 
-# Observations
-
-
 def add_observation(
     patient_id: str,
     metric: str,
@@ -615,13 +514,6 @@ def add_observation(
     source: str | None = None,
     observed_at: str | None = None,
 ) -> dict[str, Any]:
-    """Record one clinical observation; returns the stored row.
-
-    ``observed_at`` defaults to today (ISO date); ``recorded_at`` is always the
-    wall-clock UTC receipt time. Observation ids are sequential per patient
-    (``OBS-<patient_id>-001``, ...). They are not reused while minted rows remain;
-    test cleanup can reset the sequence.
-    """
     observed_at = observed_at or _today()
     recorded_at = _utcnow()
     with _LOCK, _connect() as conn:
@@ -651,7 +543,6 @@ def add_observation(
 
 
 def list_observations(patient_id: str) -> list[dict[str, Any]]:
-    """All observations for a patient, chronological (observed_at, receipt)."""
     with _connect() as conn:
         rows = conn.execute(
             """
@@ -663,9 +554,6 @@ def list_observations(patient_id: str) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-# Simulations
-
-
 def save_simulation(
     patient_id: str,
     base_envelope_id: str,
@@ -674,7 +562,6 @@ def save_simulation(
     status: str = "OPEN",
     created_at: str | None = None,
 ) -> str:
-    """Persist one what-if simulation; returns the minted simulation id."""
     created_at = created_at or _utcnow()
     with _LOCK, _connect() as conn:
         simulation_id = _mint_id(
@@ -701,7 +588,6 @@ def save_simulation(
 
 
 def list_simulations(patient_id: str) -> list[dict[str, Any]]:
-    """All simulations for a patient, oldest first, JSON fields parsed."""
     with _connect() as conn:
         rows = conn.execute(
             "SELECT * FROM simulations WHERE patient_id = ? "
@@ -719,9 +605,6 @@ def list_simulations(patient_id: str) -> list[dict[str, Any]]:
         del item["comparison_json"]
         out.append(item)
     return out
-
-
-# Review queue
 
 
 def _review_row(row: StorageRow) -> dict[str, Any]:
@@ -745,14 +628,7 @@ def create_review_item(
     created_at: str | None = None,
     review_id: str | None = None,
 ) -> str:
-    """Enqueue one clinician review item; returns the review id.
-
-    By default a sequential ``REV-<patient_id>-<NNN>`` id is minted. When
-    ``review_id`` is supplied (the review queue's deterministic sha1 ids), it
-    is used verbatim and the insert is skipped when a row with that id already
-    exists — so repeated derivations of the same condition map to the same row
-    idempotently.
-    """
+    """A supplied review ID makes repeated derivation idempotent."""
     created_at = created_at or _utcnow()
     with _LOCK, _connect() as conn:
         conn.reserve_write()
@@ -779,7 +655,6 @@ def list_review_items(
     status: str | None = None,
     patient_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Review items (oldest first), optionally filtered by status and patient."""
     sql = "SELECT * FROM review_items"
     clauses, params = [], []
     if status is not None:
@@ -797,7 +672,6 @@ def list_review_items(
 
 
 def get_review_item(review_id: str) -> dict[str, Any] | None:
-    """One review item by id, or ``None``."""
     with _connect() as conn:
         row = conn.execute(
             "SELECT * FROM review_items WHERE review_id = ?", (review_id,)
@@ -806,13 +680,7 @@ def get_review_item(review_id: str) -> dict[str, Any] | None:
 
 
 def acknowledge_review_item(review_id: str) -> dict[str, Any] | None:
-    """Advance an OPEN item to ACKNOWLEDGED; return the item or ``None`` if absent.
-
-    The transition is conditional inside the write reservation, so an item
-    whose action was recorded concurrently keeps its ACTION_RECORDED status
-    instead of being regressed. Items already acknowledged or actioned are
-    returned unchanged.
-    """
+    """A concurrent clinician action must not regress to acknowledged."""
     acknowledged_at = _utcnow()
     with _LOCK, _connect() as conn:
         conn.execute(
@@ -829,14 +697,7 @@ def acknowledge_review_item(review_id: str) -> dict[str, Any] | None:
 
 @contextmanager
 def begin_review_proposal(review_id: str):
-    """Bind a synchronous rule-service call to its review retry identity.
-
-    ``store_envelope`` commits the exact envelope ID in a pending action with
-    the snapshot. Engine failures leave the review unchanged. Context-local
-    binding keeps unrelated requests isolated without changing the rule service.
-    Capture the starting action so a clinician action or finalized attempt during
-    computation cannot be overwritten. No write lock is held during rule execution.
-    """
+    """Bind the exact retry identity without holding a write lock during rule execution."""
     with _connect() as conn:
         row = conn.execute(
             "SELECT action_json FROM review_items WHERE review_id = ?", (review_id,)
@@ -851,11 +712,7 @@ def begin_review_proposal(review_id: str):
 
 
 def recover_pending_proposal(review_id: str) -> str | None:
-    """Return the exact proposal ID committed by an unfinished review attempt.
-
-    Do not infer ownership from patient or journal ordering. Legacy watermark
-    markers lack an exact identity and cannot be recovered safely.
-    """
+    """Recover only an exact committed identity rather than infer journal ownership."""
     row = get_review_item(review_id)
     action = row["action"] if row else None
     if action and action.get("action") == "proposal_pending":
@@ -870,14 +727,7 @@ class ReviewProposalConflictError(Exception):
 def finalize_review_proposal(
     review_id: str, envelope_id: str
 ) -> dict[str, Any] | None:
-    """Finalize only the matching pending identity; return None if absent.
-
-    Read/check/write share a SQLite write reservation across workers. Repeating
-    an already-finalized same-ID completion returns the row without changing
-    its timestamp. A different pending ID or clinician action is preserved and
-    raises ReviewProposalConflictError; use record_review_action for deliberate
-    clinician replacement, not asynchronous proposal completion.
-    """
+    """Finalize only the matching pending identity under one write reservation."""
     with _LOCK, _connect() as conn:
         conn.reserve_write()
         row = conn.execute(
@@ -914,13 +764,7 @@ def record_review_action(
     note: str | None = None,
     linked_envelope_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Record the clinician's action on a review item; returns the item.
-
-    The item moves to ``ACTION_RECORDED`` regardless of its previous status.
-    A subsequent call replaces the action payload; it does not append history.
-    Proposal completion uses ``finalize_review_proposal`` instead, so an old
-    asynchronous completion cannot overwrite a newer action.
-    """
+    """Replace the action payload rather than append history."""
     action_payload = {
         "action": action,
         "note": note,
@@ -946,7 +790,7 @@ def record_review_action(
 
 
 def clear_all() -> None:
-    """Delete all application records while retaining schema; only use in isolated tests."""
+    """Use only with an isolated database."""
     with _LOCK, _connect() as conn:
         for table in (
             "plans", "meal_logs", "envelope_journal", "observations",

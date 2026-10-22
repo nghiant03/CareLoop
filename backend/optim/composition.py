@@ -1,9 +1,4 @@
-"""Main + optional side search, scored against original approved aims.
-
-Catalogue roles are explicitly heuristic, not verified recipe annotations.
-MAX/exclusions remain hard; nutritional adequacy is a separate soft objective.
-The canonical evaluator checks every candidate returned to the application.
-"""
+"""Search main and optional side combinations against original aims."""
 from collections import Counter
 from time import perf_counter
 
@@ -13,23 +8,18 @@ from .problem import NUTRIENT_KEYS, allowed_dishes, evaluate
 
 
 def is_main(dish):
-    """Apply catalogue heuristics for a main; this is not a verified recipe role."""
+    """Catalogue roles are heuristic."""
     return (dish.category not in {"dessert", "drink", "kopitiam"}
             and dish.nutrient("energy_kcal") >= 200 and dish.nutrient("protein_g") >= 5)
 
 
 def is_side(dish):
-    """Apply catalogue heuristics for a side; a dish may qualify for both roles."""
+    """A dish may qualify for both roles."""
     return (dish.nutrient("energy_kcal") <= 300
             and (dish.category in {"healthy", "soup", "cai_png"} or "vegetable" in dish.tags))
 
 
 def complete_meals(plan, dishes):
-    """Check for a nonempty plan of one main and at most one side per meal.
-
-    This predicate does not fill meals or check nutrient feasibility/day count.
-    Referenced dishes must exist in the supplied pool or lookup raises KeyError.
-    """
     lookup = {d.dish_id: d for d in dishes}
     return bool(plan) and all(
         1 <= len(meal) <= 2 and is_main(lookup[meal[0]])
@@ -38,14 +28,7 @@ def complete_meals(plan, dishes):
 
 
 def improve_meals(result, envelope, dishes, seed=42):
-    """Search complete meals with normalised, adequacy-first coordinate descent.
-
-    Search independently of the incoming plan; result supplies fallback data
-    and metadata. Validate daily candidates against hard constraints, then select
-    seven days with repetition as a tie-break. Intermediate search candidates
-    may violate ceilings. Success replaces the plan; failure retains the incoming
-    plan with meal_complete=False and is not proof of composition infeasibility.
-    """
+    """Failure retains the input plan and does not prove composition infeasibility."""
     start = perf_counter()
     pool = sorted(allowed_dishes(envelope, dishes), key=lambda d: d.dish_id)
     main = [i for i, d in enumerate(pool) if is_main(d)]
@@ -70,7 +53,6 @@ def improve_meals(result, envelope, dishes, seed=42):
         relative = np.where(target, np.abs(delta), np.maximum(-delta, 0.)) / denom
         relative[:, hard] = 0.
         worst = relative.max(axis=1) if constraints else np.zeros(len(totals))
-        # Sum relative day-aim deviations after the worst deviation criterion.
         total_relative_deviation = relative.sum(axis=1)
         repetitions = np.array([len([x for x in row if x != empty]) - len(set(row) - {empty}) for row in members])
         return np.column_stack((excess, worst, total_relative_deviation, repetitions, prices[members].sum(axis=1)))
@@ -99,7 +81,7 @@ def improve_meals(result, envelope, dishes, seed=42):
         if not violations:
             candidates[tuple(member)] = (scores(nutrients[member].sum(axis=0)[None, :], member[None, :])[0], day)
     if not candidates:
-        # Single-dish infeasibility does not rule out main/optional-side plans.
+        # Single dish infeasibility does not rule out main and side plans.
         return {**result, **metadata, "meal_complete": False,
                 "infeasibility_status": None if result.get("feasible") else "search_exhausted",
                 "infeasibility_reason": None if result.get("feasible") else "No complete meal plan found by search."}

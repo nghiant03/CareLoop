@@ -1,5 +1,3 @@
-"""Pytest bootstrap: make the repo root importable (rules.*, shared.*)."""
-
 import sys
 from pathlib import Path
 

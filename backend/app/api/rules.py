@@ -1,5 +1,3 @@
-"""Expose rule-based nutrient envelope proposals."""
-
 from __future__ import annotations
 
 import math
@@ -34,13 +32,7 @@ _INLINE_FIELDS = {
 
 
 class _RulePatientInput(BaseModel):
-    """Validate live rule inputs while preserving extra profile fields.
-
-    Missing or null optional labs remain unknown. Clinical numbers must be finite
-    and nonnegative. Weight must be positive, as must height when supplied. Numeric
-    strings are accepted, but booleans are rejected. Callers normalize lab aliases before
-    validation. This model is not a stored profile or historical snapshot.
-    """
+    """Validate live inputs without changing stored snapshots."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -110,13 +102,7 @@ def _resolve_patient(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def run_rules_service(patient: dict[str, Any]) -> dict[str, Any]:
-    """Validate rule inputs and save a fresh envelope with its decision trace.
-
-    Return ``envelope`` as a ``NutrientEnvelope`` and ``trace`` as a list.
-    Auto-approve eligible new proposals in demo mode; edits still require review.
-    Model validation errors return JSON-safe HTTP 422.
-    Other exceptions propagate rather than being classified as client errors.
-    """
+    """Save a fresh proposal and apply the configured approval policy."""
     mode = approval_mode()
     try:
         validated = _RulePatientInput.model_validate(normalize_patient_labs(patient))
@@ -144,15 +130,7 @@ def run_rules_service(patient: dict[str, Any]) -> dict[str, Any]:
 
 @router.post("/run", summary="Run rules and apply the configured approval policy")
 def run_rules(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
-    """Create a fresh envelope and return it with the rule trace.
-
-    Submit a patient ID for lookup or a complete inline record. Inline fields
-    select inline validation, not a partial update to a saved profile. Unknown
-    lookup IDs return HTTP 404 ``patient_not_found``.
-
-    Scope-rejected results return HTTP 200 with empty targets. Eligible results
-    are auto-approved in demo mode, or PROPOSED until review in clinician mode.
-    """
+    """Create a fresh proposal from a patient ID or complete inline record."""
     patient = _resolve_patient(body)
     result = run_rules_service(patient)
 

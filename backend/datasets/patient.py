@@ -1,9 +1,3 @@
-"""Extend canonical patient snapshots with synthetic vitals and lab histories.
-
-Serialize with ``by_alias=True`` to retain the wire lab names
-``serum_K_meq_L`` and ``serum_PO4_mg_dL``.
-"""
-
 from __future__ import annotations
 
 from pydantic import ConfigDict, Field
@@ -12,11 +6,7 @@ from shared.envelope_schema import PatientSummary
 
 
 class Patient(PatientSummary):
-    """A full synthetic patient record.
-
-    Adds archetype, vitals and longitudinal labs to the frozen rule-input model.
-    Monthly lab arrays store the current value at index 0, then older values.
-    """
+    """Monthly lab arrays begin with the current value."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -30,7 +20,6 @@ class Patient(PatientSummary):
     )
 
     height_cm: float = Field(..., gt=0, le=250)
-    # Full generated records require BMI; historical summaries may omit it.
     bmi: float = Field(..., gt=0, le=100)  # pyrefly: ignore[bad-override-mutable-attribute]
     hba1c_pct: float | None = Field(default=None, ge=0, le=20)
     systolic_bp: int | None = Field(default=None, ge=0, le=300)
@@ -52,7 +41,6 @@ class Patient(PatientSummary):
     notes: str | None = Field(default=None)
 
     def to_summary(self) -> PatientSummary:
-        """Project to the canonical audit snapshot used inside envelopes."""
         return PatientSummary(
             patient_id=self.patient_id,
             age=self.age,

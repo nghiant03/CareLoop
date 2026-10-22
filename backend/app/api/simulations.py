@@ -1,5 +1,3 @@
-"""Expose what-if nutrient target comparisons and their saved history."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -28,11 +26,7 @@ class SimulationRequest(BaseModel):
 
 
 def _worst_aim_deviation_pct(adequacy: list[dict[str, Any]] | None) -> float:
-    """Return the largest reported aim deviation, rounded to three decimal places.
-
-    Read ``shortfall_pct``, which covers MIN shortfalls and absolute TARGET
-    deviations for saved-plan compatibility. Return 0.0 when no values are present.
-    """
+    """Legacy shortfall fields include absolute TARGET deviations."""
     values = [
         float(entry.get("shortfall_pct") or 0.0)
         for entry in (adequacy or [])
@@ -41,12 +35,8 @@ def _worst_aim_deviation_pct(adequacy: list[dict[str, Any]] | None) -> float:
     return round(max(values), 3) if values else 0.0
 
 
-
 def _meals_changed(base_plan, simulated_plan) -> int | None:
-    """Count changed meal slots, ignoring dish order but preserving repeated dishes.
-
-    Extra slots count as changed. Return ``None`` when either plan is absent.
-    """
+    """Ignore dish order but preserve repeated dishes."""
     if base_plan is None or simulated_plan is None:
         return None
     total = 0
@@ -84,19 +74,7 @@ def _side_summary(
 
 @router.post("", summary="What-if: re-plan against proposed nutrient targets")
 def create_simulation(req: SimulationRequest) -> dict[str, Any]:
-    """Save a target comparison without changing live envelopes or saved plans.
-
-    Require the latest envelope to be approved, scope-eligible, and have targets.
-    Compare the latest saved plan under current targets with a plan under the
-    requested targets. Simulated adequacy is measured against the requested aims.
-
-    Objective and aim-deviation deltas are simulated minus base. ``meals_changed``
-    counts changed slots. All deltas are null without both objective summaries or
-    a feasible simulation. Infeasible comparisons still return HTTP 200.
-
-    Return HTTP 404 for a missing envelope, 409 when it is not ready, 503 for
-    catalogue loading failures, and 502 when planning raises an error.
-    """
+    """Save a comparison without changing live envelopes or plans. Infeasible comparisons still return success."""
     from backend.app.core import persistence
 
     envelope = find_latest_envelope_for_patient(req.patient_id)
@@ -236,10 +214,6 @@ def create_simulation(req: SimulationRequest) -> dict[str, Any]:
 def list_simulations(
     patient_id: str = Query(..., description="Patient id"),
 ) -> dict[str, Any]:
-    """Return a patient's saved simulations and their count, ordered oldest first.
-
-    Return an empty list when none exist, including for unknown patient IDs.
-    """
     from backend.app.core import persistence
 
     simulations = persistence.list_simulations(patient_id)

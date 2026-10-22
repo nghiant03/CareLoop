@@ -1,5 +1,3 @@
-"""Expose the clinician review queue, actions, and linked envelope proposals."""
-
 from __future__ import annotations
 
 import hashlib
@@ -21,7 +19,6 @@ from backend.mining.trends import detect_trends
 
 router = APIRouter(prefix="/review", tags=["review"])
 
-# Number of days included when deriving adherence review conditions.
 _QUEUE_WINDOW_DAYS = 14
 
 _STATUS_ALIASES = {
@@ -52,17 +49,11 @@ def _map_status(raw: str) -> str:
 
 
 def _review_id(patient_id: str, source: str, key: str) -> str:
-    """Return a stable 12-digit hexadecimal ID for a patient, source, and condition key."""
     digest = hashlib.sha1(f"{patient_id}|{source}|{key}".encode())
     return digest.hexdigest()[:12]
 
 
 def _compose_item(row: dict[str, Any]) -> dict[str, Any]:
-    """Return review metadata and the condition payload in the public item shape.
-
-    Unwrap a nested ``payload`` when present. Otherwise expose the stored
-    dictionary directly. Missing condition metadata has null values.
-    """
     stored = row["payload"] if isinstance(row["payload"], dict) else {}
     detail = stored.get("payload", stored)
     return {
@@ -91,10 +82,7 @@ def _ensure_derived_review_item(
     reason: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    """Return a condition's review item, creating it only when first seen.
-
-    Repeated derivation preserves the original payload and current status.
-    """
+    """Repeated derivation preserves the original payload and current status."""
     review_id = _review_id(patient_id, source, key)
     persistence.create_review_item(
         patient_id,
@@ -116,10 +104,6 @@ def _ensure_derived_review_item(
 def _latest_contributors(
     group: dict[str, Any], nutrient: str, kind: str
 ) -> list[dict[str, Any]]:
-    """Return contributors from the latest complete day containing the constraint.
-
-    Expect chronological day rows. Return an empty list when no contributors match.
-    """
     for day in reversed(group["result"]["days"]):
         if not day["completeness"]["complete"]:
             continue
@@ -130,13 +114,7 @@ def _latest_contributors(
 
 
 def _derive_for_patient(patient_id: str) -> list[dict[str, Any]]:
-    """Derive and store adherence and lab review conditions for one patient.
-
-    Use historical approval coverage over ``_QUEUE_WINDOW_DAYS`` for adherence.
-    Include worsening trends and hard violations, including partial-day violations.
-    Lab flags prefer dated observations over fixture series. Repeated conditions
-    retain their stored payload and status.
-    """
+    """Use historical approval coverage and include partial day hard violations."""
     items: list[dict[str, Any]] = []
 
     start, end = _date_window(_QUEUE_WINDOW_DAYS)
@@ -205,7 +183,6 @@ def _derive_for_patient(patient_id: str) -> list[dict[str, Any]]:
         for trend in detect_trends([dict(record)]):
             if trend.get("patient_id") != patient_id:
                 continue
-            # A new dated observation can trigger a distinct review item.
             items.append(
                 _ensure_derived_review_item(
                     patient_id,
@@ -226,15 +203,7 @@ def review_queue(
     patient_id: str | None = Query(default=None),
     status: str = Query(default="open"),
 ) -> dict[str, Any]:
-    """Capture new review conditions and return matching items with their count.
-
-    This GET can create items even when filtering for acknowledged or actioned
-    status. Existing conditions retain their payload and status. Omit ``patient_id``
-    to derive across all known patients. Results are ordered oldest first.
-
-    ``status`` defaults to ``open``. Accept ``acknowledged``, ``actioned``, their
-    uppercase stored statuses, or ``all``. Invalid statuses return HTTP 422.
-    """
+    """Derive new conditions before filtering. Existing condition payloads stay unchanged."""
     mapped_status = None if status == "all" else _map_status(status)
     patient_ids = [patient_id] if patient_id else list_patient_ids()
     items: list[dict[str, Any]] = []
@@ -250,11 +219,7 @@ def review_items(
     patient_id: str | None = Query(default=None),
     status: str | None = Query(default=None),
 ) -> dict[str, Any]:
-    """Return stored review items and their count without deriving new conditions.
-
-    Filter by patient or status when supplied. Omitted filters include all items,
-    ordered oldest first. Invalid statuses, including ``all``, return HTTP 422.
-    """
+    """List stored items without deriving new conditions."""
     mapped_status = _map_status(status) if status is not None else None
     rows = persistence.list_review_items(status=mapped_status, patient_id=patient_id)
     items = [_compose_item(row) for row in rows]
@@ -263,11 +228,7 @@ def review_items(
 
 @router.post("/{review_id}/acknowledge", summary="Acknowledge a review item")
 def acknowledge_review(review_id: str) -> dict[str, Any]:
-    """Acknowledge an OPEN item and return its current state.
-
-    Leave acknowledged or actioned items unchanged, including concurrently
-    recorded actions. Unknown review IDs return HTTP 404 ``review_item_not_found``.
-    """
+    """Leave concurrently actioned items unchanged."""
     updated = persistence.acknowledge_review_item(review_id)
     if updated is None:
         raise HTTPException(
@@ -279,11 +240,7 @@ def acknowledge_review(review_id: str) -> dict[str, Any]:
 
 @router.post("/{review_id}/action", summary="Record a clinician action")
 def action_review(review_id: str, body: ActionRequest) -> dict[str, Any]:
-    """Replace the current action and note, set ACTION_RECORDED, and return the item.
-
-    Repeated calls replace the action rather than append history. Unknown review
-    IDs return HTTP 404 ``review_item_not_found``.
-    """
+    """Replace the current action rather than append history."""
     if persistence.get_review_item(review_id) is None:
         raise HTTPException(
             status_code=404,
@@ -296,16 +253,7 @@ def action_review(review_id: str, body: ActionRequest) -> dict[str, Any]:
 
 @router.post("/{review_id}/proposal", summary="Create a revised envelope proposal")
 def proposal_review(review_id: str) -> dict[str, Any]:
-    """Create a linked envelope proposal and return its ID and updated review item.
-
-    Retry an unfinished attempt using its existing envelope rather than creating
-    another. This also applies to scope-rejected results. Eligible proposals still
-    require separate clinician approval before live planning.
-
-    Unknown review items or patients return HTTP 404. If a newer proposal or
-    clinician action supersedes this attempt, return HTTP 409
-    ``review_proposal_superseded`` without replacing the newer state.
-    """
+    """Reuse the exact pending proposal on retry without overwriting newer actions."""
     row = persistence.get_review_item(review_id)
     if row is None:
         raise HTTPException(
@@ -322,7 +270,7 @@ def proposal_review(review_id: str) -> dict[str, Any]:
             },
         )
     action = row["action"] or {}
-    # The pending ID was committed with its snapshot. Never infer it from the patient's latest proposal.
+    # Recover the committed pending identity rather than the latest patient proposal.
     envelope_id = action.get("envelope_id") if action.get("action") == "proposal_pending" else None
     try:
         if envelope_id is None:

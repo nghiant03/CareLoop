@@ -1,18 +1,4 @@
-"""Retrieval method benchmark for the grounded chat pipeline.
-
-Compare BM25, TF-IDF variants, and rank fusion using production ``KBIndex``
-chunks. Measure hit@k, MRR, end-to-end citation checks, and irrelevant-query
-refusal. Citation checks cover rule IDs and structured claims, not arbitrary
-prose entailment.
-
-Experimental gates use disjoint development questions. The production BM25
-gate remains fixed and was not independently calibrated from the ranking set.
-Held-out fusion overlap is diagnostic only. ``_answer_with_method`` temporarily
-patches process-wide state and is unsafe alongside concurrent answer calls.
-
-Run: ``.venv/bin/python -m backend.app.chat.retrieval_bench``. Artifacts use
-fixed query order and chunk-ID tie-breaks, without timestamps.
-"""
+"""Compare retrieval methods using frozen development gates."""
 
 from __future__ import annotations
 
@@ -47,21 +33,13 @@ RULES_PATH = dataset_path("rules.json")
 DISHES_PATH = dataset_path("dishes.json")
 RESULTS_PATH = artifact_dir("retrieval") / "retrieval_bench_results.json"
 
-# This row must match the deployed KBIndex configuration.
 PROD_NAME = "bm25_word_syn"
 
-# Reciprocal Rank Fusion parameters (Cormack/Clarke/Büttcher, SIGIR 2009):
-# score(d) = sum_m 1/(RRF_K + rank_m(d)) over the union of candidate ids;
-# each component contributes its top-RRF_COMPONENT_DEPTH ranked candidates.
 RRF_K = 60
 RRF_COMPONENT_DEPTH = 50
 
-# Uncalibrated RRF fallback, not a BM25-scale threshold. Evaluation calibrates
-# experimental gates on development examples, never held-out scores.
 FUSION_MIN_SCORE = 0.04
 
-# End-to-end spot-check: supported nutrient questions need grounded citations;
-# numeric sugar/fat requests without a supporting constraint may be refused.
 END_TO_END_QUESTIONS = [
     "How much sodium can I have per day?",
     "What is the sodium limit for someone with high blood pressure?",
@@ -76,9 +54,6 @@ END_TO_END_QUESTIONS = [
 ]
 
 
-
-# Intake questions require constraint-producing rules. Broader topic questions
-# may use other relevant rules. See evaluation/groundedness.py.
 _SODIUM = ["CKD-2024-SODIUM-2000", "CONFLICT-SODIUM-CKD-WINS",
            "DASH-2025-SODIUM-2300", "DASH-2025-SODIUM-1500",
            "ADA-2026-SODIUM-2300", "GEN-SODIUM-2300"]
@@ -119,16 +94,8 @@ def _dishes_by_tag(kb: KBGraph, tag: str) -> list[str]:
 
 
 def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
-    """The deterministic labeled retrieval set (58 queries).
-
-    Each entry: ``id``, ``category``, ``query``, ``relevant`` (chunk ids) and
-    an optional human ``note``. Order is fixed; relevance sets are derived
-    from KB semantics (constraint-producing rules / dish tags), not from any
-    retrieval method's behaviour.
-    """
     R = _rules
     queries: list[dict[str, Any]] = [
-        # Guideline/nutrient queries mirror evaluation/groundedness.
         {"id": "g01", "category": "guideline_nutrient", "query": "How much sodium can I have per day?", "relevant": R(*_SODIUM)},
         {"id": "g02", "category": "guideline_nutrient", "query": "Is salt bad for my blood pressure?", "relevant": R(*_SODIUM)},
         {"id": "g03", "category": "guideline_nutrient", "query": "What is the sodium limit for someone with high blood pressure?", "relevant": R(*_SODIUM)},
@@ -149,13 +116,11 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
         {"id": "g18", "category": "guideline_nutrient", "query": "at least how much protein should I eat daily", "relevant": R(*_PROTEIN)},
         {"id": "g19", "category": "guideline_nutrient", "query": "low sodium eating tips", "relevant": R(*_SODIUM)},
         {"id": "g20", "category": "guideline_nutrient", "query": "potassium rich foods guidance", "relevant": R(*_POTASSIUM)},
-        # Conflicts
         {"id": "c01", "category": "conflict", "query": "My kidney guideline says 2000 mg sodium but the hypertension guideline says 2300 mg - which applies?", "relevant": R(*_CONFLICT_SODIUM)},
         {"id": "c02", "category": "conflict", "query": "One guideline tells me to eat more potassium, another says limit potassium - what do I follow?", "relevant": R(*_CONFLICT_K)},
         {"id": "c03", "category": "conflict", "query": "Why do the sodium limits differ between the DASH and kidney guidelines?", "relevant": R("CONFLICT-SODIUM-CKD-WINS", "CKD-2024-SODIUM-2000", "DASH-2025-SODIUM-2300", "DASH-2025-SODIUM-1500")},
         {"id": "c04", "category": "conflict", "query": "Which rule wins when two guidelines disagree about potassium?", "relevant": R(*_CONFLICT_K)},
         {"id": "c05", "category": "conflict", "query": "conflicting advice about salt intake for kidney disease", "relevant": R(*_CONFLICT_SODIUM)},
-        # Phrasing variants and typos
         {"id": "t01", "category": "variant_typo", "query": "how much soduim per day", "relevant": R(*_SODIUM), "note": "typo: sodium"},
         {"id": "t02", "category": "variant_typo", "query": "wat is my daily salt limit", "relevant": R(*_SODIUM), "note": "typo: what"},
         {"id": "t03", "category": "variant_typo", "query": "protien intake advice for ckd", "relevant": R("CKD-2024-PROTEIN-055-08", "CKD-2024-PROTEIN-CEILING-13"), "note": "typo: protein"},
@@ -164,7 +129,6 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
         {"id": "t06", "category": "variant_typo", "query": "potasium limit", "relevant": R(*_POTASSIUM), "note": "typo: potassium"},
         {"id": "t07", "category": "variant_typo", "query": "phospherus in my diet", "relevant": R(*_PHOS), "note": "typo: phosphorus"},
         {"id": "t08", "category": "variant_typo", "query": "can i drink sweet fizzy drinks", "relevant": R(*_SUGAR), "note": "plain phrasing for sugar rules"},
-        # Topic rules without nutrient constraints
         {"id": "p01", "category": "topic", "query": "can i use salt substitute", "relevant": R(*_K_SALT_SUB)},
         {"id": "p02", "category": "topic", "query": "is potassium based salt replacer safe for me", "relevant": R(*_K_SALT_SUB)},
         {"id": "p03", "category": "topic", "query": "can i drink alcohol with high blood pressure", "relevant": R("DASH-2025-ALCOHOL")},
@@ -177,7 +141,6 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
         {"id": "p10", "category": "topic", "query": "sglt2 medicine and my diet", "relevant": R("MED-SGLT2I-CONTEXT")},
         {"id": "p11", "category": "topic", "query": "what does the dash dietary pattern recommend", "relevant": R("DASH-2025-MINERALS", "DASH-2025-FIBER-30", "DASH-2025-SATFAT-6PCT", "DASH-2025-SODIUM-2300", "DASH-2025-SODIUM-1500")},
         {"id": "p12", "category": "topic", "query": "metformin and diet advice", "relevant": R("MED-METFORMIN-CONTEXT")},
-        # Dish nutrient content
         {"id": "d01", "category": "dish", "query": "How much sodium is in Chicken Rice (Hainanese)?", "relevant": ["dish:SG0001"]},
         {"id": "d02", "category": "dish", "query": "sodium content of chicken rice", "relevant": ["dish:SG0001", "dish:SG0002"]},
         {"id": "d03", "category": "dish", "query": "how much soduim in chiken rice", "relevant": ["dish:SG0001", "dish:SG0002"], "note": "typos: sodium, chicken"},
@@ -197,17 +160,13 @@ def labeled_queries(kb: KBGraph) -> list[dict[str, Any]]:
     return queries
 
 
-
 def _tokenize(text: str) -> list[str]:
-    """Reuse the production tokenizer so benchmark and deployed BM25 tokens agree."""
     from backend.app.chat import retrieval as production_retrieval
 
     return production_retrieval._tokenize(text)
 
 
 class BenchMethod:
-    """Common interface: ``retrieve(query, k) -> [{chunk_id, score}, ...]``."""
-
     name: str = "base"
 
     def retrieve(self, query: str, k: int = 5) -> list[dict[str, Any]]:
@@ -215,8 +174,6 @@ class BenchMethod:
 
 
 class ProductionMethod(BenchMethod):
-    """Wrap the deployed ``retrieval.KBIndex`` without changing its ranking."""
-
     def __init__(self, index: Any, name: str) -> None:
         self.name = name
         self._index = index
@@ -295,16 +252,7 @@ class BM25Method(BenchMethod):
 
 
 class RRFMethod(BenchMethod):
-    """Reciprocal Rank Fusion of independent ranked lists (k=60).
-
-    Fuse the union of component candidates, not just BM25 hits, so character
-    n-grams can recover missed chunks. Reciprocal ranks avoid mixing BM25 and
-    cosine score scales. Ties break on ``chunk_id``.
-
-    ``calibrate_methods`` selects ``min_score`` on development examples.
-    ``_answer_with_method`` temporarily applies that gate to end-to-end calls;
-    ``diagnose_fusion_gate`` only reports held-out overlap.
-    """
+    """Fuse the union of candidates without mixing incompatible score scales."""
 
     def __init__(
         self,
@@ -335,11 +283,6 @@ class RRFMethod(BenchMethod):
 
 
 def build_methods(kb: KBGraph) -> dict[str, BenchMethod]:
-    """Build every benchmark method over the production chunking.
-
-    ``PROD_NAME`` wraps the deployed index. TF-IDF rows are comparators, not
-    production configurations. Refusal gates are assigned by ``calibrate_methods``.
-    """
     from backend.app.chat import retrieval as production_retrieval
 
     prod_index = production_retrieval.build_index(kb)
@@ -373,14 +316,12 @@ def build_methods(kb: KBGraph) -> dict[str, BenchMethod]:
         PROD_NAME: ProductionMethod(prod_index, PROD_NAME),
         "bm25_word_nosyn": BM25Method("bm25_word_nosyn", chunks, None),
     }
-    # Fuse deployed BM25 with synonym-expanded character-ngram TF-IDF.
     methods["bm25_rrf_char"] = RRFMethod(
         "bm25_rrf_char",
         [methods[PROD_NAME], methods["tfidf_char_wb_3_5_syn"]],
         chunks,
     )
     return methods
-
 
 
 def _query_metrics(ranked_ids: list[str], relevant: set[str]) -> dict[str, float]:
@@ -419,13 +360,7 @@ def _rank_retrieval_methods(results: list[dict[str, Any]]) -> list[str]:
 
 
 def _answer_with_method(method: BenchMethod, kb: KBGraph, question: str) -> dict[str, Any]:
-    """Run the real ``answers.answer`` with ``method`` injected for retrieval.
-
-    Replace ``retrieval.build_index`` and, when supplied, ``MIN_SCORE`` for one
-    call. Restore both in ``finally`` without modifying source files. All
-    calibrated methods use their own score-scale gate. These process-wide
-    patches are not safe for concurrent answer calls.
-    """
+    """Temporary process wide patches are unsafe during concurrent answer calls."""
     from backend.app.chat import retrieval as retrieval_module
     from backend.app.chat.answers import answer
     from backend.app.chat.retrieval import KBIndex
@@ -460,7 +395,7 @@ def _end_to_end_spot_check(
         rows = []
         for question in END_TO_END_QUESTIONS:
             if escalation.check(question)["escalate"]:
-                continue  # never expected for these grounded questions
+                continue
             response = _answer_with_method(method, kb, question)
             cited = [c.get("rule_id") for c in response.get("citations", [])]
             acceptable = {
@@ -492,9 +427,7 @@ def _end_to_end_spot_check(
     }
 
 
-
-# Add held-out typo probes: shared character n-grams can match garbled text,
-# so clean irrelevant questions alone understate fusion's refusal risk.
+# Typo probes catch false matches that clean irrelevant questions miss.
 _TYPO_NONSENSE_PROBES = [
     "wat is teh wether forcast tomorow",
     "tel me a jok plese",
@@ -514,14 +447,7 @@ def _irrelevant_probes() -> list[str]:
 def diagnose_fusion_gate(
     kb: KBGraph | None = None, method: RRFMethod | None = None
 ) -> dict[str, Any]:
-    """Report held-out RRF score overlap without selecting or changing a gate.
-
-    Compares the best irrelevant score with the weakest labeled-relevant score
-    and checks the method's existing threshold against that interval. Gate
-    selection happens elsewhere: ``calibrate_methods`` chooses experimental
-    thresholds on development examples before evaluation; this diagnostic only
-    reports how the frozen gate separates held-out data.
-    """
+    """Report held out overlap without selecting or changing the gate."""
     if kb is None:
         from backend.app.core.kb_loader import get_kb
 
@@ -552,7 +478,6 @@ def diagnose_fusion_gate(
         (r for r in relevant_rows if r["category"] != "variant_typo"),
         key=lambda r: (r["best_score"], r["id"]),
     )
-    # An unset gate needs the fallback, not calibration on held-out scores.
     threshold = (
         method.min_score if method.min_score is not None else FUSION_MIN_SCORE
     )
@@ -567,21 +492,13 @@ def diagnose_fusion_gate(
     }
 
 
-# Historical callable alias: the serialized results key also stays
-# ``fusion_calibration`` for compatibility with existing artifacts/readers.
+# Retain the callable alias and serialized key for older artifact readers.
 calibrate_fusion = diagnose_fusion_gate
 
 
 def _irrelevant_refusal_check(
     methods: dict[str, BenchMethod], kb: KBGraph
 ) -> dict[str, Any]:
-    """End-to-end refusal check: irrelevant probes through ``answers.answer``.
-
-    Run for the production row and the fusion row; the fusion row runs under
-    its calibrated ``min_score`` (patched via ``_answer_with_method``), the
-    production row under the production ``MIN_SCORE``. Irrelevant questions
-    must be refused, never answered.
-    """
     out: dict[str, Any] = {}
     for name in (PROD_NAME, "bm25_rrf_char"):
         rows = []
@@ -596,8 +513,6 @@ def _irrelevant_refusal_check(
     return out
 
 
-
-# Development-only examples. None belongs to the held-out ranking/e2e sets.
 _CALIBRATION_RELEVANT = [
     "Explain dietary sodium guidance for an adult with hypertension",
     "What guidance covers dietary fibre for adults with diabetes",
@@ -617,7 +532,7 @@ _CALIBRATION_IRRELEVANT = [
 
 
 def calibrate_methods(methods):
-    """Freeze scale-specific gates on development examples before evaluation."""
+    """Freeze experimental gates on development examples before evaluation."""
     from backend.app.chat.retrieval import MIN_SCORE
 
     result = {}
@@ -632,7 +547,6 @@ def calibrate_methods(methods):
         def errors(threshold, examples=examples):
             return sum((row["score"] > threshold) != row["relevant"] for row in examples)
         threshold = min(candidates, key=lambda t: (errors(t), -t))
-        # Keep the deployed baseline fixed; experimental retrievers get their own gates.
         method.min_score = MIN_SCORE if name == PROD_NAME else threshold
         result[name] = {"threshold": method.min_score, "development_errors": errors(method.min_score),
                         "selection": "deployed baseline" if name == PROD_NAME else "development minimum classification error",
@@ -640,7 +554,6 @@ def calibrate_methods(methods):
     return result
 
 def evaluate(kb: KBGraph | None = None) -> dict[str, Any]:
-    """Run the full benchmark and return the results dict (deterministic)."""
     if kb is None:
         kb = load_kb(RULES_PATH, DISHES_PATH)
 
@@ -651,7 +564,7 @@ def evaluate(kb: KBGraph | None = None) -> dict[str, Any]:
     queries = labeled_queries(kb)
     prod_method = methods[PROD_NAME]
     assert isinstance(prod_method, ProductionMethod)
-    chunks = prod_method._index.chunks  # production chunking
+    chunks = prod_method._index.chunks
     all_chunk_ids = {c["chunk_id"] for c in chunks}
 
     method_results: list[dict[str, Any]] = []
@@ -712,7 +625,6 @@ def evaluate(kb: KBGraph | None = None) -> dict[str, Any]:
 
 
 def write_results(results: dict[str, Any], path: Path | None = None) -> Path:
-    """Write the results artifact (sorted keys, rounded floats => deterministic)."""
     target = Path(path) if path is not None else RESULTS_PATH
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
@@ -722,7 +634,6 @@ def write_results(results: dict[str, Any], path: Path | None = None) -> Path:
 
 
 def run_bench(kb: KBGraph | None = None) -> tuple[dict[str, Any], Path]:
-    """Write the Markdown report and JSON results; return results and the JSON path."""
     results = evaluate(kb)
     RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     RESULTS_PATH.with_name("RETRIEVAL_BENCH.md").write_text(render_report(results), encoding="utf-8")
@@ -761,7 +672,6 @@ def render_report(results):
               "Groundedness evaluation separately checks patient applicability, clinician overrides and exact approved values. "
               "Full per-query results, thresholds and development examples are in `retrieval_bench_results.json`."), ""]
     return "\n".join(lines)
-
 
 
 def _fmt(value: float) -> str:

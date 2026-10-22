@@ -1,12 +1,4 @@
-"""Map rulebook exclusions that do not literally match catalogue vocabulary.
-
-``SEMANTIC_EXCLUSIONS`` uses per-serving catalogue heuristics, not verified
-recipe annotations. Phosphorus density is only a proxy for phosphate additives.
-Scope flags such as pregnancy describe patients, not dishes.
-
-Unknown values receive literal matching only and may exclude nothing. Check
-catalogue coverage whenever adding a rulebook exclusion.
-"""
+"""Map rule exclusions to catalogue heuristics."""
 
 from __future__ import annotations
 
@@ -22,8 +14,6 @@ def _nutrient_gt(dish: Any, key: str, threshold: float) -> bool:
         return False
 
 
-# (kind, value) -> predicate spec.  Predicates are small tuples interpreted by
-# :func:`semantic_exclusion_hit` so the table stays data, not code.
 SEMANTIC_EXCLUSIONS: dict[tuple[str, str], dict[str, Any]] = {
     ("dish_category", "high_potassium_foods"): {
         "predicate": ("nutrient_gt", "potassium_mg", 500.0),
@@ -60,13 +50,7 @@ SEMANTIC_EXCLUSIONS: dict[tuple[str, str], dict[str, Any]] = {
 
 
 def semantic_exclusion_hit(flag_kind: str, flag_value: str, dish: Any) -> bool:
-    """Does the semantic mapping exclude ``dish`` for this rulebook exclusion?
-
-    Literal tag/category/ingredient matching is tried first by the caller
-    (:func:`backend.optim.problem._matches_exclusion`); this function covers
-    only the rulebook values listed in :data:`SEMANTIC_EXCLUSIONS`.  Unknown
-    values return ``False`` (literal-only behaviour, unchanged).
-    """
+    """Unknown exclusions receive literal matching only."""
     spec = SEMANTIC_EXCLUSIONS.get((flag_kind, flag_value))
     if spec is None:
         return False

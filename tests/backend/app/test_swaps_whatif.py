@@ -1,5 +1,3 @@
-"""Check patient-aware swaps, immutable source plans, and isolated simulations."""
-
 from __future__ import annotations
 
 import pytest
@@ -10,8 +8,6 @@ from backend.app.core.approval_gate import (
     find_latest_envelope_for_patient,
 )
 
-# Attach simulations only when the imported app omits its route; normal
-# application imports already mount it.
 from backend.app.main import app as _app
 from backend.optim.problem import exclusion_for
 from backend.optim.real_data import load_dishes
@@ -23,7 +19,6 @@ if not any(getattr(route, "path", None) == "/simulations" for route in _app.rout
 
 
 def _approve_and_plan(client, patient_id: str) -> dict:
-    """Approve and plan; return an envelope_id/plan wrapper."""
     rules = client.post("/rules/run", json={"patient_id": patient_id})
     assert rules.status_code == 200, rules.text
     envelope_id = rules.json()["envelope"]["envelope_id"]
@@ -51,11 +46,6 @@ def p0001(client):
 
 
 def test_p0006_regression_excluded_candidate_never_recommended(client, p0006) -> None:
-    """Returned candidates pass whole-day hard checks and carry nutrient deltas.
-
-    The forced SG0009 -> SG0030 ranking precondition is covered separately in
-    test_downstream_audit_regressions; this case exercises real endpoint ranking.
-    """
     pair = _first_valid_swap(client, p0006["plan"])
     assert pair is not None
     source, _ = pair
@@ -93,7 +83,6 @@ def test_p0006_regression_excluded_candidate_never_recommended(client, p0006) ->
 
 
 def test_substitutions_without_patient_id_is_unchanged(client) -> None:
-    """Legacy response shape: no validation fields, no persistence access."""
     resp = client.get("/mining/substitutions", params={"dish_id": "SG0009", "k": 3})
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -107,7 +96,6 @@ def test_substitutions_without_patient_id_is_unchanged(client) -> None:
 
 
 def test_substitutions_patient_without_plan_409(client) -> None:
-    """Envelope exists but no saved plan -> 409 plan_context_required."""
     rules = client.post("/rules/run", json={"patient_id": "P0005"})
     assert rules.status_code == 200, rules.text
     resp = client.get(
@@ -121,7 +109,6 @@ def test_substitutions_patient_without_plan_409(client) -> None:
 
 
 def _first_valid_swap(client, plan) -> tuple[str, str] | None:
-    """First validated pair for the supplied immutable plan, not the latest plan."""
     saved = persistence.get_plan(plan["plan_id"])
     assert saved is not None
     patient_id = saved["patient_id"]
@@ -167,7 +154,6 @@ def test_apply_valid_swap_creates_new_plan_with_lineage(client, p0006) -> None:
     assert new_plan["applied_swap"]["replacement_dish_id"] == replacement
     assert new_plan["feasible"] is True and new_plan["violation_count"] == 0
 
-    # Fetchable through the normal plan endpoint, source plan untouched.
     fetched = client.get(f"/plans/{new_plan['plan_id']}")
     assert fetched.status_code == 200, fetched.text
     assert fetched.json()["days"] == new_plan["days"]
@@ -175,13 +161,10 @@ def test_apply_valid_swap_creates_new_plan_with_lineage(client, p0006) -> None:
     assert original.status_code == 200, original.text
     assert original.json()["days"] == plan["days"]
 
-    # The day the swap touched actually changed.
     assert new_plan["days"] != plan["days"]
 
 
 def test_apply_swap_breaking_max_ceiling_422(client, p0006) -> None:
-    """A swap whose replacement pushes a day past a hard MAX -> 422 and no
-    new plan row."""
     envelope = find_latest_envelope_for_patient("P0006")
     assert envelope is not None
     dishes = load_dishes()
@@ -237,7 +220,6 @@ def test_apply_swap_breaking_max_ceiling_422(client, p0006) -> None:
 
 
 def test_apply_swap_with_excluded_replacement_422(client, p0006) -> None:
-    """An excluded replacement never lands in the plan -> 422 (exclusion)."""
     envelope = find_latest_envelope_for_patient("P0006")
     assert envelope is not None
     excluded = [
@@ -265,7 +247,6 @@ def test_apply_swap_with_excluded_replacement_422(client, p0006) -> None:
 
 
 def _targets_with_sodium_max(value: float) -> list[dict]:
-    """The approved P0001 targets with the sodium ceiling set to ``value``."""
     envelope = find_latest_envelope_for_patient("P0001")
     assert envelope is not None
     targets = [
@@ -307,9 +288,9 @@ def test_whatif_comparison_is_read_only_and_persisted(client, p0001) -> None:
 
     simulated = body["simulated"]
     assert simulated["envelope_id"].startswith("SIM-")
-    assert simulated["plan_id"] is None  # simulations never create plan rows
+    assert simulated["plan_id"] is None
     assert simulated["feasible"] is True, simulated.get("infeasibility_reason")
-    assert simulated["adequacy_summary"]  # scored vs the SIMULATED aims
+    assert simulated["adequacy_summary"]
 
     deltas = body["deltas"]
     assert set(deltas) == {
@@ -319,7 +300,6 @@ def test_whatif_comparison_is_read_only_and_persisted(client, p0001) -> None:
     assert all(value is not None for value in deltas.values())
     assert isinstance(deltas["meals_changed"], int) and deltas["meals_changed"] >= 0
 
-    # Read-only guarantee: live state is untouched by the simulation.
     assert sorted(ENVELOPE_STORE) == envelope_ids_before
     assert persistence.latest_plan_for_patient("P0001") == latest_plan_before
     assert persistence.list_plans("P0001") == plans_before
@@ -338,8 +318,6 @@ def test_whatif_comparison_is_read_only_and_persisted(client, p0001) -> None:
 
 
 def test_whatif_infeasible_targets_still_reported(client, p0001) -> None:
-    """A provably impossible target set answers 200 with infeasibility
-    reporting instead of raising; the live state stays untouched."""
     plans_before = persistence.list_plans("P0001")
     resp = client.post(
         "/simulations",
@@ -355,8 +333,6 @@ def test_whatif_infeasible_targets_still_reported(client, p0001) -> None:
 
 
 def test_simulation_store_survives_fresh_handle(client, p0001) -> None:
-    """Restart-style read: a fresh transaction (each persistence call opens
-    its own connection) still lists the stored simulation."""
     persistence.init_db()
     rows = persistence.list_simulations("P0001")
     assert rows, "stored simulations must survive a fresh handle"

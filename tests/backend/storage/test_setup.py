@@ -1,5 +1,3 @@
-"""Deployment setup is automatic, preserves the schema primitives and has no CLI options."""
-
 import pytest
 
 from backend.storage import setup

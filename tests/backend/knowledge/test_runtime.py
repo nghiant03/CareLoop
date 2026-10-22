@@ -1,5 +1,3 @@
-"""Release-mode integration in fresh processes so global caches cannot leak between tests."""
-
 import json
 import os
 import subprocess

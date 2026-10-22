@@ -1,5 +1,3 @@
-"""Provider and request-boundary tests do not need any PostgreSQL server."""
-
 import base64
 from types import SimpleNamespace
 

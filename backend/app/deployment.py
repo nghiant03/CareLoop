@@ -1,10 +1,7 @@
-"""Choose a deployment surface once, without making draft knowledge live."""
-
 import os
 
 
 def create_app():
-    """Published mode preserves startup gates. Review mode exposes no clinical routers."""
     mode = os.environ.get("CARELOOP_DEPLOYMENT_MODE", "published")
     if mode == "published":
         from backend.app.main import app

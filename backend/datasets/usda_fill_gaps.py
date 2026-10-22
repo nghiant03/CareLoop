@@ -1,16 +1,4 @@
-"""Experimental USDA nutrient gap estimates requiring recipe and human review.
-
-Estimate missing per-serving potassium/phosphorus from FoodData Central hits.
-USDA values are per 100 g. Equal ingredient weight shares substitute for unknown
-recipe quantities, so estimates require recipe and portion review before use.
-
-Set ``USDA_API_KEY`` for imports rather than relying on the shared demo key.
-Local request budgets do not replace server quotas. Rate limits stop imports,
-which retain completed dishes. Search failures and unknown values follow each
-helper's contract.
-
-Run: ``python -m backend.datasets.usda_fill_gaps --dishes /external/dishes.json --limit 10``.
-"""
+"""Estimate missing nutrients from USDA ingredient matches."""
 
 from __future__ import annotations
 
@@ -28,14 +16,11 @@ from typing import Any
 
 FDC_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
 
-# USDA nutrient identifiers (nutrientId in the FDC API response).
 NUTRIENT_ID_POTASSIUM = 1092
 NUTRIENT_ID_PHOSPHORUS = 1091
 
-# Use a data.gov key for imports rather than relying on the shared demo quota.
 DEFAULT_API_KEY = "DEMO_KEY"
 
-# Default per-budget limit; file imports share one budget across the run.
 MAX_REQUESTS_PER_RUN = 30
 
 
@@ -45,8 +30,6 @@ class RateLimitError(RuntimeError):
 
 @dataclass
 class RequestBudget:
-    """Track requests made through this instance; share it to bound a whole run."""
-
     max_requests: int = MAX_REQUESTS_PER_RUN
     used: int = 0
     _last_call_ts: float = field(default=0.0)
@@ -67,7 +50,6 @@ class RequestBudget:
 
 
 def _http_get_json(url: str, timeout: float = 15.0) -> dict[str, Any]:
-    """GET ``url`` and decode JSON. Raises RateLimitError on HTTP 429."""
     req = urllib.request.Request(url, headers={"User-Agent": "CareLoop/0.1 (data-pipeline)"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -88,12 +70,7 @@ def search_food(
     budget: RequestBudget | None = None,
     timeout: float = 15.0,
 ) -> list[dict[str, Any]]:
-    """Search FDC for ``query`` and return raw food dicts.
-
-    Returns an empty list for network/HTTP/JSON failures other than HTTP 429.
-    Local budget exhaustion and HTTP 429 raise ``RateLimitError``. Malformed
-    response shapes or invalid arguments can still raise outside that guard.
-    """
+    """Search failures return no hits. Rate limits propagate."""
     budget = budget or RequestBudget()
     params = urllib.parse.urlencode(
         {
@@ -116,7 +93,6 @@ def search_food(
 
 
 def _extract_nutrient(food: dict[str, Any], nutrient_id: int) -> float | None:
-    """Pull one nutrient value (per 100 g) from an FDC food record."""
     for n in food.get("foodNutrients", []) or []:
         nid = n.get("nutrientId") or n.get("nutrient", {}).get("id")
         if nid == nutrient_id:
@@ -136,13 +112,7 @@ def estimate_kp_for_ingredient(
     api_key: str = DEFAULT_API_KEY,
     budget: RequestBudget | None = None,
 ) -> dict[str, Any]:
-    """Estimate K/P (mg) for ``portion_g`` of a single ingredient.
-
-    Uses the first FDC hit's per-100 g values scaled by ``portion_g / 100``.
-    Returns a dict with ``potassium_mg``/``phosphorus_mg`` (None when unknown),
-    the matched description and the fdcId. Missing hits return unknown values;
-    rate limits propagate so the run owner can stop. Invalid shapes may raise.
-    """
+    """Scale the first match from values per hundred grams. Missing values remain unknown."""
     result: dict[str, Any] = {
         "ingredient": ingredient,
         "portion_g": portion_g,
@@ -173,21 +143,9 @@ def estimate_dish_gaps(
     api_key: str = DEFAULT_API_KEY,
     budget: RequestBudget | None = None,
 ) -> dict[str, Any]:
-    """Estimate missing K/P for one dish from its ingredient list.
-
-    Splits the serving weight equally across ingredients, scales each matched
-    per-100 g value, and sums the available estimates. Unknown recipe quantities
-    and missing matches can bias results in either direction; keep
-    ``provenance='usda_estimate'`` until human review.
-
-    Existing nonzero K/P values are preserved; None and zero count as gaps.
-    Returns a shallow copy without mutating ``dish``. Changed estimates clear
-    verification. Rate limits propagate and discard this dish's partial estimates;
-    invalid inputs or malformed response shapes may raise.
-    """
+    """Equal ingredient shares estimate unknown recipe weights. Changed estimates clear verification."""
     portion = float(dish.get("portion_g") or 100.0)
     ingredients = dish.get("ingredients") or []
-    # Recipe weights are unavailable; equal shares are an estimation assumption.
     per_ingredient_g = portion / max(len(ingredients), 1)
 
     total_k = 0.0
@@ -217,7 +175,7 @@ def estimate_dish_gaps(
     if out.get("potassium_mg") != dish.get("potassium_mg") or out.get("phosphorus_mg") != dish.get("phosphorus_mg"):
         out["provenance"] = "usda_estimate"
         out["verified"] = False
-        # K/P estimates affect nutrient tags, not curated cooking/protein roles.
+        # Nutrient estimates must not change curated cooking roles.
         tags = list(out.get("tags") or [])
         for tag, nutrient, threshold in (("high_potassium", "potassium_mg", 700),
                                          ("high_phosphorus", "phosphorus_mg", 300)):
@@ -235,13 +193,7 @@ def fill_gaps_in_file(
     min_interval_s: float = 0.0,
     budget: RequestBudget | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Load a dishes JSON, estimate K/P for records missing them.
-
-    Returns ``(dishes, n_updated)``. Only dishes with a missing K or P and a
-    non-empty ingredient list are candidates. Request budget is shared across the
-    whole run. Pass a budget to inspect request usage. On a rate limit, retain
-    completed dishes but leave the interrupted and subsequent dishes unchanged.
-    """
+    """Retain completed dishes on rate limits and leave the interrupted dish unchanged."""
     dishes = json.loads(path.read_text(encoding="utf-8"))
     budget = budget or RequestBudget(max_requests=MAX_REQUESTS_PER_RUN)
     candidates = [

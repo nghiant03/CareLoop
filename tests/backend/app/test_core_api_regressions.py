@@ -1,5 +1,3 @@
-"""Regressions for creation, review retries, validation, and durable attribution."""
-
 from __future__ import annotations
 
 import pytest
@@ -13,7 +11,6 @@ from backend.app.models.patient import Patient
 
 @pytest.fixture(autouse=True)
 def _isolated_stores():
-    """Fresh logs/journal/review rows + snapshot envelope store per test."""
     snapshot = dict(ENVELOPE_STORE)
     store.clear()
     persistence.clear_all()
@@ -22,7 +19,6 @@ def _isolated_stores():
     persistence.clear_all()
     ENVELOPE_STORE.clear()
     ENVELOPE_STORE.update(snapshot)
-
 
 
 _NEW_PATIENT = {
@@ -41,7 +37,6 @@ def test_create_patient_conflicts_with_fixture_id(client) -> None:
     assert resp.status_code == 409, resp.text
     assert resp.json()["detail"]["error"] == "patient_exists"
     assert resp.json()["detail"]["patient_id"] == "P0001"
-    # The fixture record is untouched, not shadowed.
     fixture = client.get("/patients/P0001")
     assert fixture.status_code == 200, fixture.text
     assert fixture.json()["patient_id"] == "P0001"
@@ -57,16 +52,15 @@ def test_create_patient_repeat_returns_conflict_without_replacing(client) -> Non
 
     fetched = client.get("/patients/p-fix4")
     assert fetched.status_code == 200, fetched.text
-    assert fetched.json()["weight_kg"] == 70.0  # stored profile not replaced
+    assert fetched.json()["weight_kg"] == 70.0
 
 
 def test_ui_lab_alias_mirrors_overlaid_canonical_value(client) -> None:
-    # A stored lowercase alias (extra key) must not mask later observations.
     payload = {
         **_NEW_PATIENT,
         "patient_id": "p-alias",
         "serum_K_meq_L": 4.0,
-        "serum_k": 4.0,  # stale alias stored alongside the canonical key
+        "serum_k": 4.0,
         "archetype": "renal",
     }
     created = client.post("/patients", json=payload)
@@ -87,8 +81,8 @@ def test_ui_lab_alias_mirrors_overlaid_canonical_value(client) -> None:
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["serum_K_meq_L"] == 6.5
-    assert body["serum_k"] == 6.5  # alias derived from the canonical value
-    assert body["archetype"] == "renal"  # unrelated extras preserved
+    assert body["serum_k"] == 6.5
+    assert body["archetype"] == "renal"
     assert body["id"] == "p-alias"
 
 
@@ -110,7 +104,6 @@ def test_acknowledge_cannot_regress_recorded_action(client) -> None:
     assert acted is not None
     assert acted["status"] == "ACTION_RECORDED"
 
-    # The racy write path: unconditional acknowledgement would regress this.
     after_ack = persistence.acknowledge_review_item(review_id)
     assert after_ack is not None
     assert after_ack["status"] == "ACTION_RECORDED"
@@ -164,15 +157,13 @@ def test_review_proposal_retry_relinks_orphan_without_duplicate(lenient_client, 
     first = client.post(f"/review/{review_id}/proposal")
     assert first.status_code == 500, first.text
 
-    # Partial success: the proposal exists, but the review item is unlinked
-    # and carries the recoverable pending marker.
     orphan_ids = _proposed_envelope_ids("P0002")
     assert len(orphan_ids) == 1
     row = persistence.get_review_item(review_id)
     assert row is not None
     assert row["linked_envelope_id"] is None
     assert row["action"]["action"] == "proposal_pending"
-    assert row["status"] == "OPEN"  # pending marker did not touch lifecycle
+    assert row["status"] == "OPEN"
 
     retry = client.post(f"/review/{review_id}/proposal")
     assert retry.status_code == 200, retry.text
@@ -181,13 +172,10 @@ def test_review_proposal_retry_relinks_orphan_without_duplicate(lenient_client, 
     assert body["review_item"]["linked_envelope_id"] == orphan_ids[0]
     assert body["review_item"]["action"]["action"] == "proposal_created"
 
-    # The retry recovered the orphan instead of minting a second proposal.
     assert _proposed_envelope_ids("P0002") == orphan_ids
 
 
 def test_validation_error_response_is_json_safe(client) -> None:
-    # JSON parsers accept the Infinity/NaN literals; the 422 body must not
-    # carry them through into non-strict JSON (which would render as a 500).
     resp = client.post(
         "/patients",
         content=(
@@ -197,11 +185,11 @@ def test_validation_error_response_is_json_safe(client) -> None:
         headers={"Content-Type": "application/json"},
     )
     assert resp.status_code == 422, resp.text
-    body = resp.json()  # must parse as strict JSON
+    body = resp.json()
     assert body["error"] == "validation_error"
     for error in body["detail"]:
         value = error.get("input")
-        assert not isinstance(value, float)  # nonfinite floats stringified
+        assert not isinstance(value, float)
     inputs = {error.get("input") for error in body["detail"]}
     assert "inf" in inputs and "nan" in inputs
 
@@ -219,7 +207,6 @@ def test_patient_model_rejects_nonfinite_clinical_numerics() -> None:
         Patient.model_validate({**base, "egfr": float("nan")})
     with pytest.raises(ValidationError):
         Patient.model_validate({**base, "serum_K_meq_L": float("inf")})
-    # Finite values (and bounds-legal None) are unaffected.
     assert Patient.model_validate(base).egfr is None
 
 
@@ -240,7 +227,6 @@ def test_reject_retains_reviewer_attribution(client) -> None:
     assert trace and trace[-1]["patient_summary"] == "rejected by dr-lim"
     assert "stale labs" in trace[-1]["action_summary"]
 
-    # Attribution is durable: it survives a fresh read of the snapshot.
     fetched = client.get(f"/envelopes/{envelope_id}")
     assert fetched.status_code == 200, fetched.text
     persisted = [r for r in fetched.json()["fired_rules"]

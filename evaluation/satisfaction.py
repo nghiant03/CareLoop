@@ -1,13 +1,3 @@
-"""Constraint satisfaction: engine -> approval -> optimiser -> verification.
-
-Run eligible proposals through local approval and ``plan_service.plan_meals``.
-Recompute hard compliance against the solved envelope and soft gaps against
-original aims. Report search failure and retained MIN relaxations separately.
-
-Exact diagnoses apply only to single-dish encoding. Leave-one-out greedy
-results identify helpful MAX removals, not unique blockers or impossibility.
-"""
-
 from __future__ import annotations
 
 import time
@@ -24,7 +14,7 @@ _FIXED_APPROVAL_TIME = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def _approve(envelope_model: Any) -> Any:
-    """Simulate the clinician approval gate (content unchanged, status flipped)."""
+    """Approval applies only to a local evaluation copy."""
     return envelope_model.model_copy(update={
         "status": "APPROVED",
         "approved_by": "evaluation-suite (simulated clinician approval)",
@@ -34,15 +24,7 @@ def _approve(envelope_model: Any) -> Any:
 
 def _per_day_check(plan: list[list[str]], solved_envelope: Any, dishes: list[Any],
                    aims_envelope: Any = None) -> dict[str, Any]:
-    """Recompute daily MAX compliance and informational MIN/TARGET gaps.
-
-    Hard checks use ``solved_envelope``. Soft gaps use ``aims_envelope`` when
-    supplied so relaxed floors cannot hide misses. MIN reports worst-day
-    shortfall. TARGET reports mean absolute daily distance, preventing cancellation.
-
-    ``soft_aims_by_constraint`` preserves each ``<nutrient>:<kind>`` aim.
-    Legacy ``soft_aims`` keeps only the last aim for each nutrient.
-    """
+    """Hard checks use solved constraints. Soft gaps retain original aims and constraint identity."""
     from backend.optim.problem import daily_totals
 
     totals = daily_totals(plan, dishes)
@@ -63,15 +45,15 @@ def _per_day_check(plan: list[list[str]], solved_envelope: Any, dishes: list[Any
     for target in soft_envelope.targets:
         kind = target.kind.value
         if kind == "max":
-            continue  # ceilings are verified as hard constraints above
+            continue
         key = target.nutrient.value
         values = [day[key] for day in totals]
         if kind == "min":
-            shortfall = max(0.0, target.value - min(values))  # worst day
+            shortfall = max(0.0, target.value - min(values))
             soft[f"{key}:{kind}"] = {"kind": kind, "floor": target.value,
                                      "worst_day_total": round(min(values), 3),
                                      "worst_day_shortfall": round(shortfall, 3)}
-        else:  # target
+        else:
             distances = [abs(v - target.value) for v in values]
             soft[f"{key}:{kind}"] = {"kind": kind, "aim": target.value,
                                      "mean_day_total": round(sum(values) / len(values), 3),
@@ -83,14 +65,7 @@ def _per_day_check(plan: list[list[str]], solved_envelope: Any, dishes: list[Any
 
 
 def _blocking_constraints(solved_envelope: Any, dishes: list[Any]) -> list[str]:
-    """Leave-one-out greedy diagnostic for infeasible envelopes.
-
-    Among nutrient targets, only hard MAX ceilings can block feasibility, so a
-    target is a "blocker" when dropping that MAX alone lets the greedy
-    constructor find a feasible plan.  Empty list => no single removal helps
-    within the heuristic budget. Neither outcome proves the remaining envelope
-    infeasible or identifies a unique clinical blocker; exclusions also apply.
-    """
+    """Leave one MAX out at a time. Heuristic outcomes do not prove impossibility or identify unique blockers."""
     from backend.optim.real_data import FastEvaluator, greedy_feasible_plan
     from shared.envelope_schema import ConstraintKind
 
@@ -117,7 +92,6 @@ def evaluate_satisfaction(
     n_gen: int = 80,
     diagnose_blockers: bool = True,
 ) -> dict[str, Any]:
-    """End-to-end constraint-satisfaction check over all eligible patients."""
     from backend.app.core.plan_service import plan_meals
     from shared.envelope_schema import NutrientEnvelope
 
@@ -160,7 +134,7 @@ def evaluate_satisfaction(
             "feasible": feasible,
             "allowed_dish_count": result.get("allowed_dish_count"),
             "relaxed_constraints": relaxed,
-            "solver_runtime_s": round(runtime_s, 3),  # wall-clock; not deterministic
+            "solver_runtime_s": round(runtime_s, 3),
             "infeasibility_reason": result.get("infeasibility_reason"),
             "infeasibility_status": result.get("infeasibility_status"),
             "meal_complete": result.get("meal_complete", False),

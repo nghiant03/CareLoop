@@ -1,5 +1,3 @@
-"""LLM-only discovery accepts arbitrary sources and never activates knowledge."""
-
 import copy
 import json
 from pathlib import Path

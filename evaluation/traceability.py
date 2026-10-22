@@ -1,10 +1,3 @@
-"""Traceability: every envelope constraint/exclusion cites a fired rule.
-
-Targets and exclusions need a matching trace action with guideline, section,
-and rule ID. Count rejected patients separately but still check their exclusions
-and trace citations.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -58,7 +51,6 @@ def _evaluate_patient(patient: dict[str, Any]) -> dict[str, Any]:
 
 
 def evaluate_traceability(patients: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """Traceability of every envelope constraint/exclusion to a cited rule firing."""
     patients = patients if patients is not None else load_patients()
     per_patient = [_evaluate_patient(p) for p in patients]
 

@@ -1,5 +1,3 @@
-"""The Pydantic model owns the schema; export does not create a source-tree mirror."""
-
 import json
 import subprocess
 import sys

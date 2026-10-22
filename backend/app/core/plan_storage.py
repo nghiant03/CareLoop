@@ -1,5 +1,3 @@
-"""Persist mapped plan documents with their approved inputs and source hashes."""
-
 import logging
 from typing import Any
 
@@ -24,12 +22,7 @@ def _kb_version() -> str:
 
 
 def try_save_plan_document(response: dict[str, Any], envelope: NutrientEnvelope) -> None:
-    """Save a mapped response and attach its plan ID/timestamp in place.
-
-    Log failures without blocking generation or swaps. Added hashes and envelope
-    metadata remain on failure. A post-save read can fail after commit, so an
-    absent response ID does not prove that nothing was persisted.
-    """
+    """Missing response identity does not prove a save failed because the read may fail after commit."""
     try:
         response["source_hashes"] = source_hashes()
         release = selected_release()

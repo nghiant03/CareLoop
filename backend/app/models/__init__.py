@@ -1,9 +1,3 @@
-"""CareLoop data models.
-
-Re-exports the canonical contracts from ``shared/envelope_schema.py`` plus the
-patient API profile model. The dataset generator uses ``backend.datasets.patient.Patient``.
-"""
-
 from __future__ import annotations
 
 from backend.app.models.envelope import (

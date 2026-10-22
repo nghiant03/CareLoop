@@ -1,5 +1,3 @@
-"""Check explicit chat identities without mixing patients or losing unknown IDs."""
-
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
@@ -34,9 +32,6 @@ def test_unknown_explicit_envelope_rejected_404() -> None:
 
 
 def test_patient_envelope_identity_conflict_rejected_409() -> None:
-    """One patient's envelope must never be answered with another patient's
-    profile context: P0019's envelope requested together with P0001's
-    patient_id is a 409, not a mixed-context answer."""
     with TestClient(app) as client:
         envelope_id = _envelope_id_for(client, "P0019")
         resp = client.post(

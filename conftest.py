@@ -1,5 +1,3 @@
-"""Isolate tests from live URLs; provision only uniquely named PostgreSQL databases."""
-
 import os
 import uuid
 from contextlib import contextmanager
@@ -30,7 +28,6 @@ def _map_legacy_test_arg(arg: str, repo_root: Path, tests_dir: Path) -> str:
 
 
 def pytest_load_initial_conftests(early_config, parser, args):
-    """Redirect legacy package test paths (rules, backend, evaluation, shared) into centralized tests/."""
     repo_root = Path(__file__).resolve().parent
     tests_dir = repo_root / "tests"
     for idx, arg in enumerate(args):
@@ -61,7 +58,7 @@ os.environ.pop("CARELOOP_KNOWLEDGE_RELEASE", None)
 
 @pytest.fixture(scope="session")
 def pg_database_factory():
-    """Require an explicit admin test URL; never clear a configured live database."""
+    """Use only an explicit test admin URL and uniquely named disposable databases."""
     from backend.storage import postgres
     from backend.storage.migrate import initialize_database
 

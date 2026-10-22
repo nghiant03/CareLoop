@@ -1,5 +1,3 @@
-"""Boundary regressions for search delivery, policy reuse, and helper contracts."""
-
 import json
 import subprocess
 import sys

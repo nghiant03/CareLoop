@@ -1,8 +1,3 @@
-"""Exercise meal logging, adherence summaries, and trends through the HTTP app.
-
-Use real rules for pending-review cases and tunable envelopes for exact totals.
-"""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -25,8 +20,6 @@ from shared.envelope_schema import (
 
 @pytest.fixture(autouse=True)
 def _isolated_clinical_state(pg_databases, monkeypatch):
-    # Each case owns its logs AND envelope journal. Reusing a fixture ID must
-    # not overwrite a previous case's envelope through the live revision gate.
     monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", pg_databases["clinical"])
 
 
@@ -42,7 +35,6 @@ def _log(client, patient_id: str, day: str, meal: str, dish_id: str):
 
 
 def _hand_built_envelope(patient_id: str, sodium_max: float, protein_min: float, energy_target: float) -> NutrientEnvelope:
-    """Small APPROVED envelope with deliberately tunable limits."""
     envelope = NutrientEnvelope(
         envelope_id=f"env-test-{patient_id}",
         patient_id=patient_id,
@@ -81,7 +73,7 @@ def test_log_meal_returns_entry(client) -> None:
         "dish_id": "SG0001",
         "logged_at": entry["logged_at"],
     }
-    assert entry["logged_at"]  # timestamp recorded
+    assert entry["logged_at"]
 
 
 def test_log_unknown_patient_404(client) -> None:
@@ -94,7 +86,7 @@ def test_log_unknown_dish_404(client) -> None:
     resp = _log(client, "P0001", _today(), "lunch", "SG9999")
     assert resp.status_code == 404, resp.text
     assert resp.json()["detail"]["error"] == "dish_not_found"
-    assert store.count_logs("P0001") == 0  # nothing stored on failure
+    assert store.count_logs("P0001") == 0
 
 
 def test_log_invalid_date_422(client) -> None:
@@ -115,7 +107,6 @@ def test_upsert_replaces_same_slot(client) -> None:
     day = _today()
     assert _log(client, "P0001", day, "lunch", "SG0001").status_code == 201
     assert _log(client, "P0001", day, "lunch", "SG0002").status_code == 201
-    # one row per (patient, date, meal): the newest log wins
     assert store.count_logs("P0001") == 1
     stored = store.get_log("P0001", day, "lunch")
     assert stored is not None
@@ -123,8 +114,6 @@ def test_upsert_replaces_same_slot(client) -> None:
 
 
 def test_summary_totals_match_dish_data(client) -> None:
-    """Per-day totals equal the sum of per-serving nutrients from the dataset."""
-    # Real rules engine: gives P0001 an envelope for the summary endpoint.
     run = client.post("/rules/run", json={"patient_id": "P0001"})
     assert run.status_code == 200, run.text
     assert client.post(f"/envelopes/{run.json()['envelope']['envelope_id']}/approve", json={}).status_code == 200
@@ -151,9 +140,6 @@ def test_summary_totals_match_dish_data(client) -> None:
 
 
 def test_hard_vs_soft_classification(client) -> None:
-    """MAX exceeded -> hard violation; MIN shortfall and TARGET miss -> soft gap."""
-    # Tight envelope: sodium MAX 1 mg (any dish violates), protein MIN 500 g
-    # (unreachable -> soft gap), energy TARGET 1 kcal (any dish overshoots).
     _hand_built_envelope("P0007", sodium_max=1.0, protein_min=500.0, energy_target=1.0)
     _log(client, "P0007", _today(), "lunch", "SG0001")
 
@@ -182,13 +168,10 @@ def test_hard_vs_soft_classification(client) -> None:
     assert energy["status"] == "soft_gap"
     assert energy["direction"] == "over"
 
-    # Soft gaps never count as hard violations.
-    # Partial-day gaps remain visible, but do not enter whole-day aggregates.
     assert body["aggregate"]["soft_gaps_by_nutrient"] == {}
 
 
 def test_compliant_day_all_ok(client) -> None:
-    """Generous envelope: no hard violations; only the TARGET aim gap shows."""
     _hand_built_envelope("P0009", sodium_max=100_000.0, protein_min=0.0, energy_target=100_000.0)
     _log(client, "P0009", _today(), "dinner", "SG0001")
 
@@ -201,7 +184,7 @@ def test_compliant_day_all_ok(client) -> None:
     rows = {r["nutrient"]: r for r in day_row["nutrients"]}
     assert rows["sodium_mg"]["status"] == "ok"
     assert rows["protein_g"]["status"] == "ok"
-    assert rows["energy_kcal"]["status"] == "soft_gap"  # far under the soft aim
+    assert rows["energy_kcal"]["status"] == "soft_gap"
     assert rows["energy_kcal"]["direction"] == "under"
 
 
@@ -212,7 +195,6 @@ def test_summary_unknown_patient_404(client) -> None:
 
 
 def test_summary_no_envelope_404(client) -> None:
-    # P0010 has no envelope in the store during this test.
     ENVELOPE_STORE.pop("env-test-P0010", None)
     resp = client.get("/adherence/P0010/summary")
     assert resp.status_code == 404, resp.text
@@ -227,7 +209,6 @@ def test_days_param_validated(client) -> None:
 
 
 def test_proposed_envelope_is_informational_only(client) -> None:
-    """Real rules engine: PROPOSED envelope -> clear notice, informational flag."""
     run = client.post("/rules/run", json={"patient_id": "P0001"})
     assert run.status_code == 200, run.text
     assert run.json()["envelope"]["status"] == "PROPOSED"
@@ -245,17 +226,14 @@ def test_proposed_envelope_is_informational_only(client) -> None:
 
 
 def test_deviation_worsening_sodium_flag(client) -> None:
-    """Synthetic escalating series: sodium deviation trends up -> worsening."""
     _hand_built_envelope("P0009", sodium_max=100.0, protein_min=0.0, energy_target=50_000.0)
 
-    # Five complete days: increasing-sodium lunches plus fixed breakfast/dinner.
-    # All three meals are needed for the exposures to enter trend calculations.
     by_sodium = sorted(load_dishes(), key=lambda d: d.nutrient("sodium_mg"))
     picks = [by_sodium[i] for i in (0, len(by_sodium) // 4, len(by_sodium) // 2, 3 * len(by_sodium) // 4, len(by_sodium) - 1)]
     assert len({d.dish_id for d in picks}) == 5
     exposures = []
     for i, dish in enumerate(picks):
-        day = _today(offset_days=i - 4)  # oldest -> newest, ending today
+        day = _today(offset_days=i - 4)
         assert _log(client, "P0009", day, "lunch", dish.dish_id).status_code == 201
         for meal in ("breakfast", "dinner"):
             assert _log(client, "P0009", day, meal, by_sodium[0].dish_id).status_code == 201
@@ -281,7 +259,6 @@ def test_deviation_worsening_sodium_flag(client) -> None:
 
 
 def test_deviation_flat_series_no_flags(client) -> None:
-    """The same dish every day -> constant exposure -> no directional flags."""
     _hand_built_envelope("P0007", sodium_max=100.0, protein_min=0.0, energy_target=50_000.0)
     for i in range(4):
         for meal in ("breakfast", "lunch", "dinner"):

@@ -45,10 +45,6 @@ build-backend = "hatchling.build"
 exclude = ["data/**", "dataset/**", "datasets/**", "**/*.json", "**/*.jsonl", "**/*.csv", "**/*.xpt", "**/*.pdf", "**/*.parquet", "**/*.sqlite3", "**/*.sqlite3-*", "**/*.sqlite", "**/*.sqlite-*", "**/*.db", "**/*.db-*", "**/*-wal", "**/*-shm", "**/__pycache__/**", "**/.pytest_cache/**"]
 
 [tool.hatch.build.targets.wheel]
-# Preserve installation-relative resource paths without shipping clinical state.
-# For wheel smoke/deployment, set CARELOOP_APP_DB to an external writable path
-# before importing the app. The default uses the user's state directory;
-# bundling resources alone does not establish a supported deployment contract.
 only-include = ["backend", "shared", "rules"]
 
 [tool.pytest.ini_options]
@@ -60,7 +56,6 @@ addopts = "-q"
 target-version = "py311"
 
 [tool.ruff.lint.flake8-bugbear]
-# FastAPI dependency injection is declared through argument-default calls.
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Body"]
 
 [tool.pyrefly]

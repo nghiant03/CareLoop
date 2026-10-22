@@ -1,5 +1,3 @@
-"""Provider-free discovery fixtures; no network or live databases."""
-
 import copy
 from types import SimpleNamespace
 

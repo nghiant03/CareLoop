@@ -1,4 +1,4 @@
--- Frozen version-1 journal schema. Actor strings remain attestations.
+-- Version one knowledge journal.
 CREATE TABLE knowledge_drafts (
     draft_id TEXT PRIMARY KEY,
     author TEXT NOT NULL,

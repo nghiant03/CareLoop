@@ -1,9 +1,3 @@
-"""Tests for the explanation view builders (backend/app/explain).
-
-Uses the hand-worked sample trace ``rules/example_trace.json`` (CKD stage 4 +
-HTN + hyperkalaemia) as the envelope/trace fixture.
-"""
-
 from __future__ import annotations
 
 import json
@@ -41,7 +35,6 @@ def test_clinician_view_fired_rules(sample) -> None:
     assert sodium["guideline"] == "KDIGO 2024 CKD Guideline"
     assert sodium["section"] == "Sec. 3.4 / Dietary Sodium"
     assert sodium["url"] and sodium["url"].startswith("https://kdigo.org")
-    # Ordered by priority DESC, then rule id.
     priorities = [f["priority"] for f in view["fired_rules"]]
     assert priorities == sorted(priorities, reverse=True)
 
@@ -53,8 +46,6 @@ def test_clinician_view_conflicts_resolved(sample) -> None:
     assert "CONFLICT-SODIUM-CKD-WINS" in recorded
     assert "CONFLICT-K-DASH-VS-CKD" in recorded
 
-    # Priority overlaps are display metadata about mention ranking, not
-    # recorded conflict decisions.
     overlaps = view["priority_overlaps"]
     sodium_overlap = next(
         c for c in overlaps
@@ -81,7 +72,6 @@ def test_clinician_view_constraints_cited(sample) -> None:
     fiber = by_nutrient["fiber_g"]
     assert fiber["citation"]["rule_id"] == "DASH-2025-FIBER-30"
 
-    # Exclusions carry their original citations.
     excl_values = {e["value"] for e in view["exclusions"]}
     assert "potassium_chloride" in excl_values
     assert all(e["citation"] for e in view["exclusions"])
@@ -99,11 +89,8 @@ def test_patient_view_plain_language_targets(sample) -> None:
     view = patient_explanation(envelope)
     text = " ".join(t["text"] for t in view["daily_targets"])
 
-    # 2000 mg sodium becomes "under 2 g a day" style phrasing.
     assert "Keep sodium under 2 g a day." in text
-    # Energy min+max merged into a range.
     assert "1750 kcal to 2450 kcal" in text
-    # Protein as a range (0.55-0.8 g/kg -> 38.5-56 g in this sample).
     assert "at least" in text or "38.5 g to 56 g" in text
 
 
@@ -134,7 +121,7 @@ def test_patient_view_avoid_list(sample) -> None:
 
 
 def test_patient_view_approval_note(sample) -> None:
-    envelope, _ = sample  # example trace envelope is PROPOSED
+    envelope, _ = sample
     view = patient_explanation(envelope)
     assert envelope["status"] == "PROPOSED"
     assert view["approval_note"] and "not been approved" in view["approval_note"]
@@ -156,11 +143,6 @@ def test_patient_view_with_plan(sample) -> None:
 
 
 def test_patient_view_non_round_bounds_keep_precision(sample) -> None:
-    """Rounding must not loosen stated approved MAX ceilings or MIN floors.
-
-    1550 mg is not "1.6 g" (a looser ceiling), and values that are not exact
-    in hundredths of a gram stay in milligrams.
-    """
     envelope, _ = sample
     edited = deepcopy(envelope)
     for target in edited["targets"]:
@@ -182,9 +164,6 @@ def test_patient_view_non_round_bounds_keep_precision(sample) -> None:
 
 
 def test_patient_view_clinician_edited_target_not_authored_to_guideline(sample) -> None:
-    """A clinician-authored replacement is the care team's decision, not a
-    retained guideline's recommendation, even though the guideline rule that
-    produced the original value is still in the trace."""
     envelope, _ = sample
     edited = deepcopy(envelope)
     for target in edited["targets"]:
@@ -210,10 +189,7 @@ def test_patient_view_clinician_edited_target_not_authored_to_guideline(sample) 
 
     sodium_bullets = [bullet for bullet in view["why"] if "sodium" in bullet]
     assert sodium_bullets == ["Your care team set: keep sodium under 1.8 g a day."]
-    # KDIGO's retained rule action is 2000 mg; it must not author the edited
-    # 1800 mg value.
     assert not any("KDIGO" in bullet and "sodium" in bullet for bullet in view["why"])
-    # Untouched nutrients keep their guideline attribution.
     assert any("recommends" in bullet for bullet in view["why"] if "sodium" not in bullet)
 
 

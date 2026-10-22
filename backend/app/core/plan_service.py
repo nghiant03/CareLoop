@@ -1,10 +1,4 @@
-"""Shared planning policy and frontend response mapping.
-
-Single-dish search may calibrate unreachable soft MIN floors; main/side
-composition and adequacy reporting retain the original input aims. Floor
-changes are disclosed separately from hard feasibility. See
-``docs/ARCHITECTURE.md`` for the planning workflow and clinical contracts.
-"""
+"""Shared planning policy and response mapping."""
 
 from __future__ import annotations
 
@@ -41,16 +35,7 @@ class PlanningOutcome:
 
 def plan_meals(envelope: NutrientEnvelope, dishes: list[Dish], *, seed: int = 42,
                pop_size: int = 40, n_gen: int = 80) -> PlanningOutcome:
-    """Solve and compose meals without persisting clinical state.
-
-    Live callers must first enforce the approval gate: an APPROVED,
-    scope-eligible envelope with nonempty targets. The optimiser checks status
-    but this helper does not enforce scope or target readiness. Simulation and
-    evaluation callers supply locally approved copies, not live approvals.
-
-    API planning, simulations, and evaluation share this policy. Composition
-    scores the original aims; only the single-dish fallback uses relaxed floors.
-    """
+    """Callers enforce approval readiness. Composition scores original aims while the fallback may relax soft floors."""
     solved, relaxed = prepare_envelope_for_pool(envelope, dishes)
     result = optimise(solved, dishes=dishes, seed=seed, pop_size=pop_size, n_gen=n_gen)
     result = improve_meals(result, envelope, dishes, seed=seed)
@@ -62,16 +47,7 @@ def plan_meals(envelope: NutrientEnvelope, dishes: list[Dish], *, seed: int = 42
 def prepare_envelope_for_pool(
     envelope: NutrientEnvelope, dishes: list[Any]
 ) -> tuple[NutrientEnvelope, list[dict[str, Any]]]:
-    """Calibrate soft MIN floors to the single-dish-per-meal search bound.
-
-    Returns ``(envelope_to_solve, relaxed_constraints)``. The input envelope is
-    never mutated; when nothing needs relaxing the original object comes back
-    with an empty ``relaxed_constraints`` list.
-
-    Bounds use three servings of each nutrient's highest-valued allowed dish,
-    without proving joint attainability or MAX compliance. Even a relaxed copy
-    shares unchanged target objects with the input; callers must not mutate them.
-    """
+    """Relax only soft floors. Unchanged targets remain shared with the input."""
     pool = allowed_dishes(envelope, dishes)
     reachable_max: dict[str, float] = {}
     for dish in pool:
@@ -119,16 +95,7 @@ def map_plan_result(
     relaxed_constraints: list[dict[str, Any]] | None = None,
     solved_envelope: NutrientEnvelope | None = None,
 ) -> dict[str, Any]:
-    """Map the optimiser result to the frontend plan contract.
-
-    ``envelope`` supplies original aims and explanations. ``solved_envelope``
-    supplies displayed constraints, including relaxed floors. Leave both unchanged.
-
-    Map day-major meals to ``days[].slots`` and totals. ``compliant`` checks
-    MAX only and is None without a ceiling. ``adequacy`` scores original
-    MIN/TARGET aims in envelope order. Legacy ``shortfall`` keys include TARGET
-    overshoots. Decide before rounding. Infeasible results have no days or adequacy.
-    """
+    """Score adequacy against original aims and display solved constraints separately."""
     solved = solved_envelope or envelope
     lookup = {d.dish_id: d for d in dishes}
     plan = result.get("plan") or []
@@ -183,7 +150,6 @@ def map_plan_result(
                 if constraint["kind"] == "max":
                     ok = raw_value <= constraint["value"] + _EPS
                 elif constraint["kind"] == "min":
-                    # Soft floors do not change hard-compliance flags.
                     continue
                 else:
                     continue
@@ -218,7 +184,7 @@ def map_plan_result(
 
     feasible = bool(result.get("feasible"))
 
-    # Score original aims, not solver-calibrated floors, so relaxation cannot hide gaps.
+    # Score original aims so relaxed floors cannot hide gaps.
     adequacy: list[dict[str, Any]] = []
     if feasible and n_days:
         solved_aim_by_key: dict[tuple[str, str], float] = {}
@@ -249,7 +215,7 @@ def map_plan_result(
                     "mean_daily": round(sum(series) / len(series), 3),
                     "worst_day": worst_index + 1,
                     "worst_daily": worst_daily,
-                    # Retain wire keys used by saved plans; TARGET deviations include overshoots.
+                    # Retain saved plan wire keys for TARGET overshoots.
                     "shortfall": deviation,
                     "shortfall_pct": deviation_pct,
                     "met_days": sum(1 for deviation in deviations if deviation <= _EPS),
@@ -259,7 +225,6 @@ def map_plan_result(
             )
 
     def _json_safe_violations(violations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """JSON has no Infinity — blank out non-finite magnitudes."""
         safe = []
         for violation in violations or []:
             cleaned = dict(violation)

@@ -1,5 +1,3 @@
-"""Meal search, canonical evaluation, and benchmark reference implementations."""
-
 from __future__ import annotations
 
 from .problem import (
