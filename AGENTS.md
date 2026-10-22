@@ -1,163 +1,88 @@
-# CareLoop repository context
+# CareLoop
 
-CareLoop turns clinician-approved nutrient envelopes into meal plans, tracks
-logged-meal adherence, and answers nutrition questions with cited evidence.
+## Current state
 
-For API/domain naming changes, substantial refactors, or maintainability review,
-use the `maintainable-code` skill. Read [the glossary](docs/GLOSSARY.md) for domain
-distinctions and [the architecture](docs/ARCHITECTURE.md) for documented contracts.
+The user requested a fresh start: preserve `frontend/` and the agreed requirements,
+delete the old implementation and GitNexus index, and rethink the entire code
+structure. The replacement under `src/careloop` implements PostgreSQL-backed
+evidence publication, patient/CSV entry, reviewed targets, a versioned food
+catalogue, checked meal plans/substitutions, and reassessment. Source adapters
+translate SG FoodID (the user-supplied Kaggle mirror), FNDDS, and NHANES; downloads
+belong to `ingestion.py`, CLI orchestration to `cli.py`, and persistence to workflow
+services. Tests live in `tests/`. See `README.md` for run
+and verification commands. Git history and repository metadata are preserved.
+External Docker/database removal is blocked by permissions;
+see [implementation status](docs/IMPLEMENTATION.md).
 
-## Sources of truth and module responsibilities
+## Read progressively
 
-- `shared/envelope_schema.py` defines the canonical Python envelope contract;
-  `backend/app/models/envelope.py` re-exports it. JSON Schema is generated from
-  that model on demand; no mirror is tracked.
-- `rules/engine.py` derives proposals and rule traces from the external rule fixture
-  in development or the pinned knowledge release in database mode.
-  See `rules/engine.py` and `docs/ARCHITECTURE.md` for conflict resolution and scope rules.
-- `backend/app/core/` owns approval-gate helpers, durable application storage,
-  and plan preparation/mapping. `backend/app/api/` exposes HTTP workflows.
-- `backend/storage/` owns pooled PostgreSQL connections, explicit schema migrations,
-  and PostgreSQL-only durable storage. Deployment uses separate clinical/knowledge databases
-  and URL-file secrets; never initialize PostgreSQL schema from runtime startup.
-- `backend/datasets/` contains code only. `CARELOOP_DATASET_DIR` selects an absolute
-  directory outside the checkout (default `~/.local/share/careloop/datasets`).
-  Never bundle raw datasets in source control, wheels or container images. See
-  `docs/DATASETS.md`; fixture-based tests require separately provisioned inputs.
-- `backend/optim/` owns search and canonical plan evaluation; `backend/mining/`
-  owns trends and substitutions. `backend/app/adherence/` analyzes logged meals.
-- `backend/app/chat/` retrieves evidence and composes answers;
-  `backend/app/explain/` builds explanation views.
-- `backend/knowledge/` owns operator-only discovery/draft/review/publication and runtime
-  release selection. In database mode, rules, catalogue, optimizer, mining and
-  chat must use the same process-pinned published snapshot; never silently fall
-  back to fixture files. See `docs/KNOWLEDGE.md`. Keep clinical and knowledge
-  databases separate. The isolated operator web workspace/API replaces the knowledge
-  CLI. Discovery is provider-neutral and LLM-only (provider selection is deferred),
-  with instructions in `backend/knowledge/prompts/discover_rules.md`; it accepts
-  multiple guideline files without source manifests/hashes or static KDIGO patterns.
-  Actor labels are attestations, not authenticated identities.
-- `frontend/src/api.ts` adapts HTTP responses for the frontend; view contracts
-  live in `frontend/src/types.ts`. Check actual response shapes when changing
-  either side. Export JSON Schema only when needed with
-  `.venv/bin/python -m shared.export_schema --output <external-path>`.
-- `evaluation/` contains evaluation workflows and generated reports. Consult
-  `evaluation/run.py` and `evaluation/run_eval.py` before regenerating artifacts.
+- [Requirements](docs/REQUIREMENTS.md): product scope, roles, workflows, approvals.
+- [Data](docs/DATA.md): public food/participant datasets and acquisition constraints.
+- [Evidence](docs/EVIDENCE.md): clinical sources, extraction, review, publication.
+- [Inference](docs/INFERENCE.md): hosted-model selection and Neuralwatt Basic budget.
+- [Evaluation](docs/EVALUATION.md): reproducible public-data benchmarks and limits.
+- [Implementation](docs/IMPLEMENTATION.md): delivery sequence, visual style, reset status.
+- [Architecture](docs/ARCHITECTURE.md): implemented structure and transaction contracts.
+- [Patients](docs/PATIENTS.md): facts, CSV, applicability, target approval/reassessment.
+- [Foods](docs/FOODS.md): composition/portion units, adapters, reviewer annotations.
+- [Planning](docs/PLANNING.md): bounded search, checking, approval, substitutions.
 
-These are documented responsibilities, not an executable import-boundary policy.
-Current cross-router imports do not establish a required dependency direction.
+Requirements record decisions as of 2026-10-23; implementation status distinguishes
+completed slices from the remaining functionality.
+Keep requirements directly in `docs/`, with focused documents rather than a
+`rebuild/` directory or combined data-and-evidence document.
 
-## Contracts to preserve
+## Product constraints
 
-- Only APPROVED envelopes authorize live planning and personal target guidance.
-  `CARELOOP_APPROVAL_MODE=auto` (academic demo default) approves eligible new
-  proposals through the lifecycle with the reserved demo actor; `clinician`
-  requires manual approval. APPROVED does not imply human review. Demo UI/chat
-  must disclose auto-approval; edits require manual re-approval in both modes.
-  Editing invalidates approval. Scope-rejected patients must remain excluded;
-  `core/envelope_lifecycle.py` owns these transitions. `lifecycle_revision` guards
-  every durable update; clients send `expected_revision` to detect stale reviews.
-- Hard constraints are MAX ceilings and exclusions. MIN floors and TARGETs are
-  soft objectives. Feasibility and adequacy are separate results; disclose any
-  relaxed floors and assess adequacy against the original approved aims.
-- Fresh proposals receive fresh envelope IDs; edits increment the version of
-  an existing envelope. Preserve historical snapshots and citation provenance.
-- The configured clinical journal is authoritative for envelope state. Preserve
-  embedded traces across restarts; they take precedence over legacy side stores.
-- Adherence uses approval coverage effective on the logged date. Uncovered dates
-  remain unattributed; only complete logged days enter trend calculations.
-- Chat must retain grounding, citation, refusal, and escalation behavior.
-- Published catalogue IDs retain nutritional/portion/category/ingredient/tag
-  semantics and remain available for historical logs/plans; corrections use new
-  IDs. Release changes require a controlled restart, not ad-hoc cache resets.
-- Before renaming a field, inspect HTTP payloads, persisted JSON, schema mirrors,
-  frontend consumers, and evaluation fixtures. Internal renames alone do not
-  establish wire-format or stored-data compatibility.
+- Academic, English-only, single local deployment with PostgreSQL and Docker Compose.
+- Preserve frontend visual style; redesign contracts and screens as required.
+- Demonstrate decision automation, search/evolutionary optimization, food-based
+  clustering/substitutions, and cited natural-language patient questions.
+- Singapore/SEA food focus; ages 2+, including pregnancy/breastfeeding, weight
+  management, prediabetes/type 2 diabetes, hypertension, hyperlipidaemia, and
+  non-dialysis CKD. Enforce evidence-specific applicability and exceptions.
+- Demo role switcher, not authentication; all clinicians access all patients.
+  Audit actors are labels, not verified identities.
+- Use real publicly downloadable data first. Synthetic cohorts are a last resort.
+- Source discovery uses approved authoritative domains; reviewers can provide
+  URLs, PDFs, or text. Structured draft rules show source passages and exceptions.
+- One reviewer can edit and approve, including self-approval. Support individual,
+  batch, and partial-batch review. Conflicts block explicit publication.
+- Refresh evidence on demand; updates create drafts. Retire incorrect rules and
+  preserve audit/history. Published changes flag affected patient targets.
+- Published rules propose patient-specific targets; clinicians complete/edit and
+  approve them. Manual targets retain clinician authorship. Missing facts prompt
+  clarification rather than invented recommendations.
+- Clinicians approve selected plans and substitution drafts. Patient/rule changes
+  flag affected targets/plans; existing plans remain viewable, while new planning
+  and substitutions wait for review. New targets require newly approved plans.
+- Plans cover 1–7 days with adjustable breakfast/lunch/dinner/optional-snack schedule.
+  Three alternatives emphasize nutrient fit, preference match, and variety;
+  mandatory restrictions apply to all usable plans.
+- Dislikes are soft preferences; allergies and vegetarian choices are mandatory.
+  Patients choose egg/dairy inclusion. Nutrient tables do not prove allergen safety.
+- Infeasible requests explain blockers and may show explicitly unmet drafts;
+  search failure is not proof of infeasibility.
+- Default logging confirms planned meals, with changed quantity/replacement/skipped
+  options; also support independent entries. Manual patient entry and CSV import.
+- Chat explains plans/targets/logs and offers cited education/substitutions;
+  diagnosis and medication changes go to the clinician.
+- Reviewers can correct food records with provenance/history.
+- Hosted model selection follows a pilot within Neuralwatt Basic's included
+  allowance. No overage budget or provider key has been supplied.
+- Evaluation runs before the demo through a reproducible command/report. No
+  clinician/dietitian is available: measure public-data correctness, not clinical
+  validation, acceptance, or health outcomes. Laptop has a 5050 GPU.
 
-## Verification
+## Engineering protocol
 
-Run from the repository root using the existing environment:
+Design a minimal coherent structure from these workflows, not the old packages.
+Distinguish accepted decisions from open recommendations in the detailed docs.
+Keep raw datasets, credentials, and runtime state out of source control. Inventory
+exact CareLoop-owned storage before deletion; authorization excludes other projects.
+Do not recreate a GitNexus index unless requested. Old graph results and test
+commands are no longer authoritative for the replacement backend.
 
-```sh
-.venv/bin/python -m pytest rules backend evaluation -q
-.venv/bin/python -m pytest shared -q
-npm --prefix frontend run lint
-npm --prefix frontend test
-npm --prefix frontend run build
-```
-
-For focused iteration, select the relevant pytest files or directories. The
-frontend build includes TypeScript checking. Report the commands and scope run,
-including failures, warnings, or unavailable tools; do not weaken checks to pass.
-
-Pytest's root `conftest.py` removes live storage settings and creates disposable
-PostgreSQL databases when `CARELOOP_TEST_POSTGRES_URL` is supplied. Persistence/API
-tests skip without it. Standalone probes must use an explicitly provisioned test
-PostgreSQL URL, never live storage. `CARELOOP_APP_DB`, `CARELOOP_KNOWLEDGE_DB` and
-SQLite import/relocation commands are retired; existing files must be preserved.
-See `docs/STORAGE.md`; preserve databases and published evidence.
-Main evaluation/optimizer/retrieval runs write to external dataset `outputs/` by
-default (`CARELOOP_ARTIFACT_DIR` overrides the external root). Publish report snapshots deliberately.
-Mining comparisons also write to external `outputs/mining/`, never the published report
-by default. PostgreSQL integration tests require `CARELOOP_TEST_POSTGRES_URL`
-and create/drop only unique test databases; skipped cases are not server verification.
-See `docs/POSTGRES.md` for the single Compose stack and automatic deployment setup;
-application startup never creates schema. No migration CLI or backup feature is provided.
-
-The Python manifest is the repository-root `pyproject.toml` (single `careloop`
-distribution covering `backend/`, `shared/`, and `rules/`); the frontend manifest
-and lock file are under `frontend/`. Install development dependencies with
-`uv pip install --python .venv/bin/python -e '.[dev]'`. The editable install puts
-the repository root on the import path, so `backend.*`, `shared.*`, and `rules.*`
-resolve without `PYTHONPATH`. Frontend regression
-tests use Vitest and Testing Library. There is no configured Python lint/type-check
-command or repository CI workflow; report those verification gaps.
-
-Start with `README.md` and `docs/ARCHITECTURE.md` for current behavior; some older
-module READMEs still describe earlier milestones. `PLAN.md` is ignored local
-planning material and may be absent from another checkout.
-
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
-
-This project is indexed by GitNexus as **CareLoop** (3363 symbols, 7837 relationships, 290 execution flows).
-
-> Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
-
-## Always Do
-
-- **MUST run impact before editing.** Use `impact({target: "symbolName", direction: "upstream"})` or `node .gitnexus/run.cjs impact "symbolName" --direction upstream --repo .`; report callers, processes, and risk. Never substitute grep for graph analysis.
-- **MUST analyze graph changes before committing.** Use `detect_changes({scope: "all"})` (MCP) or `node .gitnexus/run.cjs detect-changes --scope all --repo .` (CLI fallback). `partial: true` or `truncated: true` is not a clean check — a zero means unseen, not unaffected; re-run it. For regression review: `detect_changes({scope: "compare", base_ref: "main"})` or `node .gitnexus/run.cjs detect-changes --scope compare --base-ref "main" --repo .`.
-- MUST warn on HIGH/CRITICAL `risk` pre-edit; never use `riskSharedAxes` to waive a HIGH/CRITICAL `risk` warning. Compare File/symbol: MCP File omits axes; Graph-RAG expands File.
-- **MUST treat `risk: UNKNOWN` as unresolved, not as low.** An empty caller set is not evidence the symbol is unused — it can also mean the callers are not resolvable by the index (plain-object property access, dynamic dispatch, cross-language calls). `impact` pairs `UNKNOWN` with a `riskNote` saying so. Confirm with a text search before treating the symbol as safe to change or delete; do not proceed on the strength of a zero.
-- **MUST use `query({search_query: "concept"})` for concepts/flows, `context({name: "symbolName"})` for a named symbol, or `impact` for blast radius, on read-only callers, dependencies, imports, or execution flow.** Graph first; text search only for empty/`UNKNOWN`/literals.
-- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
-
-## Never Do
-
-- NEVER edit a function, class, or method before MCP/CLI impact analysis.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis, and never read `UNKNOWN` as an all-clear — it means the walk could not answer, which is the one verdict that requires confirming by other means.
-- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
-- NEVER commit before MCP/CLI graph change analysis.
-
-## Resources
-
-| Resource | Use for |
-| --- | --- |
-| `gitnexus://repo/CareLoop/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/CareLoop/clusters` | All functional areas |
-| `gitnexus://repo/CareLoop/processes` | All execution flows |
-| `gitnexus://repo/CareLoop/process/{name}` | Step-by-step execution trace |
-
-## CLI
-
-| Task | Read this skill file |
-| --- | --- |
-| Understand architecture / "How does X work?" | `.agents/skills/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.agents/skills/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.agents/skills/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.agents/skills/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.agents/skills/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.agents/skills/gitnexus-cli/SKILL.md` |
-
-<!-- gitnexus:end -->
+Define verification commands alongside the new implementation. Report checks run,
+failures, skips, and unavailable tooling honestly. Inspect unfamiliar/uncommitted
+changes before overwriting. Do not delegate unless the user asks for agents.

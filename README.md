@@ -1,141 +1,129 @@
 # CareLoop
 
-CareLoop plans Singapore meals, tracks adherence, and answers nutrition questions
-with citations for T2D, hypertension and CKD stages 3–4. Planning and personal
-targets require an APPROVED nutrient envelope. The default approval policy is
-`CARELOOP_APPROVAL_MODE=auto`: eligible new proposals are auto-approved and
-clearly marked **demo, not clinically reviewed**. Set `CARELOOP_APPROVAL_MODE=clinician`
-to demonstrate manual review. Edits always invalidate approval in both modes.
-Scope exclusions and hard planning limits apply in both modes.
+A local academic nutrition application with clinician-reviewed targets and plans.
+Implementation has restarted from the agreed [requirements](docs/REQUIREMENTS.md).
 
-Persistent clinical and knowledge storage is PostgreSQL-only. SQLite runtime
-and import support have been removed; existing database files are not modified.
+**Available now:** PostgreSQL-backed evidence review/publication, manual and CSV
+patient entry, cited target proposals, clinician completion/approval, reassessment,
+and audit history. Versioned foods, checked planning alternatives, clinician plan
+approval, and substitution drafts are also implemented. Source adapters cover
+SG FoodID (the supplied Kaggle mirror), FNDDS, and NHANES. The preserved frontend
+is not yet connected to these APIs.
 
-## Deploy locally
-
-The root `compose.yaml` runs PostgreSQL 18, automatic database setup, FastAPI and
-React. Clinical and knowledge databases are separate. Knowledge releases require restart.
-
-### 1. Prepare the environment
-
-Requires Docker Compose, daemon access, Python 3.11+ and `uv`. From the repository root:
+## Run
 
 ```sh
-uv sync --extra dev
+docker compose up --build -d
+```
 
-export CARELOOP_DATASET_DIR="$HOME/.local/share/careloop/datasets"
-mkdir -p "$CARELOOP_DATASET_DIR"
+The migration service initializes a fresh `careloop` database before the API
+starts. Open <http://localhost:8000/docs> for the interactive API and
+<http://localhost:8000/api/health> for readiness. Database access is on localhost
+port 55432; the Compose password is a public local-demo value, not a secret.
+The new project/volume is `careloop` / `database_v1`, separate from the old
+`careloop-app` reset resources.
+
+For local Python development (Python 3.12+ and `uv`):
+
+```sh
+uv sync --frozen
+docker compose up -d db
+export CARELOOP_DATABASE_URL='postgresql://careloop:local-demo-only@127.0.0.1:55432/careloop'
+uv run python -m careloop.db
+uv run uvicorn careloop.api:create_app --factory --reload
+```
+
+## Review workflow
+
+Use `/docs` to submit each request with a reviewer demo actor and a reason:
+
+1. `POST /api/evidence/sources`: submit source text, title, locator, and edition.
+2. `POST /api/evidence/rules`: create a structured rule with a verbatim quote and
+   source location. Record applicability, exceptions, and unresolved blockers.
+3. `POST /api/evidence/approvals`: submit selected rule IDs and exact revisions.
+4. `GET /api/evidence/catalogue`: inspect drafts and retained published rules,
+   resolve conflicts, and obtain the reviewed `generation`.
+5. `POST /api/evidence/publications`: submit approved selections, that generation,
+   and the manual `conflict_review` note.
+6. Create revisions or retire a rule using its expected latest revision.
+
+Approval does not publish. Editing does not replace an existing published version.
+No sources, rules, patients, or clinical recommendations are preloaded. Conflict
+identification is manual; automatic extraction remains future work.
+
+## Patient targets and public data
+
+Use a clinician demo actor for the patient workflow:
+
+1. Create a record at `POST /api/patients` or import CSV at
+   `POST /api/patients/import-csv`.
+2. Generate a proposal at `POST /api/patients/{id}/targets`.
+3. Inspect missing facts/citations; complete or override targets through
+   `POST /api/targets/{id}/revisions`.
+4. Approve the exact revision at `POST /api/targets/{id}/approval`.
+
+Patient/evidence changes flag affected targets without changing historical values.
+See [patient contracts](docs/PATIENTS.md) for CSV columns, units, missing-fact
+semantics, conflict resolution, and the target-readiness boundary.
+
+Download real NHANES survey records and prepare 100 age-only profiles:
+
+```sh
+uv run --extra data careloop-data nhanes --limit 100
+```
+
+Raw data, normalized CSV, and a checksum/field-audit manifest are saved under
+`~/.local/share/careloop/public/nhanes/2021-2023/`. To also import into the migrated
+database selected by `CARELOOP_DATABASE_URL`:
+
+```sh
+uv run --extra data careloop-data nhanes --limit 100 --import-records --actor 'Demo clinician'
+```
+
+This does not create diagnoses or approvals. The adapter maps only respondent ID
+and observed survey age; other facts remain unknown. Re-importing the same external
+IDs fails atomically rather than overwriting records. See [source audit](docs/DATA.md).
+
+## Singapore foods and planning
+
+Download and normalize all 2,689 records from the supplied SG FoodID mirror:
+
+```sh
+uv run --extra data careloop-data sgfoodid --limit 0
+```
+
+Add `--import-records --actor 'Demo reviewer'` to import into the migrated database
+configured by `CARELOOP_DATABASE_URL`. FNDDS uses the same command with `fndds` as
+the source. Raw downloads and manifests stay under `~/.local/share/careloop/public/`.
+The default limit is 100; zero selects all food records.
+
+Review food portions, meal slots, and relevant restriction classifications through
+the food API before requesting plans. `POST /api/plan-requests` creates three
+checked alternatives; the clinician approves one through `/api/plans/{id}/approval`.
+See [food contracts](docs/FOODS.md) and [planning](docs/PLANNING.md) for the bounded search,
+nutrient requirements, substitutions, and reassessment behavior.
+
+## Verify
+
+```sh
+uv run ruff check src tests
+uv run ruff format --check src tests
 docker compose config --quiet
+uv run --with pgserver==0.1.4 python tests/run_postgres.py -q
 ```
 
-Provision datasets **outside the checkout** using
-[the dataset guide](docs/DATASETS.md). None are bundled. Compose mounts them
-read-only at `/datasets`.
-
-For NHANES, USDA, KDIGO and MIMIC demo downloads, follow
-[the research download instructions](docs/DATASETS.md#download-research-sources).
-Research data does not replace CareLoop fixtures or approved knowledge.
-
-Knowledge discovery, authoring, review and publication use the web workspace,
-not an operator CLI. See [knowledge discovery](docs/KNOWLEDGE.md#automatically-propose-evidence-backed-rules).
-
-### 2. Start the knowledge workspace
+The final command starts a temporary PostgreSQL 16.2 instance, runs the complete
+suite, and removes its own storage. It requires supported `pgserver` binaries
+(verified here on Linux x86-64), but no Docker access. To verify against the
+Compose PostgreSQL 18 instance instead:
 
 ```sh
-docker compose up --build -d --wait
+CARELOOP_TEST_DATABASE_URL='postgresql://careloop:local-demo-only@127.0.0.1:55432/careloop' uv run pytest -q
 ```
 
-Compose waits for PostgreSQL, runs its one-shot `setup` task, and starts the
-backend only after both schemas are ready. There is no manual migration command.
-Setup preserves existing compatible databases and refuses unrelated/incomplete
-schemas; it does not import data, create approvals or publish knowledge.
+Database checks create and remove only uniquely named `check_*` schemas. Without
+the test database variable, plain `uv run pytest` skips integration checks.
 
-Open **http://127.0.0.1:8080/knowledge-review**. This is the default deployment mode;
-it needs no existing draft or published release. Use **Create draft**, **Clone
-release**, **Discover sources**, and a draft's review/edit/publication sections.
-Clinical routes are unavailable here.
-
-Discovery accepts multiple PDF, HTML, Markdown or text guidelines without hashes,
-manifests or KDIGO-specific patterns. Its instructions live in a separate prompt
-file and can be edited per request. **No LLM provider has been selected**; the UI
-discloses this and extraction stays unavailable until an adapter is connected.
-
-The local demo has no login, custom database admin account or operator UID/GID
-settings. PostgreSQL uses passwordless trust and the built-in `postgres` role,
-bound to `127.0.0.1:5433`. For existing volumes
-created with `careloop_admin`, set `CARELOOP_DATABASE_USER=careloop_admin` before
-startup; no role or stored data is renamed or recreated.
-
-### 3. Activate a reviewed knowledge release
-
-Use your reviewed, published release ID:
-
-```sh
-export CARELOOP_KNOWLEDGE_RELEASE=YOUR_REVIEWED_RELEASE_ID
-export CARELOOP_DEPLOYMENT_MODE=published
-docker compose up --build -d --wait
-docker compose ps
-
-curl --fail http://127.0.0.1:8080/api/healthz
-curl --fail http://127.0.0.1:8080/api/kb/stats
-```
-
-Open **http://127.0.0.1:8080**. Backend proxy: `/api`. API docs: `/api/docs` in either mode.
-Override the HTTP port with `CARELOOP_HTTP_PORT`. Missing releases block startup
-without fixture fallback.
-
-If Docker requires sudo, use `sudo docker compose`. Preserve startup settings:
-
-```sh
-sudo env CARELOOP_DATASET_DIR="$CARELOOP_DATASET_DIR" \
-  CARELOOP_KNOWLEDGE_RELEASE="$CARELOOP_KNOWLEDGE_RELEASE" \
-  CARELOOP_DEPLOYMENT_MODE=published \
-  docker compose up --build -d --wait
-```
-
-## Operate and preserve state
-
-```sh
-docker compose logs --tail=100 postgres setup backend frontend
-docker compose stop
-```
-
-`docker compose down` keeps volumes. **`down -v` deletes databases.**
-Preserve existing volumes and retired SQLite files. Restart the backend when
-changing knowledge releases. No backup feature or scheduled backup job is included.
-
-See [PostgreSQL operations](docs/POSTGRES.md) and
-[deployment configuration](deploy/README.md).
-
-## Code and documentation
-
-| Location | Responsibility |
-| --- | --- |
-| `frontend/` | Web interface and HTTP adapters |
-| `backend/` | API, storage, knowledge, planning, adherence and dataset tooling |
-| `shared/`, `rules/` | Canonical envelope contract and rule engine |
-| `evaluation/` | Evaluation workflows and published report summaries |
-| External `CARELOOP_DATASET_DIR` | Fixtures, research data and generated outputs |
-
-- [Architecture and contracts](docs/ARCHITECTURE.md)
-- [Knowledge authoring and publication](docs/KNOWLEDGE.md)
-- [External datasets](docs/DATASETS.md) and [storage](docs/STORAGE.md)
-- [Clinician guide](docs/user-guide-clinician.md) and [patient guide](docs/user-guide-patient.md)
-
-Development requires external fixtures. Backend:
-`.venv/bin/uvicorn backend.app.main:app --reload --port 8000`.
-Frontend: `npm ci`, then `npm run dev` in `frontend/` (port 5173).
-
-Verification commands:
-
-```sh
-.venv/bin/python -m pytest rules backend evaluation shared -q
-npm --prefix frontend run lint
-npm --prefix frontend test
-npm --prefix frontend run build
-```
-
-Python tests need external fixtures. Persistence/API/knowledge integration tests
-need `CARELOOP_TEST_POSTGRES_URL` (an admin URL); they create and drop only uniquely
-named disposable databases, never the configured deployment databases.
-Skipped tests do not verify a live server.
+See [architecture](docs/ARCHITECTURE.md), [implementation status](docs/IMPLEMENTATION.md),
+and the planned public-data [evaluation](docs/EVALUATION.md). These workflow checks
+are engineering verification, not clinical validation or the final evaluation.
