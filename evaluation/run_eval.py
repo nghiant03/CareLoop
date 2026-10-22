@@ -1,5 +1,3 @@
-"""Run evaluations and write external artifacts."""
-
 from __future__ import annotations
 
 import argparse
@@ -15,7 +13,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from backend.knowledge.runtime import selected_release, source_hashes
-from backend.storage_paths import artifact_dir
 from evaluation.ablation import evaluate_ablation
 from evaluation.benchmark import evaluate_benchmark
 from evaluation.common import ROOT, load_patients
@@ -226,15 +223,15 @@ def _print_headlines(results: dict[str, Any]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="evaluation.run",
-        description="CareLoop two-tier evaluation suite (external output only).",
+        description="CareLoop two-tier evaluation suite.",
     )
     parser.add_argument(
         "--rerun-benchmark", action="store_true",
         help="re-run backend.optim.benchmark (~21s) before consuming its artefacts",
     )
     parser.add_argument(
-        "--out-dir", default=str(artifact_dir("evaluation")),
-        help="external directory for results.json / EVALUATION.md (default: CARELOOP_DATASET_DIR/outputs/evaluation/)",
+        "--out-dir",
+        help="explicitly export results.json and EVALUATION.md to this external directory",
     )
     parser.add_argument(
         "--quick", action="store_true",
@@ -242,8 +239,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    out_dir = Path(args.out_dir).expanduser().resolve()
-    if out_dir == ROOT or ROOT in out_dir.parents:
+    out_dir = Path(args.out_dir).expanduser().resolve() if args.out_dir is not None else None
+    if out_dir is not None and (out_dir == ROOT or ROOT in out_dir.parents):
         raise ValueError("Evaluation output directory must be outside the code checkout")
 
     optimiser_kwargs = {"pop_size": 20, "n_gen": 40} if args.quick else None
@@ -254,16 +251,16 @@ def main(argv: list[str] | None = None) -> int:
         max_nhanes_subjects=max_nhanes,
     )
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    results_path = out_dir / "results.json"
-    report_path = out_dir / "EVALUATION.md"
-    results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n",
-                            encoding="utf-8")
-    report_path.write_text(render_report(results), encoding="utf-8")
-
     _print_headlines(results)
-    print(f"\nWrote {results_path}")
-    print(f"Wrote {report_path}")
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        results_path = out_dir / "results.json"
+        report_path = out_dir / "EVALUATION.md"
+        results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n",
+                                encoding="utf-8")
+        report_path.write_text(render_report(results), encoding="utf-8")
+        print(f"\nWrote {results_path}")
+        print(f"Wrote {report_path}")
     return 0
 
 

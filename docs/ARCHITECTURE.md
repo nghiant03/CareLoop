@@ -259,7 +259,7 @@ schema.
 | `backend/app/core/` | `shared/`, `kb/`, `optim/`, `explain/` | gate, stores, plan service |
 | `backend/app/api/` | all of the above | the REST surface |
 | `frontend/` | REST API (`/api` proxy) | clinician / patient / chat / adherence screens |
-| `evaluation/` | everything | two-tier evaluation suite (`traceability`, `conflicts`, `satisfaction`, `benchmark`, `groundedness`, `ablation`, `external`) writing external `EVALUATION.md` and `results.json` under `CARELOOP_DATASET_DIR/outputs/evaluation/` |
+| `evaluation/` | everything | two-tier evaluation suite (`traceability`, `conflicts`, `satisfaction`, `benchmark`, `groundedness`, `ablation`, `external`) with console results and optional external report export through `--out-dir` |
 
 
 ## 7. Known runtime boundaries

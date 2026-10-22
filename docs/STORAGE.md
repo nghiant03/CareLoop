@@ -56,10 +56,14 @@ are not live-server verification. Never point standalone probes at live data.
 .venv/bin/python -m backend.app.chat.retrieval_bench
 ```
 
-These write unpublished outputs, not committed reports. Set environment variables
-before launch because some output constants resolve on import. Existing
-`--out-dir` and retrieval `write_results(path=...)` remain supported. Give each
-experiment a distinct artifact root outside the checkout.
+Evaluation runs print results without creating report files. To export
+`results.json` and `EVALUATION.md`, explicitly supply `--out-dir /external/run`.
+Existing reports are left unchanged when no export is requested.
+
+The optimizer and retrieval benchmark commands write unpublished outputs. Set
+environment variables before launch because some output constants resolve on
+import. Retrieval `write_results(path=...)` remains supported. Give each experiment
+a distinct artifact root outside the checkout.
 
 The benchmark evaluation reads published optimizer snapshots by default. `evaluation.run
 --rerun-benchmark` generates and consumes a fresh full benchmark and records its

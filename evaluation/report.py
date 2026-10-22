@@ -463,17 +463,16 @@ def render_report(results: dict[str, Any]) -> str:
     lines: list[str] = []
     add = lines.append
 
-    add("# CareLoop — Automated Evaluation Report")
+    add("# CareLoop — Evaluation Report")
     add("")
     add(f"Suite: {meta['suite']} · optimiser seed {meta['seed']} "
         f"(pop {meta['pop_size']}, gen {meta['n_gen']}, NSGA-II) · "
         f"{meta['patients']} synthetic fixture patients · {meta['dishes']}-dish pool")
     add("")
-    add("Reproduce with `.venv/bin/python -m evaluation.run` (add `--rerun-benchmark` "
+    add("Export with `.venv/bin/python -m evaluation.run --out-dir /external/run` (add `--rerun-benchmark` "
         "to regenerate the optimiser benchmark artefacts). Deterministic apart from "
         "wall-clock runtimes. All generated reports (`EVALUATION.md`) and raw outputs "
-        "(`results.json`) are written outside the code checkout under `CARELOOP_ARTIFACT_DIR` "
-        "or `CARELOOP_DATASET_DIR/outputs/evaluation/`.")
+        "(`results.json`) are written only to the explicitly selected external directory.")
     add("")
 
     add("## Headline verdicts")
@@ -744,9 +743,9 @@ def render_report(results: dict[str, Any]) -> str:
         "silently reads the *oldest* lab as current and will mis-trigger the "
         "hyperkalaemia/hyperphosphataemia rules.")
     add("")
-    add("5. **External benchmark storage.** All evaluation reports (`EVALUATION.md`), "
-        "raw results (`results.json`), and optimizer/mining/retrieval benchmark "
-        "files live outside the code checkout under `CARELOOP_DATASET_DIR/benchmarks/` "
+    add("5. **External benchmark storage.** Evaluation reports (`EVALUATION.md`) and "
+        "raw results (`results.json`) require an explicit `--out-dir` export. "
+        "Optimizer/mining/retrieval benchmark files live outside the code checkout under `CARELOOP_DATASET_DIR/benchmarks/` "
         "and `CARELOOP_DATASET_DIR/outputs/` (or `CARELOOP_ARTIFACT_DIR`). "
         "Runtimes in the report are wall-clock and not deterministic.")
     add("")

@@ -2,6 +2,8 @@ import json
 import os
 from pathlib import Path
 
+import pytest
+
 from backend.storage_paths import artifact_dir
 from evaluation import benchmark, run_eval
 
@@ -23,11 +25,11 @@ def test_evaluation_cli_default_and_explicit_output(monkeypatch, tmp_path):
     monkeypatch.setattr(run_eval, "_print_headlines", lambda results: None)
     assert run_eval.main([]) == 0
     output = tmp_path / "runs/evaluation"
-    assert json.loads((output / "results.json").read_text()) == {"meta": {"seed": 42}}
-    assert (output / "EVALUATION.md").read_text() == "# Test report\n"
+    assert not output.parent.exists()
     explicit = tmp_path / "selected"
     assert run_eval.main(["--out-dir", str(explicit)]) == 0
-    assert (explicit / "results.json").exists()
+    assert json.loads((explicit / "results.json").read_text()) == {"meta": {"seed": 42}}
+    assert (explicit / "EVALUATION.md").read_text() == "# Test report\n"
     in_repo = run_eval.ROOT / "evaluation"
     try:
         run_eval.main(["--out-dir", str(in_repo)])
@@ -35,6 +37,40 @@ def test_evaluation_cli_default_and_explicit_output(monkeypatch, tmp_path):
         assert "outside the code checkout" in str(exc)
     else:
         raise AssertionError("Expected ValueError when writing inside repository checkout")
+
+
+@pytest.mark.parametrize("args", [[], ["--quick"], ["--rerun-benchmark"]])
+def test_evaluation_preserves_existing_reports_without_export(monkeypatch, tmp_path, capsys, args):
+    monkeypatch.setenv("CARELOOP_ARTIFACT_DIR", str(tmp_path / "runs"))
+    output = tmp_path / "runs/evaluation"
+    output.mkdir(parents=True)
+    for name in ("results.json", "EVALUATION.md"):
+        (output / name).write_text("Existing report\n")
+    calls = []
+    results = {"meta": {"seed": 42}}
+
+    def evaluate(**kwargs):
+        calls.append(kwargs)
+        return results
+
+    def unexpected_report(results):
+        raise AssertionError("Report rendering requires an explicit export")
+
+    headlines = []
+    monkeypatch.setattr(run_eval, "run_suite", evaluate)
+    monkeypatch.setattr(run_eval, "render_report", unexpected_report)
+    monkeypatch.setattr(run_eval, "_print_headlines", headlines.append)
+    assert run_eval.main(args) == 0
+    assert calls == [{
+        "rerun_benchmark": "--rerun-benchmark" in args,
+        "optimiser_kwargs": {"pop_size": 20, "n_gen": 40} if "--quick" in args else None,
+        "max_nhanes_subjects": 200 if "--quick" in args else 600,
+    }]
+    assert headlines == [results]
+    assert "Wrote" not in capsys.readouterr().out
+    assert sorted(path.name for path in output.iterdir()) == ["EVALUATION.md", "results.json"]
+    for path in output.iterdir():
+        assert path.read_text() == "Existing report\n"
 
 
 def test_no_generated_reports_inside_repository():
@@ -75,4 +111,3 @@ def test_benchmark_rerun_reads_generated_files_without_mutating_snapshots(monkey
     assert benchmark._MD_PATH.read_bytes() == published_md
     assert os.environ["CARELOOP_BENCH_SMOKE"] == "1"
     assert benchmark.evaluate_benchmark()["artefacts"]["csv"] == str(benchmark._CSV_PATH)
-
