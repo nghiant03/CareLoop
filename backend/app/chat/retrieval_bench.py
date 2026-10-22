@@ -667,7 +667,7 @@ def render_report(results):
     for name, row in results["irrelevant_refusal"].items():
         lines.append(f"- {name}: {row['refused']}/{row['probes']} irrelevant probes refused.")
     lines += ["", "## Limitations", "",
-              ("Small, internally authored development/test sets and semantic relevance labels do not establish clinical validity. "
+              ("The evaluation uses small internally authored sets with semantic relevance labels. "
               "Some end-to-end questions overlap ranking questions; those are complementary metrics, not independent evidence. "
               "Groundedness evaluation separately checks patient applicability, clinician overrides and exact approved values. "
               "Full per-query results, thresholds and development examples are in `retrieval_bench_results.json`."), ""]

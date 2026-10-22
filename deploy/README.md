@@ -44,13 +44,12 @@ pass the relevant environment explicitly with `sudo env ... docker compose ...`.
 - HTTP binds to **127.0.0.1:8080**, overridden by `CARELOOP_HTTP_PORT`.
 - PostgreSQL binds to **127.0.0.1:5433** with passwordless trust. Fresh installations
   use the built-in `postgres` role, not a custom admin account. Any local user with
-  network access to the port can connect. This is not suitable for public deployment.
+  network access to the port can connect.
 - Existing volumes initialized as `careloop_admin` require
   `CARELOOP_DATABASE_USER=careloop_admin` for connections. No role/data conversion
   is attempted. PostgreSQL initialization scripts run only against an empty volume.
-- The operator workspace has no login. Names are attestations, not authenticated
-  identities. Mutation request tokens, same-origin checks and a local Host allowlist
-  protect the browser surface; they are not authorization.
+- Mutation request tokens, same-origin checks and a local Host allowlist protect
+  the operator workspace.
 - `careloop-app_postgres_data` contains the durable databases. `run_artifacts` holds
   unpublished outputs. Dataset mounts remain read-only, outside the checkout.
 - No backup feature, schedule or container is implemented.
@@ -75,8 +74,5 @@ The build excludes datasets, databases, credentials and generated frontend outpu
 Never put real patient information in demo fixtures. PostgreSQL schema preparation
 does not import fixtures, approve envelopes or populate knowledge drafts.
 
-This is a local academic demo, not a clinical deployment: no TLS, authenticated
-operators, high availability, automatic release rollout or measured multi-worker
-throughput. The backend uses one worker; a long proxy timeout is not a background
-job system. Python dependency ranges and image tags are not fully reproducible
-release locks. See [POSTGRES.md](../docs/POSTGRES.md) for setup and test boundaries.
+The backend uses one worker. See [POSTGRES.md](../docs/POSTGRES.md) for setup and
+test boundaries.

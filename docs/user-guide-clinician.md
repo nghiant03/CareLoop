@@ -7,7 +7,6 @@ stats. Command examples use
 web UI (Clinician review and Adherence screens). Clinical state persists in
 PostgreSQL across backend restarts.
 
-This is an academic showcase with simulated roles, not real clinical review.
 `CARELOOP_APPROVAL_MODE=auto` is the demo default: eligible new proposals pass
 through the approval lifecycle with a labelled system actor, not a clinician.
 Scope-rejected proposals stay excluded. Edits always require manual re-approval.

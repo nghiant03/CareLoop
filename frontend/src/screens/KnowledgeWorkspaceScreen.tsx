@@ -70,7 +70,6 @@ export default function KnowledgeWorkspaceScreen() {
     <WorkspaceHeader label="Knowledge workspace"><a href="/api/docs">API reference</a></WorkspaceHeader>
     <main id="knowledge-content" tabIndex={-1} className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader code="KNW" title="Knowledge workspace"><p>Discover evidence, author drafts, review exact revisions and publish knowledge without command-line workflows.</p></PageHeader>
-      <p className="notice notice-warn mb-5">Local operator workspace. No clinical use. Names are attestations, not authenticated accounts. Publishing does not activate a release.</p>
       {error && <div role="alert" className="notice notice-error mb-5"><p>{error}</p><button type="button" className="btn-ghost mt-3" onClick={() => setRefresh(value => value + 1)}>Refresh workspace</button></div>}
       <nav aria-label="Workspace sections" className="review-sections">{['Drafts', 'Create draft', 'Clone release', 'Discover sources'].map(value => <button key={value} type="button" aria-pressed={section === value} className="review-section" onClick={() => setSection(value)}>{value}</button>)}</nav>
       {workspace && section === 'Drafts' && <section>

@@ -28,13 +28,12 @@ is automatic; there are no login/admin accounts or backup feature.
 
 - Approval is a workflow state, not proof of human clinical review. Academic demo
   auto-approval must remain disclosed.
-- Knowledge drafts are unpublished and not for clinical use. Review decisions
+- Knowledge drafts are unpublished. Review decisions
   are bound to a revision and do not publish or activate knowledge. Edits append
   a revision and require a new independent review. Publication requires an
   independent approving review of that exact revision and explicit confirmation;
   it freezes the revision, but activation still requires a controlled restart.
-- Author, editor, reviewer and publisher names are attestations, not authenticated
-  identities. Published dish IDs must retain their historical meaning.
+- Published dish IDs must retain their historical meaning.
 - Create drafts from executable rulebook and catalogue JSON, or clone published
   releases. Discovery reports are review-only candidates, not executable rules.
 - Discovery accepts multiple PDF, HTML, Markdown or text guidelines without

@@ -760,7 +760,7 @@ def render_report(results: dict[str, Any]) -> str:
     add("7. **Data quality & external cohort scope.** All 214 Singapore dishes are "
         "unverified and costs are synthetic estimates. NHANES 2021–2023 is a US "
         "cross-sectional survey (unweighted cohort mapping for rule/adherence stress "
-        "testing, not clinical import); MIMIC-IV Demo 2.2 is inpatient/ICU data "
+        "testing); MIMIC-IV Demo 2.2 is inpatient/ICU data "
         "(100 patients), not outpatient longitudinal CKD tracking.")
     add("")
     return "\n".join(lines) + "\n"

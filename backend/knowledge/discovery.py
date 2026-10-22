@@ -133,7 +133,7 @@ def propose_rules(text: str, source: dict, rules_document: dict, client: Discove
             "extraction": {"adapter": type(client).__name__, "model": getattr(client, "model", "unspecified")},
             "candidates": candidates,
             "limitations": [
-                "LLM output is non-deterministic and may omit or misinterpret recommendations. No clinical validity is established.",
+                "LLM output is non-deterministic and may omit or misinterpret recommendations.",
                 "Quote matching proves text presence, not that numbers, units, scope or caveats were interpreted correctly.",
                 "Source authenticity and clinical suitability are operator responsibilities; discovery uses no manifest or hash checks.",
                 "PDF layout extraction can omit or mix columns. Review quotes against their PDF pages.",

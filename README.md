@@ -2,8 +2,8 @@
 
 CareLoop plans Singapore meals, tracks adherence, and answers nutrition questions
 with citations for T2D, hypertension and CKD stages 3–4. Planning and personal
-targets require an APPROVED nutrient envelope. This academic showcase defaults
-to `CARELOOP_APPROVAL_MODE=auto`: eligible new proposals are auto-approved and
+targets require an APPROVED nutrient envelope. The default approval policy is
+`CARELOOP_APPROVAL_MODE=auto`: eligible new proposals are auto-approved and
 clearly marked **demo, not clinically reviewed**. Set `CARELOOP_APPROVAL_MODE=clinician`
 to demonstrate manual review. Edits always invalidate approval in both modes.
 Scope exclusions and hard planning limits apply in both modes.
@@ -62,7 +62,7 @@ discloses this and extraction stays unavailable until an adapter is connected.
 
 The local demo has no login, custom database admin account or operator UID/GID
 settings. PostgreSQL uses passwordless trust and the built-in `postgres` role,
-bound to `127.0.0.1:5433`. Do not expose this stack publicly. For existing volumes
+bound to `127.0.0.1:5433`. For existing volumes
 created with `careloop_admin`, set `CARELOOP_DATABASE_USER=careloop_admin` before
 startup; no role or stored data is renamed or recreated.
 
@@ -82,7 +82,7 @@ curl --fail http://127.0.0.1:8080/api/kb/stats
 
 Open **http://127.0.0.1:8080**. Backend proxy: `/api`. API docs: `/api/docs` in either mode.
 Override the HTTP port with `CARELOOP_HTTP_PORT`. Missing releases block startup
-without fixture fallback. Health checks do not establish clinical readiness.
+without fixture fallback.
 
 If Docker requires sudo, use `sudo docker compose`. Preserve startup settings:
 

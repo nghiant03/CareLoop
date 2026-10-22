@@ -21,6 +21,7 @@ it('starts with an empty workspace and no account or CLI requirement', async () 
   expect(await screen.findByText(/No knowledge drafts yet/)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Create first draft' })).toBeTruthy();
   expect(screen.queryByLabelText(/password/i)).toBeNull();
+  expect(screen.queryByText(/clinical use|attestations|authenticated accounts/i)).toBeNull();
 });
 
 it('discloses unconfigured discovery and allows preparing multiple sources', async () => {

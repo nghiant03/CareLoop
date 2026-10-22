@@ -30,7 +30,7 @@ PostgreSQL 18 stores both databases in the named volume mounted at
 `/var/lib/postgresql`. Host access is **127.0.0.1:5433**; container access is
 `postgres:5432`. Password authentication is disabled for this local demo
 (`POSTGRES_HOST_AUTH_METHOD=trust`). Any local user able to reach that port can
-connect. Do not expose it on a public interface.
+connect.
 
 Fresh installations use PostgreSQL's built-in **`postgres`** role. There is no
 custom admin account, password, operator UID/GID configuration or role/group
@@ -54,8 +54,6 @@ The default deployment mode is `review`. Open
 **http://127.0.0.1:8080/knowledge-review** without a preselected draft or release.
 Use Create draft to upload rulebook and catalogue JSON, inspect the draft,
 record an independent review and publish the exact reviewed revision.
-Actor names are attestations, not authentication. Existing fixture inputs remain
-unreviewed until deliberately assessed; compilation does not establish clinical validity.
 
 Discovery accepts multiple guideline files and an editable prompt without hashes
 or a source manifest. Its provider-neutral interface is implemented, but no LLM

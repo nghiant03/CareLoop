@@ -96,7 +96,7 @@ def create_review_app(*, discovery_client: DiscoveryClient | None = None) -> Fas
         app.state.discovery_client = discovery_client
         yield
 
-    app = FastAPI(title="CareLoop knowledge workspace — no clinical use", lifespan=lifespan,
+    app = FastAPI(title="CareLoop knowledge workspace", lifespan=lifespan,
                   root_path="/api", description=(
                       "Local operator discovery, draft authoring, revision-bound review and publication. "
                       "Publication never activates knowledge. Patient guidance and planning are unavailable."))

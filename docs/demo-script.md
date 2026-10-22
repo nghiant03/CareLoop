@@ -167,5 +167,4 @@ curl -sS "$P/adherence/P0005/deviation" | jq '.flags'
 - Rule content and trace are deterministic for unchanged patient facts; persisted
   proposals receive fresh identities/times. Observations and approval history can
   change the demo outcome. Adherence windows use the server's local date, not UTC.
-- Dish nutrient values are curated estimates (`docs/DATASETS.md`); present
-  numbers as prototype-grade, not clinically validated.
+- Dish nutrient values are curated estimates. See `docs/DATASETS.md`.

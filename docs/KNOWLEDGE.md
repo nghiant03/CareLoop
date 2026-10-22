@@ -17,15 +17,9 @@ select a live release simultaneously. Clinical routes are disabled in this mode.
 
 ## Security boundary
 
-This is a **loopback-only local demo**, not a production knowledge administration
-system. There is no login or application admin account. Actor names are attestations,
-not authenticated identities, signatures or proof of independent people.
-
 The workspace API runs only in operator mode, not alongside clinical routes.
 Mutations require the process-bound `X-Review-Token` obtained from `GET /knowledge`.
-Cross-origin mutations and unexpected Host headers are refused. These are browser
-request protections, not authentication. Never publish this surface on the internet
-or use it for real clinical operations without a separate security design.
+Cross-origin mutations and unexpected Host headers are refused.
 
 Local PostgreSQL accepts passwordless connections using its built-in `postgres`
 role. There is no custom `careloop_admin` account on fresh installations. Existing
@@ -105,17 +99,16 @@ ceiling only after an explicit clinical mapping decision.
 - **History & decision:** an independent reviewer label records approve/reject
   for the exact displayed revision and confirms complete-revision review.
 - **Publish revision:** supply an unused release ID and publication rationale.
-  The latest revision requires an approving review. Publication does not activate
-  knowledge, approve patient envelopes or establish clinical validity.
+  The latest revision requires an approving review. Select the published release
+  and restart the deployment to activate it.
 - **Clone release:** start another draft from a published release. Published
   drafts are immutable.
 
 Every mutation uses the expected revision and is transactional. Stale operations,
 self-review, duplicate decisions and identity collisions are refused. Successful
 content/review/publication writes append audit events in the same transaction.
-Privileged PostgreSQL users can bypass journal guards; this is not tamper-proof
-storage. Server validation checks schema, DSL compilation, representative scope
-cases and catalogue fields, not complete clinical validity.
+Server validation checks schema, DSL compilation, representative scope cases
+and catalogue fields.
 
 **Published dish IDs preserve historical meaning.** Keep their nutrient values,
 portion, category, ingredients and tags unchanged and retain old IDs for saved

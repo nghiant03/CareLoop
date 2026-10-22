@@ -2,10 +2,8 @@
 
 What you will see in the CareLoop app, in plain language.
 
-> **Important:** CareLoop is an academic demo, not medical advice. Demo mode
-> auto-approves new eligible targets without clinical review and labels them as
-> such. The clinician role is simulated. Never use these targets to make real
-> changes to diet or medication.
+Demo mode auto-approves new eligible targets without clinical review and labels
+them as such.
 
 ## Reading your meal plan
 

@@ -27,6 +27,7 @@ it('browses rules, filters missing evidence and never links unsafe URLs', async 
   setup();
   await screen.findByRole('heading', { name: 'SODIUM' });
   expect(screen.getByText('“Limit sodium”')).toBeTruthy();
+  expect(screen.queryByText(/clinical use|attestations|authenticated identities/i)).toBeNull();
   await userEvent.click(screen.getByLabelText('Show only rules missing a quote or valid source link'));
   expect(screen.getByRole('heading', { name: 'PROTEIN' })).toBeTruthy();
   expect(screen.queryByRole('link', { name: /javascript/ })).toBeNull();

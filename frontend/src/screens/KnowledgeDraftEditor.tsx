@@ -78,7 +78,7 @@ export default function KnowledgeDraftEditor({ draft, documents, token, onChange
     </form>
     <form onSubmit={event => void save(event, true)} className="border-t border-rule-2 pt-6 space-y-5">
       <h2 className="text-lg font-bold">Publish reviewed knowledge</h2>
-      <p className="max-w-prose">Publication freezes this revision. It does not activate knowledge or establish clinical validity. Selecting the release for clinical use requires a controlled restart.</p>
+      <p className="max-w-prose">Publication freezes this revision. Select the release and restart the deployment to activate it.</p>
       {draft.release_id ? <p className="notice notice-ok">Published as {draft.release_id}.</p>
         : draft.review?.decision !== 'approve' && <p className="notice notice-warn">An independent approving review of this revision is required.</p>}
       <fieldset disabled={busy || Boolean(draft.release_id) || draft.review?.decision !== 'approve'} className="space-y-4">
