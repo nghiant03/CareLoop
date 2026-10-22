@@ -6,14 +6,14 @@ Compose file. PostgreSQL stores clinical and knowledge state in separate
 databases; SQLite runtime and import support have been removed. The derived
 in-memory knowledge graph is unchanged.
 
-## Prepare credentials and start the database
+## Start the database
 
 From the repository root:
 
 ```sh
-.venv/bin/python deploy/prepare_secrets.py
 export CARELOOP_OPERATOR_UID=$(id -u)
 export CARELOOP_OPERATOR_GID=$(id -g)
+mkdir -p "${CARELOOP_DATASET_DIR:-$HOME/.local/share/careloop/datasets}/outputs/knowledge"
 docker compose config --quiet
 docker compose up -d --wait postgres
 docker compose run --rm migrate
@@ -21,26 +21,17 @@ docker compose run --rm migrate
 
 Use `sudo docker compose ...` if Docker socket access requires sudo; retain the
 operator UID/GID variables explicitly when using sudo for operator exports.
-The preparation script creates ignored credentials in `.secrets/`, without
-replacing existing values. Their host directory is private (0700); files are
-0444 so non-root containers can read Compose bind-mounted secrets. Docker access
-and local administrator access remain privileged. Never print URLs/passwords
-or commit them. The script also prepares localhost URL files for operator tools.
 
 `postgres` uses PostgreSQL 18 and a named volume mounted at
 `/var/lib/postgresql`. It publishes only **127.0.0.1:5433**. The container network
-uses `postgres:5432`. This local configuration has no TLS, replication or HA.
-The image runs bootstrap scripts only on an empty volume. Editing secret files
-does not rotate existing PostgreSQL passwords; use an explicit rotation plan.
+uses `postgres:5432`. Authentication is disabled (`POSTGRES_HOST_AUTH_METHOD: trust`);
+this local loopback-only configuration has no credentials, TLS, replication or HA.
+The image runs bootstrap scripts only on an empty volume.
 
-Bootstrap provisions these roles:
-
-| Role | Scope |
-| --- | --- |
-| `careloop_admin` | Local bootstrap superuser and explicit schema/data migrations; never the backend role |
-| `careloop_app` | Clinical workflow reads/writes |
-| `careloop_knowledge_reader` | Published-knowledge runtime reads |
-| `careloop_knowledge_operator` | Knowledge authoring journal reads/inserts |
+Bootstrap provisions a single `careloop_admin` role (the Compose
+`POSTGRES_USER`) that owns both databases and is used for bootstrap, schema
+migration and all runtime access; finer role separation is out of scope for
+this local deployment.
 
 The `migrate` service applies schema version 1 explicitly before the backend
 starts. The backend checks the recorded domain/version and never performs DDL.
@@ -56,10 +47,10 @@ WAL files; this version does not delete or convert them. See [STORAGE.md](STORAG
 ## Bootstrap knowledge when no authoring journal exists
 
 Fixtures are **draft inputs**, not automatically approved evidence. Configure
-operator credentials for the CLI on the host:
+knowledge credentials for the CLI on the host:
 
 ```sh
-export CARELOOP_KNOWLEDGE_DATABASE_URL_FILE="$PWD/.secrets/knowledge_operator_url_local"
+export CARELOOP_KNOWLEDGE_DATABASE_URL="postgresql://careloop_admin@127.0.0.1:5433/careloop_knowledge"
 .venv/bin/python -m backend.knowledge import --draft-id bootstrap \
   --rules-file "$CARELOOP_DATASET_DIR/fixtures/rules.json" \
   --dishes-file "$CARELOOP_DATASET_DIR/fixtures/dishes.json" --actor AUTHOR
@@ -92,10 +83,8 @@ curl --fail http://127.0.0.1:8080/api/kb/stats
 
 If using sudo, pass the release explicitly, for example
 `sudo env CARELOOP_KNOWLEDGE_RELEASE=knowledge-2026-10 docker compose up --build -d`.
-An absent/unknown release blocks backend startup. The runtime uses only its
-clinical writer and knowledge reader secrets; operator/admin credentials are
-not mounted into the backend. Check hashes, historical approvals/logs and saved
-plans before accepting new writes.
+An absent/unknown release blocks backend startup. Check hashes, historical
+approvals/logs and saved plans before accepting new writes.
 
 ## Backups and restoration
 
@@ -133,11 +122,11 @@ regressions require an explicit administrator test URL and create/drop only
 unique `careloop_test_*` databases:
 
 ```sh
-CARELOOP_TEST_POSTGRES_URL="$(cat .secrets/clinical_admin_url_local)" \
+CARELOOP_TEST_POSTGRES_URL="postgresql://careloop_admin@127.0.0.1:5433/postgres" \
   .venv/bin/python -m pytest backend/storage -q
 ```
 
-Do not share the command's expanded URL. Tests report skipped integration cases
+Tests report skipped integration cases
 when no URL is supplied; that is not a successful PostgreSQL integration run.
 Runtime connections are pooled (default maximum 5 per URL/process) and writers
 are conservatively serialized per domain with PostgreSQL advisory transaction

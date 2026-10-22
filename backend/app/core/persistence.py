@@ -1,6 +1,6 @@
 """Durable PostgreSQL clinical storage.
 
-PostgreSQL uses CARELOOP_APP_DATABASE_URL or its _FILE secret and pooled
+PostgreSQL uses CARELOOP_APP_DATABASE_URL and pooled
 transactions. Its schema is migrated explicitly, never during runtime startup.
 
 Database write reservations protect ID allocation and lifecycle checks across
@@ -75,7 +75,7 @@ def _connect() -> PostgresConnection:
     """Open a schema-checked PostgreSQL transaction; never create runtime schema."""
     url = database_url("clinical")
     if url is None:
-        raise ValueError("Configure CARELOOP_APP_DATABASE_URL or CARELOOP_APP_DATABASE_URL_FILE")
+        raise ValueError("Configure CARELOOP_APP_DATABASE_URL")
     return PostgresConnection(url, "clinical")
 
 

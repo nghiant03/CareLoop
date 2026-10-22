@@ -28,22 +28,20 @@ _SQL_TOKENS = re.compile(r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|--[^\n]*|/\*.*?\*/
 
 
 def database_url(component: str) -> str | None:
-    """Read a URL or a Docker-secret file; reject ambiguous or malformed settings.
+    """Read a plain PostgreSQL URL; reject ambiguous or malformed settings.
 
-    Credentials are never returned in diagnostics. Retired SQLite settings are
-    rejected, not ignored, so existing storage is never silently abandoned.
+    Retired SQLite and secret-file settings are rejected, not ignored, so
+    existing storage is never silently abandoned.
     """
     if component not in _WRITE_LOCKS:
         raise ValueError("database component must be clinical or knowledge")
     prefix = "CARELOOP_APP" if component == "clinical" else "CARELOOP_KNOWLEDGE"
     if os.environ.get(prefix + "_DB") is not None:
-        raise ValueError(f"{prefix}_DB is no longer supported; configure {prefix}_DATABASE_URL[_FILE]. Existing files are untouched.")
+        raise ValueError(f"{prefix}_DB is no longer supported; configure {prefix}_DATABASE_URL. Existing files are untouched.")
     variable = f"{prefix}_DATABASE_URL"
-    value, filename = os.environ.get(variable), os.environ.get(variable + "_FILE")
-    if value is not None and filename is not None:
-        raise ValueError(f"Set only {variable} or {variable}_FILE")
-    if filename is not None:
-        value = Path(filename).read_text(encoding="utf-8").strip()
+    if os.environ.get(variable + "_FILE") is not None:
+        raise ValueError(f"{variable}_FILE is no longer supported; configure {variable} directly")
+    value = os.environ.get(variable)
     if value is not None and not value.startswith(("postgresql://", "postgres://")):
         raise ValueError(f"{variable} must contain a PostgreSQL URL")
     return value

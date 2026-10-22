@@ -20,7 +20,7 @@ def review_store(pg_databases, monkeypatch):
     dishes = json.loads(dataset_path("dishes.json").read_text())
     rules["authoring_review"] = {"status": "BLOCKED_FOR_PUBLICATION", "blockers": ["clinical approval pending"]}
     store.create_draft("review-test", rules, dishes, actor="technical-author")
-    for key in ("CARELOOP_KNOWLEDGE_DATABASE_URL", "CARELOOP_KNOWLEDGE_DATABASE_URL_FILE", "CARELOOP_KNOWLEDGE_RELEASE"):
+    for key in ("CARELOOP_KNOWLEDGE_DATABASE_URL", "CARELOOP_KNOWLEDGE_RELEASE"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("CARELOOP_KNOWLEDGE_DATABASE_URL", database)
     monkeypatch.setenv("CARELOOP_REVIEW_DRAFT", "review-test")

@@ -62,11 +62,6 @@ def initialize_database(url: str, component: str) -> dict:
                 conn.execute(sql.SQL("CREATE TRIGGER {} BEFORE UPDATE OR DELETE OR TRUNCATE ON {} "
                                      "FOR EACH STATEMENT EXECUTE FUNCTION reject_knowledge_mutation()")
                              .format(sql.Identifier(table + "_immutable"), sql.Identifier(table)))
-        roles = ("careloop_app",) if component == "clinical" else ("careloop_knowledge_reader", "careloop_knowledge_operator")
-        for role in roles:
-            if conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,)).fetchone():
-                conn.execute(sql.SQL("REVOKE ALL ON careloop_schema, careloop_imports FROM {}").format(sql.Identifier(role)))
-                conn.execute(sql.SQL("GRANT SELECT ON careloop_schema TO {}").format(sql.Identifier(role)))
     return {"component": component, "schema_version": 1, "initialized": True}
 
 
@@ -81,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         for component in components:
             url = database_url(component)
             if url is None:
-                raise ValueError(f"configure the {component} PostgreSQL DATABASE_URL or _FILE")
+                raise ValueError(f"configure the {component} PostgreSQL DATABASE_URL")
             results.append(initialize_database(url, component))
     except psycopg.Error:
         parser.exit(1, "PostgreSQL migration failed. Inspect server access/schema without sharing credentials.\n")

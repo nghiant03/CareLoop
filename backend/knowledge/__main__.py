@@ -76,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         url = database_url("knowledge")
         if url is None:
-            raise ValueError("configure CARELOOP_KNOWLEDGE_DATABASE_URL or its _FILE secret")
+            raise ValueError("configure CARELOOP_KNOWLEDGE_DATABASE_URL")
         store = KnowledgeStore(url)
         if args.command == "init":
             store.initialize()

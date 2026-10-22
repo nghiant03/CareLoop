@@ -227,7 +227,7 @@ def test_cli_discovery_never_opens_or_creates_a_database(research, baseline, tmp
     baseline_path = tmp_path / "rules.json"
     baseline_path.write_text(json.dumps(baseline))
     database = tmp_path / "must-not-exist.sqlite3"
-    monkeypatch.setenv("CARELOOP_KNOWLEDGE_DATABASE_URL_FILE", str(tmp_path / "missing-secret"))
+    monkeypatch.setenv("CARELOOP_KNOWLEDGE_DATABASE_URL", "postgresql://must-not-connect.invalid/db")
     monkeypatch.setenv("CARELOOP_APP_DB", str(database))
     def forbidden(*args, **kwargs):
         raise AssertionError("Discovery must not construct a knowledge store")

@@ -3,8 +3,7 @@
 ## PostgreSQL deployment
 
 The root Compose stack selects a PostgreSQL published release. Configure
-`CARELOOP_KNOWLEDGE_DATABASE_URL` or `CARELOOP_KNOWLEDGE_DATABASE_URL_FILE` for
-runtime readers and operator commands, with separate credentials. Never also
+`CARELOOP_KNOWLEDGE_DATABASE_URL` for runtime and operator commands. Never also
 set the retired `CARELOOP_KNOWLEDGE_DB` path (it now fails explicitly). Run schema migrations with the admin
 role through `backend.storage.migrate init`, not the operator `init` command;
 on PostgreSQL the latter only verifies an existing schema.
@@ -120,7 +119,7 @@ and reviewed release names; the commands below describe the workflow, not a
 pre-approved release. Nothing runs automatically on application startup.
 
 ```sh
-export CARELOOP_KNOWLEDGE_DATABASE_URL_FILE="$PWD/.secrets/knowledge_operator_url_local"
+export CARELOOP_KNOWLEDGE_DATABASE_URL="postgresql://careloop_admin@127.0.0.1:5433/careloop_knowledge"
 umask 077
 .venv/bin/python -m backend.knowledge init
 .venv/bin/python -m backend.knowledge import \
@@ -149,9 +148,9 @@ settings in the service environment, not only the author's shell:
 
 ```sh
 export CARELOOP_KNOWLEDGE_MODE=database
-export CARELOOP_KNOWLEDGE_DATABASE_URL_FILE="$PWD/.secrets/knowledge_reader_url_local"
+export CARELOOP_KNOWLEDGE_DATABASE_URL="postgresql://careloop_admin@127.0.0.1:5433/careloop_knowledge"
 export CARELOOP_KNOWLEDGE_RELEASE=knowledge-2026-10
-export CARELOOP_APP_DATABASE_URL_FILE="$PWD/.secrets/clinical_app_url_local"
+export CARELOOP_APP_DATABASE_URL="postgresql://careloop_admin@127.0.0.1:5433/careloop_clinical"
 .venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 ```
 

@@ -26,11 +26,9 @@ uv sync --extra dev
 export CARELOOP_DATASET_DIR="$HOME/.local/share/careloop/datasets"
 export CARELOOP_OPERATOR_UID=$(id -u)
 export CARELOOP_OPERATOR_GID=$(id -g)
-.venv/bin/python deploy/prepare_secrets.py
+mkdir -p "$CARELOOP_DATASET_DIR/outputs/knowledge"
 docker compose config --quiet
 ```
-
-Credentials in ignored `.secrets/` are preserved. Never print or commit them.
 
 Provision datasets **outside the checkout** using
 [the dataset guide](docs/DATASETS.md). None are bundled. Compose mounts them

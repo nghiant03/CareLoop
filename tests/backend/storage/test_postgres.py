@@ -16,21 +16,19 @@ def test_parameter_adapter_preserves_literals_comments_and_percent():
     assert postgres.bind_sql('SELECT "?", ? /* ? */') == 'SELECT "?", %s /* ? */'
 
 
-def test_url_files_and_conflicting_configurations(monkeypatch, tmp_path):
+def test_database_url_configuration(monkeypatch):
     monkeypatch.delenv("CARELOOP_APP_DATABASE_URL", raising=False)
     monkeypatch.delenv("CARELOOP_APP_DATABASE_URL_FILE", raising=False)
     assert postgres.database_url("clinical") is None
-    secret = tmp_path / "url"
-    secret.write_text("postgresql://example/db\n")
-    monkeypatch.setenv("CARELOOP_APP_DATABASE_URL_FILE", str(secret))
-    assert postgres.database_url("clinical") == "postgresql://example/db"
-    monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", "postgresql://another/db")
-    with pytest.raises(ValueError, match="only"):
+    monkeypatch.setenv("CARELOOP_APP_DATABASE_URL_FILE", "/tmp/retired-secret")
+    with pytest.raises(ValueError, match="no longer supported"):
         postgres.database_url("clinical")
     monkeypatch.delenv("CARELOOP_APP_DATABASE_URL_FILE")
     monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", "sqlite:///not-postgres")
     with pytest.raises(ValueError, match="PostgreSQL URL"):
         postgres.database_url("clinical")
+    monkeypatch.setenv("CARELOOP_APP_DATABASE_URL", "postgresql://example/db")
+    assert postgres.database_url("clinical") == "postgresql://example/db"
 
 
 def test_schema_matches_snapshot_contract_and_has_meal_items():

@@ -52,7 +52,7 @@ def pytest_configure(config):
             file_or_dir[idx] = _map_legacy_test_arg(arg, repo_root, tests_dir)
 
 for _prefix in ("CARELOOP_APP", "CARELOOP_KNOWLEDGE"):
-    for _suffix in ("_DB", "_DATABASE_URL", "_DATABASE_URL_FILE"):
+    for _suffix in ("_DB", "_DATABASE_URL"):
         os.environ.pop(_prefix + _suffix, None)
 os.environ["CARELOOP_APPROVAL_MODE"] = "clinician"
 os.environ["CARELOOP_KNOWLEDGE_MODE"] = "fixtures"

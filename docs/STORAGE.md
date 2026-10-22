@@ -7,8 +7,8 @@ creates tables. See [POSTGRES.md](POSTGRES.md) for setup, backups and restoratio
 | Category | Location | Version control |
 |---|---|---|
 | Rules, dishes, synthetic patients | External `CARELOOP_DATASET_DIR/fixtures/` | Provision separately; never bundle |
-| Clinical state | `CARELOOP_APP_DATABASE_URL` or `CARELOOP_APP_DATABASE_URL_FILE` | Never commit credentials or dumps |
-| Knowledge authoring journal | `CARELOOP_KNOWLEDGE_DATABASE_URL` or its `_FILE` secret | Separate PostgreSQL database; runtime reads only |
+| Clinical state | `CARELOOP_APP_DATABASE_URL` | Never commit dumps |
+| Knowledge authoring journal | `CARELOOP_KNOWLEDGE_DATABASE_URL` | Separate PostgreSQL database |
 | Reviewed benchmark/evaluation snapshots | External `CARELOOP_DATASET_DIR/benchmarks/` (`EVALUATION.md`, `benchmark_results.{csv,md}`, `benchmark_wall_time.{csv,md}`, `COMPARISON.md`, `RETRIEVAL_BENCH.md`) | Provision separately; never commit reports or raw results into source control |
 | New run outputs | External dataset `outputs/{evaluation,optim,retrieval,mining}/`; override `CARELOOP_ARTIFACT_DIR` | Never commit raw outputs or generated reports |
 

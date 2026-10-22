@@ -80,7 +80,7 @@ convention:
   optimiser.
 
 The durable envelope's embedded `RuleFire` trace is authoritative for explanations.
-Deployment uses `CARELOOP_APP_DATABASE_URL` or its `_FILE` secret for PostgreSQL.
+Deployment uses `CARELOOP_APP_DATABASE_URL` for PostgreSQL.
 SQLite durable storage and imports are removed; legacy path settings fail closed.
 PostgreSQL schema migrations are explicit, outside runtime startup.
 See [STORAGE.md](STORAGE.md) for migration,
@@ -257,7 +257,7 @@ schema.
 ## 7. Known runtime boundaries
 
 - Clinical state survives restart in PostgreSQL, selected by
-  `CARELOOP_APP_DATABASE_URL` or its `_FILE` secret.
+  `CARELOOP_APP_DATABASE_URL`.
   Timestamped observations overlay profiles and feed rules and lab trends.
   Observations alone do not approve envelopes; an ensuing rule run follows the
   configured approval policy.

@@ -7,7 +7,6 @@ The explicit draft revision is pinned at startup and is never a runtime release.
 import os
 import secrets
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Literal
 
 import psycopg
@@ -51,8 +50,6 @@ def create_review_app() -> FastAPI:
         if (state["revision"] != int(revision_text) or state["rules_hash"] != content_hash(rules)
                 or state["dishes_hash"] != content_hash(dishes)):
             raise ValueError("draft changed during review startup or selected revision is not current")
-        operator_file = os.environ.get("CARELOOP_REVIEW_OPERATOR_URL_FILE")
-        app.state.operator = KnowledgeStore(Path(operator_file).read_text().strip()) if operator_file else None
         app.state.store = store
         app.state.token = secrets.token_urlsafe(32)
         app.state.snapshot = {"deployment_mode": "review", "clinical_workflows_enabled": False,
@@ -93,7 +90,7 @@ def create_review_app() -> FastAPI:
     def review_status():
         snapshot = app.state.snapshot
         result = {key: snapshot[key] for key in ("deployment_mode", "clinical_workflows_enabled", "draft", "technical_review")}
-        result["review_enabled"] = app.state.operator is not None
+        result["review_enabled"] = True
         result["csrf_token"] = app.state.token
         result["current_draft"] = app.state.store.show(snapshot["draft"]["draft_id"])
         return result
@@ -118,16 +115,14 @@ def create_review_app() -> FastAPI:
     def decide(payload: ReviewDecision, request: Request):
         if not secrets.compare_digest(request.headers.get("x-review-token", ""), app.state.token):
             return JSONResponse(status_code=403, content={"detail": "Reload the workspace before submitting a review"})
-        if app.state.operator is None:
-            return JSONResponse(status_code=403, content={"detail": "Review recording is not enabled by the operator"})
         draft = app.state.snapshot["draft"]
         if payload.expected_revision != draft["revision"]:
             return JSONResponse(status_code=409, content={"detail": "Decision must match the displayed pinned revision"})
         try:
-            current = app.state.operator.show(draft["draft_id"])
+            current = app.state.store.show(draft["draft_id"])
             if (current["rules_hash"], current["dishes_hash"]) != (draft["rules_hash"], draft["dishes_hash"]):
                 raise ValueError("stale draft revision; restart review deployment")
-            result = app.state.operator.review(draft["draft_id"], **payload.model_dump())
+            result = app.state.store.review(draft["draft_id"], **payload.model_dump())
         except ValueError as error:
             return JSONResponse(status_code=409, content={"detail": str(error)})
         except psycopg.IntegrityError:

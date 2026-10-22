@@ -7,19 +7,12 @@ services:
     environment:
       POSTGRES_USER: careloop_admin
       POSTGRES_DB: postgres
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
-      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./deploy/postgres/01-databases.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
-      - ./deploy/postgres/02-passwords.sh:/docker-entrypoint-initdb.d/02-passwords.sh:ro
-    secrets:
-      - postgres_admin_password
-      - postgres_app_password
-      - postgres_knowledge_reader_password
-      - postgres_knowledge_operator_password
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U careloop_admin -d postgres"]
       interval: 10s
@@ -33,11 +26,8 @@ services:
       context: .
       dockerfile: deploy/backend/Dockerfile
     environment:
-      CARELOOP_APP_DATABASE_URL_FILE: /run/secrets/clinical_admin_url
-      CARELOOP_KNOWLEDGE_DATABASE_URL_FILE: /run/secrets/knowledge_admin_url
-    secrets:
-      - clinical_admin_url
-      - knowledge_admin_url
+      CARELOOP_APP_DATABASE_URL: postgresql://careloop_admin@postgres:5432/careloop_clinical
+      CARELOOP_KNOWLEDGE_DATABASE_URL: postgresql://careloop_admin@postgres:5432/careloop_knowledge
     command: ["python", "-m", "backend.storage.migrate", "init", "--component", "both"]
     depends_on:
       postgres:
@@ -57,9 +47,7 @@ services:
       context: .
       dockerfile: deploy/backend/Dockerfile
     environment:
-      CARELOOP_KNOWLEDGE_DATABASE_URL_FILE: /run/secrets/knowledge_operator_url
-    secrets:
-      - knowledge_operator_url
+      CARELOOP_KNOWLEDGE_DATABASE_URL: postgresql://careloop_admin@postgres:5432/careloop_knowledge
     volumes:
       - ${CARELOOP_DATASET_DIR:-${HOME}/.local/share/careloop/datasets}/outputs/knowledge:/work
     working_dir: /work
@@ -81,9 +69,9 @@ services:
       context: .
       dockerfile: deploy/backend/Dockerfile
     environment:
-      CARELOOP_APP_DATABASE_URL_FILE: /run/secrets/clinical_app_url
+      CARELOOP_APP_DATABASE_URL: postgresql://careloop_admin@postgres:5432/careloop_clinical
       CARELOOP_APPROVAL_MODE: ${CARELOOP_APPROVAL_MODE:-auto}
-      CARELOOP_KNOWLEDGE_DATABASE_URL_FILE: /run/secrets/knowledge_reader_url
+      CARELOOP_KNOWLEDGE_DATABASE_URL: postgresql://careloop_admin@postgres:5432/careloop_knowledge
       CARELOOP_ARTIFACT_DIR: /var/lib/careloop/artifacts
       CARELOOP_DATASET_DIR: /datasets
       CARELOOP_KNOWLEDGE_MODE: database
@@ -91,9 +79,6 @@ services:
       CARELOOP_REVIEW_DRAFT: ${CARELOOP_REVIEW_DRAFT:-}
       CARELOOP_REVIEW_REVISION: ${CARELOOP_REVIEW_REVISION:-}
       CARELOOP_KNOWLEDGE_RELEASE: ${CARELOOP_KNOWLEDGE_RELEASE:-}
-    secrets:
-      - clinical_app_url
-      - knowledge_reader_url
     volumes:
       - run_artifacts:/var/lib/careloop
       - ${CARELOOP_DATASET_DIR:-${HOME}/.local/share/careloop/datasets}:/datasets:ro
@@ -144,23 +129,3 @@ services:
 volumes:
   postgres_data:
   run_artifacts:
-
-secrets:
-  postgres_admin_password:
-    file: ./.secrets/postgres_admin_password
-  postgres_app_password:
-    file: ./.secrets/postgres_app_password
-  postgres_knowledge_reader_password:
-    file: ./.secrets/postgres_knowledge_reader_password
-  postgres_knowledge_operator_password:
-    file: ./.secrets/postgres_knowledge_operator_password
-  clinical_admin_url:
-    file: ./.secrets/clinical_admin_url
-  knowledge_admin_url:
-    file: ./.secrets/knowledge_admin_url
-  clinical_app_url:
-    file: ./.secrets/clinical_app_url
-  knowledge_reader_url:
-    file: ./.secrets/knowledge_reader_url
-  knowledge_operator_url:
-    file: ./.secrets/knowledge_operator_url

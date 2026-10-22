@@ -11,18 +11,16 @@ have been removed; derived in-memory graphs remain unchanged.
 | `backend/Dockerfile` | Install the Python distribution and run a non-root Uvicorn worker |
 | `frontend/Dockerfile` | Build with the npm lock file, then serve static files using non-root nginx |
 | `frontend/nginx.conf` | SPA routing, static asset caching, `/api` proxy and container health endpoint |
-| `postgres/01-databases.sql` | Empty clinical/knowledge PostgreSQL databases and access roles |
-| `postgres/02-passwords.sh` | Initial role passwords from private Compose secrets |
-| `prepare_secrets.py` | Ignored credentials and internal/localhost connection URL files |
+| `postgres/01-databases.sql` | Empty clinical/knowledge PostgreSQL databases owned by the admin role |
 
 ## Application stack
 
 Follow [the PostgreSQL guide](../docs/POSTGRES.md) before starting the app.
-From the repository root, prepare secrets, start only the database, and initialize
+From the repository root, start only the database, and initialize
 schemas first:
 
 ```sh
-.venv/bin/python deploy/prepare_secrets.py
+mkdir -p "${CARELOOP_DATASET_DIR:-$HOME/.local/share/careloop/datasets}/outputs/knowledge"
 docker compose config --quiet
 docker compose up -d --wait postgres
 docker compose run --rm migrate
@@ -47,11 +45,42 @@ contract. Its health endpoint checks nginx only; `/api/healthz` checks the backe
 Neither endpoint establishes clinical readiness.
 
 Backend knowledge mode is explicitly `database` and requires a published release.
-No fixture fallback is allowed. PostgreSQL runtime credentials are different from
-operator and migration credentials; only runtime secrets reach the backend.
+No fixture fallback is allowed. A single admin role owns both databases; runtime
+role separation is out of scope for this local deployment.
 The `knowledge` service is an opt-in CLI under the `tools` profile, not an editing
 API. Its bind-mounted export workspace is external dataset `outputs/knowledge`; set
 `CARELOOP_OPERATOR_UID/GID` to the invoking user's IDs before exports.
+
+## Knowledge review workspace
+
+Review mode serves a dedicated UI at `/knowledge-review` (the root redirects
+there), without a published release. It includes searchable rules, evidence,
+conditions/actions, authoring blockers, catalogue, provenance, hashes, revision
+comparison and event history. Clinical routes, document editing and publication
+remain disabled. All displayed documents are pinned to the selected revision;
+restart with the new revision after an edit.
+
+Review mode is a switch on the single deployment: set
+`CARELOOP_DEPLOYMENT_MODE=review`, `CARELOOP_REVIEW_DRAFT` and
+`CARELOOP_REVIEW_REVISION`, and leave `CARELOOP_KNOWLEDGE_RELEASE` empty.
+Approving/rejecting decisions are recorded in the same deployment. From the
+repository root, substituting an existing draft ID and its current revision:
+
+```sh
+CARELOOP_DEPLOYMENT_MODE=review CARELOOP_REVIEW_DRAFT=YOUR_DRAFT_ID \
+  CARELOOP_REVIEW_REVISION=1 \
+  docker compose up --build -d backend frontend
+```
+
+With sudo, pass those variables using `sudo env`.
+
+Decisions require a reviewer name, rationale and confirmation of complete-revision
+review. The server enforces an independent reviewer, the exact current revision,
+an unpublished draft and a single decision per revision. A process-bound request
+token protects the mutation against cross-origin form submissions. Names remain
+attestations, not authentication; keep this local operator surface on loopback.
+Recording a decision does not remove source blockers, publish, activate knowledge
+or establish clinical validity. Publication remains a separate operator action.
 
 ## State and existing data
 
@@ -99,8 +128,8 @@ docker compose logs postgres migrate backend frontend
 ```
 
 Changing knowledge releases requires a controlled backend restart. PostgreSQL
-URLs use `CARELOOP_APP_DATABASE_URL[_FILE]` and
-`CARELOOP_KNOWLEDGE_DATABASE_URL[_FILE]`, not legacy SQLite path settings.
+URLs use `CARELOOP_APP_DATABASE_URL` and
+`CARELOOP_KNOWLEDGE_DATABASE_URL`, not legacy SQLite path settings.
 
 ## Deployment limits
 
