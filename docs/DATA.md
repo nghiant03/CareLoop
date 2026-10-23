@@ -10,9 +10,8 @@ allergen coverage remain incomplete. Source-specific audits are recorded below.
   clinician-provided datasets. Real data first, generation only as a last resort.
 - Singapore/SEA is the application food context. US survey data may support
   reproducible benchmarks but is not evidence of Singapore representativeness.
-- Keep raw datasets outside source control and container images. Determine a new
-  external data layout during implementation; replace old CareLoop datasets as
-  requested, not arbitrary neighbouring files.
+- Keep raw datasets outside source control and container images, under
+  `~/.local/share/careloop/public/` by default.
 - Record source identity, URL, edition/date, retrieval time, units, applicability,
   and transformation provenance. Preserve source snapshots supporting active and
   historical rules. Missing values are unknown, not zero.
@@ -148,9 +147,8 @@ food pool. Missing free sugars and safety classifications remain unknown.
 
 ### Implementation boundaries
 
-`adapters/` only parses source formats and maps fields/units to domain models.
-`ingestion.py` performs downloads and writes external artifacts; `cli.py` orchestrates
-explicit database import. There is no download CLI inside an adapter.
+See [architecture](ARCHITECTURE.md#workflow-integration) for acquisition, adapter,
+and database-import boundaries.
 
 Normalize composition, portion, category, ingredient, and allergen records while
 retaining source provenance. Reviewer corrections must remain traceable. Numeric

@@ -17,10 +17,15 @@ src/careloop/
   evidence/
     models.py             Input contracts and structural validation
     service.py            Transactional source/review/publication operations
+    acquisition.py        Approved-domain HTTPS downloads and discovery
+    documents.py          Bounded document parsing and passages
+    conflicts.py          Structured population/numeric conflict checks
   patients/               Facts, CSV import, applicability, target review, routes
   adapters/               Source format → domain model translation (no side effects)
   foods/                  Versioned nutrients, portions, reviewer annotations
   planning/               Bounded search, independent checking, approvals/substitutions
+  logging/                Intake revisions, completeness, and target comparisons
+  evaluate_foods.py        Reproducible public-food retrieval pilot
 tests/                    Workflow and PostgreSQL integration tests
 ui/
   src/App.tsx             Application shell, routing and demo session
@@ -30,16 +35,16 @@ ui/
   src/components/         Shared headers and form/display controls
 ```
 
-Meal logging and food clustering are implemented in the corresponding backend
-workflow modules; cited questions remain pending. Share database access and audit conventions;
+Food clustering lives in `foods/clustering.py`. Share database access and audit conventions;
 avoid separate services, generic repositories, a second knowledge database, or
 mirroring every HTTP resource into multiple abstraction layers.
 
 ## Evidence persistence and consistency
 
-- Sources are immutable submitted-text snapshots with title, edition, locator,
-  timestamp, and SHA-256. New source editions are new snapshots. Locators are
-  metadata; the application does not fetch arbitrary URLs in this slice.
+- Sources are immutable text snapshots with title, edition, locator, timestamp,
+  and SHA-256. URL/PDF imports also retain original bytes, parser metadata, and
+  passages. New editions are new snapshots; URL acquisition is restricted to
+  approved domains. See [evidence](EVIDENCE.md) for acquisition limits.
 - Rules have immutable revisions. A revision records applicability, exceptions,
   recommendation type, amount/unit where appropriate, source quote/location, and
   unresolved blockers. Quoted text must occur verbatim in the submitted snapshot.
@@ -53,11 +58,10 @@ mirroring every HTTP resource into multiple abstraction layers.
 - Publication records a permanent membership list and changes active pointers in
   the same transaction. Publication is distinct from approval. Retirement retains
   the historical active pointer and marks the rule ineligible for future use.
-- Conflict identification is currently **manual**. Reviewers record blockers in
-  draft bodies, resolve them through audited revisions, and provide a conflict
-  review note when publishing. There is no automatic clinical conflict detector.
-  The review must consider the selection together with retained active rules;
-  narrower applicability or explicit resolution must be recorded in rule bodies.
+- Publication checks structured population overlap and same-unit numeric conflicts
+  against selected and retained active rules. Broader clinical interpretation
+  remains manual: reviewers resolve blockers through audited revisions and provide
+  a conflict-review note. See [conflict analysis](EVIDENCE.md#structured-conflict-analysis).
 - A database-held catalogue lock serializes evidence writes. Publication includes
   the catalogue generation reviewed; any intervening write invalidates it. This
   conservative mechanism fits the small local reviewer workflow. Concurrent edits
@@ -69,9 +73,8 @@ mirroring every HTTP resource into multiple abstraction layers.
 
 ## Contract boundary
 
-All new routes use `/api/`. FastAPI generates the current contract at
-`/openapi.json` and interactive documentation at `/docs`. The old frontend contract
-is not used as a design constraint.
+Routes use `/api/`. FastAPI generates the current contract at `/openapi.json` and
+interactive documentation at `/docs`.
 
 Each write carries `actor: {name, role}` and `reason`. Reviewer actions require the
 reviewer label. These labels implement demo workflow guards, not authentication.
@@ -87,7 +90,7 @@ Applicability evaluation now supports a bounded, typed fact vocabulary and
 three-valued missing-fact semantics. See [patient contracts](PATIENTS.md) for
 supported units, explicit per-kg arithmetic, clinician completion, and limits.
 
-## Next implementation boundaries
+## Workflow integration
 
 Patient target approvals bind immutable patient facts and published rule revisions.
 Evidence publication/retirement re-evaluates patient snapshots and flags affected
@@ -98,10 +101,9 @@ Planning consumes only approved, current targets and adds food/restriction check
 Target readiness alone is not sufficient for planning. Food and target changes
 flag affected plans transactionally, while their pinned snapshots remain readable.
 
-Source discovery/PDF parsing and hosted extraction should produce the same draft
-contract rather than bypass review. Public food acquisition and normalization must
-precede optimization. Model and data-source pilots remain separate, measurable
-work; neither fabricated clinical rules nor generated patient cohorts are seeded.
+Acquired sources feed the structured draft contract; future hosted extraction must
+use the same review boundary. Model and data-source pilots remain separate,
+measurable work; neither clinical rules nor generated patient cohorts are seeded.
 The NHANES adapter translates explicitly selected public demographic records; no
 diagnoses, target approvals, or clinical histories are inferred. SG FoodID and
 FNDDS adapters translate food records. Acquisition and output artifacts belong to

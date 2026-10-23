@@ -2,7 +2,7 @@
 
 Status: decisions from the user discussion, 2026-10-23. Not an implementation
 completion report. Read with [data](DATA.md), [evidence](EVIDENCE.md), and
-[evaluation](EVALUATION.md). This is a fresh design, not an incremental cleanup.
+[evaluation](EVALUATION.md).
 
 ## Purpose and scope
 
@@ -19,7 +19,7 @@ every recommendation; stage, age, observations, medications, and exceptions may
 matter. Support coexisting conditions and explicit unresolved conflicts.
 
 Region: Singapore/SEA. Interface, extraction, and chat: English. Preserve the
-existing frontend visual style, not its obsolete workflows or API shapes.
+established frontend visual style.
 
 ## Actors and access
 
@@ -68,8 +68,7 @@ are separate workflows.
   required fields; identify recommendations that cannot yet be assessed.
 - Clinicians can manually complete or override targets. Record these as clinician
   authored, not falsely sourced to the underlying guideline.
-- Clinician approval is required before planning. No legacy automatic demo
-  approval policy carries into this design.
+- Clinician approval is required before planning.
 - Relevant changes to diagnoses, allergies, measurements, or published rules flag
   affected targets/plans for review. Do not silently change approved values.
 - Existing plans remain viewable; new generation and substitutions are blocked
@@ -137,15 +136,12 @@ against simpler non-clustered recommendations.
 - Use hosted LLM for language/extraction; deterministic calculation/checking for
   nutrient arithmetic and enforceable constraints.
 
-## Deployment and fresh start
+## Deployment and implementation choices
 
-Single local deployment with PostgreSQL and Docker Compose. Replace old backend,
-shared/rules/evaluation code, application databases, and downloaded datasets.
-No old patient-record migration is required: later explicit reset instructions
-supersede earlier requests to preserve records. Reacquire public data afresh.
-Identify exact project-owned deletion targets before executing the reset.
+Single local deployment with PostgreSQL and Docker Compose. No old patient-record
+migration is required. Remaining external cleanup is tracked in [implementation status](IMPLEMENTATION.md).
 
-Open implementation choices: module layout, schema, algorithms, hosted model,
-source-domain list, reference formulas, measurable latency targets, CSV columns,
-external-plan input, and full staged rollout details. Do not present proposals for
-these as user-approved requirements.
+Engineering choices are documented in [architecture](ARCHITECTURE.md) and the
+workflow contracts; they are not additional user-approved requirements. Hosted
+model selection, reference formulas, measurable latency targets, and external-plan
+input remain open.

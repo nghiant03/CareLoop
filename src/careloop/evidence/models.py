@@ -1,5 +1,3 @@
-"""First evidence contract: explicit applicability and quoted source support."""
-
 from typing import Annotated, Literal
 from uuid import UUID
 

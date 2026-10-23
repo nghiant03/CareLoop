@@ -1,5 +1,3 @@
-"""Bounded HTTPS acquisition from the project's authoritative source domains."""
-
 import http.client
 import ipaddress
 import socket
@@ -66,7 +64,7 @@ class PinnedHTTPS(http.client.HTTPSConnection):
         self.address = address
 
     def connect(self):
-        # Connect to the validated address, retaining hostname verification and SNI.
+        # Re-resolving the hostname could connect to an IP we did not validate.
         raw = socket.create_connection((self.address, 443), timeout=self.timeout)
         try:
             self.sock = self._context.wrap_socket(raw, server_hostname=self.host)

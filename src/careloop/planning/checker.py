@@ -1,8 +1,3 @@
-"""Independent Decimal arithmetic and mandatory checks, reused at approval.
-
-Search scores are not evidence of validity. Every returned plan is recomputed here.
-"""
-
 from decimal import Decimal
 from typing import get_args
 
@@ -106,7 +101,7 @@ def check_plan(meals, days, schedule, facts, items, items_per_slot=None):
         except ValueError as exc:
             violations.append({"day": day, "slot": slot, "issue": str(exc)})
             continue
-        # Older stored g-based snapshots used the grams key; preserve their meaning.
+        # Historical mass-based snapshots use `grams`.
         recorded = meal.get("quantity", meal.get("grams"))
         if Decimal(str(recorded)) != quantity or meal.get("unit", "g") != food.get("basis", "g"):
             violations.append({"day": day, "slot": slot, "issue": "Portion quantity/unit mismatch"})

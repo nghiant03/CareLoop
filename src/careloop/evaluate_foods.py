@@ -1,5 +1,3 @@
-"""Reproducible public-food retrieval pilot, distinct from clinical plan evaluation."""
-
 import argparse
 import hashlib
 import json
@@ -94,7 +92,7 @@ def main():
         identities.add(identity)
         body = FoodBody.model_validate(record["body"]).model_dump(mode="json")
         rows.append({"id": identity, "body": body})
-    # Hash ordering is fixed and avoids selecting by nutrition/category or source order.
+    # Hash before taking the limit so source ordering does not determine the sample.
     selected = sorted(rows, key=lambda row: hashlib.sha256(row["id"].encode()).hexdigest())[
         : args.limit
     ]

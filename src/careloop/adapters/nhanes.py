@@ -1,9 +1,3 @@
-"""Translate NHANES DEMO_L observations into patient records.
-
-Only SEQN and RIDAGEYR are mapped in this first adapter. Survey demographics are
-historical observations, not current clinical records or evidence of diagnoses.
-"""
-
 import math
 
 from careloop.patients.models import Facts, PatientBody, Provenance
@@ -16,7 +10,6 @@ SOURCES = {"data": (URL, ".xpt", b"HEADER RECORD*******LIBRARY HEADER")}
 
 
 def normalize(rows, checksum, limit):
-    """Return deterministic records and counts; reject unusable respondent identities."""
     if not 1 <= limit <= 5000:
         raise ValueError("limit must be between 1 and 5000")
     identities = set()
@@ -33,8 +26,7 @@ def normalize(rows, checksum, limit):
         elif not math.isfinite(age) or not 0 <= age <= 80:
             raise ValueError("DEMO_L contains an unexpected RIDAGEYR value")
         elif age < 2:
-            # Some XPORT readers decode zero as a tiny positive float. Both are
-            # outside our population; never round an eligible participant's age.
+            # Filter before the integer check: XPORT can decode age 0 as a tiny float.
             counts["under_two"] += 1
         elif not age.is_integer():
             raise ValueError("DEMO_L contains a non-integer eligible RIDAGEYR value")
@@ -68,7 +60,6 @@ def normalize(rows, checksum, limit):
 
 
 def read(paths, hashes, limit):
-    """Read local source files and adapt them; no network, output files, or DB writes."""
     import pandas as pd
 
     frame = pd.read_sas(paths["data"], format="xport")

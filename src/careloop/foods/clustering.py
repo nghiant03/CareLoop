@@ -1,5 +1,3 @@
-"""Deterministic food-composition clustering; no clinical suitability inference."""
-
 from math import isfinite, sqrt
 
 FEATURES = {"protein": 25.0, "carbohydrate": 25.0, "fat": 100 / 9}
@@ -8,11 +6,7 @@ MAX_ITERATIONS = 30
 
 
 def vector(food):
-    """Macronutrient amounts per 100 kcal, scaled by fixed reference amounts.
-
-    Ratios cancel the source mass/volume basis. These are similarity features,
-    not energy reconstruction, intake targets, or inferred missing nutrients.
-    """
+    """Divide by energy so g-based and ml-based foods need no density conversion."""
     nutrients = food["nutrients"]
     energy = nutrients.get("energy")
     if energy is None or energy <= 0 or any(nutrients.get(k) is None for k in FEATURES):
@@ -26,7 +20,6 @@ def distance(left, right):
 
 
 def fit(rows, clusters=4):
-    """Sorted identities, farthest-first seeds, stable ties, bounded Lloyd iterations."""
     points = {}
     excluded = []
     for row in sorted(rows, key=lambda r: str(r["id"])):
@@ -76,7 +69,6 @@ def fit(rows, clusters=4):
 
 
 def retrieve(rows, source, model, method):
-    """Return a stable candidate pool; checking and portion ranking happen separately."""
     origin = vector(source["body"])
     source_id = str(source["id"])
     candidates = []

@@ -43,7 +43,6 @@ def test_clusters_are_stable_separate_profiles_and_preserve_unknowns():
     assert len(retrieve(data, data[0], model, "nearest")) == 3
     assert len(retrieve(data, data[0], model, "same_category")) == 2
     assert vector({"nutrients": composition(energy=0)}) is None
-    # The ratio is independent of g versus ml; no density conversion is assumed.
     assert vector({**data[0]["body"], "basis": "ml"}) == vector(data[0]["body"])
 
 
@@ -97,7 +96,6 @@ def test_checked_recommendations_differences_and_approval_workflow(client, metho
     assert result["check"]["valid"]
     assert Decimal(result["nutrient_delta"]["energy"]) == 0
     assert result["nutrient_delta"]["free_sugars"] is None
-    # Retrieval creates no drafts or implicit approval.
     parent = client.get(f"/api/plans/{plan['id']}").json()
     assert not parent["needs_review"]
     draft = client.post(
@@ -131,8 +129,7 @@ def test_restrictions_missing_targets_and_whole_day_bounds_filter_candidates(cli
 def test_missing_features_baselines_and_stale_catalogue(client):
     _, _, plan = fixture(client)
     missing = food(client, "missing", nutrients=composition(protein=None))
-    # Protein is not a target here: the category baseline can check this food,
-    # while the nutrient-based methods explicitly exclude its unknown feature.
+    # This plan has no protein target, so missing protein only blocks similarity scoring.
     nearest = recommend(client, plan, [missing], method="nearest").json()
     assert nearest["recommendations"] == []
     assert missing["id"] in nearest["model"]["excluded_food_ids"]

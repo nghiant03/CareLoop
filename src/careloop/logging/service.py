@@ -209,7 +209,7 @@ def confirm_meal(conn, patient_id, data):
     meals = [m for m in plan["body"]["meals"] if m["day"] == number and m["slot"] == data.slot]
     if not meals:
         raise WorkflowError(422, "No planned meal on this date and slot")
-    # The caller's transaction makes a whole-meal confirmation atomic.
+    # Keep one transaction so a later item's conflict rolls back earlier inserts.
     return [
         save_log(conn, patient_id, LogInput(**data.model_dump(), item=m.get("item", 1)))
         for m in meals

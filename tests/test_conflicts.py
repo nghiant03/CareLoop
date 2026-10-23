@@ -93,7 +93,6 @@ def test_selection_checked_against_active_rules_and_different_units_need_review(
     assert not report["blocking_conflicts"]
     assert len(report["review_findings"]) == 1
     assert report["manual_review_required"]
-    # Default retrieval includes published sources; retirement removes them from default results.
     found = client.get("/api/evidence/passages", params={"q": "illustrative"}).json()
     assert found
     client.post(

@@ -1,5 +1,3 @@
-"""Public-file acquisition and artifact manifests, separate from format adapters."""
-
 import hashlib
 import json
 from datetime import UTC, datetime

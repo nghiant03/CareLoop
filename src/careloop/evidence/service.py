@@ -1,8 +1,4 @@
-"""Transactional evidence operations. Call inside one database transaction.
-
-Writes share a catalogue lock: reviews/publications cannot race with edits or retirement.
-Revision bodies and source snapshots are immutable through this service.
-"""
+"""Caller owns the transaction; committing mid-operation can leave unaudited writes."""
 
 import hashlib
 from uuid import UUID, uuid4
@@ -232,7 +228,7 @@ def retire(conn, rule_id, data: RetirementInput):
 
 
 def catalogue(conn):
-    # One statement gives the caller a consistent generation + rule snapshot.
+    # Separate SELECTs could return rules changed after the generation was read.
     return conn.execute("""
         SELECT generation, COALESCE((
             SELECT jsonb_agg(jsonb_build_object(

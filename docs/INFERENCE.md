@@ -6,7 +6,7 @@ pilot comparing extraction fidelity and grounded-answer performance.
 
 ## Budget
 
-The user specified Neuralwatt Basic, superseding the earlier $50 proposal.
+The budget is Neuralwatt Basic's included allowance; overage is not authorized.
 [Pricing](https://portal.neuralwatt.com/pricing) observed on 2026-10-23 lists
 $20/month, 2.35 kWh included, and $8.50/kWh monthly overage. Recheck at execution;
 do not assume a fixed token-to-energy conversion or authorization for overage.

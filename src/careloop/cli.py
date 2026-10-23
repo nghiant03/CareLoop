@@ -1,5 +1,3 @@
-"""Explicit command orchestration; adapters do not write application databases."""
-
 import argparse
 import json
 from pathlib import Path
@@ -18,7 +16,6 @@ from careloop.patients.service import save_patient
 
 
 def import_records(source, records, actor):
-    """One application transaction; duplicate source identities roll back the batch."""
     with psycopg.connect(database_url(), row_factory=dict_row) as conn:
         if source == "nhanes":
             data = CSVInput(

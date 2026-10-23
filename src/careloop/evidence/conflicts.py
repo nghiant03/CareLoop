@@ -1,5 +1,3 @@
-"""Conservative structured overlap analysis, not free-text clinical interpretation."""
-
 from collections import defaultdict
 
 from careloop.patients.engine import BOOL_FACTS, LIST_FACTS, NUMERIC_FACTS, predicate

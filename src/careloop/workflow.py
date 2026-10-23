@@ -1,5 +1,3 @@
-"""Shared transaction-local audit and demo-role guards."""
-
 from psycopg.types.json import Jsonb
 
 

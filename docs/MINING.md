@@ -21,7 +21,7 @@ checked portion counts, and rejected portions with whole-plan violations.
 
 Retrieval is followed by the planner's meal-slot, reviewed-portion, allergy,
 vegetarian, egg/dairy, and target-nutrient completeness checks. Each eligible
-portion at scales 0.5, 1, and 1.5 replaces the requested slot and passes through
+portion at scales 0.5, 1, and 1.5 replaces the requested item and passes through
 the independent whole-plan Decimal checker. At most 500 portion choices are
 allowed; larger requests ask the caller to narrow the pool. Only passing choices
 are recommended. An empty result is not proof of infeasibility.
@@ -32,7 +32,7 @@ use their midpoint; intake targets use their amount. Satisfied ceilings contribu
 no fit incentive. Dislikes remain soft. Each food retains its best passing portion,
 with deterministic identity/portion/scale tie-breaking. Scores are visible.
 
-Results show per-meal nutrient differences, quantity/unit, and checked daily totals.
+Results show item nutrient differences, quantity/unit, and checked daily totals.
 Unknown differences stay null. The `substitution` selection can be submitted to
 the existing substitution endpoint with actor/reason; this recomputes the draft
 using current state. The clinician must still approve it. Retrieval itself does

@@ -1,5 +1,3 @@
-"""Translate the user's Kaggle SG FoodID snapshot; preserve units and qualifiers."""
-
 import csv
 import hashlib
 import io
@@ -58,10 +56,6 @@ def serving(text, basis, edible):
 
 
 def serving_check(row, quantity, edible):
-    """Compare to independently supplied serving values, allowing displayed rounding.
-
-    This is a source-consistency check, not independent food-chemistry validation.
-    """
     mismatches = []
     compared = 0
     for nutrient, column in MAPPING.items():
@@ -71,8 +65,7 @@ def serving_check(row, quantity, edible):
             continue
         compared += 1
         reconstructed = a * quantity / 100
-        # Half a displayed unit for each rounded nutrient value. Include the
-        # displayed edible-percentage and whole-unit serving measurement rounding.
+        # Sum rounding errors from both nutrient cells, edible %, and serving size.
         rounding = Decimal(10) ** a.as_tuple().exponent / 2 * quantity / 100
         rounding += Decimal(10) ** b.as_tuple().exponent / 2
         percent = Decimal(row["Edible Portion"][:-1])
@@ -133,7 +126,7 @@ def normalize(rows, checksum, limit):
         comparisons += compared
         mismatches += len(differences)
         warnings.extend(differences)
-        # The mirror exposes names, not official source IDs; retain that distinction.
+        # No source IDs are provided; unique names give repeatable import identities.
         identity = hashlib.sha256(name.encode()).hexdigest()
         body = FoodBody(
             name=name,

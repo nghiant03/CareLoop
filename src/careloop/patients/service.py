@@ -109,8 +109,7 @@ def invalidate(conn, decision, reason, *, patient_id=None, facts=None):
     ).fetchall()
     for row in changed:
         record_event(conn, decision, "targets.flagged", row["id"], {"reason": reason})
-    # Include already-flagged historical target sets so new allergens also mark
-    # meals in previously approved plans that remain viewable.
+    # `changed` omits already-flagged targets; their plans still need new allergy alerts.
     targets = conn.execute(
         "SELECT id FROM target_sets WHERE patient_id = %s", (patient_id,)
     ).fetchall()
@@ -119,12 +118,9 @@ def invalidate(conn, decision, reason, *, patient_id=None, facts=None):
 
 
 def invalidate_evidence(conn, decision):
-    """Called inside evidence publication/retirement's locked transaction.
-
-    Re-evaluate current target snapshots, including newly applicable rules; a reverse
-    dependency lookup alone would miss rules that were previously inapplicable.
-    """
+    """Caller holds the evidence lock until target and plan flags are saved."""
     rules = active_rules(conn)
+    # A newly applicable rule will not appear in a target's stored rule references.
     candidates = conn.execute("""
         SELECT t.id, t.evaluation, p.body FROM target_sets t JOIN patient_revisions p
         ON (p.patient_id, p.revision) = (t.patient_id, t.patient_revision)

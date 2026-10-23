@@ -1,5 +1,3 @@
-"""Cluster-assisted retrieval followed by mandatory whole-plan checks."""
-
 from decimal import Decimal
 
 from careloop.foods.clustering import fit, retrieve
@@ -34,7 +32,7 @@ def target_fit(totals, items):
     for item in items:
         action = item["action"]
         if action["kind"] == "ceiling":
-            continue  # a satisfied ceiling is not an instruction to approach the ceiling
+            continue  # Scoring distance to a ceiling would reward higher intake.
         goal = action["amount"]
         if action["kind"] == "range":
             goal = (goal + action["upper"]) / 2
@@ -106,7 +104,6 @@ def recommend(conn, plan_id, data):
         disliked = any(d.casefold() in text for d in facts.get("dislikes") or [])
         fit_score = target_fit(check["daily_totals"][str(data.day)], target["body"]["items"])
         similarity = distances[meal["food_id"]]
-        # Category baseline deliberately does not require or rank by macro similarity.
         score = fit_score + 0.25 * disliked
         if data.method != "same_category":
             score += similarity
@@ -133,7 +130,6 @@ def recommend(conn, plan_id, data):
             }
         )
     accepted.sort(key=lambda r: (r["score"], r["food_id"], r["portion_id"], r["scale"]))
-    # Present distinct foods, retaining each food's best checked portion/scale.
     best = {}
     for item in accepted:
         best.setdefault(item["food_id"], item)

@@ -1,5 +1,3 @@
-"""Transaction-local plan flags shared by food and target workflows."""
-
 from psycopg.types.json import Jsonb
 
 from careloop.workflow import record_event

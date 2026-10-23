@@ -1,5 +1,3 @@
-"""Deterministic bounded beam search; failure is never an infeasibility proof."""
-
 from careloop.planning.checker import check_plan, food_restrictions, portion_quantity, preflight
 
 OBJECTIVES = {
@@ -115,8 +113,6 @@ def generate(foods, request, facts, items):
                     )
                 )
                 beam = expanded[:BEAM_WIDTH]
-            # Search ranking and validity are separate: choose a valid final candidate
-            # when one remains in the beam, otherwise expose a fully checked unmet draft.
             valid = [
                 meals
                 for meals in beam

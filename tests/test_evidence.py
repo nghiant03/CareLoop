@@ -11,7 +11,6 @@ from careloop.db import migrate
 from careloop.evidence.models import Action
 
 DECISION = {"actor": {"name": "Demo reviewer", "role": "reviewer"}, "reason": "Test review"}
-# Test-only invented text; no clinical guideline or demo data is seeded by the application.
 TEXT = "Example test population: an illustrative ceiling is 100 mg per day."
 
 

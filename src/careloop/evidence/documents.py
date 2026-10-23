@@ -1,5 +1,3 @@
-"""Text/HTML/PDF passages with explicit extraction limits and source locations."""
-
 import json
 import subprocess
 import sys
@@ -89,7 +87,6 @@ def html_document(payload):
 def passages(sections):
     result, content = [], ""
     for location, text in sections:
-        # Fixed-size bounded passages preserve every character and exact citation offsets.
         text = text.strip()
         if "\x00" in text:
             raise WorkflowError(422, "Extracted text contains unsupported null characters")

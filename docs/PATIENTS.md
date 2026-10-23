@@ -107,7 +107,7 @@ used as a total. Unsupported nutrient/units also prompt clinician completion.
 Approved targets cannot be edited. Create and approve a new proposal to replace
 them. Approval supersedes prior approved sets; all remain readable.
 
-## Reassessment and the future planning boundary
+## Reassessment and planning
 
 Patient revisions conservatively flag all their current target sets for review.
 Publication/retirement re-evaluates target patient snapshots and flags sets when

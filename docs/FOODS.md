@@ -3,20 +3,13 @@
 Implementation choices, 2026-10-23. See [planning](PLANNING.md) for how reviewed
 foods enter plans, and [data audits](DATA.md) for source coverage and measurements.
 
-## Source integration boundaries
+## Source integration
 
-- `cli.py` parses `careloop-data` commands and invokes application import services.
-- `ingestion.py` downloads public files, validates file signatures/size, stores raw
-  snapshots externally, and writes normalized exports and checksum manifests.
-- `adapters/` reads source formats and translates them into domain models. Adapters
-  contain no CLI, network requests, database writes, or output-file writes.
-- `foods/service.py` owns revisions, reviewer corrections, duplicate identities,
-  plan invalidation, and audit entries. `patients/service.py` handles imported
-  patient records. A CLI batch uses one database transaction.
-
-Sources supported: the supplied Kaggle SG FoodID mirror, USDA FNDDS 2021–2023,
-and NHANES DEMO_L. Imports are explicit commands, not API startup side effects.
-No clinical recommendations or approvals are seeded.
+Food adapters support the supplied Kaggle SG FoodID mirror and USDA FNDDS
+2021–2023. Imports are explicit, atomic CLI batches, not API startup side effects.
+No clinical recommendations or approvals are seeded. See
+[architecture](ARCHITECTURE.md#workflow-integration) for acquisition, adapter, and
+persistence boundaries, and [data](DATA.md) for source audits.
 
 ## Catalogue contract
 

@@ -139,4 +139,4 @@ rules. Set extraction/retrieval quality and latency thresholds after the pilot,
 before the final benchmark. These are proposed engineering gates, not clinical
 certification or already-measured results.
 
-See [implementation planning](IMPLEMENTATION.md) for delivery sequencing and status.
+See [implementation status](IMPLEMENTATION.md) for remaining work and blockers.

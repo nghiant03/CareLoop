@@ -17,7 +17,7 @@ meal `slot`, optional 1-based `item` (default 1), and one of these statuses:
 - `independent`: omit `plan_id`; provide food, portion, and scale.
 
 All entries accept an optional note. Planned entries must match the plan's patient,
-date, and scheduled slot. Only previously approved plans can be logged, including
+date, scheduled slot, and item. Only previously approved plans can be logged, including
 historical plans now flagged for review. Their original food snapshots are retained.
 Replacements and independent entries use a snapshot of the current catalogue
 revision. Any catalogue portion can be logged, including foods not annotated for

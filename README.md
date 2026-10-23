@@ -1,7 +1,7 @@
 # CareLoop
 
 A local academic nutrition application with clinician-reviewed targets and plans.
-Implementation has restarted from the agreed [requirements](docs/REQUIREMENTS.md).
+See the agreed [requirements](docs/REQUIREMENTS.md).
 
 **Available now:** PostgreSQL-backed evidence review/publication, manual and CSV
 patient entry, cited target proposals, clinician completion/approval, reassessment,
@@ -22,8 +22,7 @@ starts. Open <http://localhost:5173> for the application,
 <http://localhost:8000/docs> for the interactive API and
 <http://localhost:8000/api/health> for readiness. Database access is on localhost
 port 55432; the Compose password is a public local-demo value, not a secret.
-The new project/volume is `careloop` / `database_v1`, separate from the old
-`careloop-app` reset resources.
+The Compose project/volume is `careloop` / `database_v1`.
 
 For local Python development (Python 3.12+ and `uv`):
 

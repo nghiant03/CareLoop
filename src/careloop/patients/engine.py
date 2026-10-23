@@ -1,5 +1,3 @@
-"""Conservative, three-valued rule applicability; no clinical defaults or formulas."""
-
 from collections import defaultdict
 from math import isfinite
 
@@ -150,7 +148,6 @@ def target_blockers(evaluation, items, dispositions):
         if action["kind"] in {"intake", "ceiling", "range"}:
             grouped[action["subject"]].append(action)
     for subject, actions in grouped.items():
-        # Do not silently choose the strictest or merge distinct recommendation concepts.
         keys = {(a["kind"], a["amount"], a.get("upper"), a["unit"]) for a in actions}
         if len(keys) > 1:
             blockers.append(

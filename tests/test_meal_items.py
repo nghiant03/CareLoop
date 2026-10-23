@@ -102,7 +102,7 @@ def test_item_logs_and_atomic_whole_meal_confirmation(client):
     data = {**PATIENT, "logged_on": "2026-11-01", "slot": "lunch", "plan_id": plan["id"]}
     one = client.post(base + "/meal-logs", json={**data, "item": 2, "status": "skipped"})
     assert one.status_code == 201, one.text
-    # Item 1 would be inserted first, then item 2 conflicts: the whole batch rolls back.
+    # Item 2's conflict must roll back item 1's insertion.
     assert client.post(base + "/meal-log-confirmations", json=data).status_code == 409
     summary = client.get(base + "/meal-log-days/2026-11-01", params={"plan_id": plan["id"]}).json()
     assert len(summary["entries"]) == 1

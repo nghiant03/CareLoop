@@ -1,6 +1,6 @@
 # CareLoop UI
 
-React, TypeScript, Vite and Tailwind UI connected to the replacement CareLoop API.
+React, TypeScript, Vite and Tailwind UI connected to the CareLoop API.
 The established navy/blue visual system is retained.
 
 ## Run
@@ -38,8 +38,7 @@ and cited chat remain pending. `/chat` explains that limitation.
 `src/App.tsx` owns routing, navigation and the demo session. The five screens live
 in `src/screens/`, with reusable controls in `src/components/`. `src/api.ts` is the
 single typed API client; `src/state.ts` provides shared session and request state.
-Tests live beside the application and screens. Retired screens, API contracts and
-demo providers have been removed. Current workflow contracts live in `../docs/`.
+Tests live beside the application and screens. Workflow contracts live in `../docs/`.
 
 ## Verify
 

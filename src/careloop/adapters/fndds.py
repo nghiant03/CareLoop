@@ -1,5 +1,3 @@
-"""Translate local FNDDS workbooks into food composition and edible portions."""
-
 import math
 from collections import defaultdict
 from urllib.parse import quote
