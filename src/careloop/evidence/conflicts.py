@@ -11,6 +11,8 @@ def overlap(left, right):
                 if predicate(p, {})[2]:
                     return None
                 constraints[p["fact"]].append((p["operator"], p["value"], negated))
+                if p["fact"] == "ckd_stage" and not negated:
+                    constraints["has_ckd"].append(("eq", True, False))
     for fact, conditions in constraints.items():
         if fact in NUMERIC_FACTS:
             lower, upper, lower_closed, upper_closed = float("-inf"), float("inf"), True, True

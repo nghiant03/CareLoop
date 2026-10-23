@@ -16,6 +16,7 @@ class Facts(Model):
     weight_kg: Annotated[StrictFloat, Field(gt=0, le=700)] | None = None
     height_cm: Annotated[StrictFloat, Field(gt=0, le=300)] | None = None
     egfr: Annotated[StrictFloat, Field(ge=0, le=250)] | None = None
+    has_ckd: StrictBool | None = None
     ckd_stage: Literal["G1", "G2", "G3a", "G3b", "G4", "G5"] | None = None
     dialysis: StrictBool | None = None
     conditions: list[Text] | None = None
@@ -25,6 +26,15 @@ class Facts(Model):
     include_eggs: StrictBool | None = None
     include_dairy: StrictBool | None = None
     dislikes: list[Text] | None = None
+
+    @model_validator(mode="after")
+    def consistent_ckd_status(self):
+        if self.ckd_stage is not None:
+            if self.has_ckd is False:
+                raise ValueError("CKD stage cannot be recorded when CKD status is No")
+            # Preserve legacy records that already explicitly record a CKD stage.
+            self.has_ckd = True
+        return self
 
 
 class Provenance(Model):

@@ -142,6 +142,35 @@ def test_missing_facts_do_not_become_false_and_patient_changes_flag_targets(clie
     assert len(client.get(f"/api/patients/{p['id']}").json()["revisions"]) == 3
 
 
+def test_ckd_status_revisions_change_stage_rule_eligibility(client):
+    rule(client, applicability=[{"fact": "ckd_stage", "operator": "eq", "value": "G4"}])
+    p = patient(client)
+    assert propose(client, p)["evaluation"][0]["status"] == "incomplete"
+    body = deepcopy(p["body"])
+    body["facts"]["has_ckd"] = False
+    changed = client.post(
+        f"/api/patients/{p['id']}/revisions",
+        json={**CLINICIAN, "expected_revision": 1, "body": body},
+    )
+    assert changed.status_code == 201
+    evaluated = propose(client, changed.json())["evaluation"][0]
+    assert evaluated["status"] == "not_applicable"
+    assert evaluated["missing"] == []
+    body["facts"]["ckd_stage"] = "G4"
+    invalid = client.post(
+        f"/api/patients/{p['id']}/revisions",
+        json={**CLINICIAN, "expected_revision": 2, "body": body},
+    )
+    assert invalid.status_code == 422
+    body["facts"]["has_ckd"] = True
+    changed = client.post(
+        f"/api/patients/{p['id']}/revisions",
+        json={**CLINICIAN, "expected_revision": 2, "body": body},
+    )
+    assert changed.status_code == 201
+    assert propose(client, changed.json())["evaluation"][0]["status"] == "applicable"
+
+
 def test_per_kg_calculation_citation_and_target_supersession(client):
     r, _ = rule(client, amount=0.8, subject="protein", unit="g/kg/day")
     p = patient(client, weight_kg=50)

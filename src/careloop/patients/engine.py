@@ -3,6 +3,7 @@ from math import isfinite
 
 NUMERIC_FACTS = {"age_years", "weight_kg", "height_cm", "egfr"}
 BOOL_FACTS = {
+    "has_ckd",
     "pregnant",
     "breastfeeding",
     "dialysis",
@@ -39,6 +40,10 @@ def predicate(condition, facts):
     if not supported:
         return None, [], [f"Unsupported predicate: {key} {op} {expected!r}"]
     actual = facts.get(key)
+    if key == "ckd_stage" and facts.get("has_ckd") is False:
+        return False, [], []
+    if key == "has_ckd" and actual is None and facts.get("ckd_stage") is not None:
+        actual = True
     if actual is None:
         return None, [key], []
     if op == "gte":
