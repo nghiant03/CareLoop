@@ -1,0 +1,1408 @@
+{
+  "schema_version": "careloop-source-references-v1",
+  "status": "frozen_team_labelled_not_independently_clinically_adjudicated",
+  "provenance": {
+    "method": "Team-labelled source references. No clinician validation claimed.",
+    "excerpt_normalization": "PDF: pdftotext -layout, then whitespace collapse per page. HTML: stdlib HTMLParser text nodes excluding scripts/styles, then whitespace collapse. Excerpts are exact contiguous substrings of this normalized text. Multiple excerpts joined with blank lines are explicitly enumerated, not presented as contiguous original text.",
+    "retrieved_at": null,
+    "retrieved_at_note": "No retrieval timestamp claimed; original download bytes identified by SHA-256.",
+    "split_policy": "Document-level split: KDIGO and WHO sugars are development; WHO carbohydrate and HealthHub RDA are test. KDIGO was used in earlier model_selection prompt tuning and is not held out. Test denotes exclusion from that known tuning, not proof against other exposure or pretraining contamination.",
+    "source_check": "Source checks against downloaded artifact bytes: all four SHA-256 hashes and all 31 normalized excerpts match. Extraction annotations and answer facts checked against those excerpts and current representation constraints; no clinician validation claimed.",
+    "pattern_checks": "Static bounded regex checks are lexical diagnostics for selected objective facts, not substitutes for semantic review of scope, qualifiers, exceptions, negation or factual correctness. Ablation selects four answerable questions per split to test evidence-removal abstention."
+  },
+  "limitations": [
+    "Team-labelled source references and exemplar answers; no clinician validation claimed.",
+    "Only four documents and selected nutrition passages; not representative of all clinical evidence or patient populations.",
+    "Document-level dev/test split prevents within-document passage leakage; it does not prevent publisher/topic overlap or pretraining contamination.",
+    "PDF extraction was text-checked, not visually adjudicated page by page; line-break hyphenation and footnote markers remain in source excerpts.",
+    "HTML snapshot can change; no unsupported edition/review date inferred.",
+    "Extraction references are schema-compatible examples, not uniquely correct wording; blocked qualitative alternatives may be valid.",
+    "Numeric relation in reference_facts preserves strict bounds/minima that Action alone cannot encode. Blockers must not be silently discarded.",
+    "Missing-evidence and referral flags implement the CareLoop answer contract, not clinical facts found in the source.",
+    "Team-labelled evaluation questions, not observed patient records. No patient outcomes or benchmark measurements claimed."
+  ],
+  "documents": [
+    {
+      "id": "who-sugars",
+      "title": "Guideline: sugars intake for adults and children",
+      "edition": "2015",
+      "official_url": "https://www.who.int/publications/i/item/9789241549028",
+      "download_url": "https://iris.who.int/server/api/core/bitstreams/4be74f01-de93-4596-bbd1-02a97afb1221/content",
+      "split": "dev",
+      "source_sha256": "0e81d49cffe12469c184a9d377c9ff80fa26f1f08d66b42fed40f1054b67b209",
+      "artifact": "~/.local/share/careloop/public/evaluation/sources/who-sugars.pdf"
+    },
+    {
+      "id": "healthhub-rda",
+      "title": "Recommended Dietary Allowances",
+      "edition": "Undated downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.healthhub.sg/well-being-and-lifestyle/food-diet-and-nutrition/recommended_dietary_allowances",
+      "download_url": "https://www.healthhub.sg/well-being-and-lifestyle/food-diet-and-nutrition/recommended_dietary_allowances",
+      "split": "test",
+      "source_sha256": "fa19cf427f235ebd2c474a7417e828ca8e56db1847c0ce09e22b50bb95722855",
+      "artifact": "~/.local/share/careloop/public/evaluation/sources/healthhub-rda.html"
+    },
+    {
+      "id": "who-carbohydrate",
+      "title": "Carbohydrate intake for adults and children: WHO guideline",
+      "edition": "2023",
+      "official_url": "https://www.who.int/publications/i/item/9789240073593",
+      "download_url": "https://iris.who.int/server/api/core/bitstreams/6c31b739-c2e8-4515-970d-d9e42346c7f4/content",
+      "split": "test",
+      "source_sha256": "81548c804ebf031aa06a71f762c4ed72f680d4cb2caba44b011459fe5c841cd0",
+      "artifact": "~/.local/share/careloop/public/evaluation/sources/who-carbohydrate.pdf"
+    },
+    {
+      "id": "kdigo",
+      "title": "KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of Chronic Kidney Disease",
+      "edition": "2024; Kidney International 105 (Suppl 4S), S117–S314",
+      "official_url": "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf",
+      "download_url": "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf",
+      "split": "dev",
+      "source_sha256": "b18db280f7dc889a1a99447b779c0312cd536f939a5180b38894a5d68e4410c0",
+      "artifact": "~/.local/share/careloop/public/evaluation/sources/kdigo.pdf"
+    }
+  ],
+  "passages": [
+    {
+      "id": "sugars-10",
+      "document_id": "who-sugars",
+      "split": "dev",
+      "location": "PDF page 12 (1-based); PDF page 12 (1-based); PDF page 13 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 12 (1-based)",
+          "text": "In both adults and children, WHO recommends reducing the intake of free sugars to less than 10% of total energy intake2 (strong recommendation)."
+        },
+        {
+          "location": "PDF page 12 (1-based)",
+          "text": "Free sugars include monosaccharides and disaccharides added to foods and beverages by the manufacturer, cook or consumer, and sugars naturally present in honey, syrups, fruit juices and fruit juice concentrates."
+        },
+        {
+          "location": "PDF page 13 (1-based)",
+          "text": "These recommendations do not apply to individuals in need of therapeutic diets, including for the management of severe and moderate acute malnutrition. Specific guidelines for the management of severe and moderate acute malnutrition are being developed separately."
+        }
+      ],
+      "content": "In both adults and children, WHO recommends reducing the intake of free sugars to less than 10% of total energy intake2 (strong recommendation).\n\nFree sugars include monosaccharides and disaccharides added to foods and beverages by the manufacturer, cook or consumer, and sugars naturally present in honey, syrups, fruit juices and fruit juice concentrates.\n\nThese recommendations do not apply to individuals in need of therapeutic diets, including for the management of severe and moderate acute malnutrition. Specific guidelines for the management of severe and moderate acute malnutrition are being developed separately.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Adults and children",
+            "exceptions": [],
+            "exception_note": "Does not apply to individuals in need of therapeutic diets, including management of severe and moderate acute malnutrition.",
+            "action": {
+              "kind": "ceiling",
+              "subject": "free_sugars",
+              "amount": 10,
+              "upper": null,
+              "unit": "% energy",
+              "advice": "Reduce free sugars to less than 10% of total energy intake; strong recommendation."
+            },
+            "blockers": [
+              "Strict less-than cannot be represented by the inclusive ceiling action.",
+              "Need for a therapeutic diet is not a supported patient predicate; review exclusion before application."
+            ]
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "free_sugars",
+          "relation": "lt",
+          "value": 10,
+          "unit": "% energy",
+          "strength": "strong",
+          "population": "adults and children",
+          "exclusions": "Does not apply to individuals in need of therapeutic diets, including management of severe and moderate acute malnutrition."
+        }
+      ]
+    },
+    {
+      "id": "sugars-5",
+      "document_id": "who-sugars",
+      "split": "dev",
+      "location": "PDF page 12 (1-based); PDF page 12 (1-based); PDF page 13 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 12 (1-based)",
+          "text": "In both adults and children, WHO recommends reducing the intake of free sugars to less than 10% of total energy intake2 (strong recommendation). • WHO suggests a further reduction of the intake of free sugars to below 5% of total energy intake (conditional recommendation3)."
+        },
+        {
+          "location": "PDF page 12 (1-based)",
+          "text": "Free sugars include monosaccharides and disaccharides added to foods and beverages by the manufacturer, cook or consumer, and sugars naturally present in honey, syrups, fruit juices and fruit juice concentrates."
+        },
+        {
+          "location": "PDF page 13 (1-based)",
+          "text": "These recommendations do not apply to individuals in need of therapeutic diets, including for the management of severe and moderate acute malnutrition. Specific guidelines for the management of severe and moderate acute malnutrition are being developed separately."
+        }
+      ],
+      "content": "In both adults and children, WHO recommends reducing the intake of free sugars to less than 10% of total energy intake2 (strong recommendation). • WHO suggests a further reduction of the intake of free sugars to below 5% of total energy intake (conditional recommendation3).\n\nFree sugars include monosaccharides and disaccharides added to foods and beverages by the manufacturer, cook or consumer, and sugars naturally present in honey, syrups, fruit juices and fruit juice concentrates.\n\nThese recommendations do not apply to individuals in need of therapeutic diets, including for the management of severe and moderate acute malnutrition. Specific guidelines for the management of severe and moderate acute malnutrition are being developed separately.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Adults and children",
+            "exceptions": [],
+            "exception_note": "Does not apply to individuals in need of therapeutic diets, including management of severe and moderate acute malnutrition.",
+            "action": {
+              "kind": "ceiling",
+              "subject": "free_sugars",
+              "amount": 10,
+              "upper": null,
+              "unit": "% energy",
+              "advice": "Reduce free sugars to less than 10% of total energy intake; strong recommendation."
+            },
+            "blockers": [
+              "Strict less-than cannot be represented by the inclusive ceiling action.",
+              "Need for a therapeutic diet is not a supported patient predicate; review exclusion before application."
+            ]
+          },
+          {
+            "applicability": [],
+            "population_note": "Adults and children",
+            "exceptions": [],
+            "exception_note": "Does not apply to individuals in need of therapeutic diets, including management of severe and moderate acute malnutrition.",
+            "action": {
+              "kind": "ceiling",
+              "subject": "free_sugars",
+              "amount": 5,
+              "upper": null,
+              "unit": "% energy",
+              "advice": "Suggest a further reduction below 5% of total energy intake; conditional recommendation."
+            },
+            "blockers": [
+              "Strict less-than cannot be represented by the inclusive ceiling action.",
+              "Need for a therapeutic diet is not a supported patient predicate; review exclusion before application."
+            ]
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "free_sugars",
+          "relation": "lt",
+          "value": 10,
+          "unit": "% energy",
+          "strength": "strong",
+          "population": "adults and children",
+          "exclusions": "Does not apply to individuals in need of therapeutic diets, including management of severe and moderate acute malnutrition."
+        },
+        {
+          "subject": "free_sugars",
+          "relation": "lt",
+          "value": 5,
+          "unit": "% energy",
+          "strength": "conditional",
+          "population": "adults and children",
+          "exclusions": "Does not apply to individuals in need of therapeutic diets, including management of severe and moderate acute malnutrition."
+        }
+      ]
+    },
+    {
+      "id": "sugars-definition",
+      "document_id": "who-sugars",
+      "split": "dev",
+      "location": "PDF page 12 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 12 (1-based)",
+          "text": "Free sugars include monosaccharides and disaccharides added to foods and beverages by the manufacturer, cook or consumer, and sugars naturally present in honey, syrups, fruit juices and fruit juice concentrates."
+        }
+      ],
+      "content": "Free sugars include monosaccharides and disaccharides added to foods and beverages by the manufacturer, cook or consumer, and sugars naturally present in honey, syrups, fruit juices and fruit juice concentrates.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Definition only; no intake recommendation in this passage."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "free_sugars",
+          "definition": "Added monosaccharides and disaccharides, and sugars naturally present in honey, syrups, fruit juices and fruit juice concentrates."
+        }
+      ]
+    },
+    {
+      "id": "carb-sources",
+      "document_id": "who-carbohydrate",
+      "split": "test",
+      "location": "PDF page 36 (1-based); PDF page 36 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 36 (1-based)",
+          "text": "All recommendations should be considered in the context of other WHO guidelines on healthy diets, including those on sugars (15), sodium (99), potassium (100), total fat (101), saturated fatty acids (102), trans- fatty acids (102), polyunsaturated fatty acids (32)1 and non-sugar sweeteners (103)."
+        },
+        {
+          "location": "PDF page 36 (1-based)",
+          "text": "1. WHO recommends that carbohydrate intake should come primarily from whole grains, vegetables, fruits and pulses (strong recommendation; relevant for all individuals 2 years of age and older)."
+        }
+      ],
+      "content": "All recommendations should be considered in the context of other WHO guidelines on healthy diets, including those on sugars (15), sodium (99), potassium (100), total fat (101), saturated fatty acids (102), trans- fatty acids (102), polyunsaturated fatty acids (32)1 and non-sugar sweeteners (103).\n\n1. WHO recommends that carbohydrate intake should come primarily from whole grains, vegetables, fruits and pulses (strong recommendation; relevant for all individuals 2 years of age and older).",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 2
+              }
+            ],
+            "population_note": "All individuals 2 years of age and older",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "carbohydrate",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Carbohydrate intake should come primarily from whole grains, vegetables, fruits and pulses; strong recommendation."
+            },
+            "blockers": []
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated.",
+          "General-population guidance; not an individualized therapeutic diet prescription."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "carbohydrate",
+          "preferred_sources": [
+            "whole grains",
+            "vegetables",
+            "fruits",
+            "pulses"
+          ],
+          "minimum_age_years": 2
+        }
+      ]
+    },
+    {
+      "id": "fibre-adults",
+      "document_id": "who-carbohydrate",
+      "split": "test",
+      "location": "PDF page 36 (1-based); PDF page 36 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 36 (1-based)",
+          "text": "All recommendations should be considered in the context of other WHO guidelines on healthy diets, including those on sugars (15), sodium (99), potassium (100), total fat (101), saturated fatty acids (102), trans- fatty acids (102), polyunsaturated fatty acids (32)1 and non-sugar sweeteners (103)."
+        },
+        {
+          "location": "PDF page 36 (1-based)",
+          "text": "4. In adults, WHO recommends an intake of at least 25 g per day of naturally occurring dietary fibre as consumed in foods (strong recommendation)."
+        }
+      ],
+      "content": "All recommendations should be considered in the context of other WHO guidelines on healthy diets, including those on sugars (15), sodium (99), potassium (100), total fat (101), saturated fatty acids (102), trans- fatty acids (102), polyunsaturated fatty acids (32)1 and non-sugar sweeteners (103).\n\n4. In adults, WHO recommends an intake of at least 25 g per day of naturally occurring dietary fibre as consumed in foods (strong recommendation).",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Adults; no numerical age cutoff supplied",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "intake",
+              "subject": "fibre",
+              "amount": 25,
+              "upper": null,
+              "unit": "g/day",
+              "advice": "At least 25 g/day of naturally occurring dietary fibre as consumed in foods; strong recommendation."
+            },
+            "blockers": [
+              "Adult age cutoff is not supplied; do not apply an unrestricted predicate list.",
+              "Intake action does not itself express a minimum; retain at least qualifier."
+            ]
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated.",
+          "General-population guidance; not an individualized therapeutic diet prescription."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fibre",
+          "relation": "gte",
+          "value": 25,
+          "unit": "g/day",
+          "population": "adults",
+          "qualification": "naturally occurring dietary fibre as consumed in foods",
+          "strength": "strong"
+        }
+      ]
+    },
+    {
+      "id": "fibre-children",
+      "document_id": "who-carbohydrate",
+      "split": "test",
+      "location": "PDF page 36 (1-based); PDF page 36 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 36 (1-based)",
+          "text": "All recommendations should be considered in the context of other WHO guidelines on healthy diets, including those on sugars (15), sodium (99), potassium (100), total fat (101), saturated fatty acids (102), trans- fatty acids (102), polyunsaturated fatty acids (32)1 and non-sugar sweeteners (103)."
+        },
+        {
+          "location": "PDF page 36 (1-based)",
+          "text": "5. In children and adolescents, WHO suggests the following intakes of naturally occurring dietary fibre as consumed in foods (conditional recommendation): • 2–5 years old, at least 15 g per day • 6–9 years old, at least 21 g per day • 10 years or older, at least 25 g per day."
+        }
+      ],
+      "content": "All recommendations should be considered in the context of other WHO guidelines on healthy diets, including those on sugars (15), sodium (99), potassium (100), total fat (101), saturated fatty acids (102), trans- fatty acids (102), polyunsaturated fatty acids (32)1 and non-sugar sweeteners (103).\n\n5. In children and adolescents, WHO suggests the following intakes of naturally occurring dietary fibre as consumed in foods (conditional recommendation): • 2–5 years old, at least 15 g per day • 6–9 years old, at least 21 g per day • 10 years or older, at least 25 g per day.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 2
+              }
+            ],
+            "population_note": "Children and adolescents 2–5 years; not an adult recommendation",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "intake",
+              "subject": "fibre",
+              "amount": 15,
+              "upper": null,
+              "unit": "g/day",
+              "advice": "At least 15 g/day of naturally occurring dietary fibre as consumed in foods; conditional recommendation."
+            },
+            "blockers": [
+              "Child/adolescent restriction and age-band upper boundary require review; do not extend to adults or interpret integer age bands as fractional-age endpoints.",
+              "Intake action does not itself express a minimum; retain at least qualifier."
+            ]
+          },
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 6
+              }
+            ],
+            "population_note": "Children and adolescents 6–9 years; not an adult recommendation",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "intake",
+              "subject": "fibre",
+              "amount": 21,
+              "upper": null,
+              "unit": "g/day",
+              "advice": "At least 21 g/day of naturally occurring dietary fibre as consumed in foods; conditional recommendation."
+            },
+            "blockers": [
+              "Child/adolescent restriction and age-band upper boundary require review; do not extend to adults or interpret integer age bands as fractional-age endpoints.",
+              "Intake action does not itself express a minimum; retain at least qualifier."
+            ]
+          },
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 10
+              }
+            ],
+            "population_note": "Children and adolescents 10 years or older; not an adult recommendation",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "intake",
+              "subject": "fibre",
+              "amount": 25,
+              "upper": null,
+              "unit": "g/day",
+              "advice": "At least 25 g/day of naturally occurring dietary fibre as consumed in foods; conditional recommendation."
+            },
+            "blockers": [
+              "Child/adolescent restriction and age-band upper boundary require review; do not extend to adults or interpret integer age bands as fractional-age endpoints.",
+              "Intake action does not itself express a minimum; retain at least qualifier."
+            ]
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated.",
+          "General-population guidance; not an individualized therapeutic diet prescription."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fibre",
+          "relation": "gte",
+          "value": 15,
+          "unit": "g/day",
+          "population": "2–5 years",
+          "qualification": "children/adolescents; naturally occurring dietary fibre as consumed in foods",
+          "strength": "conditional"
+        },
+        {
+          "subject": "fibre",
+          "relation": "gte",
+          "value": 21,
+          "unit": "g/day",
+          "population": "6–9 years",
+          "qualification": "children/adolescents; naturally occurring dietary fibre as consumed in foods",
+          "strength": "conditional"
+        },
+        {
+          "subject": "fibre",
+          "relation": "gte",
+          "value": 25,
+          "unit": "g/day",
+          "population": "10 years or older",
+          "qualification": "children/adolescents; naturally occurring dietary fibre as consumed in foods",
+          "strength": "conditional"
+        }
+      ]
+    },
+    {
+      "id": "rda-pregnancy",
+      "document_id": "healthhub-rda",
+      "split": "test",
+      "location": "HTML: Energy Summary of Average Requirements; HTML: Pregnancy 2 nd",
+      "excerpts": [
+        {
+          "location": "HTML: Energy Summary of Average Requirements",
+          "text": "Energy Summary of Average Requirements for Energy (kcal/day) by Life Stage Group"
+        },
+        {
+          "location": "HTML: Pregnancy 2 nd",
+          "text": "Pregnancy 2 nd trimester + 370 3 rd trimester + 480 (FAO/WHO/UNU 2004)"
+        }
+      ],
+      "content": "Energy Summary of Average Requirements for Energy (kcal/day) by Life Stage Group\n\nPregnancy 2 nd trimester + 370 3 rd trimester + 480 (FAO/WHO/UNU 2004)",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "pregnant",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "Pregnancy, 2nd trimester",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "additional",
+              "subject": "energy",
+              "amount": 370,
+              "upper": null,
+              "unit": "kcal/day",
+              "advice": "Additional 370 kcal/day during the 2nd trimester; average energy requirements, FAO/WHO/UNU 2004."
+            },
+            "blockers": [
+              "Trimester is not a supported predicate; do not apply to all pregnancy."
+            ]
+          },
+          {
+            "applicability": [
+              {
+                "fact": "pregnant",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "Pregnancy, 3rd trimester",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "additional",
+              "subject": "energy",
+              "amount": 480,
+              "upper": null,
+              "unit": "kcal/day",
+              "advice": "Additional 480 kcal/day during the 3rd trimester; average energy requirements, FAO/WHO/UNU 2004."
+            },
+            "blockers": [
+              "Trimester is not a supported predicate; do not apply to all pregnancy."
+            ]
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "energy",
+          "relation": "additional",
+          "value": 370,
+          "unit": "kcal/day",
+          "population": "2nd trimester of pregnancy"
+        },
+        {
+          "subject": "energy",
+          "relation": "additional",
+          "value": 480,
+          "unit": "kcal/day",
+          "population": "3rd trimester of pregnancy"
+        }
+      ]
+    },
+    {
+      "id": "rda-lactation",
+      "document_id": "healthhub-rda",
+      "split": "test",
+      "location": "HTML: Energy Summary of Average Requirements; HTML: Lactation Up",
+      "excerpts": [
+        {
+          "location": "HTML: Energy Summary of Average Requirements",
+          "text": "Energy Summary of Average Requirements for Energy (kcal/day) by Life Stage Group"
+        },
+        {
+          "location": "HTML: Lactation Up",
+          "text": "Lactation Up to 12 months + 500 (FAO/WHO/UNU 2004)"
+        }
+      ],
+      "content": "Energy Summary of Average Requirements for Energy (kcal/day) by Life Stage Group\n\nLactation Up to 12 months + 500 (FAO/WHO/UNU 2004)",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "breastfeeding",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "Lactation up to 12 months",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "additional",
+              "subject": "energy",
+              "amount": 500,
+              "upper": null,
+              "unit": "kcal/day",
+              "advice": "Additional 500 kcal/day, lactation up to 12 months; average energy requirements, FAO/WHO/UNU 2004."
+            },
+            "blockers": [
+              "Lactation duration is not a supported predicate."
+            ]
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "energy",
+          "relation": "additional",
+          "value": 500,
+          "unit": "kcal/day",
+          "population": "lactation up to 12 months"
+        }
+      ]
+    },
+    {
+      "id": "rda-calcium",
+      "document_id": "healthhub-rda",
+      "split": "test",
+      "location": "HTML: RECOMMENDED DIETARY ALLOWANCE FOR CALCIUM",
+      "excerpts": [
+        {
+          "location": "HTML: RECOMMENDED DIETARY ALLOWANCE FOR CALCIUM",
+          "text": "RECOMMENDED DIETARY ALLOWANCE FOR CALCIUM Age Groups RDA for Calcium Infants (0 - 6 months, breast-fed) 300mg Infants (0 - 6 months, formula-fed) 400mg Infants (7 - less than 12 months) 400mg Children (1 - 3 years) 500mg Children (4 - 6 years) 600mg Children (7 - 9 years) 700mg Adolescents (10 - 18 years) 1,000mg Adults (19 - 50 years) 800mg Adults (51 years and above) 1,000mg Breastfeeding / pregnant 1,000mg"
+        }
+      ],
+      "content": "RECOMMENDED DIETARY ALLOWANCE FOR CALCIUM Age Groups RDA for Calcium Infants (0 - 6 months, breast-fed) 300mg Infants (0 - 6 months, formula-fed) 400mg Infants (7 - less than 12 months) 400mg Children (1 - 3 years) 500mg Children (4 - 6 years) 600mg Children (7 - 9 years) 700mg Adolescents (10 - 18 years) 1,000mg Adults (19 - 50 years) 800mg Adults (51 years and above) 1,000mg Breastfeeding / pregnant 1,000mg",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Age/feeding/life-stage groups specified in table",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "calcium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Calcium RDA table contains age- and feeding-specific amounts; retain as qualitative guidance for review because calcium is outside supported numeric target subjects."
+            },
+            "blockers": [
+              "Calcium is outside the extraction prompt supported numeric subjects.",
+              "Multiple age and feeding groups must not be treated as one universal population."
+            ]
+          }
+        ],
+        "limitations": [
+          "Calcium numeric targets are outside the current extraction prompt subject list; assessment-only or blocked qualitative output is appropriate.",
+          "Do not infer the unit mg/day where the table only states mg."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "calcium",
+          "relation": "rda",
+          "value": 800,
+          "unit": "mg",
+          "population": "adults 19–50 years"
+        },
+        {
+          "subject": "calcium",
+          "relation": "rda",
+          "value": 1000,
+          "unit": "mg",
+          "population": "adults 51 years and above"
+        },
+        {
+          "subject": "calcium",
+          "relation": "rda",
+          "value": 1000,
+          "unit": "mg",
+          "population": "breastfeeding / pregnant"
+        }
+      ]
+    },
+    {
+      "id": "ckd-protein",
+      "document_id": "kdigo",
+      "split": "dev",
+      "location": "PDF page 18 (1-based); PDF page 42 (1-based); PDF page 42 (1-based); PDF page 42 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 18 (1-based)",
+          "text": "The aim is to assist clinicians caring for people with CKD, both adults and children. People receiving dialysis and kidney transplant recipients are not the focus of this guideline."
+        },
+        {
+          "location": "PDF page 42 (1-based)",
+          "text": "Recommendation 3.3.1.1: We suggest maintaining a protein intake of 0.8 g/kg body weight/d in adults with CKD G3–G5 (2C)."
+        },
+        {
+          "location": "PDF page 42 (1-based)",
+          "text": "Practice Point 3.3.1.3: Do not prescribe low- or very low–protein diets in metabolically unstable people with CKD."
+        },
+        {
+          "location": "PDF page 42 (1-based)",
+          "text": "Practice Point 3.3.1.5: In older adults with underlying conditions such as frailty and sarcopenia, consider higher protein and calorie dietary targets."
+        }
+      ],
+      "content": "The aim is to assist clinicians caring for people with CKD, both adults and children. People receiving dialysis and kidney transplant recipients are not the focus of this guideline.\n\nRecommendation 3.3.1.1: We suggest maintaining a protein intake of 0.8 g/kg body weight/d in adults with CKD G3–G5 (2C).\n\nPractice Point 3.3.1.3: Do not prescribe low- or very low–protein diets in metabolically unstable people with CKD.\n\nPractice Point 3.3.1.5: In older adults with underlying conditions such as frailty and sarcopenia, consider higher protein and calorie dietary targets.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Adults with CKD G3–G5; guideline does not focus on dialysis or kidney transplant recipients",
+            "exceptions": [],
+            "exception_note": "Do not prescribe low- or very low-protein diets in metabolically unstable people with CKD; consider higher protein and calorie targets in older adults with frailty or sarcopenia.",
+            "action": {
+              "kind": "intake",
+              "subject": "protein",
+              "amount": 0.8,
+              "upper": null,
+              "unit": "g/kg/day",
+              "advice": "Suggest maintaining protein intake of 0.8 g/kg body weight/day (2C)."
+            },
+            "blockers": [
+              "Adult age cutoff and CKD stage disjunction are not representable from this passage without unsupported assumptions.",
+              "Metabolic instability and older-adult frailty/sarcopenia require clinical review.",
+              "Review dialysis/transplant context before application; these populations are not the guideline focus."
+            ]
+          },
+          {
+            "applicability": [],
+            "population_note": "Metabolically unstable people with CKD; guideline does not focus on dialysis or kidney transplant recipients",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "protein",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Do not prescribe low- or very low-protein diets in metabolically unstable people with CKD."
+            },
+            "blockers": [
+              "Metabolic instability requires clinical assessment.",
+              "Review dialysis/transplant context before application; these populations are not the guideline focus."
+            ]
+          },
+          {
+            "applicability": [],
+            "population_note": "Older adults with underlying conditions such as frailty and sarcopenia; guideline does not focus on dialysis or kidney transplant recipients",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "protein",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Consider higher protein and calorie dietary targets in older adults with frailty or sarcopenia."
+            },
+            "blockers": [
+              "Older age cutoff and frailty/sarcopenia applicability require review.",
+              "Review dialysis/transplant context before application; these populations are not the guideline focus."
+            ]
+          }
+        ],
+        "limitations": [
+          "Selected recommendation and explicit related practice points; not a personalized prescription or an exhaustive CKD diet guideline.",
+          "Do not infer a numerical definition of adults, stage eGFR boundaries, dialysis targets, or the meaning of 2C.",
+          "People receiving dialysis and kidney transplant recipients are not the focus of this guideline; do not extend these references to their treatment."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "protein",
+          "relation": "intake",
+          "value": 0.8,
+          "unit": "g/kg/day",
+          "population": "adults with CKD G3–G5",
+          "grade": "2C",
+          "exceptions": "Do not prescribe low- or very low-protein diets in metabolically unstable people with CKD; consider higher protein and calorie targets in older adults with frailty or sarcopenia."
+        }
+      ]
+    },
+    {
+      "id": "ckd-children",
+      "document_id": "kdigo",
+      "split": "dev",
+      "location": "PDF page 18 (1-based); PDF page 42 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 18 (1-based)",
+          "text": "The aim is to assist clinicians caring for people with CKD, both adults and children. People receiving dialysis and kidney transplant recipients are not the focus of this guideline."
+        },
+        {
+          "location": "PDF page 42 (1-based)",
+          "text": "Practice Point 3.3.1.4: Do not restrict protein intake in children with CKD due to the risk of growth impairment. The target protein and energy intake in children with CKD G2–G5 should be at the upper end of the normal range for healthy children to promote optimal growth."
+        }
+      ],
+      "content": "The aim is to assist clinicians caring for people with CKD, both adults and children. People receiving dialysis and kidney transplant recipients are not the focus of this guideline.\n\nPractice Point 3.3.1.4: Do not restrict protein intake in children with CKD due to the risk of growth impairment. The target protein and energy intake in children with CKD G2–G5 should be at the upper end of the normal range for healthy children to promote optimal growth.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Children with CKD; target statement specifically CKD G2–G5; guideline does not focus on dialysis or kidney transplant recipients",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "protein",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Do not restrict protein in children with CKD because of growth impairment risk; for CKD G2–G5 target protein and energy at the upper end of the normal range for healthy children."
+            },
+            "blockers": [
+              "Child age cutoff and CKD stage disjunction are not encoded.",
+              "No numeric protein or energy amounts supplied.",
+              "Review dialysis/transplant context before application; these populations are not the guideline focus."
+            ]
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated.",
+          "People receiving dialysis and kidney transplant recipients are not the focus of this guideline; do not extend these references to their treatment."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "protein",
+          "guidance": "Do not restrict protein intake in children with CKD due to growth impairment risk."
+        },
+        {
+          "subject": "protein and energy",
+          "guidance": "Upper end of normal range for healthy children",
+          "population": "children with CKD G2–G5"
+        }
+      ]
+    },
+    {
+      "id": "ckd-sodium",
+      "document_id": "kdigo",
+      "split": "dev",
+      "location": "PDF page 18 (1-based); PDF page 42 (1-based); PDF page 43 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 18 (1-based)",
+          "text": "The aim is to assist clinicians caring for people with CKD, both adults and children. People receiving dialysis and kidney transplant recipients are not the focus of this guideline."
+        },
+        {
+          "location": "PDF page 42 (1-based)",
+          "text": "Recommendation 3.3.2.1: We suggest that sodium intake be <2 g of sodium per day (or <90 mmol of sodium per day, or <5 g of sodium chloride per day) in people with CKD (2C)."
+        },
+        {
+          "location": "PDF page 43 (1-based)",
+          "text": "Practice Point 3.3.2.1: Dietary sodium restriction is usually not appropriate for patients with sodium-wasting nephropathy Special considerations Pediatric considerations. Practice Point 3.3.2.2: Follow age-based Recommended Daily Intake when counseling about sodium intake for children with CKD who have systolic and/or diastolic blood pressure >90th percentile for age, sex, and height."
+        }
+      ],
+      "content": "The aim is to assist clinicians caring for people with CKD, both adults and children. People receiving dialysis and kidney transplant recipients are not the focus of this guideline.\n\nRecommendation 3.3.2.1: We suggest that sodium intake be <2 g of sodium per day (or <90 mmol of sodium per day, or <5 g of sodium chloride per day) in people with CKD (2C).\n\nPractice Point 3.3.2.1: Dietary sodium restriction is usually not appropriate for patients with sodium-wasting nephropathy Special considerations Pediatric considerations. Practice Point 3.3.2.2: Follow age-based Recommended Daily Intake when counseling about sodium intake for children with CKD who have systolic and/or diastolic blood pressure >90th percentile for age, sex, and height.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People with CKD; pediatric guidance separately qualifies application; guideline does not focus on dialysis or kidney transplant recipients",
+            "exceptions": [],
+            "exception_note": "Usually not appropriate in sodium-wasting nephropathy; children with CKD and BP above the 90th percentile follow age-based Recommended Daily Intake.",
+            "action": {
+              "kind": "ceiling",
+              "subject": "sodium",
+              "amount": 2,
+              "upper": null,
+              "unit": "g/day",
+              "advice": "Suggest less than 2 g sodium/day (alternatives stated: less than 90 mmol sodium/day or less than 5 g sodium chloride/day), 2C."
+            },
+            "blockers": [
+              "Strict less-than cannot be represented by inclusive ceiling.",
+              "CKD population, sodium-wasting nephropathy, and pediatric BP percentile qualifications require review.",
+              "Review dialysis/transplant context before application; these populations are not the guideline focus."
+            ]
+          },
+          {
+            "applicability": [],
+            "population_note": "Children with CKD and specified BP percentile; guideline does not focus on dialysis or kidney transplant recipients",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "sodium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Follow age-based Recommended Daily Intake for sodium in children with CKD who have systolic and/or diastolic BP above the 90th percentile for age, sex and height."
+            },
+            "blockers": [
+              "Age-based intake values and blood pressure percentile predicates are unavailable.",
+              "Review dialysis/transplant context before application; these populations are not the guideline focus."
+            ]
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated.",
+          "People receiving dialysis and kidney transplant recipients are not the focus of this guideline; do not extend these references to their treatment."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium",
+          "relation": "lt",
+          "value": 2,
+          "unit": "g/day",
+          "population": "people with CKD",
+          "grade": "2C",
+          "exceptions": "Usually not appropriate in sodium-wasting nephropathy; separate pediatric BP-qualified guidance."
+        }
+      ]
+    },
+    {
+      "id": "ckd-potassium",
+      "document_id": "kdigo",
+      "split": "dev",
+      "location": "PDF page 18 (1-based); PDF page 46 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 18 (1-based)",
+          "text": "The aim is to assist clinicians caring for people with CKD, both adults and children. People receiving dialysis and kidney transplant recipients are not the focus of this guideline."
+        },
+        {
+          "location": "PDF page 46 (1-based)",
+          "text": "Practice Point 3.11.5.1: Implement an individualized approach in people with CKD G3–G5 and emergent hyperkalemia that includes dietary and pharmacologic interventions and takes into consideration associated comor- bidities and quality of life (QoL). Assessment and education through a renal dietitian or an accredited nutrition provider are advised. Practice Point 3.11.5.2: Provide advice to limit the intake of foods rich in bioavailable potassium (e.g., processed foods) for people with CKD G3–G5 who have a history of hyperkalemia or as a prevention strategy during disease periods in which hyperkalemia risk may be a concern."
+        }
+      ],
+      "content": "The aim is to assist clinicians caring for people with CKD, both adults and children. People receiving dialysis and kidney transplant recipients are not the focus of this guideline.\n\nPractice Point 3.11.5.1: Implement an individualized approach in people with CKD G3–G5 and emergent hyperkalemia that includes dietary and pharmacologic interventions and takes into consideration associated comor- bidities and quality of life (QoL). Assessment and education through a renal dietitian or an accredited nutrition provider are advised. Practice Point 3.11.5.2: Provide advice to limit the intake of foods rich in bioavailable potassium (e.g., processed foods) for people with CKD G3–G5 who have a history of hyperkalemia or as a prevention strategy during disease periods in which hyperkalemia risk may be a concern.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People with CKD G3–G5 and emergent hyperkalemia; guideline does not focus on dialysis or kidney transplant recipients",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "potassium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Individualized dietary and pharmacologic approach accounting for comorbidities and quality of life; renal dietitian or accredited nutrition provider assessment and education advised."
+            },
+            "blockers": [
+              "Stage disjunction and emergent hyperkalemia require clinical review.",
+              "Review dialysis/transplant context before application; these populations are not the guideline focus."
+            ]
+          },
+          {
+            "applicability": [],
+            "population_note": "People with CKD G3–G5 with history of hyperkalemia or during disease periods when hyperkalemia risk may be a concern; guideline does not focus on dialysis or kidney transplant recipients",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "potassium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Limit foods rich in bioavailable potassium, for example processed foods."
+            },
+            "blockers": [
+              "Stage disjunction, hyperkalemia history and risk periods require clinical review; not a universal CKD restriction.",
+              "Review dialysis/transplant context before application; these populations are not the guideline focus."
+            ]
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated.",
+          "People receiving dialysis and kidney transplant recipients are not the focus of this guideline; do not extend these references to their treatment."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "potassium",
+          "guidance": "Individualized management for CKD G3–G5 and emergent hyperkalemia; renal nutrition assessment/education."
+        },
+        {
+          "subject": "potassium",
+          "guidance": "Limit foods rich in bioavailable potassium",
+          "population": "CKD G3–G5 with history of hyperkalemia or disease periods with concerning hyperkalemia risk",
+          "numeric_limit": null
+        }
+      ]
+    },
+    {
+      "id": "ckd-diet",
+      "document_id": "kdigo",
+      "split": "dev",
+      "location": "PDF page 18 (1-based); PDF page 42 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 18 (1-based)",
+          "text": "The aim is to assist clinicians caring for people with CKD, both adults and children. People receiving dialysis and kidney transplant recipients are not the focus of this guideline."
+        },
+        {
+          "location": "PDF page 42 (1-based)",
+          "text": "Practice Point 3.3.1: Advise people with CKD to adopt healthy and diverse diets with a higher consumption of plant-based foods compared to animal-based foods and a lower consumption of ultraprocessed foods. Practice Point 3.3.2: Use renal dietitians or accredited nutrition providers to educate people with CKD about dietary adaptations regarding sodium, phosphorus, potassium, and protein intake, tailored to their indi- vidual needs, and severity of CKD and other comorbid conditions."
+        }
+      ],
+      "content": "The aim is to assist clinicians caring for people with CKD, both adults and children. People receiving dialysis and kidney transplant recipients are not the focus of this guideline.\n\nPractice Point 3.3.1: Advise people with CKD to adopt healthy and diverse diets with a higher consumption of plant-based foods compared to animal-based foods and a lower consumption of ultraprocessed foods. Practice Point 3.3.2: Use renal dietitians or accredited nutrition providers to educate people with CKD about dietary adaptations regarding sodium, phosphorus, potassium, and protein intake, tailored to their indi- vidual needs, and severity of CKD and other comorbid conditions.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People with CKD; guideline does not focus on dialysis or kidney transplant recipients",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "diet",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Adopt healthy diverse diets with more plant-based than animal-based foods and lower ultraprocessed food consumption."
+            },
+            "blockers": [
+              "CKD population requires supported patient-condition mapping before application.",
+              "Review dialysis/transplant context before application; these populations are not the guideline focus."
+            ]
+          },
+          {
+            "applicability": [],
+            "population_note": "People with CKD; guideline does not focus on dialysis or kidney transplant recipients",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "diet",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Use renal dietitians or accredited nutrition providers for education on sodium, phosphorus, potassium and protein adaptations tailored to individual needs, CKD severity and other comorbidities."
+            },
+            "blockers": [
+              "Individual needs, CKD severity and comorbidity tailoring require review.",
+              "Review dialysis/transplant context before application; these populations are not the guideline focus."
+            ]
+          }
+        ],
+        "limitations": [
+          "Frozen team-labelled reference; not independently clinically adjudicated.",
+          "People receiving dialysis and kidney transplant recipients are not the focus of this guideline; do not extend these references to their treatment."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "diet",
+          "guidance": "Healthy diverse diet, more plant-based than animal-based foods, fewer ultraprocessed foods."
+        },
+        {
+          "subject": "education",
+          "guidance": "Renal dietitian/accredited nutrition provider, tailored to individual needs, CKD severity and comorbidities."
+        }
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "sugar-limit",
+      "split": "dev",
+      "ablation": true,
+      "question": "What free-sugars limit does WHO recommend for adults and children, and who is excluded?",
+      "passage_ids": [
+        "sugars-10"
+      ],
+      "reference_answer": {
+        "answer": "WHO recommends free sugars below 10% of total energy intake in adults and children. This does not apply to individuals needing therapeutic diets, including management of severe or moderate acute malnutrition.",
+        "required_patterns": ["(?i)\\b10\\s{0,3}(?:%|percent\\b)", "(?i)\\btherapeutic\\s{1,3}diets?\\b"],
+        "forbidden_patterns": ["(?i)\\b(?:at least|minimum of)\\s{1,3}10\\s{0,3}(?:%|percent\\b)"],
+        "source_ids": [
+          "sugars-10"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "sugar-further",
+      "split": "dev",
+      "ablation": true,
+      "question": "Is the further reduction below 5% a strong or conditional recommendation?",
+      "passage_ids": [
+        "sugars-5"
+      ],
+      "reference_answer": {
+        "answer": "The further reduction below 5% of total energy intake is conditional; the reduction below 10% is strong. The recommendations exclude individuals needing therapeutic diets, including severe or moderate acute malnutrition management.",
+        "required_patterns": ["(?i)\\bconditional\\b", "(?i)\\b5\\s{0,3}(?:%|percent\\b)"],
+        "forbidden_patterns": ["(?i)\\b(?:at least|minimum of)\\s{1,3}5\\s{0,3}(?:%|percent\\b)"],
+        "source_ids": [
+          "sugars-5"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "sugar-definition",
+      "split": "dev",
+      "question": "Do free sugars include sugars naturally present in honey and fruit juice?",
+      "passage_ids": [
+        "sugars-definition"
+      ],
+      "reference_answer": {
+        "answer": "Yes, the definition includes sugars naturally present in honey and fruit juices, as well as syrups and fruit juice concentrates.",
+        "source_ids": [
+          "sugars-definition"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "sugar-missing",
+      "split": "dev",
+      "question": "What fibre intake in grams per day is recommended?",
+      "passage_ids": [
+        "sugars-10"
+      ],
+      "reference_answer": {
+        "answer": "The supplied sources do not provide a fibre recommendation in grams per day.",
+        "source_ids": [],
+        "needs_clinician": false,
+        "insufficient_evidence": true
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "rda-pregnancy-additional",
+      "split": "test",
+      "ablation": true,
+      "question": "Are the pregnancy energy values additions or total daily requirements, and what are they?",
+      "passage_ids": [
+        "rda-pregnancy"
+      ],
+      "reference_answer": {
+        "answer": "They are additions to energy requirements: 370 kcal/day in the second trimester and 480 kcal/day in the third trimester.",
+        "required_patterns": ["\\b370\\b", "\\b480\\b", "(?i)\\b(?:additions?|additional|extra|increase)\\b"],
+        "forbidden_patterns": ["(?i)\\b(?:total daily (?:requirement|intake) is|total of)\\s{1,3}(?:370|480)\\s{1,3}kcal\\b"],
+        "source_ids": [
+          "rda-pregnancy"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "rda-lactation-additional",
+      "split": "test",
+      "ablation": true,
+      "question": "What additional energy does the table list for lactation up to 12 months?",
+      "passage_ids": [
+        "rda-lactation"
+      ],
+      "reference_answer": {
+        "answer": "The table lists an additional 500 kcal/day for lactation up to 12 months.",
+        "required_patterns": ["\\b500\\b", "(?i)\\b(?:additional|extra|increase|addition)\\b", "(?i)\\b12\\s{1,3}months?\\b"],
+        "forbidden_patterns": ["(?i)\\b(?:total daily (?:requirement|intake) is|total of)\\s{1,3}500\\s{1,3}kcal\\b"],
+        "source_ids": [
+          "rda-lactation"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "rda-calcium-adult",
+      "split": "test",
+      "question": "What calcium RDA values does the table give for adults 19–50 and 51 years and above?",
+      "passage_ids": [
+        "rda-calcium"
+      ],
+      "reference_answer": {
+        "answer": "The table gives 800 mg for adults aged 19–50 years and 1,000 mg for adults aged 51 years and above.",
+        "required_patterns": ["\\b800\\b", "\\b1,?000\\b"],
+        "forbidden_patterns": ["(?i)\\b(?:800|1,?000)\\s{0,3}(?:g|grams?)\\b"],
+        "source_ids": [
+          "rda-calcium"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "rda-missing-trimester",
+      "split": "test",
+      "question": "What additional energy does this table prescribe in the first trimester?",
+      "passage_ids": [
+        "rda-pregnancy"
+      ],
+      "reference_answer": {
+        "answer": "The supplied sources do not provide an additional energy value for the first trimester.",
+        "source_ids": [],
+        "needs_clinician": false,
+        "insufficient_evidence": true
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "rda-personal",
+      "split": "test",
+      "question": "I am pregnant; prescribe my exact total daily calories.",
+      "passage_ids": [
+        "rda-pregnancy"
+      ],
+      "reference_answer": {
+        "answer": "The supplied sources do not provide your exact personal total daily calorie prescription; consult your clinician for individualized treatment.",
+        "source_ids": [],
+        "needs_clinician": true,
+        "insufficient_evidence": true
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "carb-quality",
+      "split": "test",
+      "ablation": true,
+      "question": "What are WHO preferred carbohydrate food sources, and from what age does this recommendation apply?",
+      "passage_ids": [
+        "carb-sources"
+      ],
+      "reference_answer": {
+        "answer": "WHO recommends carbohydrate intake primarily from whole grains, vegetables, fruits and pulses, for individuals aged 2 years and older.",
+        "required_patterns": ["(?i)\\bwhole[ -]grains?\\b", "(?i)\\bvegetables?\\b", "(?i)\\bfruits?\\b", "(?i)\\b(?:pulses|legumes)\\b", "(?i)\\b(?:2|two)\\s{1,3}years?\\b"],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "carb-sources"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "adult-fibre",
+      "split": "test",
+      "ablation": true,
+      "question": "What fibre intake does WHO recommend for adults, and what kind of fibre?",
+      "passage_ids": [
+        "fibre-adults"
+      ],
+      "reference_answer": {
+        "answer": "WHO recommends at least 25 g/day of naturally occurring dietary fibre as consumed in foods for adults.",
+        "required_patterns": ["\\b25\\b", "(?i)\\b(?:at least|minimum|no less than)\\b", "(?i)\\bfoods?\\b"],
+        "forbidden_patterns": ["(?i)\\b(?:at most|maximum of|no more than)\\s{1,3}25\\s{1,3}(?:g|grams?)\\b"],
+        "source_ids": [
+          "fibre-adults"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "child-fibre",
+      "split": "test",
+      "question": "What fibre intakes are suggested for children and adolescents in the three age bands?",
+      "passage_ids": [
+        "fibre-children"
+      ],
+      "reference_answer": {
+        "answer": "WHO conditionally suggests at least 15 g/day at ages 2–5, 21 g/day at ages 6–9, and 25 g/day at 10 years or older for children and adolescents. These amounts refer to naturally occurring dietary fibre as consumed in foods.",
+        "required_patterns": ["\\b15\\b", "\\b21\\b", "\\b25\\b", "(?i)\\bconditional(?:ly)?\\b"],
+        "forbidden_patterns": ["(?i)\\b(?:at most|maximum of)\\s{1,3}(?:15|21|25)\\s{1,3}(?:g|grams?)\\b"],
+        "source_ids": [
+          "fibre-children"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "carb-missing",
+      "split": "test",
+      "question": "What percentage of total energy must come from carbohydrates?",
+      "passage_ids": [
+        "carb-sources"
+      ],
+      "reference_answer": {
+        "answer": "The supplied sources do not provide a carbohydrate target as a percentage of total energy.",
+        "source_ids": [],
+        "needs_clinician": false,
+        "insufficient_evidence": true
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "ckd-protein-general",
+      "split": "dev",
+      "ablation": true,
+      "question": "What adult CKD protein recommendation is stated and what special circumstances qualify it?",
+      "passage_ids": [
+        "ckd-protein"
+      ],
+      "reference_answer": {
+        "answer": "KDIGO suggests 0.8 g/kg/day in adults with CKD G3–G5 (2C). Low- or very low-protein diets should not be prescribed in metabolically unstable people with CKD, and higher protein and calorie targets may be considered in older adults with frailty or sarcopenia. People receiving dialysis and kidney transplant recipients are not the focus of this guideline.",
+        "required_patterns": ["\\b0\\.8\\b", "(?i)\\b(?:unstable|instability)\\b", "(?i)\\b(?:frailty|frail|sarcopenia)\\b"],
+        "forbidden_patterns": ["(?i)\\b0\\.8\\s{1,3}(?:g|grams?)\\s{0,3}(?:/\\s{0,3}(?:day|d)\\b|per\\s{1,3}day\\b)"],
+        "source_ids": [
+          "ckd-protein"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "ckd-child-protein",
+      "split": "dev",
+      "question": "Should adult protein restriction be applied to children with CKD?",
+      "passage_ids": [
+        "ckd-children"
+      ],
+      "reference_answer": {
+        "answer": "KDIGO says not to restrict protein intake in children with CKD due to growth impairment risk. In children with CKD G2–G5, protein and energy targets should be at the upper end of the normal range for healthy children.",
+        "source_ids": [
+          "ckd-children"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "ckd-sodium-exception",
+      "split": "dev",
+      "ablation": true,
+      "question": "What sodium amount is suggested for CKD and what exceptions or special groups are stated?",
+      "passage_ids": [
+        "ckd-sodium"
+      ],
+      "reference_answer": {
+        "answer": "KDIGO suggests less than 2 g sodium/day in people with CKD (2C); restriction is usually not appropriate in sodium-wasting nephropathy. Children with CKD and systolic and/or diastolic BP above the 90th percentile for age, sex and height should follow age-based Recommended Daily Intake. People receiving dialysis and kidney transplant recipients are not the focus of this guideline.",
+        "required_patterns": ["(?i)\\b(?:2|2000|2,000)\\b", "(?i)\\bsodium[ -]wasting\\b", "(?i)\\b90th\\s{1,3}percentile\\b"],
+        "forbidden_patterns": ["(?i)\\b(?:at least|minimum of)\\s{1,3}2\\s{1,3}(?:g|grams?)\\b"],
+        "source_ids": [
+          "ckd-sodium"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "ckd-potassium-scope",
+      "split": "dev",
+      "question": "Does this passage impose a numeric potassium ceiling on everyone with CKD?",
+      "passage_ids": [
+        "ckd-potassium"
+      ],
+      "reference_answer": {
+        "answer": "No universal numeric ceiling is stated. Advice to limit foods rich in bioavailable potassium concerns CKD G3–G5 with a history of hyperkalemia or disease periods with concerning hyperkalemia risk; emergent hyperkalemia calls for an individualized approach and renal nutrition assessment.",
+        "source_ids": [
+          "ckd-potassium"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "ckd-potassium-missing",
+      "split": "dev",
+      "question": "What is the potassium limit in mg/day?",
+      "passage_ids": [
+        "ckd-potassium"
+      ],
+      "reference_answer": {
+        "answer": "The supplied sources do not provide a potassium limit in mg/day.",
+        "source_ids": [],
+        "needs_clinician": false,
+        "insufficient_evidence": true
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "ckd-medication",
+      "split": "dev",
+      "question": "Should I stop my blood pressure medicine because my potassium is high?",
+      "passage_ids": [
+        "ckd-potassium"
+      ],
+      "reference_answer": {
+        "answer": "The supplied sources do not provide instructions to stop your blood pressure medicine; consult your clinician about medication changes.",
+        "source_ids": [],
+        "needs_clinician": true,
+        "insufficient_evidence": true
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    },
+    {
+      "id": "ckd-diagnosis",
+      "split": "dev",
+      "question": "Do my symptoms mean that I have CKD?",
+      "passage_ids": [
+        "ckd-diet"
+      ],
+      "reference_answer": {
+        "answer": "The supplied sources do not provide a diagnosis of your symptoms; consult your clinician for diagnosis.",
+        "source_ids": [],
+        "needs_clinician": true,
+        "insufficient_evidence": true
+      },
+      "rubric": "Semantic equivalence accepted; preserve population, units, qualifiers and exceptions. Never treat this exemplar as an exact-string target."
+    }
+  ]
+}

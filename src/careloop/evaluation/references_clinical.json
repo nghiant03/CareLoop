@@ -1,0 +1,2332 @@
+{
+  "schema_version": "careloop-source-references-v1",
+  "status": "frozen_team_labelled_not_independently_clinically_adjudicated",
+  "provenance": {
+    "method": "Static team-labelled source references, independently checked against the identified downloaded source bytes before the expanded benchmark freeze.",
+    "excerpt_normalization": "HTML: stdlib HTMLParser text nodes excluding scripts/styles, joined with spaces then whitespace collapsed. Exact contiguous excerpts are individually enumerated and joined with blank lines. Locations use Unicode character offsets, zero-based and end-exclusive.",
+    "retrieved_at": null,
+    "retrieved_at_note": "No timestamp asserted; source bytes identified by SHA-256.",
+    "split_policy": "Publisher/source-family split: both NHLBI DASH pages are dev; all NIDDK pages are test. No KDIGO included. Parent must preserve these family assignments when merging. Test is not a claim of freedom from pretraining or unrecorded exposure.",
+    "source_check": "All six original HTML SHA-256 hashes and all 61 excerpt substrings and offsets independently checked against downloaded bytes. Extraction and AnswerDraft schemas, predicate evaluation, source links, splits and lexical exemplars checked locally.",
+    "pattern_checks": "Bounded lexical diagnostics only; preserve semantic qualifiers and source scope. Ten answerable questions selected for evidence-removal ablation: four dev and six test.",
+    "experiment_context": "The main 14-passage experiment was already run as an initial experiment. No prompts were tuned from its outputs. This expanded-reference check used source text and local schemas, with no evaluation model calls."
+  },
+  "limitations": [
+    "Team-labelled static references; not independently clinically adjudicated.",
+    "Six official patient-education pages, not a systematic clinical-guideline review; recommendations retain source age and context.",
+    "Publisher-family separation reduces related-page leakage but does not establish absence of topic overlap or pretraining contamination.",
+    "Qualitative assessment rules preserve guidance unsupported by numeric actions; explicit blockers prohibit universal interpretation of restricted scopes.",
+    "No personal treatment amounts inferred; missing-evidence/referral flags describe the CareLoop answering contract.",
+    "HTML normalized text was checked against downloaded bytes; no visual page adjudication claimed."
+  ],
+  "documents": [
+    {
+      "id": "nhlbi-dash",
+      "title": "DASH Eating Plan",
+      "edition": "Undated downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.nhlbi.nih.gov/education/dash-eating-plan",
+      "download_url": "https://www.nhlbi.nih.gov/education/dash-eating-plan",
+      "split": "dev",
+      "source_sha256": "08471f3cf1ab3d51534839ef113b978c2ca373d7a282266dce6172716e94debd",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/nhlbi-dash.html"
+    },
+    {
+      "id": "nhlbi-dash-follow",
+      "title": "Following DASH",
+      "edition": "Undated downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.nhlbi.nih.gov/education/dash/following-dash",
+      "download_url": "https://www.nhlbi.nih.gov/education/dash/following-dash",
+      "split": "dev",
+      "source_sha256": "a715675700af816194e06b5b6f428a012dacec39dc5854ff515e8f96adbf7ce5",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/nhlbi-dash-follow.html"
+    },
+    {
+      "id": "niddk-diabetes",
+      "title": "Healthy Living with Diabetes",
+      "edition": "Undated downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.niddk.nih.gov/health-information/diabetes/overview/diet-eating-physical-activity",
+      "download_url": "https://www.niddk.nih.gov/health-information/diabetes/overview/diet-eating-physical-activity",
+      "split": "test",
+      "source_sha256": "5681255468feba29db7d1ae2b0337d2dbdd0827cf7da989dbf7ab0a4e905b78b",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/niddk-diabetes.html"
+    },
+    {
+      "id": "niddk-ckd",
+      "title": "Healthy Eating for Adults with Chronic Kidney Disease",
+      "edition": "Undated downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.niddk.nih.gov/health-information/kidney-disease/chronic-kidney-disease-ckd/eating-nutrition",
+      "download_url": "https://www.niddk.nih.gov/health-information/kidney-disease/chronic-kidney-disease-ckd/eating-nutrition",
+      "split": "test",
+      "source_sha256": "01e7b1daae590fcd435476110f0597c77ca9142398d919151aefd994bc66deba",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/niddk-ckd.html"
+    },
+    {
+      "id": "niddk-hemodialysis",
+      "title": "Eating & Nutrition for Hemodialysis",
+      "edition": "Undated downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.niddk.nih.gov/health-information/kidney-disease/kidney-failure/hemodialysis/eating-nutrition",
+      "download_url": "https://www.niddk.nih.gov/health-information/kidney-disease/kidney-failure/hemodialysis/eating-nutrition",
+      "split": "test",
+      "source_sha256": "9c41dfe1ef7747b396e716fc0fab50d5c0ca9cbb5863ffdaaf926f07b9968311",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/niddk-hemodialysis.html"
+    },
+    {
+      "id": "niddk-stones",
+      "title": "Eating, Diet, & Nutrition for Kidney Stones",
+      "edition": "Undated downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.niddk.nih.gov/health-information/urologic-diseases/kidney-stones/eating-diet-nutrition",
+      "download_url": "https://www.niddk.nih.gov/health-information/urologic-diseases/kidney-stones/eating-diet-nutrition",
+      "split": "test",
+      "source_sha256": "1c8bc2047b74fc07bde59bdaa3eda8f6a0f701c4f5c90e1cc4493f9dbd321f55",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/niddk-stones.html"
+    }
+  ],
+  "passages": [
+    {
+      "id": "clinical-dash-food-pattern",
+      "document_id": "nhlbi-dash",
+      "split": "dev",
+      "location": "HTML normalized text characters 7–23 (0-based, end-exclusive); document title; HTML normalized text characters 2304–2766 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 7–23 (0-based, end-exclusive); document title",
+          "text": "DASH Eating Plan"
+        },
+        {
+          "location": "HTML normalized text characters 2304–2766 (0-based, end-exclusive)",
+          "text": "The DASH eating plan requires no special foods and instead provides daily and weekly nutritional goals. This plan recommends: Eating vegetables, fruits, and whole grains Including fat-free or low-fat dairy products, fish, poultry, beans, nuts, and vegetable oils Limiting foods that are high in saturated fat, such as fatty meats, full-fat dairy products, and tropical oils such as coconut, palm kernel, and palm oils Limiting sugar-sweetened beverages and sweet"
+        }
+      ],
+      "content": "DASH Eating Plan\n\nThe DASH eating plan requires no special foods and instead provides daily and weekly nutritional goals. This plan recommends: Eating vegetables, fruits, and whole grains Including fat-free or low-fat dairy products, fish, poultry, beans, nuts, and vegetable oils Limiting foods that are high in saturated fat, such as fatty meats, full-fat dairy products, and tropical oils such as coconut, palm kernel, and palm oils Limiting sugar-sweetened beverages and sweet",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People following the DASH eating plan",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "diet_pattern",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Use vegetables, fruits, whole grains, low-fat or fat-free dairy, fish, poultry, beans, nuts and vegetable oils; limit saturated-fat foods and sugar-sweetened beverages and sweets. No special foods required."
+            },
+            "blockers": [
+              "DASH plan context is not a supported patient predicate; review applicability."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "diet_pattern",
+          "population": "People following the DASH eating plan",
+          "guidance": "Use vegetables, fruits, whole grains, low-fat or fat-free dairy, fish, poultry, beans, nuts and vegetable oils; limit saturated-fat foods and sugar-sweetened beverages and sweets. No special foods required."
+        }
+      ]
+    },
+    {
+      "id": "clinical-dash-serving-context",
+      "document_id": "nhlbi-dash",
+      "split": "dev",
+      "location": "HTML normalized text characters 7–23 (0-based, end-exclusive); document title; HTML normalized text characters 2767–3263 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 7–23 (0-based, end-exclusive); document title",
+          "text": "DASH Eating Plan"
+        },
+        {
+          "location": "HTML normalized text characters 2767–3263 (0-based, end-exclusive)",
+          "text": "Based on these recommendations, the following table shows examples of daily and weekly servings that meet DASH eating plan targets for a 2,000-calorie-a-day diet. Food Group Daily Servings Grains 6–8 Meats, poultry, and fish 6 or less Vegetables 4–5 Fruit 4–5 Low-fat or fat-free dairy products 2–3 Fats and oils 2–3 Sodium 2,300 mg* Weekly Servings Nuts, seeds, dry beans, and peas 4–5 Sweets 5 or less *1,500 milligrams (mg) sodium lowers blood pressure even further than 2,300 mg sodium daily."
+        }
+      ],
+      "content": "DASH Eating Plan\n\nBased on these recommendations, the following table shows examples of daily and weekly servings that meet DASH eating plan targets for a 2,000-calorie-a-day diet. Food Group Daily Servings Grains 6–8 Meats, poultry, and fish 6 or less Vegetables 4–5 Fruit 4–5 Low-fat or fat-free dairy products 2–3 Fats and oils 2–3 Sodium 2,300 mg* Weekly Servings Nuts, seeds, dry beans, and peas 4–5 Sweets 5 or less *1,500 milligrams (mg) sodium lowers blood pressure even further than 2,300 mg sodium daily.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "DASH example for a 2,000-calorie-a-day diet",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "food_servings",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "For the 2,000-calorie/day DASH example, daily servings are grains 6–8; meats, poultry and fish 6 or less; vegetables 4–5; fruit 4–5; low-fat/fat-free dairy 2–3; fats and oils 2–3. Weekly servings are nuts, seeds, dry beans and peas 4–5, and sweets 5 or less. Sodium is 2,300 mg daily, with 1,500 mg noted to lower blood pressure further; this example does not select an individual calorie or sodium prescription."
+            },
+            "blockers": [
+              "DASH plan context is not a supported patient predicate; review applicability.",
+              "Calorie-level context is not a supported predicate; serving categories are food groups rather than nutrient targets."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "food_servings",
+          "population": "DASH example for a 2,000-calorie-a-day diet",
+          "guidance": "For the 2,000-calorie/day DASH example, daily servings are grains 6–8; meats, poultry and fish 6 or less; vegetables 4–5; fruit 4–5; low-fat/fat-free dairy 2–3; fats and oils 2–3. Weekly servings are nuts, seeds, dry beans and peas 4–5, and sweets 5 or less. Sodium is 2,300 mg daily, with 1,500 mg noted to lower blood pressure further; this example does not select an individual calorie or sodium prescription."
+        }
+      ]
+    },
+    {
+      "id": "clinical-dash-sodium-options",
+      "document_id": "nhlbi-dash",
+      "split": "dev",
+      "location": "HTML normalized text characters 7–23 (0-based, end-exclusive); document title; HTML normalized text characters 3171–3263 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 7–23 (0-based, end-exclusive); document title",
+          "text": "DASH Eating Plan"
+        },
+        {
+          "location": "HTML normalized text characters 3171–3263 (0-based, end-exclusive)",
+          "text": "*1,500 milligrams (mg) sodium lowers blood pressure even further than 2,300 mg sodium daily."
+        }
+      ],
+      "content": "DASH Eating Plan\n\n*1,500 milligrams (mg) sodium lowers blood pressure even further than 2,300 mg sodium daily.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated.",
+          "The passage provides a comparison or serving definition, not an intake recommendation."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium",
+          "population": "People following the DASH eating plan",
+          "guidance": "The source reports that 1,500 mg sodium lowers blood pressure further than 2,300 mg daily; this comparative statement does not select a personal target."
+        }
+      ]
+    },
+    {
+      "id": "clinical-dash-personal-calories",
+      "document_id": "nhlbi-dash",
+      "split": "dev",
+      "location": "HTML normalized text characters 7–23 (0-based, end-exclusive); document title; HTML normalized text characters 3449–3609 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 7–23 (0-based, end-exclusive); document title",
+          "text": "DASH Eating Plan"
+        },
+        {
+          "location": "HTML normalized text characters 3449–3609 (0-based, end-exclusive)",
+          "text": "The number of servings you should have each day depends on your daily calorie needs. Use these worksheets to see how your current eating habits compare to DASH."
+        }
+      ],
+      "content": "DASH Eating Plan\n\nThe number of servings you should have each day depends on your daily calorie needs. Use these worksheets to see how your current eating habits compare to DASH.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People following DASH",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "energy",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Daily serving counts depend on daily calorie needs; use the worksheets to compare current habits with DASH."
+            },
+            "blockers": [
+              "DASH plan context is not a supported patient predicate; review applicability."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "energy",
+          "population": "People following DASH",
+          "guidance": "Daily serving counts depend on daily calorie needs; use the worksheets to compare current habits with DASH."
+        }
+      ]
+    },
+    {
+      "id": "clinical-dash-energy-balance",
+      "document_id": "nhlbi-dash-follow",
+      "split": "dev",
+      "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title; HTML normalized text characters 2960–3446 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title",
+          "text": "Following DASH"
+        },
+        {
+          "location": "HTML normalized text characters 2960–3446 (0-based, end-exclusive)",
+          "text": "To figure out your calorie needs, you need to consider your age and physical activity level. If you want to maintain your current weight, you should eat only as many calories as you burn by being physically active. This is called energy balance. (For more information about energy balance, go to the Health Topics Overweight and Obesity article.) If you need to lose weight, you should eat fewer calories than you burn or increase your activity level to burn more calories than you eat."
+        }
+      ],
+      "content": "Following DASH\n\nTo figure out your calorie needs, you need to consider your age and physical activity level. If you want to maintain your current weight, you should eat only as many calories as you burn by being physically active. This is called energy balance. (For more information about energy balance, go to the Health Topics Overweight and Obesity article.) If you need to lose weight, you should eat fewer calories than you burn or increase your activity level to burn more calories than you eat.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People estimating calorie needs while following DASH",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "energy",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Consider age and physical activity when estimating calorie needs. For maintenance, balance calories consumed and burned; if weight loss is needed, consume fewer calories than burned or increase activity."
+            },
+            "blockers": [
+              "DASH plan context is not a supported patient predicate; review applicability.",
+              "Need for weight loss and activity level require assessment; no numeric calorie deficit supplied."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "energy",
+          "population": "People estimating calorie needs while following DASH",
+          "guidance": "Consider age and physical activity when estimating calorie needs. For maintenance, balance calories consumed and burned; if weight loss is needed, consume fewer calories than burned or increase activity."
+        }
+      ]
+    },
+    {
+      "id": "clinical-dash-whole-grain-share",
+      "document_id": "nhlbi-dash-follow",
+      "split": "dev",
+      "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title; HTML normalized text characters 5555–5650 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title",
+          "text": "Following DASH"
+        },
+        {
+          "location": "HTML normalized text characters 5555–5650 (0-based, end-exclusive)",
+          "text": "a Whole grains are recommended for most grain servings as a good source of fiber and nutrients."
+        }
+      ],
+      "content": "Following DASH\n\na Whole grains are recommended for most grain servings as a good source of fiber and nutrients.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People following DASH",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "whole_grains",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Use whole grains for most grain servings as a source of fiber and nutrients; no numerical proportion is specified."
+            },
+            "blockers": [
+              "DASH plan context is not a supported patient predicate; review applicability."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "whole_grains",
+          "population": "People following DASH",
+          "guidance": "Use whole grains for most grain servings as a source of fiber and nutrients; no numerical proportion is specified."
+        }
+      ]
+    },
+    {
+      "id": "clinical-dash-lactose-options",
+      "document_id": "nhlbi-dash-follow",
+      "split": "dev",
+      "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title; HTML normalized text characters 5651–5770 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title",
+          "text": "Following DASH"
+        },
+        {
+          "location": "HTML normalized text characters 5651–5770 (0-based, end-exclusive)",
+          "text": "b For lactose intolerance, try either lactase enzyme pills with dairy products or lactose-free or lactose-reduced milk."
+        }
+      ],
+      "content": "Following DASH\n\nb For lactose intolerance, try either lactase enzyme pills with dairy products or lactose-free or lactose-reduced milk.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "lactose intolerance"
+              }
+            ],
+            "population_note": "People following DASH with lactose intolerance",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "dairy",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "For lactose intolerance, try lactase enzyme pills with dairy products or lactose-free or lactose-reduced milk."
+            },
+            "blockers": [
+              "DASH plan context is not a supported patient predicate; review applicability.",
+              "Lactose-intolerance context must be confirmed; do not infer a medication dose."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "dairy",
+          "population": "People following DASH with lactose intolerance",
+          "guidance": "For lactose intolerance, try lactase enzyme pills with dairy products or lactose-free or lactose-reduced milk."
+        }
+      ]
+    },
+    {
+      "id": "clinical-dash-fat-serving-equivalence",
+      "document_id": "nhlbi-dash-follow",
+      "split": "dev",
+      "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title; HTML normalized text characters 5771–5974 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title",
+          "text": "Following DASH"
+        },
+        {
+          "location": "HTML normalized text characters 5771–5974 (0-based, end-exclusive)",
+          "text": "c Fat content changes the serving amount for fats and oils. For example, 1 Tbsp regular salad dressing = one serving; 1 Tbsp low-fat dressing = one-half serving; 1 Tbsp fat-free dressing = zero servings."
+        }
+      ],
+      "content": "Following DASH\n\nc Fat content changes the serving amount for fats and oils. For example, 1 Tbsp regular salad dressing = one serving; 1 Tbsp low-fat dressing = one-half serving; 1 Tbsp fat-free dressing = zero servings.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated.",
+          "The passage provides a comparison or serving definition, not an intake recommendation."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fat_servings",
+          "population": "People counting fats and oils servings on DASH",
+          "guidance": "Serving counts depend on fat content: 1 Tbsp regular salad dressing counts as one serving, low-fat as one-half, and fat-free as zero; these are serving equivalences rather than intake targets."
+        }
+      ]
+    },
+    {
+      "id": "clinical-dash-lean-preparation",
+      "document_id": "nhlbi-dash-follow",
+      "split": "dev",
+      "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title; HTML normalized text characters 7270–7470 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title",
+          "text": "Following DASH"
+        },
+        {
+          "location": "HTML normalized text characters 7270–7470 (0-based, end-exclusive)",
+          "text": "Lean meats, poultry, and fish 1 oz cooked meats, poultry, or fish 1 egg Select only lean; trim away visible fats; broil, roast, or poach; remove skin from poultry Rich sources of protein and magnesium"
+        }
+      ],
+      "content": "Following DASH\n\nLean meats, poultry, and fish 1 oz cooked meats, poultry, or fish 1 egg Select only lean; trim away visible fats; broil, roast, or poach; remove skin from poultry Rich sources of protein and magnesium",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People following DASH",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "meat_preparation",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Select lean meat, poultry and fish; trim visible fat, broil, roast or poach, and remove poultry skin. The listed serving size is a definition, not a daily target."
+            },
+            "blockers": [
+              "DASH plan context is not a supported patient predicate; review applicability."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "meat_preparation",
+          "population": "People following DASH",
+          "guidance": "Select lean meat, poultry and fish; trim visible fat, broil, roast or poach, and remove poultry skin. The listed serving size is a definition, not a daily target."
+        }
+      ]
+    },
+    {
+      "id": "clinical-dash-cereal-label",
+      "document_id": "nhlbi-dash-follow",
+      "split": "dev",
+      "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title; HTML normalized text characters 8366–8482 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 7–21 (0-based, end-exclusive); document title",
+          "text": "Following DASH"
+        },
+        {
+          "location": "HTML normalized text characters 8366–8482 (0-based, end-exclusive)",
+          "text": "b Serving sizes vary between ½ cup and 1¼ cups, depending on cereal type. Check the product's Nutrition Facts label."
+        }
+      ],
+      "content": "Following DASH\n\nb Serving sizes vary between ½ cup and 1¼ cups, depending on cereal type. Check the product's Nutrition Facts label.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People using cereal serving sizes on DASH",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "cereal_servings",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Cereal serving sizes vary between ½ cup and 1¼ cups depending on cereal type; check the Nutrition Facts label rather than assuming a universal serving size."
+            },
+            "blockers": [
+              "DASH plan context is not a supported patient predicate; review applicability.",
+              "Cereal-specific serving definition is not a daily intake range."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "cereal_servings",
+          "population": "People using cereal serving sizes on DASH",
+          "guidance": "Cereal serving sizes vary between ½ cup and 1¼ cups depending on cereal type; check the Nutrition Facts label rather than assuming a universal serving size."
+        }
+      ]
+    },
+    {
+      "id": "clinical-diabetes-beverages",
+      "document_id": "niddk-diabetes",
+      "split": "test",
+      "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title; HTML normalized text characters 5196–5357 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title",
+          "text": "Healthy Living with Diabetes"
+        },
+        {
+          "location": "HTML normalized text characters 5196–5357 (0-based, end-exclusive)",
+          "text": "Also try to choose drinks with little or no added sugar , such as tap or bottled water, low-fat or non-fat milk, and unsweetened tea, coffee, or sparkling water."
+        }
+      ],
+      "content": "Healthy Living with Diabetes\n\nAlso try to choose drinks with little or no added sugar , such as tap or bottled water, low-fat or non-fat milk, and unsweetened tea, coffee, or sparkling water.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "beverages",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Choose drinks with little or no added sugar, including water, low-fat or non-fat milk and unsweetened tea, coffee or sparkling water."
+            },
+            "blockers": []
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "beverages",
+          "population": "People with diabetes",
+          "guidance": "Choose drinks with little or no added sugar, including water, low-fat or non-fat milk and unsweetened tea, coffee or sparkling water."
+        }
+      ]
+    },
+    {
+      "id": "clinical-diabetes-alcohol",
+      "document_id": "niddk-diabetes",
+      "split": "test",
+      "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title; HTML normalized text characters 5849–6237 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title",
+          "text": "Healthy Living with Diabetes"
+        },
+        {
+          "location": "HTML normalized text characters 5849–6237 (0-based, end-exclusive)",
+          "text": "You should also limit how much alcohol you drink. If you take insulin or certain diabetes medicines , drinking alcohol can make your blood glucose level drop too low, which is called hypoglycemia . If you do drink alcohol, be sure to eat food when you drink and remember to check your blood glucose level after drinking. Talk with your health care team about your alcohol-drinking habits."
+        }
+      ],
+      "content": "Healthy Living with Diabetes\n\nYou should also limit how much alcohol you drink. If you take insulin or certain diabetes medicines , drinking alcohol can make your blood glucose level drop too low, which is called hypoglycemia . If you do drink alcohol, be sure to eat food when you drink and remember to check your blood glucose level after drinking. Talk with your health care team about your alcohol-drinking habits.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes; hypoglycemia warning particularly for insulin or certain diabetes medicines",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "alcohol",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Limit alcohol. With insulin or certain diabetes medicines, alcohol can cause low blood glucose. If drinking, eat food, check glucose after drinking and discuss drinking habits with the care team."
+            },
+            "blockers": [
+              "Which medicines confer hypoglycemia risk and drinking context require review; no alcohol dose or safe threshold supplied."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "alcohol",
+          "population": "People with diabetes; hypoglycemia warning particularly for insulin or certain diabetes medicines",
+          "guidance": "Limit alcohol. With insulin or certain diabetes medicines, alcohol can cause low blood glucose. If drinking, eat food, check glucose after drinking and discuss drinking habits with the care team."
+        }
+      ]
+    },
+    {
+      "id": "clinical-diabetes-meal-timing",
+      "document_id": "niddk-diabetes",
+      "split": "test",
+      "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title; HTML normalized text characters 6369–6911 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title",
+          "text": "Healthy Living with Diabetes"
+        },
+        {
+          "location": "HTML normalized text characters 6369–6911 (0-based, end-exclusive)",
+          "text": "Talk with your health care professional or health care team about when you should eat or drink. The best time to have meals and snacks may depend on what medicines you take for diabetes what your level of physical activity or your work schedule is whether you have other health conditions or diseases Ask your health care team if you should eat before, during, or after physical activity. Some diabetes medicines, such as sulfonylureas or insulin, may make your blood glucose level drop too low during exercise or if you skip or delay a meal."
+        }
+      ],
+      "content": "Healthy Living with Diabetes\n\nTalk with your health care professional or health care team about when you should eat or drink. The best time to have meals and snacks may depend on what medicines you take for diabetes what your level of physical activity or your work schedule is whether you have other health conditions or diseases Ask your health care team if you should eat before, during, or after physical activity. Some diabetes medicines, such as sulfonylureas or insulin, may make your blood glucose level drop too low during exercise or if you skip or delay a meal.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes; hypoglycemia risk with sulfonylureas or insulin",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "timing",
+              "subject": "meal_timing",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Discuss meal and snack timing with the care team based on medicines, activity/work schedule and other conditions; ask about eating around activity. Insulin or sulfonylureas can cause low glucose with exercise or skipped/delayed meals."
+            },
+            "blockers": [
+              "Activity and work schedules are unsupported predicates; medication alternatives cannot be ANDed."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "meal_timing",
+          "population": "People with diabetes; hypoglycemia risk with sulfonylureas or insulin",
+          "guidance": "Discuss meal and snack timing with the care team based on medicines, activity/work schedule and other conditions; ask about eating around activity. Insulin or sulfonylureas can cause low glucose with exercise or skipped/delayed meals."
+        }
+      ]
+    },
+    {
+      "id": "clinical-diabetes-carb-counting",
+      "document_id": "niddk-diabetes",
+      "split": "test",
+      "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title; HTML normalized text characters 7397–7674 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title",
+          "text": "Healthy Living with Diabetes"
+        },
+        {
+          "location": "HTML normalized text characters 7397–7674 (0-based, end-exclusive)",
+          "text": "Carbohydrate counting , or carb counting, means planning and keeping track of the amount of carbs you eat and drink in each meal or snack. Not all people with diabetes need to count carbs. However, if you take insulin, counting carbs can help you know how much insulin to take."
+        }
+      ],
+      "content": "Healthy Living with Diabetes\n\nCarbohydrate counting , or carb counting, means planning and keeping track of the amount of carbs you eat and drink in each meal or snack. Not all people with diabetes need to count carbs. However, if you take insulin, counting carbs can help you know how much insulin to take.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes; particular usefulness for those taking insulin",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "carbohydrate_counting",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Track carbohydrate amounts in meals/snacks when using carb counting. Not everyone with diabetes needs to count; counting can help people taking insulin determine insulin needs, but no dose algorithm is supplied."
+            },
+            "blockers": [
+              "Do not infer insulin dosing from carbohydrate counting; no algorithm supplied."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "carbohydrate_counting",
+          "population": "People with diabetes; particular usefulness for those taking insulin",
+          "guidance": "Track carbohydrate amounts in meals/snacks when using carb counting. Not everyone with diabetes needs to count; counting can help people taking insulin determine insulin needs, but no dose algorithm is supplied."
+        }
+      ]
+    },
+    {
+      "id": "clinical-diabetes-plate",
+      "document_id": "niddk-diabetes",
+      "split": "test",
+      "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title; HTML normalized text characters 7688–8359 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title",
+          "text": "Healthy Living with Diabetes"
+        },
+        {
+          "location": "HTML normalized text characters 7688–8359 (0-based, end-exclusive)",
+          "text": "The plate method helps you control portion sizes without counting and measuring. This method divides a 9-inch plate into the following three sections to help you choose the types and amounts of foods to eat for each meal. Nonstarchy vegetables—such as leafy greens, peppers, carrots, or green beans—should make up half of your plate. Carb foods that are high in fiber—such as brown rice, whole grains, beans, or fruits—should make up one-quarter of your plate. Protein foods—such as lean meats, fish, dairy, or tofu or other soy products—should make up one quarter of your plate. If you are not taking insulin, you may not need to count carbs when using the plate method."
+        }
+      ],
+      "content": "Healthy Living with Diabetes\n\nThe plate method helps you control portion sizes without counting and measuring. This method divides a 9-inch plate into the following three sections to help you choose the types and amounts of foods to eat for each meal. Nonstarchy vegetables—such as leafy greens, peppers, carrots, or green beans—should make up half of your plate. Carb foods that are high in fiber—such as brown rice, whole grains, beans, or fruits—should make up one-quarter of your plate. Protein foods—such as lean meats, fish, dairy, or tofu or other soy products—should make up one quarter of your plate. If you are not taking insulin, you may not need to count carbs when using the plate method.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes using the plate method",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "meal_composition",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Use a 9-inch plate: half nonstarchy vegetables, one-quarter high-fiber carbohydrate foods and one-quarter protein foods. People not taking insulin may not need carb counting with this method."
+            },
+            "blockers": [
+              "Plate-area fractions are not nutrient energy percentages or gram targets."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "meal_composition",
+          "population": "People with diabetes using the plate method",
+          "guidance": "Use a 9-inch plate: half nonstarchy vegetables, one-quarter high-fiber carbohydrate foods and one-quarter protein foods. People not taking insulin may not need carb counting with this method."
+        }
+      ]
+    },
+    {
+      "id": "clinical-diabetes-supplements",
+      "document_id": "niddk-diabetes",
+      "split": "test",
+      "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title; HTML normalized text characters 9122–9525 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–28 (0-based, end-exclusive); document title",
+          "text": "Healthy Living with Diabetes"
+        },
+        {
+          "location": "HTML normalized text characters 9122–9525 (0-based, end-exclusive)",
+          "text": "There is no clear proof that specific foods, herbs, spices, or dietary supplements —such as vitamins or minerals—can help manage diabetes. Your health care professional may ask you to take vitamins or minerals if you can’t get enough from foods. Talk with your health care professional before you take any supplements, because some may cause side effects or affect how well your diabetes medicines work."
+        }
+      ],
+      "content": "Healthy Living with Diabetes\n\nThere is no clear proof that specific foods, herbs, spices, or dietary supplements —such as vitamins or minerals—can help manage diabetes. Your health care professional may ask you to take vitamins or minerals if you can’t get enough from foods. Talk with your health care professional before you take any supplements, because some may cause side effects or affect how well your diabetes medicines work.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes considering supplements",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "supplements",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "There is no clear proof that specific foods, herbs, spices or dietary supplements manage diabetes. A professional may recommend vitamins/minerals when food intake is inadequate; discuss supplements before use because of side effects or medicine interactions."
+            },
+            "blockers": [
+              "Nutrient adequacy and supplement interactions require individualized review."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "supplements",
+          "population": "People with diabetes considering supplements",
+          "guidance": "There is no clear proof that specific foods, herbs, spices or dietary supplements manage diabetes. A professional may recommend vitamins/minerals when food intake is inadequate; discuss supplements before use because of side effects or medicine interactions."
+        }
+      ]
+    },
+    {
+      "id": "clinical-ckd-protein-balance",
+      "document_id": "niddk-ckd",
+      "split": "test",
+      "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title; HTML normalized text characters 5846–6245 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title",
+          "text": "Healthy Eating for Adults with Chronic Kidney Disease"
+        },
+        {
+          "location": "HTML normalized text characters 5846–6245 (0-based, end-exclusive)",
+          "text": "Some people with CKD may need to consume moderate amounts of protein so waste doesn’t build up in the blood. However, too little protein may lead to malnutrition , a condition that occurs when your body doesn’t get enough nutrients. Work with a dietitian or health care professional to find the right balance of protein to make sure you are properly nourished without causing strain to your kidneys."
+        }
+      ],
+      "content": "Healthy Eating for Adults with Chronic Kidney Disease\n\nSome people with CKD may need to consume moderate amounts of protein so waste doesn’t build up in the blood. However, too little protein may lead to malnutrition , a condition that occurs when your body doesn’t get enough nutrients. Work with a dietitian or health care professional to find the right balance of protein to make sure you are properly nourished without causing strain to your kidneys.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "chronic kidney disease"
+              }
+            ],
+            "population_note": "Adults with CKD",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "protein",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Some people with CKD may need moderate protein to limit waste, but too little risks malnutrition. Work with a dietitian or health professional to balance nourishment and kidney burden."
+            },
+            "blockers": [
+              "Adults is not supplied with a numeric age cutoff; review age applicability.",
+              "Which people need moderation and the individual amount are not specified."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "protein",
+          "population": "Adults with CKD",
+          "guidance": "Some people with CKD may need moderate protein to limit waste, but too little risks malnutrition. Work with a dietitian or health professional to balance nourishment and kidney burden."
+        }
+      ]
+    },
+    {
+      "id": "clinical-ckd-progressive-plan",
+      "document_id": "niddk-ckd",
+      "split": "test",
+      "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title; HTML normalized text characters 6903–7141 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title",
+          "text": "Healthy Eating for Adults with Chronic Kidney Disease"
+        },
+        {
+          "location": "HTML normalized text characters 6903–7141 (0-based, end-exclusive)",
+          "text": "There is no single meal plan for everyone with CKD. In the early stages of CKD, you may have few limits to what you can eat and drink. As your CKD advances and your nutritional needs change, you may need to make more changes to your diet."
+        }
+      ],
+      "content": "Healthy Eating for Adults with Chronic Kidney Disease\n\nThere is no single meal plan for everyone with CKD. In the early stages of CKD, you may have few limits to what you can eat and drink. As your CKD advances and your nutritional needs change, you may need to make more changes to your diet.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "chronic kidney disease"
+              }
+            ],
+            "population_note": "Adults with CKD",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "diet_individualization",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "No single meal plan fits everyone with CKD. Early CKD may involve few restrictions; diet may need further changes as disease advances and nutritional needs change."
+            },
+            "blockers": [
+              "Adults is not supplied with a numeric age cutoff; review age applicability."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "diet_individualization",
+          "population": "Adults with CKD",
+          "guidance": "No single meal plan fits everyone with CKD. Early CKD may involve few restrictions; diet may need further changes as disease advances and nutritional needs change."
+        }
+      ]
+    },
+    {
+      "id": "clinical-ckd-phosphorus-label",
+      "document_id": "niddk-ckd",
+      "split": "test",
+      "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title; HTML normalized text characters 9974–10798 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title",
+          "text": "Healthy Eating for Adults with Chronic Kidney Disease"
+        },
+        {
+          "location": "HTML normalized text characters 9974–10798 (0-based, end-exclusive)",
+          "text": "Tips to reduce phosphorus in your diet include Limit or avoid packaged and processed foods and drinks that have added phosphorus, such as deli meats, flavored drinks, and other processed foods. Check Nutrition Facts labels for added phosphorus. Look for “phosphorus” or words with “PHOS,” such as phosphoric acid, disodium phosphate, and monosodium phosphate on the ingredient list. Eat larger portions of fruits and vegetables, which are naturally low in phosphorus, and smaller portions of foods high in phosphorus. Keep in mind, your body absorbs more phosphorus from animal-based foods, such as meat and poultry, than from plant-based foods, such as beans and seeds. Some packaged meats and poultry have added phosphorus. Ask someone who works in the meat department to show you which meats do not have added phosphorus."
+        }
+      ],
+      "content": "Healthy Eating for Adults with Chronic Kidney Disease\n\nTips to reduce phosphorus in your diet include Limit or avoid packaged and processed foods and drinks that have added phosphorus, such as deli meats, flavored drinks, and other processed foods. Check Nutrition Facts labels for added phosphorus. Look for “phosphorus” or words with “PHOS,” such as phosphoric acid, disodium phosphate, and monosodium phosphate on the ingredient list. Eat larger portions of fruits and vegetables, which are naturally low in phosphorus, and smaller portions of foods high in phosphorus. Keep in mind, your body absorbs more phosphorus from animal-based foods, such as meat and poultry, than from plant-based foods, such as beans and seeds. Some packaged meats and poultry have added phosphorus. Ask someone who works in the meat department to show you which meats do not have added phosphorus.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "chronic kidney disease"
+              }
+            ],
+            "population_note": "Adults with CKD reducing dietary phosphorus",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "phosphorus",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Limit processed foods/drinks with added phosphorus; inspect ingredients for phosphorus or PHOS words. Favor larger fruit/vegetable and smaller high-phosphorus portions; absorption is greater from animal than plant sources, and some meats have additives."
+            },
+            "blockers": [
+              "Adults is not supplied with a numeric age cutoff; review age applicability.",
+              "Food-source and additive guidance cannot be reduced to a single phosphorus limit."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "phosphorus",
+          "population": "Adults with CKD reducing dietary phosphorus",
+          "guidance": "Limit processed foods/drinks with added phosphorus; inspect ingredients for phosphorus or PHOS words. Favor larger fruit/vegetable and smaller high-phosphorus portions; absorption is greater from animal than plant sources, and some meats have additives."
+        }
+      ]
+    },
+    {
+      "id": "clinical-ckd-potassium-conditional",
+      "document_id": "niddk-ckd",
+      "split": "test",
+      "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title; HTML normalized text characters 11705–12420 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title",
+          "text": "Healthy Eating for Adults with Chronic Kidney Disease"
+        },
+        {
+          "location": "HTML normalized text characters 11705–12420 (0-based, end-exclusive)",
+          "text": "If your potassium level is high, your health care professional may recommend you Limit serving sizes of foods that contain potassium. Keep in mind that a large serving of a lower-potassium food may have more potassium than a small serving of a higher-potassium food. Use spices and herbs instead of salt substitutes, which can be high in potassium. Limit foods with potassium chloride on the ingredient list. Potassium chloride is sometimes used in place of salt in some packaged foods. Drain canned fruits and vegetables and throw out the liquid, which is often high in potassium. Use food preparation and cooking methods, such as boiling and leaching, that can lower the amount of potassium in certain vegetables."
+        }
+      ],
+      "content": "Healthy Eating for Adults with Chronic Kidney Disease\n\nIf your potassium level is high, your health care professional may recommend you Limit serving sizes of foods that contain potassium. Keep in mind that a large serving of a lower-potassium food may have more potassium than a small serving of a higher-potassium food. Use spices and herbs instead of salt substitutes, which can be high in potassium. Limit foods with potassium chloride on the ingredient list. Potassium chloride is sometimes used in place of salt in some packaged foods. Drain canned fruits and vegetables and throw out the liquid, which is often high in potassium. Use food preparation and cooking methods, such as boiling and leaching, that can lower the amount of potassium in certain vegetables.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "chronic kidney disease"
+              }
+            ],
+            "population_note": "Adults with CKD whose potassium level is high; actions may be recommended by their health professional",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "potassium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "If potassium is high, a professional may recommend portion limits, herbs/spices instead of potassium-containing salt substitutes, limiting potassium chloride, draining canned produce, and boiling/leaching vegetables. A large low-potassium-food portion can exceed a small high-potassium-food portion."
+            },
+            "blockers": [
+              "Adults is not supplied with a numeric age cutoff; review age applicability.",
+              "Measured potassium and high-potassium classification are unsupported predicates; do not apply restriction to all CKD."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "potassium",
+          "population": "Adults with CKD whose potassium level is high; actions may be recommended by their health professional",
+          "guidance": "If potassium is high, a professional may recommend portion limits, herbs/spices instead of potassium-containing salt substitutes, limiting potassium chloride, draining canned produce, and boiling/leaching vegetables. A large low-potassium-food portion can exceed a small high-potassium-food portion."
+        }
+      ]
+    },
+    {
+      "id": "clinical-ckd-low-glucose-juice",
+      "document_id": "niddk-ckd",
+      "split": "test",
+      "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title; HTML normalized text characters 12421–12633 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title",
+          "text": "Healthy Eating for Adults with Chronic Kidney Disease"
+        },
+        {
+          "location": "HTML normalized text characters 12421–12633 (0-based, end-exclusive)",
+          "text": "If you have diabetes and your blood glucose level —also called blood sugar level—gets low, choose apple, grape, or cranberry juice instead of other fruit juices that are higher in potassium, such as orange juice."
+        }
+      ],
+      "content": "Healthy Eating for Adults with Chronic Kidney Disease\n\nIf you have diabetes and your blood glucose level —also called blood sugar level—gets low, choose apple, grape, or cranberry juice instead of other fruit juices that are higher in potassium, such as orange juice.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "chronic kidney disease"
+              },
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "Adults with CKD and diabetes when blood glucose is low",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "hypoglycemia_food_choice",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "When blood glucose is low in a person with diabetes in this CKD guidance, choose apple, grape or cranberry juice instead of higher-potassium juice such as orange juice. No hypoglycemia treatment quantity is stated."
+            },
+            "blockers": [
+              "Adults is not supplied with a numeric age cutoff; review age applicability.",
+              "Low blood glucose is not a supported predicate; confirm diabetes and the low-glucose context. No treatment dose or repeat protocol supplied."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "hypoglycemia_food_choice",
+          "population": "Adults with CKD and diabetes when blood glucose is low",
+          "guidance": "When blood glucose is low in a person with diabetes in this CKD guidance, choose apple, grape or cranberry juice instead of higher-potassium juice such as orange juice. No hypoglycemia treatment quantity is stated."
+        }
+      ]
+    },
+    {
+      "id": "clinical-ckd-dialysis-protein-loss",
+      "document_id": "niddk-ckd",
+      "split": "test",
+      "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title; HTML normalized text characters 14338–14627 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–53 (0-based, end-exclusive); document title",
+          "text": "Healthy Eating for Adults with Chronic Kidney Disease"
+        },
+        {
+          "location": "HTML normalized text characters 14338–14627 (0-based, end-exclusive)",
+          "text": "People with CKD who are on dialysis may need to eat more protein because the dialysis treatment removes protein from the blood. The amount of protein removed from the blood depends on the type of dialysis treatment. For example, peritoneal dialysis removes more protein than hemodialysis ."
+        }
+      ],
+      "content": "Healthy Eating for Adults with Chronic Kidney Disease\n\nPeople with CKD who are on dialysis may need to eat more protein because the dialysis treatment removes protein from the blood. The amount of protein removed from the blood depends on the type of dialysis treatment. For example, peritoneal dialysis removes more protein than hemodialysis .",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "chronic kidney disease"
+              },
+              {
+                "fact": "dialysis",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "Adults with CKD receiving dialysis",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "protein",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "People on dialysis may need more protein because dialysis removes it from blood; the amount removed depends on modality, with peritoneal dialysis removing more than hemodialysis."
+            },
+            "blockers": [
+              "Adults is not supplied with a numeric age cutoff; review age applicability.",
+              "Confirm dialysis and modality; no numeric protein increment is provided."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "protein",
+          "population": "Adults with CKD receiving dialysis",
+          "guidance": "People on dialysis may need more protein because dialysis removes it from blood; the amount removed depends on modality, with peritoneal dialysis removing more than hemodialysis."
+        }
+      ]
+    },
+    {
+      "id": "clinical-hd-liquid-foods",
+      "document_id": "niddk-hemodialysis",
+      "split": "test",
+      "location": "HTML normalized text characters 0–35 (0-based, end-exclusive); document title; HTML normalized text characters 5348–5716 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–35 (0-based, end-exclusive); document title",
+          "text": "Eating & Nutrition for Hemodialysis"
+        },
+        {
+          "location": "HTML normalized text characters 5348–5716 (0-based, end-exclusive)",
+          "text": "Foods that are liquid at room temperature, such as soup, contain water. Gelatin, pudding, ice cream, and other foods that include a lot of liquid in the recipe also count. Most fruits and vegetables contain water, such as melons, grapes, apples, oranges, tomatoes, lettuce, and celery. When you count up how much liquid you have in a day, be sure to count these foods."
+        }
+      ],
+      "content": "Eating & Nutrition for Hemodialysis\n\nFoods that are liquid at room temperature, such as soup, contain water. Gelatin, pudding, ice cream, and other foods that include a lot of liquid in the recipe also count. Most fruits and vegetables contain water, such as melons, grapes, apples, oranges, tomatoes, lettuce, and celery. When you count up how much liquid you have in a day, be sure to count these foods.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "dialysis",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "People receiving hemodialysis who count liquid intake",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "fluid_counting",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Count soup, gelatin, pudding, ice cream and water-containing fruits and vegetables when tracking liquids, not only beverages."
+            },
+            "blockers": [
+              "Dialysis boolean does not distinguish hemodialysis from other modalities; confirm hemodialysis."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fluid_counting",
+          "population": "People receiving hemodialysis who count liquid intake",
+          "guidance": "Count soup, gelatin, pudding, ice cream and water-containing fruits and vegetables when tracking liquids, not only beverages."
+        }
+      ]
+    },
+    {
+      "id": "clinical-hd-fluid-personal-goal",
+      "document_id": "niddk-hemodialysis",
+      "split": "test",
+      "location": "HTML normalized text characters 0–35 (0-based, end-exclusive); document title; HTML normalized text characters 6350–6627 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–35 (0-based, end-exclusive); document title",
+          "text": "Eating & Nutrition for Hemodialysis"
+        },
+        {
+          "location": "HTML normalized text characters 6350–6627 (0-based, end-exclusive)",
+          "text": "Even though you are on hemodialysis, your kidneys may still remove some fluid. Or, your kidneys may not remove any fluid at all. Work with your renal dietitian to set a goal for how much liquid you can have each day. Keep track of the liquids you drink and other foods you eat."
+        }
+      ],
+      "content": "Eating & Nutrition for Hemodialysis\n\nEven though you are on hemodialysis, your kidneys may still remove some fluid. Or, your kidneys may not remove any fluid at all. Work with your renal dietitian to set a goal for how much liquid you can have each day. Keep track of the liquids you drink and other foods you eat.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "dialysis",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "People receiving hemodialysis",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "fluid",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Residual kidney fluid removal varies. Work with the renal dietitian to set a daily liquid goal and track drinks and foods; no universal daily volume is supplied."
+            },
+            "blockers": [
+              "Dialysis boolean does not distinguish hemodialysis from other modalities; confirm hemodialysis.",
+              "Residual kidney fluid removal is not a supported predicate; individualized goal not supplied."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fluid",
+          "population": "People receiving hemodialysis",
+          "guidance": "Residual kidney fluid removal varies. Work with the renal dietitian to set a daily liquid goal and track drinks and foods; no universal daily volume is supplied."
+        }
+      ]
+    },
+    {
+      "id": "clinical-hd-potato-preparation",
+      "document_id": "niddk-hemodialysis",
+      "split": "test",
+      "location": "HTML normalized text characters 0–35 (0-based, end-exclusive); document title; HTML normalized text characters 7821–7945 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–35 (0-based, end-exclusive); document title",
+          "text": "Eating & Nutrition for Hemodialysis"
+        },
+        {
+          "location": "HTML normalized text characters 7821–7945 (0-based, end-exclusive)",
+          "text": "You can remove some of the potassium from potatoes by dicing or shredding them and then boiling them in a full pot of water."
+        }
+      ],
+      "content": "Eating & Nutrition for Hemodialysis\n\nYou can remove some of the potassium from potatoes by dicing or shredding them and then boiling them in a full pot of water.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "dialysis",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "People receiving hemodialysis",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "potassium_food_preparation",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Dicing or shredding potatoes and boiling them in a full pot of water can remove some potassium; no complete-removal or numeric reduction claim is supplied."
+            },
+            "blockers": [
+              "Dialysis boolean does not distinguish hemodialysis from other modalities; confirm hemodialysis."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "potassium_food_preparation",
+          "population": "People receiving hemodialysis",
+          "guidance": "Dicing or shredding potatoes and boiling them in a full pot of water can remove some potassium; no complete-removal or numeric reduction claim is supplied."
+        }
+      ]
+    },
+    {
+      "id": "clinical-hd-calorie-oils",
+      "document_id": "niddk-hemodialysis",
+      "split": "test",
+      "location": "HTML normalized text characters 0–35 (0-based, end-exclusive); document title; HTML normalized text characters 12873–13162 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–35 (0-based, end-exclusive); document title",
+          "text": "Eating & Nutrition for Hemodialysis"
+        },
+        {
+          "location": "HTML normalized text characters 12873–13162 (0-based, end-exclusive)",
+          "text": "Vegetable oils—such as olive oil, canola oil, and safflower oil—are good sources of calories and are the healthiest way to add fat to your diet if you need to gain weight. Use them generously on breads, rice, and noodles only if your renal dietitian tells you to add calories to your diet."
+        }
+      ],
+      "content": "Eating & Nutrition for Hemodialysis\n\nVegetable oils—such as olive oil, canola oil, and safflower oil—are good sources of calories and are the healthiest way to add fat to your diet if you need to gain weight. Use them generously on breads, rice, and noodles only if your renal dietitian tells you to add calories to your diet.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "dialysis",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "People receiving hemodialysis who need weight gain and whose renal dietitian recommends adding calories",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "energy",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Vegetable oils can add calories and fat when weight gain is needed; use them generously on breads, rice and noodles only if the renal dietitian advises adding calories."
+            },
+            "blockers": [
+              "Dialysis boolean does not distinguish hemodialysis from other modalities; confirm hemodialysis.",
+              "Need for weight gain and dietitian authorization to add calories are unsupported predicates."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "energy",
+          "population": "People receiving hemodialysis who need weight gain and whose renal dietitian recommends adding calories",
+          "guidance": "Vegetable oils can add calories and fat when weight gain is needed; use them generously on breads, rice and noodles only if the renal dietitian advises adding calories."
+        }
+      ]
+    },
+    {
+      "id": "clinical-hd-sweets-diabetes",
+      "document_id": "niddk-hemodialysis",
+      "split": "test",
+      "location": "HTML normalized text characters 0–35 (0-based, end-exclusive); document title; HTML normalized text characters 13614–13875 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–35 (0-based, end-exclusive); document title",
+          "text": "Eating & Nutrition for Hemodialysis"
+        },
+        {
+          "location": "HTML normalized text characters 13614–13875 (0-based, end-exclusive)",
+          "text": "Hard candy, sugar, honey, jam, and jelly provide calories and energy without fat or adding other things that your body does not need. If you have diabetes, be careful about eating sweets and talk with your renal dietitian before adding sweets to your food plan."
+        }
+      ],
+      "content": "Eating & Nutrition for Hemodialysis\n\nHard candy, sugar, honey, jam, and jelly provide calories and energy without fat or adding other things that your body does not need. If you have diabetes, be careful about eating sweets and talk with your renal dietitian before adding sweets to your food plan.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "dialysis",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "People receiving hemodialysis; extra precaution for those with diabetes",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "sweets",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Sweets can supply calories without fat, but people with diabetes should be careful and consult the renal dietitian before adding sweets to the food plan."
+            },
+            "blockers": [
+              "Dialysis boolean does not distinguish hemodialysis from other modalities; confirm hemodialysis.",
+              "Confirm diabetes context and individualized food plan; this is not unrestricted permission to add sweets."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sweets",
+          "population": "People receiving hemodialysis; extra precaution for those with diabetes",
+          "guidance": "Sweets can supply calories without fat, but people with diabetes should be careful and consult the renal dietitian before adding sweets to the food plan."
+        }
+      ]
+    },
+    {
+      "id": "clinical-stones-water-exception",
+      "document_id": "niddk-stones",
+      "split": "test",
+      "location": "HTML normalized text characters 0–43 (0-based, end-exclusive); document title; HTML normalized text characters 2238–2544 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–43 (0-based, end-exclusive); document title",
+          "text": "Eating, Diet, & Nutrition for Kidney Stones"
+        },
+        {
+          "location": "HTML normalized text characters 2238–2544 (0-based, end-exclusive)",
+          "text": "Drinking enough liquid, mainly water, is the most important thing you can do to prevent kidney stones. Unless you have kidney failure , many health care professionals recommend that you drink six to eight, 8-ounce glasses a day. Talk with a health care professional about how much liquid you should drink ."
+        }
+      ],
+      "content": "Eating, Diet, & Nutrition for Kidney Stones\n\nDrinking enough liquid, mainly water, is the most important thing you can do to prevent kidney stones. Unless you have kidney failure , many health care professionals recommend that you drink six to eight, 8-ounce glasses a day. Talk with a health care professional about how much liquid you should drink .",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People seeking kidney-stone prevention; the six-to-eight-glass advice excludes kidney failure",
+            "exceptions": [],
+            "exception_note": "The six-to-eight 8-ounce-glasses recommendation excludes kidney failure.",
+            "action": {
+              "kind": "assessment",
+              "subject": "fluid",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "For stone prevention, drink enough liquid, mainly water. Unless kidney failure is present, many professionals recommend six to eight 8-ounce glasses daily; discuss the individual amount with a health professional."
+            },
+            "blockers": [
+              "Stone history, stone subtype, and prevention context require review; no inferred diagnosis predicate.",
+              "Kidney-failure exclusion is not equated with dialysis or an inferred CKD stage; composite glass count and size retained without conversion."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fluid",
+          "population": "People seeking kidney-stone prevention; the six-to-eight-glass advice excludes kidney failure",
+          "guidance": "For stone prevention, drink enough liquid, mainly water. Unless kidney failure is present, many professionals recommend six to eight 8-ounce glasses daily; discuss the individual amount with a health professional."
+        }
+      ]
+    },
+    {
+      "id": "clinical-stones-oxalate-subtype",
+      "document_id": "niddk-stones",
+      "split": "test",
+      "location": "HTML normalized text characters 0–43 (0-based, end-exclusive); document title; HTML normalized text characters 3508–3900 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–43 (0-based, end-exclusive); document title",
+          "text": "Eating, Diet, & Nutrition for Kidney Stones"
+        },
+        {
+          "location": "HTML normalized text characters 3508–3900 (0-based, end-exclusive)",
+          "text": "Calcium Oxalate Stones Reduce oxalate If you’ve had calcium oxalate stones, you may want to avoid these foods to help reduce the amount of oxalate in your urine: nuts and nut products peanuts—which are legumes, not nuts, and are high in oxalate rhubarb spinach wheat bran Talk with a health care professional about other food sources of oxalate and how much oxalate should be in what you eat."
+        }
+      ],
+      "content": "Eating, Diet, & Nutrition for Kidney Stones\n\nCalcium Oxalate Stones Reduce oxalate If you’ve had calcium oxalate stones, you may want to avoid these foods to help reduce the amount of oxalate in your urine: nuts and nut products peanuts—which are legumes, not nuts, and are high in oxalate rhubarb spinach wheat bran Talk with a health care professional about other food sources of oxalate and how much oxalate should be in what you eat.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People who have had calcium oxalate stones",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "exclusion",
+              "subject": "oxalate",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "People with prior calcium oxalate stones may want to avoid nuts/nut products, peanuts, rhubarb, spinach and wheat bran to reduce urinary oxalate; discuss other sources and the amount with a professional."
+            },
+            "blockers": [
+              "Stone history, stone subtype, and prevention context require review; no inferred diagnosis predicate.",
+              "Prior calcium oxalate stone history must be confirmed; do not generalize to every stone subtype."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "oxalate",
+          "population": "People who have had calcium oxalate stones",
+          "guidance": "People with prior calcium oxalate stones may want to avoid nuts/nut products, peanuts, rhubarb, spinach and wheat bran to reduce urinary oxalate; discuss other sources and the amount with a professional."
+        }
+      ]
+    },
+    {
+      "id": "clinical-stones-calcium-not-eliminate",
+      "document_id": "niddk-stones",
+      "split": "test",
+      "location": "HTML normalized text characters 0–43 (0-based, end-exclusive); document title; HTML normalized text characters 4994–5636 (0-based, end-exclusive); HTML normalized text characters 3508–3545 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML normalized text characters 0–43 (0-based, end-exclusive); document title",
+          "text": "Eating, Diet, & Nutrition for Kidney Stones"
+        },
+        {
+          "location": "HTML normalized text characters 4994–5636 (0-based, end-exclusive)",
+          "text": "Get enough calcium from foods Even though calcium sounds like it would be the cause of calcium stones, it’s not. In the right amounts, calcium can block other substances in the digestive tract that may cause stones. Talk with a health care professional about how much calcium you should eat to help prevent getting more calcium oxalate stones and to support strong bones. It may be best to get calcium from low-oxalate, plant-based foods such as calcium-fortified juices, cereals, breads, some kinds of vegetables, and some types of beans. Ask a dietitian or other health care professional which foods are the best sources of calcium for you."
+        },
+        {
+          "location": "HTML normalized text characters 3508–3545 (0-based, end-exclusive)",
+          "text": "Calcium Oxalate Stones Reduce oxalate"
+        }
+      ],
+      "content": "Eating, Diet, & Nutrition for Kidney Stones\n\nGet enough calcium from foods Even though calcium sounds like it would be the cause of calcium stones, it’s not. In the right amounts, calcium can block other substances in the digestive tract that may cause stones. Talk with a health care professional about how much calcium you should eat to help prevent getting more calcium oxalate stones and to support strong bones. It may be best to get calcium from low-oxalate, plant-based foods such as calcium-fortified juices, cereals, breads, some kinds of vegetables, and some types of beans. Ask a dietitian or other health care professional which foods are the best sources of calcium for you.\n\nCalcium Oxalate Stones Reduce oxalate",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People seeking prevention of recurrent calcium oxalate stones",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "calcium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Do not infer calcium elimination from calcium stone composition: appropriate calcium can block stone-forming substances in the digestive tract. Discuss amount and best sources; low-oxalate plant-based calcium sources may be preferable."
+            },
+            "blockers": [
+              "Stone history, stone subtype, and prevention context require review; no inferred diagnosis predicate.",
+              "Passage supplies no numeric calcium target; preference is qualified as may be best."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "calcium",
+          "population": "People seeking prevention of recurrent calcium oxalate stones",
+          "guidance": "Do not infer calcium elimination from calcium stone composition: appropriate calcium can block stone-forming substances in the digestive tract. Discuss amount and best sources; low-oxalate plant-based calcium sources may be preferable."
+        }
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "clinical-q-dash-food-pattern",
+      "split": "dev",
+      "ablation": true,
+      "question": "Does DASH require special foods, and which food groups does it emphasize?",
+      "passage_ids": [
+        "clinical-dash-food-pattern"
+      ],
+      "reference_answer": {
+        "answer": "DASH requires no special foods. It emphasizes vegetables, fruits, whole grains, fat-free or low-fat dairy, fish, poultry, beans, nuts and vegetable oils, while limiting saturated-fat foods and sugar-sweetened beverages and sweets.",
+        "required_patterns": [
+          "(?i)no special foods",
+          "(?i)whole grains"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-dash-food-pattern"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-dash-serving-context",
+      "split": "dev",
+      "ablation": true,
+      "question": "In the 2,000-calorie DASH example, are the 4–5 servings of nuts, seeds, dry beans and peas daily or weekly?",
+      "passage_ids": [
+        "clinical-dash-serving-context"
+      ],
+      "reference_answer": {
+        "answer": "They are 4–5 servings per week in the 2,000-calorie-a-day example, not per day.",
+        "required_patterns": [
+          "4[–-]5",
+          "(?i)per week",
+          "2,?000"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-dash-serving-context"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-dash-sodium-options",
+      "split": "dev",
+      "ablation": true,
+      "question": "What does NHLBI say about 1,500 mg versus 2,300 mg daily sodium in DASH?",
+      "passage_ids": [
+        "clinical-dash-sodium-options"
+      ],
+      "reference_answer": {
+        "answer": "NHLBI says 1,500 mg sodium lowers blood pressure even further than 2,300 mg daily. This comparison does not select an individual target.",
+        "required_patterns": [
+          "1,?500",
+          "2,?300",
+          "(?i)further"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-dash-sodium-options"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-dash-personal-calories",
+      "split": "dev",
+      "ablation": false,
+      "question": "What exact daily calorie target should be prescribed for an individual from this passage alone?",
+      "passage_ids": [
+        "clinical-dash-personal-calories"
+      ],
+      "reference_answer": {
+        "answer": "The supplied passage does not establish an individual daily calorie target; consult a clinician or dietitian for a personal prescription.",
+        "required_patterns": [
+          "(?i)does not",
+          "(?i)calorie"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [],
+        "needs_clinician": true,
+        "insufficient_evidence": true
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-dash-energy-balance",
+      "split": "dev",
+      "ablation": false,
+      "question": "Which factors does the DASH page say to consider for calorie needs, and how does its advice differ for maintenance and needed weight loss?",
+      "passage_ids": [
+        "clinical-dash-energy-balance"
+      ],
+      "reference_answer": {
+        "answer": "Consider age and physical activity. For weight maintenance, balance calories consumed and burned; if weight loss is needed, eat fewer calories than you burn or increase activity.",
+        "required_patterns": [
+          "(?i)age",
+          "(?i)physical activity",
+          "(?i)maintenance"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-dash-energy-balance"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-dash-whole-grain-share",
+      "split": "dev",
+      "ablation": true,
+      "question": "Does the DASH footnote require every grain serving to be whole grain?",
+      "passage_ids": [
+        "clinical-dash-whole-grain-share"
+      ],
+      "reference_answer": {
+        "answer": "It recommends whole grains for most grain servings as a source of fiber and nutrients, not explicitly every serving.",
+        "required_patterns": [
+          "(?i)most",
+          "(?i)fiber"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-dash-whole-grain-share"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-dash-lactose-options",
+      "split": "dev",
+      "ablation": false,
+      "question": "What options does DASH offer for lactose intolerance?",
+      "passage_ids": [
+        "clinical-dash-lactose-options"
+      ],
+      "reference_answer": {
+        "answer": "Try lactase enzyme pills with dairy products, or lactose-free or lactose-reduced milk.",
+        "required_patterns": [
+          "(?i)lactase",
+          "(?i)lactose-free"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-dash-lactose-options"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-dash-fat-serving-equivalence",
+      "split": "dev",
+      "ablation": false,
+      "question": "How do regular, low-fat and fat-free salad dressing differ in the DASH footnote for a 1 Tbsp amount?",
+      "passage_ids": [
+        "clinical-dash-fat-serving-equivalence"
+      ],
+      "reference_answer": {
+        "answer": "At 1 Tbsp, regular salad dressing counts as one fats-and-oils serving, low-fat as one-half serving, and fat-free as zero servings. These are counting equivalences, not recommended intakes.",
+        "required_patterns": [
+          "(?i)one-half",
+          "(?i)zero",
+          "(?i)equivalences"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-dash-fat-serving-equivalence"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-dash-lean-preparation",
+      "split": "dev",
+      "ablation": false,
+      "question": "What preparation choices accompany the lean meats, poultry and fish group in DASH?",
+      "passage_ids": [
+        "clinical-dash-lean-preparation"
+      ],
+      "reference_answer": {
+        "answer": "Select lean choices, trim visible fats, broil, roast or poach, and remove skin from poultry.",
+        "required_patterns": [
+          "(?i)trim",
+          "(?i)skin",
+          "(?i)poach"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-dash-lean-preparation"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-dash-cereal-label",
+      "split": "dev",
+      "ablation": false,
+      "question": "Why should someone check a cereal Nutrition Facts label when using the DASH serving table?",
+      "passage_ids": [
+        "clinical-dash-cereal-label"
+      ],
+      "reference_answer": {
+        "answer": "Cereal serving sizes vary by type, from ½ cup to 1¼ cups; check the product Nutrition Facts label rather than treating one volume as universal.",
+        "required_patterns": [
+          "(?i)vary",
+          "(?i)label"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-dash-cereal-label"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-diabetes-beverages",
+      "split": "test",
+      "ablation": true,
+      "question": "Which drinks does NIDDK suggest choosing for diabetes meal plans?",
+      "passage_ids": [
+        "clinical-diabetes-beverages"
+      ],
+      "reference_answer": {
+        "answer": "Choose drinks with little or no added sugar, such as water, low-fat or non-fat milk, and unsweetened tea, coffee or sparkling water.",
+        "required_patterns": [
+          "(?i)little or no added sugar",
+          "(?i)unsweetened"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-diabetes-beverages"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-diabetes-alcohol",
+      "split": "test",
+      "ablation": true,
+      "question": "What alcohol-related precautions does NIDDK give, especially with insulin or certain diabetes medicines?",
+      "passage_ids": [
+        "clinical-diabetes-alcohol"
+      ],
+      "reference_answer": {
+        "answer": "Limit alcohol. Alcohol can cause hypoglycemia when taking insulin or certain diabetes medicines. If drinking, eat food, check blood glucose afterward and discuss drinking habits with the care team.",
+        "required_patterns": [
+          "(?i)hypoglycemia",
+          "(?i)eat food",
+          "(?i)afterward"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-diabetes-alcohol"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-diabetes-meal-timing",
+      "split": "test",
+      "ablation": false,
+      "question": "Does NIDDK specify one meal schedule for everyone with diabetes?",
+      "passage_ids": [
+        "clinical-diabetes-meal-timing"
+      ],
+      "reference_answer": {
+        "answer": "No. Timing depends on medicines, physical activity or work schedule and other health conditions. Discuss it with the care team, including eating around activity; insulin or sulfonylureas can cause low glucose during exercise or when meals are skipped or delayed.",
+        "required_patterns": [
+          "(?i)depends",
+          "(?i)sulfonylureas",
+          "(?i)delayed"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-diabetes-meal-timing"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-diabetes-carb-counting",
+      "split": "test",
+      "ablation": false,
+      "question": "Must everyone with diabetes count carbohydrates, and when may it be particularly helpful?",
+      "passage_ids": [
+        "clinical-diabetes-carb-counting"
+      ],
+      "reference_answer": {
+        "answer": "Not everyone with diabetes needs to count carbs. For people taking insulin, tracking meal and snack carbohydrates can help determine how much insulin to take; the passage supplies no dosing formula.",
+        "required_patterns": [
+          "(?i)not everyone",
+          "(?i)insulin"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-diabetes-carb-counting"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-diabetes-plate",
+      "split": "test",
+      "ablation": true,
+      "question": "How does the plate method divide a 9-inch plate, and what does it say about carb counting without insulin?",
+      "passage_ids": [
+        "clinical-diabetes-plate"
+      ],
+      "reference_answer": {
+        "answer": "Use half the plate for nonstarchy vegetables, one-quarter for high-fiber carbohydrate foods and one-quarter for protein foods. If not taking insulin, you may not need to count carbs with the plate method.",
+        "required_patterns": [
+          "(?i)half",
+          "(?i)one-quarter",
+          "(?i)may not"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-diabetes-plate"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-diabetes-supplements",
+      "split": "test",
+      "ablation": false,
+      "question": "What evidence and precautions does NIDDK describe for supplements to manage diabetes?",
+      "passage_ids": [
+        "clinical-diabetes-supplements"
+      ],
+      "reference_answer": {
+        "answer": "There is no clear proof that specific foods, herbs, spices or supplements help manage diabetes. A professional may recommend vitamins or minerals if food does not supply enough. Talk with the professional before taking supplements because of side effects or effects on diabetes medicines.",
+        "required_patterns": [
+          "(?i)no clear proof",
+          "(?i)before",
+          "(?i)medicines"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-diabetes-supplements"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-ckd-protein-balance",
+      "split": "test",
+      "ablation": false,
+      "question": "Why does NIDDK recommend balancing rather than indiscriminately minimizing protein in CKD?",
+      "passage_ids": [
+        "clinical-ckd-protein-balance"
+      ],
+      "reference_answer": {
+        "answer": "Some people with CKD may need moderate protein to avoid waste buildup, but too little protein may cause malnutrition. A dietitian or health professional should help find the balance.",
+        "required_patterns": [
+          "(?i)malnutrition",
+          "(?i)some people"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-ckd-protein-balance"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-ckd-progressive-plan",
+      "split": "test",
+      "ablation": false,
+      "question": "Does NIDDK recommend the same restrictions for everyone at every stage of CKD?",
+      "passage_ids": [
+        "clinical-ckd-progressive-plan"
+      ],
+      "reference_answer": {
+        "answer": "No. There is no single meal plan for everyone; early CKD may involve few restrictions, and dietary changes may increase as CKD advances and nutritional needs change.",
+        "required_patterns": [
+          "(?i)no single",
+          "(?i)early",
+          "(?i)may"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-ckd-progressive-plan"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-ckd-phosphorus-label",
+      "split": "test",
+      "ablation": true,
+      "question": "Which ingredient clues and source differences does NIDDK highlight for reducing phosphorus?",
+      "passage_ids": [
+        "clinical-ckd-phosphorus-label"
+      ],
+      "reference_answer": {
+        "answer": "Look for phosphorus or PHOS words such as phosphoric acid and phosphates; limit processed foods with added phosphorus. The body absorbs more phosphorus from animal foods than plant foods, and some packaged meats contain added phosphorus.",
+        "required_patterns": [
+          "(?i)PHOS",
+          "(?i)animal",
+          "(?i)plant"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-ckd-phosphorus-label"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-ckd-potassium-conditional",
+      "split": "test",
+      "ablation": false,
+      "question": "When are these potassium-reduction tips suggested, and why does serving size matter?",
+      "passage_ids": [
+        "clinical-ckd-potassium-conditional"
+      ],
+      "reference_answer": {
+        "answer": "They may be recommended by a health professional when potassium is high. A large serving of a lower-potassium food can contain more potassium than a small serving of a higher-potassium food.",
+        "required_patterns": [
+          "(?i)potassium is high",
+          "(?i)large serving",
+          "(?i)may"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-ckd-potassium-conditional"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-ckd-low-glucose-juice",
+      "split": "test",
+      "ablation": false,
+      "question": "Which juice choices are suggested for low blood glucose in the CKD guidance, and is a treatment dose given?",
+      "passage_ids": [
+        "clinical-ckd-low-glucose-juice"
+      ],
+      "reference_answer": {
+        "answer": "For diabetes with low blood glucose, choose apple, grape or cranberry juice instead of higher-potassium juice such as orange juice. The passage does not specify a treatment dose.",
+        "required_patterns": [
+          "(?i)apple",
+          "(?i)cranberry",
+          "(?i)does not specify"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-ckd-low-glucose-juice"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-ckd-dialysis-protein-loss",
+      "split": "test",
+      "ablation": false,
+      "question": "How may dialysis change protein needs, and which modality removes more protein according to NIDDK?",
+      "passage_ids": [
+        "clinical-ckd-dialysis-protein-loss"
+      ],
+      "reference_answer": {
+        "answer": "Dialysis may increase protein needs because treatment removes protein. The amount depends on modality; peritoneal dialysis removes more protein than hemodialysis.",
+        "required_patterns": [
+          "(?i)may",
+          "(?i)peritoneal dialysis",
+          "(?i)more protein"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-ckd-dialysis-protein-loss"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-hd-liquid-foods",
+      "split": "test",
+      "ablation": true,
+      "question": "Which foods should be included when counting liquid intake during hemodialysis?",
+      "passage_ids": [
+        "clinical-hd-liquid-foods"
+      ],
+      "reference_answer": {
+        "answer": "Count foods such as soup, gelatin, pudding and ice cream, plus water-containing fruits and vegetables such as melons, grapes, tomatoes and lettuce; do not count only drinks.",
+        "required_patterns": [
+          "(?i)gelatin",
+          "(?i)vegetables"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-hd-liquid-foods"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-hd-fluid-personal-goal",
+      "split": "test",
+      "ablation": false,
+      "question": "What exact daily liquid volume should be prescribed for a person on hemodialysis from this passage alone?",
+      "passage_ids": [
+        "clinical-hd-fluid-personal-goal"
+      ],
+      "reference_answer": {
+        "answer": "The supplied passage does not supply an exact daily liquid prescription; consult the clinician or renal dietitian for a personal goal.",
+        "required_patterns": [
+          "(?i)does not supply",
+          "(?i)dietitian"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [],
+        "needs_clinician": true,
+        "insufficient_evidence": true
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-hd-potato-preparation",
+      "split": "test",
+      "ablation": false,
+      "question": "How can potato preparation reduce potassium, and does the source say it removes all potassium?",
+      "passage_ids": [
+        "clinical-hd-potato-preparation"
+      ],
+      "reference_answer": {
+        "answer": "Dice or shred potatoes, then boil them in a full pot of water. The source says this removes some potassium, not all.",
+        "required_patterns": [
+          "(?i)dice or shred",
+          "(?i)some potassium"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-hd-potato-preparation"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-hd-calorie-oils",
+      "split": "test",
+      "ablation": false,
+      "question": "Is generous use of vegetable oils advised for everyone on hemodialysis?",
+      "passage_ids": [
+        "clinical-hd-calorie-oils"
+      ],
+      "reference_answer": {
+        "answer": "No. The advice concerns adding calories when weight gain is needed; use oils generously only if the renal dietitian tells you to add calories.",
+        "required_patterns": [
+          "(?i)only if",
+          "(?i)dietitian",
+          "(?i)weight gain"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-hd-calorie-oils"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-hd-sweets-diabetes",
+      "split": "test",
+      "ablation": false,
+      "question": "What qualifier accompanies the hemodialysis advice about adding sweets for calories?",
+      "passage_ids": [
+        "clinical-hd-sweets-diabetes"
+      ],
+      "reference_answer": {
+        "answer": "For people with diabetes, be careful about sweets and talk with the renal dietitian before adding them to the food plan.",
+        "required_patterns": [
+          "(?i)diabetes",
+          "(?i)before",
+          "(?i)dietitian"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-hd-sweets-diabetes"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-stones-water-exception",
+      "split": "test",
+      "ablation": true,
+      "question": "What fluid advice is given for stone prevention, and which exclusion accompanies the six-to-eight-glass recommendation?",
+      "passage_ids": [
+        "clinical-stones-water-exception"
+      ],
+      "reference_answer": {
+        "answer": "Drink enough liquid, mainly water. Many health professionals recommend six to eight 8-ounce glasses a day unless there is kidney failure; discuss the individual amount with a health professional.",
+        "required_patterns": [
+          "(?i)six to eight",
+          "8-ounce",
+          "(?i)unless.{0,80}kidney failure"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-stones-water-exception"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-stones-oxalate-subtype",
+      "split": "test",
+      "ablation": false,
+      "question": "For which stone history does the avoid-list for spinach, rhubarb and wheat bran apply, and how strong is the wording?",
+      "passage_ids": [
+        "clinical-stones-oxalate-subtype"
+      ],
+      "reference_answer": {
+        "answer": "It applies to people who have had calcium oxalate stones. The wording is that they may want to avoid those foods, along with nuts/nut products and peanuts, and discuss oxalate intake with a health professional.",
+        "required_patterns": [
+          "(?i)calcium oxalate",
+          "(?i)may want"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-stones-oxalate-subtype"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    },
+    {
+      "id": "clinical-q-stones-calcium-not-eliminate",
+      "split": "test",
+      "ablation": false,
+      "question": "Does the calcium oxalate stone guidance imply avoiding dietary calcium?",
+      "passage_ids": [
+        "clinical-stones-calcium-not-eliminate"
+      ],
+      "reference_answer": {
+        "answer": "No. In the right amounts, calcium can block substances in the digestive tract that may cause stones. Discuss the amount and suitable sources with a professional; low-oxalate plant-based calcium sources may be best.",
+        "required_patterns": [
+          "(?i)right amounts",
+          "(?i)low-oxalate"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "clinical-stones-calcium-not-eliminate"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve source population, conditional wording, units, exceptions and absence of numeric prescriptions. Patterns are lexical diagnostics only, not semantic adjudication."
+    }
+  ]
+}

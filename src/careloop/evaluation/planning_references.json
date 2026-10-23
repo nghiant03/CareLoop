@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "prepared_on": "2026-10-23",
+  "reference_type": "static_team_labelled_source_transcription",
+  "label_scope": "Labels record source passages, explicit menu headings, published portions and preparation blockers. They do not establish clinician agreement, human validation, patient preferences or catalogue suitability.",
+  "status": "blocked",
+  "scope": "Source-grounded computational planning and substitution references; no patient histories or clinical approvals are asserted.",
+  "usable_planning_cases": [],
+  "usable_substitution_cases": [],
+  "sources": [
+    {
+      "id": "sgfoodid-kaggle-v1",
+      "url": "https://www.kaggle.com/datasets/adisongoh/comprehensive-food-nutritional-information",
+      "edition": "Kaggle SG FoodID mirror version 1 (July 2026)",
+      "inspection": "All acquired normalized JSONL rows inspected locally.",
+      "local_path": "~/.local/share/careloop/public/sgfoodid/kaggle-v1/normalized-dc5bea6d2bb1c450e46a5e61307cab69ec40db4dc0c4f0e1d5a6df2352317fac-0.jsonl",
+      "normalized_sha256": "7691285710035cbb550a4430ac50c8d4b5b463fbe126ce001bfa135b4fbb9543",
+      "source_archive_sha256": "bc686846eb0c81f4c3e231b222f7bb17a00010a474ccd0a2477f8cd1cecddafd"
+    },
+    {
+      "id": "nhlbi-week-dash",
+      "title": "A Week With the DASH Eating Plan",
+      "publisher": "National Heart, Lung, and Blood Institute, NIH",
+      "url": "https://www.nhlbi.nih.gov/sites/default/files/publications/WeekOnDASH.pdf",
+      "inspection": "Official PDF downloaded; pages 1 and 2 checked using pdftotext -layout.",
+      "local_path": "~/.local/share/careloop/public/evaluation/planning/WeekOnDASH.pdf",
+      "sha256": "9853d66dbaae3a105be7f25985b66dfd101ff84a193c147e2eda344e97e8bf3b",
+      "retrieved_on": "2026-10-23"
+    },
+    {
+      "id": "nhlbi-living-dash",
+      "title": "DASH: Living with DASH",
+      "url": "https://www.nhlbi.nih.gov/health/dash/living-with-dash",
+      "last_updated": "2026-02-25",
+      "retrieved_on": "2026-10-23",
+      "inspection": "Full official HTML text retrieved successfully.",
+      "locations": ["Controlling Daily Sodium and Calories", "Meal Planning Tools", "Increasing Daily Potassium"]
+    },
+    {
+      "id": "nhlbi-week-landing",
+      "url": "https://www.nhlbi.nih.gov/resources/week-dash-eating-plan",
+      "inspection": "Search result inspected; direct HTML retrieval returned HTTP 403. Linked official PDF was acquired successfully."
+    },
+    {
+      "id": "nhlbi-older-guide-discovery",
+      "url": "https://www.nhlbi.nih.gov/files/docs/public/heart/new_dash.pdf",
+      "inspection": "Search extraction only; not downloaded or used as a frozen numeric reference. Search showed rounded portions and nominal 2000 kcal menus; no numeric calorie tolerance was established."
+    }
+  ],
+  "catalogue_coverage": {
+    "source_id": "sgfoodid-kaggle-v1",
+    "records": 2689,
+    "records_with_source_portions": 2689,
+    "source_portions": 3295,
+    "basis_counts": {"g": 2089, "ml": 600},
+    "records_with_nonempty_meal_slots": 0,
+    "records_with_nonempty_planning_portions": 0,
+    "records_with_review_note": 0,
+    "records_with_ingredients": 0,
+    "records_with_nonempty_allergen_status": 0,
+    "records_with_known_vegetarian": 0,
+    "records_with_known_contains_egg": 0,
+    "records_with_known_contains_dairy": 0,
+    "records_with_import_warnings": 1,
+    "records_with_known_energy_sodium_and_potassium": 1151,
+    "nutrient_nonnull_counts": {
+      "energy": 2689,
+      "protein": 2665,
+      "carbohydrate": 2674,
+      "fat": 2652,
+      "saturated_fat": 2573,
+      "fibre": 2319,
+      "total_sugars": 2364,
+      "added_sugars": 186,
+      "free_sugars": 0,
+      "sodium": 2373,
+      "potassium": 1436,
+      "phosphorus": 746
+    },
+    "usable_source_portions": 3295,
+    "records_with_usable_source_portions": 2689,
+    "interpretation": "All source portions pass positive finite quantity and matching g/ml basis checks. The current planner uses them directly; legacy meal_slots and planning_portions no longer gate eligibility. Vegetarian/egg/dairy fields remain null and allergen maps empty, not evidence of absence. Counts concern the acquired JSONL, not later database revisions."
+  },
+  "partial_source_references": [
+    {
+      "id": "dash-day1-published-menu",
+      "status": "source_reference_only_not_executable",
+      "source_id": "nhlbi-week-dash",
+      "location": "PDF page 1 introduction; page 2 DAY 1 menu and Total nutrients per day",
+      "energy": {
+        "nominal_kcal_per_day": "2000",
+        "published_day_total_kcal": "2062",
+        "required_range_kcal": null,
+        "published_numeric_tolerance": null,
+        "source_quote": "These menus are based on 2,000 calories a day. Serving sizes should be increased or decreased for other calorie levels.",
+        "interpretation": "The observed 2062 kcal total is a menu analysis, not an upper bound or an authorized tolerance. The spread of seven menu totals must not be converted into a prescribed range."
+      },
+      "nutrient_targets": [
+        {"nutrient": "sodium", "kind": "ceiling", "value": "2300", "unit": "mg/day", "source_id": "nhlbi-living-dash", "location": "Controlling Daily Sodium and Calories"},
+        {"nutrient": "sodium", "kind": "alternative_ceiling", "value": "1500", "unit": "mg/day", "source_id": "nhlbi-living-dash", "location": "Controlling Daily Sodium and Calories", "note": "An alternative scenario, not an additional mandatory bound on the 2300 mg menu."},
+        {"nutrient": "potassium", "kind": "recommended_intake", "value": "4700", "unit": "mg/day", "source_id": "nhlbi-living-dash", "location": "Increasing Daily Potassium"}
+      ],
+      "published_day_totals": {
+        "energy_kcal": "2062", "fat_g": "63", "saturated_fat_g": "13",
+        "cholesterol_mg": "155", "sodium_mg": "2101", "carbohydrate_g": "284",
+        "protein_g": "114", "calcium_mg": "1220", "magnesium_mg": "594",
+        "potassium_mg": "4909", "fibre_g": "37"
+      },
+      "portion_transcription_scope": "Selected literal rows, not the complete day. Slots are explicit source headings. Household measures are retained; no gram/ml conversions or SGFoodID matches asserted.",
+      "verified_source_items": [
+        {"slot": "breakfast", "food": "bran flakes cereal", "portion": "3/4 cup", "sodium_mg": "220"},
+        {"slot": "breakfast", "food": "banana", "portion": "1 medium", "sodium_mg": "1"},
+        {"slot": "breakfast", "food": "low-fat milk", "portion": "1 cup", "sodium_mg": "107"},
+        {"slot": "breakfast", "food": "whole wheat bread", "portion": "1 slice", "sodium_mg": "149"},
+        {"slot": "breakfast", "food": "soft (tub) margarine", "portion": "1 tsp", "sodium_mg": "26"},
+        {"slot": "breakfast", "food": "orange juice", "portion": "1 cup", "sodium_mg": "5"},
+        {"slot": "lunch", "food": "chicken salad", "portion": "3/4 cup", "sodium_mg": "179"},
+        {"slot": "lunch", "food": "Dijon mustard", "portion": "1 Tbsp", "sodium_mg": "373"},
+        {"slot": "dinner", "food": "roast beef, eye of the round", "portion": "3 oz", "sodium_mg": "35"},
+        {"slot": "dinner", "food": "low-fat milk", "portion": "1 cup", "sodium_mg": "107"},
+        {"slot": "snack", "source_slot_label": "SNACKS", "food": "almonds, unsalted", "portion": "1/3 cup", "sodium_mg": "0"},
+        {"slot": "snack", "source_slot_label": "SNACKS", "food": "raisins", "portion": "1/4 cup", "sodium_mg": "4"},
+        {"slot": "snack", "source_slot_label": "SNACKS", "food": "fruit yogurt, fat-free, no sugar added", "portion": "1/2 cup", "sodium_mg": "86"}
+      ],
+      "restrictions": {
+        "sodium_scenario_provenance": "Official DASH 2300 mg/day menu with explicitly described lower-sodium substitutions toward the optional 1500 mg/day level.",
+        "patient_allergies": null,
+        "patient_vegetarian": null,
+        "patient_egg_choice": null,
+        "patient_dairy_choice": null,
+        "note": "The menu is not a patient record. Do not silently fill mandatory patient-choice fields or certify allergens absent from food names."
+      }
+    },
+    {
+      "id": "dash-day1-mustard-substitution",
+      "status": "source_reference_only_not_executable",
+      "source_id": "nhlbi-week-dash",
+      "location": "PDF page 2 DAY 1, LUNCH and 198 mg less sodium callout",
+      "slot": "lunch",
+      "original_food": "Dijon mustard",
+      "original_portion": "1 Tbsp",
+      "original_sodium_mg": "373",
+      "replacement_food": "regular mustard",
+      "source_quote": "Use regular mustard in place of Dijon mustard.",
+      "published_sodium_reduction_mg": "198",
+      "replacement_sodium_mg_derived": "175",
+      "derivation": "373 - 198 = 175 mg; derived from the published original and reduction, not an independently measured replacement value.",
+      "limitation": "Only sodium and source slot context are established here. No replacement energy/other-nutrient vector, verified catalogue mapping, or approved parent plan exists. This single change does not by itself establish compliance with the 1500 mg/day scenario."
+    }
+  ],
+  "blockers": [
+    {
+      "code": "missing_published_daily_energy_range",
+      "detail": "Inspected official weekly menu provides nominal 2000 kcal/day, not numeric lower/upper bounds or a numeric tolerance. Its page 1 advice to keep averages close to recommended servings and sodium levels does not supply a daily calorie tolerance.",
+      "resolution": "Acquire a source with an explicit applicable energy interval or numeric allowance, or obtain an explicitly authorized computational target specification. Do not invent +/-5%, use min/max menu totals, or reinterpret an approximate calorie level as an exact equality."
+    },
+    {
+      "code": "missing_restriction_annotations_and_patient_choices",
+      "detail": "No acquired food has ingredient/allergen/vegetarian/egg/dairy classifications; official menus do not supply an actual person's mandatory dietary choices. Sodium scenarios are documented, but allergy-free or vegetarian patient histories are not.",
+      "resolution": "Use explicitly documented computational restriction assumptions separately from real patient claims, and acquire ingredient/classification provenance for any requested exclusion. Unknown remains unknown."
+    },
+    {
+      "code": "menu_composition_and_portion_mapping_incomplete",
+      "detail": "The DASH menu gives item sodium, household measures and daily nutrient totals, not complete per-item nutrient vectors tied to the acquired SGFoodID food IDs. Cup/slice/medium units cannot be turned into grams without food-specific supporting data. Six separately listed breakfast components also exceed the planner's five-item limit if represented individually.",
+      "resolution": "Use documented matching composition records and source portion masses. Any composite recipe grouping must have a reproducible source-backed composition rather than an invented combined food. Do not claim the partial transcription reconstructs the complete published menu."
+    }
+  ],
+  "verification": {
+    "method": "Complete local JSONL count and null/empty-field inspection with Python json; SHA-256 of normalized file and downloaded official PDF; pdftotext -layout source transcription checks.",
+    "not_performed": ["Clinical review", "SGFoodID-to-DASH food equivalence adjudication", "Planner execution", "Substitution execution"],
+    "benchmark_interpretation": "Zero executable real-source cases prepared is a prerequisite blocker, not a successful feasibility result or proof of nutritional infeasibility. Partial references support further preparation and source-fidelity checks only."
+  }
+}

@@ -1,4 +1,3 @@
-import argparse
 import hashlib
 import json
 import platform
@@ -67,60 +66,29 @@ def evaluate(rows, clusters=4, top=5):
     }
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, required=True, help="careloop-data food JSONL export")
-    parser.add_argument(
-        "--output", type=Path, required=True, help="Explicit JSON report destination"
-    )
-    parser.add_argument("--limit", type=int, default=300)
-    parser.add_argument("--clusters", type=int, default=4)
-    parser.add_argument("--top", type=int, default=5)
-    args = parser.parse_args()
-    if not 2 <= args.limit <= 1000 or not 1 <= args.clusters <= 8 or not 1 <= args.top <= 20:
-        parser.error("Use limit 2–1000, clusters 1–8, top 1–20")
-    if args.input.resolve() == args.output.resolve():
-        parser.error("Output must not overwrite the input")
-    payload = args.input.read_bytes()
+def evaluate_export(path: Path, limit=300, clusters=4, top=5):
+    """Return a reproducible report from a normalized food export."""
+    if not 2 <= limit <= 1000 or not 1 <= clusters <= 8 or not 1 <= top <= 20:
+        raise ValueError("Use limit 2–1000, clusters 1–8, top 1–20")
+    payload = path.read_bytes()
     rows = []
     identities = set()
     for line in payload.splitlines():
         record = json.loads(line)
         identity = record["namespace"] + ":" + record["external_id"]
         if identity in identities:
-            parser.error("Duplicate food source identity")
+            raise ValueError("Duplicate food source identity")
         identities.add(identity)
         body = FoodBody.model_validate(record["body"]).model_dump(mode="json")
         rows.append({"id": identity, "body": body})
     # Hash before taking the limit so source ordering does not determine the sample.
-    selected = sorted(rows, key=lambda row: hashlib.sha256(row["id"].encode()).hexdigest())[
-        : args.limit
-    ]
+    selected = sorted(rows, key=lambda row: hashlib.sha256(row["id"].encode()).hexdigest())[:limit]
     if len(selected) < 2:
-        parser.error("At least two food records are required")
-    report = evaluate(selected, args.clusters, args.top)
+        raise ValueError("At least two food records are required")
+    report = evaluate(selected, clusters, top)
     report.update(
         input_sha256=hashlib.sha256(payload).hexdigest(),
         source_records=len(rows),
         selection="First limit source identities ordered by SHA-256(identity)",
     )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
-    print(
-        json.dumps(
-            {
-                "report": str(args.output),
-                "selected": len(selected),
-                "feature_exclusions": len(report["model"]["excluded_food_ids"]),
-                "methods": {
-                    key: {k: v for k, v in value.items() if k != "query_results"}
-                    for key, value in report["methods"].items()
-                },
-            },
-            indent=2,
-        )
-    )
-
-
-if __name__ == "__main__":
-    main()
+    return report

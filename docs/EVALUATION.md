@@ -1,142 +1,203 @@
-# Evaluation plan
+# System evaluation
 
-Status: proposed full evaluation design incorporating confirmed constraints,
-2026-10-23. A [public-food retrieval pilot](MINING.md) now has a reproducible command
-and saved report; the unified evaluation command and full benchmarks remain pending.
-Run before the demonstration; an in-app evaluation dashboard is not required.
-Algorithms are free to choose. No clinician or dietitian is available.
+The evaluation separates four substantive experiments from supporting software
+verification. Public sources and real food records come first. Unknown patient
+facts, preferences, targets and food suitability are never filled to make a case
+executable. No synthetic patient cohort is part of the experiments.
 
-## Claims and reference data
+## Implementation and artifacts
 
-Measure computational correctness, source fidelity, constraint satisfaction,
-retrieval/citation performance, recommendation properties, and workflow integrity.
-Do not claim clinical validation, improved health outcomes, patient acceptance, or
-clinician agreement. Do not require clinician-labelled datasets to complete the
-evaluation. Use [public data](DATA.md) and [evidence sources](EVIDENCE.md), real records first.
+`src/careloop/evaluation/` provides reusable Python functions, not a CLI:
 
-Expected answers must be independent of the implementation under evaluation.
-Project-team transcription checks can establish exact source/table fidelity, not
-clinical validity. A second LLM is not an independent clinical gold standard.
-Prefer objectively checkable tasks where public gold answers exist; disclose
-limitations of semantic/LLM-assisted answer scoring.
+- `prepare(...)`: load static team-labelled references and freeze the experiment.
+- `run_pilot(directory)`: execute development cases and local experiments.
+- `run(directory)`: execute/resume development and held-out test requests.
+- `report(directory)`: regenerate JSON and Markdown reports without network access.
+- `review.export_packets(directory)`: export model-blinded source/output packets.
+- `review.import_assessments(...)`: validate and attach source-linked review labels.
+- `verification.import_junit(...)`: attach supporting test results, including skips.
 
-## Benchmarks
+The reproducible system-evaluation section is in
+[`notebooks/model_selection.ipynb`](../notebooks/model_selection.ipynb), alongside
+the earlier development experiments. Hosted execution is disabled by default.
+The notebook loads frozen summaries without credentials; full regeneration from
+saved requests requires the external artifact directory.
 
-### 1. Composition arithmetic and meal logs
+Raw downloads, requests, responses and runtime state remain outside Git under
+`~/.local/share/careloop/public/evaluation/`. Each system experiment has a
+content-addressed directory containing its manifest, source/reference snapshots,
+code hashes, model IDs, generation settings, per-request outcomes, local results,
+verification results, and report. Published summaries exclude raw participant data
+and credentials. Individual source excerpts and team reference labels are versioned.
 
-Reconstruct eligible NHANES 2021–2023 food intakes from matching FNDDS nutrient
-values and reported grams; compare with published item and daily nutrient totals.
-Use matching codes/editions and reliability filters, and derive rounding tolerances
-from documentation. Report absolute/relative errors per nutrient, conversion
-accuracy, missing-code coverage, and missing-nutrient rates. Handle zero reference
-values without invalid relative-error calculations.
+## Frozen source references
 
-This is a software reconstruction benchmark: NHANES values were derived from
-FNDDS, not independent chemical measurements. Test confirmations, quantity changes,
-replacements, skipped meals, partial logs, and independent entries separately.
+`references.json` contains four authoritative documents, 14 passage tasks,
+20 question tasks and eight no-evidence ablation selections. References include
+source URLs, original-byte checksums, original locations, literal normalized
+excerpts, structured rule labels, exemplar answers, and scoring notes.
+They are team-labelled source references, not clinician-adjudicated gold labels.
 
-### 2. Rule extraction and application
+| Split | Documents | Passages | Questions | Ablation questions |
+|---|---|---:|---:|---:|
+| Development | WHO sugars; KDIGO 2024 CKD | 8 | 11 | 4 |
+| Test | WHO carbohydrate; Singapore HealthHub RDA | 6 | 9 | 4 |
 
-Create a frozen source-grounded reference set from public guideline tables and
-passages: values, units, applicability, exceptions, source locations, and expected
-qualitative actions. Include age boundaries, additional-versus-total amounts,
-multiple conditions, and cases requiring missing facts.
+KDIGO was used in earlier prompt development and is explicitly **not held out**.
+Related passages stay in one document split. Publisher/topic overlap remains;
+this small split does not establish population-wide generalization or absence of
+model pretraining exposure. Test outputs must not be used to tune the tested prompts.
 
-Measure extraction precision/recall, field accuracy, citation support, applicable
-rule selection, target-calculation agreement, conflict handling, and missing-input
-requests. Evaluate raw extracted drafts before review; separately record correction
-effort so publication review does not hide extraction errors.
+The evaluation loads the fixed reference files. It does not create reference labels
+from evaluated outputs. Exact excerpts and reference annotations were checked
+against the downloaded documents before inference.
 
-Use actual participant fields where available. Missing observations must not be
-invented. Construct clearly labelled boundary/error cases only where public data
-cannot exercise the required behaviour; these are software tests, not an invented
-clinical cohort. Source holdout evaluates extraction generalization, while rule
-execution is tested against published reference rules; these are distinct tasks.
+## 1. Guideline extraction
 
-### 3. Optimization
+Compare four distinct endpoint-catalogue model families:
 
-Compare the chosen informed-search/evolutionary method with greedy planning and
-random search under comparable compute budgets. On small bounded instances,
-compare with exhaustive or exact solutions where tractable.
+- `glm-5.3`
+- `qwen3.8-max`
+- `deepseek-v4-pro-0813`
+- `kimi-k3`
 
-Measure mandatory-constraint violations, feasible-plan discovery, normalized
-nutrient deviation, dislike usage, repetition/diversity, distinctness of the three
-alternatives, and wall-clock runtime for horizons 1–7 days. Report each objective
-and trade-offs rather than only a combined score. Repeat stochastic methods using
-recorded seeds and report variability. Independently recalculate returned plans.
+Each receives the production `source-rule-extraction-v2` prompt and identical
+passage context. Settings: JSON mode, requested high reasoning, temperature zero,
+8,192 output tokens. Provider interpretations of reasoning settings may differ.
+Unsupported parameters, truncations, transport failures and schema/domain failures
+are retained; there is no silent fallback or automatic retry.
 
-Differentiate feasible solutions, best violating drafts, exhausted search budgets,
-and proven infeasibility. Missing catalogue data is not zero. No violating plan
-may pass as approved/usable in the workflow benchmark.
+Score raw drafts before review. Automatic checks compare unordered action fields,
+predicates and blocker presence against the frozen references, penalizing extra
+and omitted actions. These are **exact structured checks**, not full semantic
+accuracy: equivalent blocked/qualitative representations and prose need review.
 
-### 4. Food mining and substitutions
+Model-blinded team review checks meaning, unsupported additions, applicability,
+exceptions and relevance against the source. Review rationales accompany labels.
+Report completed/attempted requests, bounded checks, review outcomes, latency,
+provider token usage and failures separately. No correction-time or clinician-
+agreement claim is made without corresponding observations.
 
-Compare cluster-assisted retrieval/ranking with direct nutrient nearest-neighbour
-search and a simple same-category baseline. Measure restriction violations,
-nutrient-target changes, category compatibility, coverage, recommendation diversity,
-cluster stability, and runtime.
+## 2. Meal-plan search
 
-Use public food categories as an explicit compatibility proxy, not ground truth
-for palatability. Cluster scores alone do not establish recommendation usefulness.
-Show whether clustering improves a relevant outcome over the simpler baseline;
-report a negative result honestly. No human taste/suitability panel is required.
+`planning.benchmark(case)` compares the production width-32 beam search with
+width-one greedy search, random complete-plan search (seeds 17, 43, 91), and exact
+enumeration for spaces of at most 100,000 combinations. Random runs use the beam's
+observed wall-time ceiling and a 2,000-complete-plan cap; greedy stops after its
+single pass. Record effort and time because partial-plan scores and whole-plan
+audits are different work units. Exact enumeration is a reference, not an equal-
+budget competitor.
 
-### 5. Retrieval and patient answers
+Cases must explicitly supply provenance, foods, facts, target actions and requested
+days/schedule/item counts. `oracle.audit` independently checks catalogue snapshots,
+portions, coverage, restrictions, nutrient bounds, deviation and repetition. It does
+not call the production plan checker. Exact-reference gaps use the same declared
+evaluation objective; absent preference observations remain unmeasured.
 
-Prepare held-out source-grounded questions with reference passages and checkable
-facts, plus patient-record questions whose expected numeric/state answers are
-known. Cover general nutrition, approved targets, plan arithmetic, meal logs,
-substitution explanations, incomplete evidence, and diagnosis/medication requests.
+### Real-data prerequisite blocker
 
-Measure retrieval recall/ranking, reference-fact correctness, citation validity
-and support, numeric accuracy, approved-state compliance, clarification/referral
-behaviour, latency, and actual inference consumption. Citation URL validity alone
-does not demonstrate that a citation supports a claim. Report the method and
-limitations of any semantic support score.
+`planning_references.json` records the actual catalogue audit and official DASH
+source inspection. All 2,689 acquired Singapore records have usable source portions
+(3,295 in total). Planning now uses these directly at any requested meal; separate
+slot/portion-enablement annotations are no longer required. Ingredient/allergen
+and vegetarian/egg/dairy annotations remain unavailable. The official DASH menu
+specifies nominal 2,000 kcal, not the numeric daily range required by the planner.
+Its observed daily totals do not justify inventing a calorie tolerance. US menu
+foods are not silently matched to similarly named Singapore dishes.
 
-Compare grounded answers with an ungrounded baseline on a budget-bounded subset.
-Freeze prompts/model identifiers and save outputs; hosted inference may change or
-vary despite fixed settings. Reproduction includes deterministic report generation
-from saved outputs, not a claim that fresh hosted calls are byte-identical.
+Consequently, no executable real-source planning cases are currently in the frozen
+set. The harness reports **blocked**, not zero violations or successful planning.
+Its unit-test fixtures verify the evaluator but are excluded from benchmark results.
+Further execution needs documented target constraints and any restriction evidence
+required by the selected case.
 
-### 6. End-to-end software workflows
+## 3. Substitution retrieval
 
-Exercise source submission, extraction, self-review, partial approval, publication,
-patient proposal completion, target approval, three plan alternatives, plan
-approval, substitution review, logging, and cited explanations.
+Two scopes are reported separately:
 
-Also test retirement, new rule versions, changed allergies/observations, blocked
-planning during reassessment, historical readability, and audit provenance.
-These are software state-transition checks, not clinical outcome experiments.
+1. **Real-catalogue retrieval:** hash-select 1,000 of the 2,689 acquired Singapore
+   records, compare cluster-assisted, direct nearest-neighbour and same-category
+   methods with four clusters and five results. Report result coverage, known
+   nutrient distance, category agreement, recommendation diversity, missing features
+   and runtime. Queries participate in fitting: this is transductive retrieval.
+   Category agreement and distance are proxies, not palatability or safety labels.
+2. **Checked whole-plan replacements:** for an independently valid benchmark plan,
+   enumerate permitted alternative portions and independently establish feasible
+   food replacements. Run the same pure recommendation core used by the API;
+   measure invalid suggestions, discovery when feasible, coverage at the result
+   limit, target changes and runtime. This scope is blocked until valid real-source
+   planning inputs exist.
 
-## Experimental discipline and report
+The older 300-food pilot remains a development observation in [MINING.md](MINING.md).
+The current catalogue experiment is larger but is not an independent held-out
+food generalization claim. No annotations are inferred from dish names.
 
-- Freeze dataset/evidence versions, selections, exclusions, prompts, algorithms,
-  parameters, seeds, and environment. Report actual hardware.
-- Separate development and final evaluation cases. Split records by participant,
-  not by meal. Avoid near-duplicate guideline passages leaking across extraction
-  development/test partitions; document any fitting/tuning on food data.
-- Report US numerical benchmarks separately from Singapore catalogue coverage and
-  local-food results. Do not fabricate US-to-Singapore dish equivalence.
-- Report missingness and results by supported age/life-stage/condition subgroup
-  where sample counts permit; disclose absent or insufficient groups.
-- Decide sample sizes after the data/energy pilot, before final runs; do not tune
-  against final outcomes. Include repeated-run variability and uncertainty where
-  meaningful. Survey population claims require proper survey weighting/design;
-  software benchmark claims do not imply population inference.
-- Store downloaded data and intermediate outputs outside the checkout. Deliberately
-  publish summary reports without raw participant records or credentials.
-- Provide one documented entry point with data preparation, bounded pilot, full
-  run, resume, and report-from-saved-results capabilities. Exact CLI syntax is TBD.
-- Make missing prerequisites explicit; skipped checks are not passing evidence.
-- Fit hosted calls within Neuralwatt Basic's included allowance, reserving demo
-  capacity. Local deterministic tests need no hosted model.
+## 4. Grounded answers
 
-Proposed completion criteria: zero observed mandatory-constraint violations in
-released plans, correct approval transitions in all specified workflow cases,
-numerical agreement within documented tolerances, and source-linked published
-rules. Set extraction/retrieval quality and latency thresholds after the pilot,
-before the final benchmark. These are proposed engineering gates, not clinical
-certification or already-measured results.
+The same four families receive the production `cited-education-v4` prompt, fixed
+questions and supporting passages. Four answerable questions per split also run
+with **all evidence removed**. In that condition, the correct contract behaviour
+is abstention rather than answering from model memory. This is a grounding ablation,
+not an unrestricted medical-QA baseline.
 
-See [implementation status](IMPLEMENTATION.md) for remaining work and blockers.
+Automatic scores cover flags, source IDs and frozen text patterns; model-blinded
+review covers correctness, support and relevance. Regex matches and valid citation
+IDs do not prove entailment. Review equivalent phrasing and negation against the
+source. Report failures and incomplete outcomes alongside successful responses.
+
+The frozen experiment measures the **cited-answer component with supplied evidence**.
+It does not establish lexical-retrieval recall or broad persisted patient-chat
+quality. Patient-context chat and stale-history behaviour are covered by supporting
+software tests; a real-record patient-question benchmark remains unmeasured.
+
+## Supporting verification
+
+Arithmetic, rule execution, predicate boundaries, missing facts, conflicts,
+imports, persistence and permissions are correctness tests, not headline experiments.
+The PostgreSQL test suite also covers publication, approval, revision, retirement,
+reassessment, interruption, duplicate requests and audit history.
+
+`test_evaluation_workflow.py` exercises plan generation/approval, replacement
+recommendation/draft/approval, intake, cited chat, idempotency and invalidation after
+a food revision. It uses existing explicitly labelled software-test fixtures and a
+stub provider. It is an acceptance test, not a real-patient or hosted-answer result.
+
+Verification commands:
+
+```sh
+uv run --with pgserver==0.1.4 python tests/run_postgres.py -q --junitxml=/tmp/opencode/careloop-evaluation/verification.xml
+uv run ruff check src tests
+uv build
+```
+
+## Reproduction
+
+Run the following from installed project code or the notebook; there is no CLI:
+
+```python
+from pathlib import Path
+from careloop.evaluation import prepare, run_pilot, run, report
+
+food_export = Path.home() / ".local/share/careloop/public/sgfoodid/kaggle-v1" / (
+    "normalized-dc5bea6d2bb1c450e46a5e61307cab69ec40db4dc0c4f0e1d5a6df2352317fac-0.jsonl"
+)
+experiment = prepare(food_export=food_export)
+# Explicit hosted work; credentials are required only for these calls.
+# run_pilot(experiment)
+# run(experiment)
+summary = report(experiment)  # Offline, from saved outcomes.
+```
+
+Frozen manifests cannot be overwritten with changed inputs. Requests are claimed
+before inference; rerunning retains successful, failed and interrupted-pending
+records without repeating provider calls. Fresh calls after changes require a new
+experiment. Report regeneration requires neither credentials nor network access.
+Hosted outputs may vary even at temperature zero; cache reproducibility is not a
+claim of byte-identical future inference.
+
+## Interpretation
+
+No human usability study, clinical validation, clinical outcomes, taste panel or
+clinician workload reduction is claimed. Missing prerequisites and unperformed
+review are explicit. Counts and failures matter more than a single aggregate score;
+four documents cannot support broad confidence claims across all supported conditions.

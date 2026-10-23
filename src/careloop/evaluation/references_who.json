@@ -1,0 +1,2250 @@
+{
+  "schema_version": "careloop-source-references-v1",
+  "status": "frozen_team_labelled_not_independently_clinically_adjudicated",
+  "provenance": {
+    "method": "Static team-labelled source references, independently checked against the identified downloaded source bytes before the expanded benchmark freeze.",
+    "excerpt_normalization": "Original PDF bytes converted with pdftotext -layout; whitespace collapsed separately per PDF page. Each excerpt is an exact contiguous substring; multiple excerpts are joined with blank lines and separately located.",
+    "retrieved_at": null,
+    "retrieved_at_note": "No retrieval timestamp claimed; original PDF bytes identified by SHA-256.",
+    "split_policy": "Whole-source-family split: WHO sodium and potassium (2012) are dev; WHO saturated/trans fatty acids and total fat (2023) are test. Related fat guidelines are kept together. Test means a designated evaluation partition, not proof of freedom from pretraining exposure or topic/publisher overlap.",
+    "source_check": "All four original PDF SHA-256 hashes and all 51 page-linked excerpt substrings independently checked using pdftotext -layout. Extraction and AnswerDraft schemas, predicate evaluation, source support, source links, splits and lexical exemplars checked locally.",
+    "experiment_context": "The main 14-passage experiment was already run as an initial experiment. No prompts were tuned from its outputs. This expanded-reference check used source text and local schemas, with no evaluation model calls.",
+    "pattern_checks": "Bounded lexical checks for objective facts only; semantic review must assess qualifiers, scope, exceptions and negation. Six of thirty questions are designated for evidence-removal ablation."
+  },
+  "limitations": [
+    "Static team-labelled exemplars, not clinician-adjudicated gold standards.",
+    "Four WHO guidelines only; selected passages are not representative of all populations or nutrition evidence.",
+    "PDF extraction checked textually; no independent page-image adjudication.",
+    "No hosted evaluated model calls or benchmark measurements were performed.",
+    "Qualitative scope and implementation tasks intentionally coexist with numeric extraction tasks; empty rule lists indicate descriptive evidence, not a missing label.",
+    "Strict numeric bounds, minimum targets and unsupported conditions require explicit blockers; do not silently convert to inclusive limits or universal recommendations.",
+    "No infant feeding targets are supplied. Sodium and potassium distinguish adults aged 16 or older from children aged 2–15. The total-fat quantity recommendation is adult-only; fat quality guidance is distinct.",
+    "The four full PDFs were acquired. WHO landing pages for the two fat guidelines timed out; authoritative WHO IRIS PDF URLs were discovered through indexed official results and verified from PDF title/copyright pages.",
+    "Question answers and flags implement the CareLoop answer contract, not observed patient outcomes."
+  ],
+  "documents": [
+    {
+      "id": "who-sodium",
+      "title": "Guideline: sodium intake for adults and children",
+      "edition": "2012",
+      "official_url": "https://www.who.int/publications/i/item/9789241504836",
+      "download_url": "https://iris.who.int/server/api/core/bitstreams/d0f9feb5-ed78-44d1-9e06-533a93352012/content",
+      "split": "dev",
+      "source_sha256": "1f42c807c29ae255b31554afafaed683d5598414a1e5cc2a4b89190c72e2f369",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/who-sodium.pdf"
+    },
+    {
+      "id": "who-potassium",
+      "title": "Guideline: potassium intake for adults and children",
+      "edition": "2012",
+      "official_url": "https://www.who.int/publications/i/item/9789241504829",
+      "download_url": "https://iris.who.int/server/api/core/bitstreams/8516dcd5-49a9-486e-890b-48471468a5bb/content",
+      "split": "dev",
+      "source_sha256": "c2b221752f81604faf748e1a33420db8bdb8b7eb3b8f33ac8310c712982c4d0d",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/who-potassium.pdf"
+    },
+    {
+      "id": "who-saturated-trans",
+      "title": "Saturated fatty acid and trans-fatty acid intake for adults and children: WHO guideline",
+      "edition": "2023",
+      "official_url": "https://www.who.int/publications/i/item/9789240073630",
+      "download_url": "https://iris.who.int/server/api/core/bitstreams/463fa93e-6c17-4e5b-a4d7-928354ea34c3/content",
+      "split": "test",
+      "source_sha256": "767c24d20e90357e71831e3e19813f79c84457c8a24ddbca931237a58bd3d503",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/who-saturated-trans.pdf"
+    },
+    {
+      "id": "who-total-fat",
+      "title": "Total fat intake for the prevention of unhealthy weight gain in adults and children: WHO guideline",
+      "edition": "2023",
+      "official_url": "https://www.who.int/publications/i/item/9789240073654",
+      "download_url": "https://iris.who.int/server/api/core/bitstreams/fe09e661-09a6-4f53-ae8a-420cbd0c6a6e/content",
+      "split": "test",
+      "source_sha256": "a9f12218be0b1720c9be4f0dee79c2dbdcbd13fb44cd3e0d751bf04b5fa63381",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/who-total-fat.pdf"
+    }
+  ],
+  "passages": [
+    {
+      "id": "who-na-adult-limit",
+      "document_id": "who-sodium",
+      "split": "dev",
+      "location": "PDF page 26 (1-based); PDF page 26 (1-based); PDF page 26 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 26 (1-based)",
+          "text": "WHO recommends a reduction in sodium intake to reduce blood pressure and risk of cardiovascular disease, stroke and coronary heart disease in adults (strong recommendation 1). WHO recommends a reduction to <2 g/day sodium (5 g/day salt) in adults (strong recommendation)."
+        },
+        {
+          "location": "PDF page 26 (1-based)",
+          "text": "For this recommendation, “adults” includes individuals ≥16 years of age."
+        },
+        {
+          "location": "PDF page 26 (1-based)",
+          "text": "These recommendations apply to all individuals, with or without hypertension (including pregnant or lactating women), except for individuals with illnesses or taking drug therapy that may lead to hyponatraemia or acute build-up of body water, or require physician-supervised diets (e.g. patients with heart failure and those with type I diabetes)."
+        }
+      ],
+      "content": "WHO recommends a reduction in sodium intake to reduce blood pressure and risk of cardiovascular disease, stroke and coronary heart disease in adults (strong recommendation 1). WHO recommends a reduction to <2 g/day sodium (5 g/day salt) in adults (strong recommendation).\n\nFor this recommendation, “adults” includes individuals ≥16 years of age.\n\nThese recommendations apply to all individuals, with or without hypertension (including pregnant or lactating women), except for individuals with illnesses or taking drug therapy that may lead to hyponatraemia or acute build-up of body water, or require physician-supervised diets (e.g. patients with heart failure and those with type I diabetes).",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 16
+              }
+            ],
+            "population_note": "Adults aged ≥16 years",
+            "exceptions": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "heart failure"
+              },
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "type I diabetes"
+              }
+            ],
+            "exception_note": "Excludes illnesses or drug therapy that may cause hyponatraemia or acute build-up of body water, or require physician-supervised diets, including heart failure and type I diabetes.",
+            "action": {
+              "kind": "ceiling",
+              "subject": "sodium",
+              "amount": 2,
+              "upper": null,
+              "unit": "g/day",
+              "advice": "Reduce sodium to <2 g/day (5 g/day salt); strong recommendation."
+            },
+            "blockers": [
+              "Strict less-than cannot be represented by the inclusive ceiling action.",
+              "Illness/drug effects and need for physician-supervised diets are not fully representable by supported patient predicates; review exclusions."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium",
+          "relation": "lt",
+          "value": 2,
+          "unit": "g/day",
+          "strength": "strong",
+          "population": "age ≥16",
+          "exclusions": "Excludes illnesses or drug therapy that may cause hyponatraemia or acute build-up of body water, or require physician-supervised diets, including heart failure and type I diabetes."
+        }
+      ]
+    },
+    {
+      "id": "who-na-child-adjustment",
+      "document_id": "who-sodium",
+      "split": "dev",
+      "location": "PDF page 26 (1-based); PDF page 26 (1-based); PDF page 26 (1-based); PDF page 26 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 26 (1-based)",
+          "text": "WHO recommends a reduction in sodium intake to control2 blood pressure in children (strong recommendation). The recommended maximum level of intake of 2 g/day sodium in adults should be adjusted downward based on the energy requirements of children relative to those of adults."
+        },
+        {
+          "location": "PDF page 26 (1-based)",
+          "text": "For this recommendation, “children” includes individuals 2–15 years of age inclusive."
+        },
+        {
+          "location": "PDF page 26 (1-based)",
+          "text": "These recommendations apply to all individuals, with or without hypertension (including pregnant or lactating women), except for individuals with illnesses or taking drug therapy that may lead to hyponatraemia or acute build-up of body water, or require physician-supervised diets (e.g. patients with heart failure and those with type I diabetes)."
+        },
+        {
+          "location": "PDF page 26 (1-based)",
+          "text": "“Control” for this recommendation refers to the prevention of a deleterious rise in blood pressure with age"
+        }
+      ],
+      "content": "WHO recommends a reduction in sodium intake to control2 blood pressure in children (strong recommendation). The recommended maximum level of intake of 2 g/day sodium in adults should be adjusted downward based on the energy requirements of children relative to those of adults.\n\nFor this recommendation, “children” includes individuals 2–15 years of age inclusive.\n\nThese recommendations apply to all individuals, with or without hypertension (including pregnant or lactating women), except for individuals with illnesses or taking drug therapy that may lead to hyponatraemia or acute build-up of body water, or require physician-supervised diets (e.g. patients with heart failure and those with type I diabetes).\n\n“Control” for this recommendation refers to the prevention of a deleterious rise in blood pressure with age",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 2
+              },
+              {
+                "fact": "age_years",
+                "operator": "lte",
+                "value": 15
+              }
+            ],
+            "population_note": "Children aged 2–15 inclusive",
+            "exceptions": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "heart failure"
+              },
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "type I diabetes"
+              }
+            ],
+            "exception_note": "Excludes illnesses or drug therapy that may cause hyponatraemia or acute build-up of body water, or require physician-supervised diets, including heart failure and type I diabetes.",
+            "action": {
+              "kind": "assessment",
+              "subject": "sodium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Reduce sodium to prevent a deleterious rise in blood pressure with age; adjust the adult maximum downward according to relative energy requirements."
+            },
+            "blockers": [
+              "Child-specific energy requirements and an adjustment calculation are not supplied; do not assign the adult 2 g/day amount to children.",
+              "Illness/drug effects and need for physician-supervised diets are not fully representable by supported patient predicates; review exclusions."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium",
+          "recommendation": "Adjust adult maximum downward using relative energy requirements.",
+          "strength": "strong",
+          "population": "children 2–15",
+          "exclusions": "Excludes illnesses or drug therapy that may cause hyponatraemia or acute build-up of body water, or require physician-supervised diets, including heart failure and type I diabetes."
+        }
+      ]
+    },
+    {
+      "id": "who-na-clinical-exclusions",
+      "document_id": "who-sodium",
+      "split": "dev",
+      "location": "PDF page 26 (1-based); PDF page 26 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 26 (1-based)",
+          "text": "These recommendations apply to all individuals, with or without hypertension (including pregnant or lactating women), except for individuals with illnesses or taking drug therapy that may lead to hyponatraemia or acute build-up of body water, or require physician-supervised diets (e.g. patients with heart failure and those with type I diabetes)."
+        },
+        {
+          "location": "PDF page 26 (1-based)",
+          "text": "In these subpopulations, there may be a particular relationship between sodium intake and the health outcomes of interest (10, 11). Hence, these subpopulations were not considered in the review of the evidence and generation of the guideline."
+        }
+      ],
+      "content": "These recommendations apply to all individuals, with or without hypertension (including pregnant or lactating women), except for individuals with illnesses or taking drug therapy that may lead to hyponatraemia or acute build-up of body water, or require physician-supervised diets (e.g. patients with heart failure and those with type I diabetes).\n\nIn these subpopulations, there may be a particular relationship between sodium intake and the health outcomes of interest (10, 11). Hence, these subpopulations were not considered in the review of the evidence and generation of the guideline.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Scope exclusion only; no individual sodium prescription is provided."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium_guideline_scope",
+          "exclusions": "Excludes illnesses or drug therapy that may cause hyponatraemia or acute build-up of body water, or require physician-supervised diets, including heart failure and type I diabetes."
+        }
+      ]
+    },
+    {
+      "id": "who-na-iodization",
+      "document_id": "who-sodium",
+      "split": "dev",
+      "location": "PDF page 27 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 27 (1-based)",
+          "text": "These recommendations recognize that salt reduction and salt iodization are compatible. Monitoring of salt intake and salt iodization at country level is needed so that salt iodization can be adjusted over time, depending on observed salt intake in the population, so that individuals consuming the recommended amount of sodium will continue to consume sufficient iodine."
+        }
+      ],
+      "content": "These recommendations recognize that salt reduction and salt iodization are compatible. Monitoring of salt intake and salt iodization at country level is needed so that salt iodization can be adjusted over time, depending on observed salt intake in the population, so that individuals consuming the recommended amount of sodium will continue to consume sufficient iodine.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Country-level public health programmes",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "salt_iodization",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Monitor salt intake and iodization at country level and adjust iodization as intake changes to preserve sufficient iodine."
+            },
+            "blockers": [
+              "Country-level monitoring and iodization policy are not patient-level predicates or executable intake targets."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "salt_iodization",
+          "recommendation": "Salt reduction and iodization are compatible; monitor and adjust iodization with population salt intake."
+        }
+      ]
+    },
+    {
+      "id": "who-na-potassium-complement",
+      "document_id": "who-sodium",
+      "split": "dev",
+      "location": "PDF page 27 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 27 (1-based)",
+          "text": "These recommendations complement the WHO guideline on potassium consumption and should not be interpreted to replace or supersede that guideline. Public health interventions should aim to reduce sodium intake and simultaneously increase potassium intake through foods."
+        }
+      ],
+      "content": "These recommendations complement the WHO guideline on potassium consumption and should not be interpreted to replace or supersede that guideline. Public health interventions should aim to reduce sodium intake and simultaneously increase potassium intake through foods.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Public health interventions",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "sodium_potassium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Reduce sodium intake while simultaneously increasing potassium intake through foods; sodium guidance does not replace potassium guidance."
+            },
+            "blockers": [
+              "Population public-health intervention, not an individualized prescription; clinical eligibility is not specified in this excerpt."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium_potassium",
+          "recommendation": "Complementary guidelines; simultaneously reduce sodium and increase food potassium."
+        }
+      ]
+    },
+    {
+      "id": "who-na-molar-ratio",
+      "document_id": "who-sodium",
+      "split": "dev",
+      "location": "PDF page 27 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 27 (1-based)",
+          "text": "These recommendations do not address the optimal sodium to potassium ratio; however, if this guideline and the WHO guideline on potassium intake are achieved, the molar ratio of sodium to potassium would be approximately one to one."
+        }
+      ],
+      "content": "These recommendations do not address the optimal sodium to potassium ratio; however, if this guideline and the WHO guideline on potassium intake are achieved, the molar ratio of sodium to potassium would be approximately one to one.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Descriptive implication of two guidelines; not an optimal-ratio recommendation."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium_potassium_molar_ratio",
+          "definition": "Approximately 1:1 when both guidelines are achieved; not an established optimal ratio."
+        }
+      ]
+    },
+    {
+      "id": "who-na-child-energy-data",
+      "document_id": "who-sodium",
+      "split": "dev",
+      "location": "PDF page 27 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 27 (1-based)",
+          "text": "Each country should determine the energy requirements of various age categories of the paediatric population relative to adults approximately 20–50 years of age, to lower the recommended maximum intake value of 2 g/day. If country-specific data are not available, data from another country with similar population demographics and dietary habits can be used to make this adjustment."
+        }
+      ],
+      "content": "Each country should determine the energy requirements of various age categories of the paediatric population relative to adults approximately 20–50 years of age, to lower the recommended maximum intake value of 2 g/day. If country-specific data are not available, data from another country with similar population demographics and dietary habits can be used to make this adjustment.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Country-level paediatric guideline adaptation",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "sodium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Use country-specific paediatric energy requirements relative to adults approximately 20–50 years old to lower the 2 g/day maximum; if unavailable, use a country with similar demographics and dietary habits."
+            },
+            "blockers": [
+              "Population-level adaptation needs age-category energy data; the 20–50-year adult comparator is not the patient eligibility range."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "child_sodium_adjustment",
+          "recommendation": "Use country energy data, otherwise a country with similar demographics and dietary habits; comparator adults approximately 20–50."
+        }
+      ]
+    },
+    {
+      "id": "who-na-evidence-certainty",
+      "document_id": "who-sodium",
+      "split": "dev",
+      "location": "PDF page 26 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 26 (1-based)",
+          "text": "The evidence regarding the relationship between sodium intake and blood pressure was of high quality, whereas the evidence regarding sodium intake and all-cause mortality, cardiovascular disease, stroke and coronary heart disease was of lower quality. Therefore, these recommendations should be reviewed when more evidence on the relationship between sodium intake and all-cause mortality and cardiovascular disease outcomes becomes available."
+        }
+      ],
+      "content": "The evidence regarding the relationship between sodium intake and blood pressure was of high quality, whereas the evidence regarding sodium intake and all-cause mortality, cardiovascular disease, stroke and coronary heart disease was of lower quality. Therefore, these recommendations should be reviewed when more evidence on the relationship between sodium intake and all-cause mortality and cardiovascular disease outcomes becomes available.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Evidence-quality description; no new intake rule."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium_evidence",
+          "definition": "Blood-pressure evidence high quality; mortality, CVD, stroke and coronary heart disease evidence lower quality; review as further evidence becomes available."
+        }
+      ]
+    },
+    {
+      "id": "who-k-adult-food-minimum",
+      "document_id": "who-potassium",
+      "split": "dev",
+      "location": "PDF page 24 (1-based); PDF page 24 (1-based); PDF page 24 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "WHO recommends an increase in potassium intake from food for reduction of blood pressure and risk of cardiovascular disease, stroke and coronary heart disease in adults (strong recommendation1 ). WHO suggests a potassium intake of at least 90 mmol/day (3510 mg/day) for adults (conditional recommendation2)."
+        },
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "For this recommendation, “adults” includes all individuals ≥16 years of age."
+        },
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "These recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion."
+        }
+      ],
+      "content": "WHO recommends an increase in potassium intake from food for reduction of blood pressure and risk of cardiovascular disease, stroke and coronary heart disease in adults (strong recommendation1 ). WHO suggests a potassium intake of at least 90 mmol/day (3510 mg/day) for adults (conditional recommendation2).\n\nFor this recommendation, “adults” includes all individuals ≥16 years of age.\n\nThese recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 16
+              }
+            ],
+            "population_note": "Adults aged ≥16",
+            "exceptions": [],
+            "exception_note": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women.",
+            "action": {
+              "kind": "intake",
+              "subject": "potassium",
+              "amount": 3510,
+              "upper": null,
+              "unit": "mg/day",
+              "advice": "Increase potassium from food (strong); at least 3510 mg/day, equivalent in the source to 90 mmol/day, is conditional."
+            },
+            "blockers": [
+              "The intake action cannot encode an at-least minimum; preserve the bound in advice and facts.",
+              "Impaired urinary potassium excretion is not a supported patient predicate and cannot be inferred from eGFR alone."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "potassium",
+          "relation": "gte",
+          "value": 3510,
+          "unit": "mg/day",
+          "strength": "conditional",
+          "population": "age ≥16",
+          "exclusions": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women."
+        },
+        {
+          "subject": "potassium_from_food",
+          "recommendation": "Increase intake",
+          "strength": "strong"
+        }
+      ]
+    },
+    {
+      "id": "who-k-child-adjustment",
+      "document_id": "who-potassium",
+      "split": "dev",
+      "location": "PDF page 24 (1-based); PDF page 24 (1-based); PDF page 24 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "WHO suggests an increase in potassium intake from food to control3 blood pressure in children (conditional recommendation). The recommended potassium intake of at least 90 mmol/day should be adjusted downward for children, based on the energy requirements of children relative to those of adults."
+        },
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "For this recommendation, “children” includes all individuals 2–15 years of age."
+        },
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "These recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion."
+        }
+      ],
+      "content": "WHO suggests an increase in potassium intake from food to control3 blood pressure in children (conditional recommendation). The recommended potassium intake of at least 90 mmol/day should be adjusted downward for children, based on the energy requirements of children relative to those of adults.\n\nFor this recommendation, “children” includes all individuals 2–15 years of age.\n\nThese recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 2
+              },
+              {
+                "fact": "age_years",
+                "operator": "lte",
+                "value": 15
+              }
+            ],
+            "population_note": "Children aged 2–15",
+            "exceptions": [],
+            "exception_note": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women.",
+            "action": {
+              "kind": "assessment",
+              "subject": "potassium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Conditionally increase potassium from food; adjust the adult minimum downward using relative energy requirements."
+            },
+            "blockers": [
+              "No child-specific energy requirement or numeric adjusted amount is supplied.",
+              "Impaired urinary potassium excretion is not a supported patient predicate and cannot be inferred from eGFR alone."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "potassium",
+          "recommendation": "Increase from food; adjust adult minimum downward using relative energy requirements.",
+          "strength": "conditional",
+          "population": "children 2–15",
+          "exclusions": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women."
+        }
+      ]
+    },
+    {
+      "id": "who-k-renal-exclusion",
+      "document_id": "who-potassium",
+      "split": "dev",
+      "location": "PDF page 24 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "These recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion."
+        }
+      ],
+      "content": "These recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Scope statement only; no individualized potassium prescription."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "potassium_scope",
+          "exclusions": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women."
+        }
+      ]
+    },
+    {
+      "id": "who-k-ratio-at-high-sodium",
+      "document_id": "who-potassium",
+      "split": "dev",
+      "location": "PDF page 24 (1-based); PDF page 24 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "These recommendations do not address the optimal ratio of sodium to potassium; however, if this guideline and the WHO guideline on sodium consumption are achieved, the molar ratio of sodium to potassium would be approximately one to one. To maintain this molar ratio at higher levels of sodium consumption, the recommended level of intake of ≥90 mmol/day potassium should be increased."
+        },
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "These recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion."
+        }
+      ],
+      "content": "These recommendations do not address the optimal ratio of sodium to potassium; however, if this guideline and the WHO guideline on sodium consumption are achieved, the molar ratio of sodium to potassium would be approximately one to one. To maintain this molar ratio at higher levels of sodium consumption, the recommended level of intake of ≥90 mmol/day potassium should be increased.\n\nThese recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Individuals covered by potassium guidance",
+            "exceptions": [],
+            "exception_note": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women.",
+            "action": {
+              "kind": "assessment",
+              "subject": "potassium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "The guidelines do not establish an optimal sodium:potassium ratio; maintaining an approximately 1:1 molar ratio at higher sodium intake would require increasing potassium above the recommended level."
+            },
+            "blockers": [
+              "Ratio-dependent increase has no fixed amount and is not an optimal ratio prescription.",
+              "Impaired urinary potassium excretion is not a supported patient predicate and cannot be inferred from eGFR alone.",
+              "Full age eligibility is not defined in this excerpt."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium_potassium_ratio",
+          "recommendation": "Not an optimal-ratio finding; maintaining 1:1 molar ratio at higher sodium intake requires increased potassium.",
+          "exclusions": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women."
+        }
+      ]
+    },
+    {
+      "id": "who-k-minimum-certainty",
+      "document_id": "who-potassium",
+      "split": "dev",
+      "location": "PDF page 25 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 25 (1-based)",
+          "text": "The recommended level of intake of ≥90 mmol/day is a conditional recommendation for adults because there is limited evidence regarding the precise level that will result in maximum health benefits. The recommendation is informed by moderate and high-quality evidence that consuming potassium at ≥90 mmol/day will provide a health benefit. However, the recommendation recognizes that the value may change if there are additional high-quality trials that determine the precise level of potassium intake that achieves the most favourable reduction in blood pressure and risk of cardiovascular disease, stroke and coronary heart disease, without a negative effect on other health outcomes such as blood lipids and catecholamine levels."
+        }
+      ],
+      "content": "The recommended level of intake of ≥90 mmol/day is a conditional recommendation for adults because there is limited evidence regarding the precise level that will result in maximum health benefits. The recommendation is informed by moderate and high-quality evidence that consuming potassium at ≥90 mmol/day will provide a health benefit. However, the recommendation recognizes that the value may change if there are additional high-quality trials that determine the precise level of potassium intake that achieves the most favourable reduction in blood pressure and risk of cardiovascular disease, stroke and coronary heart disease, without a negative effect on other health outcomes such as blood lipids and catecholamine levels.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Rationale for recommendation strength; does not supply a new prescription."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "potassium_minimum_evidence",
+          "definition": "Conditional adult ≥90 mmol/day recommendation reflects uncertainty about the precise level maximizing health benefits, despite moderate/high-quality evidence of benefit at that level."
+        }
+      ]
+    },
+    {
+      "id": "who-k-child-energy-not-weight",
+      "document_id": "who-potassium",
+      "split": "dev",
+      "location": "PDF page 25 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 25 (1-based)",
+          "text": "An adjustment in intake, based on energy requirement, is recommended because the relatively high energy intake on a per body-weight basis during periods of rapid growth implies a risk that the recommended level of potassium intake could be too low if adjustments to the adult recommended value are made on a per body-weight basis. Every country should determine the requirement of various age categories of the paediatric population relative to adults 20–50 years of age, to adjust the recommended minimum intake value of 90 mmol/day. If country-specific data are not available, data from another country with similar population demographics and dietary habits can be used to make this adjustment."
+        }
+      ],
+      "content": "An adjustment in intake, based on energy requirement, is recommended because the relatively high energy intake on a per body-weight basis during periods of rapid growth implies a risk that the recommended level of potassium intake could be too low if adjustments to the adult recommended value are made on a per body-weight basis. Every country should determine the requirement of various age categories of the paediatric population relative to adults 20–50 years of age, to adjust the recommended minimum intake value of 90 mmol/day. If country-specific data are not available, data from another country with similar population demographics and dietary habits can be used to make this adjustment.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Country-level paediatric guideline adaptation",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "potassium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Adjust paediatric minimum using energy requirements, not simply body weight; use country data or comparable-country data when unavailable."
+            },
+            "blockers": [
+              "Requires paediatric and adult comparator energy data; no individual numeric target can be computed from the passage."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "child_potassium_adjustment",
+          "recommendation": "Energy-based adjustment avoids a potentially too-low target from body-weight scaling during rapid growth."
+        }
+      ]
+    },
+    {
+      "id": "who-k-sweat-losses",
+      "document_id": "who-potassium",
+      "split": "dev",
+      "location": "PDF page 25 (1-based); PDF page 24 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 25 (1-based)",
+          "text": "These recommendations recognize that non-acclimated individuals engaged in intense physical activities (especially at high temperatures) for extended periods of time, resulting in the production of large volumes of sweat, should consume higher levels of potassium to replace potassium losses via sweat. For most individuals, sufficient potassium to replace such losses can be consumed through food, without the need for specially formulated food and beverage products."
+        },
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "These recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion."
+        }
+      ],
+      "content": "These recommendations recognize that non-acclimated individuals engaged in intense physical activities (especially at high temperatures) for extended periods of time, resulting in the production of large volumes of sweat, should consume higher levels of potassium to replace potassium losses via sweat. For most individuals, sufficient potassium to replace such losses can be consumed through food, without the need for specially formulated food and beverage products.\n\nThese recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Non-acclimated individuals with prolonged intense activity and large sweat losses",
+            "exceptions": [],
+            "exception_note": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women.",
+            "action": {
+              "kind": "assessment",
+              "subject": "potassium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Non-acclimated people doing prolonged intense activity, especially in heat, with large sweat losses should consume more potassium; ordinary food suffices for most people."
+            },
+            "blockers": [
+              "Acclimation, exertion, temperature and sweat loss are not supported patient predicates; no numeric replacement dose is given.",
+              "Impaired urinary potassium excretion is not a supported patient predicate and cannot be inferred from eGFR alone."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "potassium_sweat_replacement",
+          "recommendation": "Higher intake for non-acclimated prolonged intense activity with large sweat losses; food sufficient for most.",
+          "exclusions": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women."
+        }
+      ]
+    },
+    {
+      "id": "who-k-food-no-upper-limit",
+      "document_id": "who-potassium",
+      "split": "dev",
+      "location": "PDF page 25 (1-based); PDF page 24 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 25 (1-based)",
+          "text": "It is recommended that potassium be consumed through food. Because of the safety of consumption of increased potassium via food, no upper limit has been considered."
+        },
+        {
+          "location": "PDF page 24 (1-based)",
+          "text": "These recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion."
+        }
+      ],
+      "content": "It is recommended that potassium be consumed through food. Because of the safety of consumption of increased potassium via food, no upper limit has been considered.\n\nThese recommendations apply to all individuals, with or without hypertension (including pregnant and lactating women) except for those with impaired urinary potassium excretion.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Individuals covered by potassium guidance",
+            "exceptions": [],
+            "exception_note": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women.",
+            "action": {
+              "kind": "assessment",
+              "subject": "potassium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Consume potassium through food; no upper limit was considered for increased food potassium in the covered population."
+            },
+            "blockers": [
+              "No upper limit considered is not a claim of unlimited safety or a supplement recommendation.",
+              "Impaired urinary potassium excretion is not a supported patient predicate and cannot be inferred from eGFR alone.",
+              "Full age eligibility is not defined in this excerpt."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "potassium_source",
+          "recommendation": "Food; no upper limit considered for food potassium in the covered population.",
+          "exclusions": "Except people with impaired urinary potassium excretion; otherwise includes those with or without hypertension and pregnant/lactating women."
+        }
+      ]
+    },
+    {
+      "id": "who-sfa-levels",
+      "document_id": "who-saturated-trans",
+      "split": "test",
+      "location": "PDF page 11 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 11 (1-based)",
+          "text": "WHO recommends that adults and children reduce saturated fatty acid intake to 10% of total energy intake (strong recommendation). 2. WHO suggests further reducing saturated fatty acid intake to less than 10% of total energy intake (conditional recommendation)."
+        }
+      ],
+      "content": "WHO recommends that adults and children reduce saturated fatty acid intake to 10% of total energy intake (strong recommendation). 2. WHO suggests further reducing saturated fatty acid intake to less than 10% of total energy intake (conditional recommendation).",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Adults and children",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "ceiling",
+              "subject": "saturated_fat",
+              "amount": 10,
+              "upper": null,
+              "unit": "% energy",
+              "advice": "Reduce saturated fatty acids to 10% of total energy; strong recommendation."
+            },
+            "blockers": [
+              "Adults and children are named but a numerical age boundary is not supplied in this excerpt; do not infer an age threshold or apply to infants."
+            ]
+          },
+          {
+            "applicability": [],
+            "population_note": "Adults and children",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "ceiling",
+              "subject": "saturated_fat",
+              "amount": 10,
+              "upper": null,
+              "unit": "% energy",
+              "advice": "Further reduce saturated fatty acids below 10% of energy; conditional recommendation."
+            },
+            "blockers": [
+              "Adults and children are named but a numerical age boundary is not supplied in this excerpt; do not infer an age threshold or apply to infants.",
+              "Strict less-than cannot be encoded by an inclusive ceiling."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "saturated_fat",
+          "relation": "lte",
+          "value": 10,
+          "unit": "% energy",
+          "strength": "strong",
+          "population": "adults and children"
+        },
+        {
+          "subject": "saturated_fat",
+          "relation": "lt",
+          "value": 10,
+          "unit": "% energy",
+          "strength": "conditional",
+          "population": "adults and children"
+        }
+      ]
+    },
+    {
+      "id": "who-sfa-replacement-options",
+      "document_id": "who-saturated-trans",
+      "split": "test",
+      "location": "PDF page 11 (1-based); PDF page 13 (1-based); PDF page 13 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 11 (1-based)",
+          "text": "WHO recommends replacing saturated fatty acids in the diet with polyunsaturated fatty acids (strong recommendation), monounsaturated fatty acids from plant sources (conditional recommendation), or carbohydrates from foods containing naturally occurring dietary fibre, such as whole grains, vegetables, fruits and pulses (conditional recommendation)."
+        },
+        {
+          "location": "PDF page 13 (1-based)",
+          "text": "To facilitate implementing this recommendation, replacing SFA can be achieved via a single recommended nutrient or a combination of nutrients."
+        },
+        {
+          "location": "PDF page 13 (1-based)",
+          "text": "The guidance on replacement nutrients is relevant for a state of energy balance, in which total energy consumed is balanced by total energy expended. For energy balance, when the intake of one nutrient is reduced, the resulting energy deficit must be compensated for by intake of another nutrient. In cases of positive energy balance, and where a reduction in total energy intake is desired, SFA intake may be reduced in part or entirely without the need for a replacement nutrient."
+        }
+      ],
+      "content": "WHO recommends replacing saturated fatty acids in the diet with polyunsaturated fatty acids (strong recommendation), monounsaturated fatty acids from plant sources (conditional recommendation), or carbohydrates from foods containing naturally occurring dietary fibre, such as whole grains, vegetables, fruits and pulses (conditional recommendation).\n\nTo facilitate implementing this recommendation, replacing SFA can be achieved via a single recommended nutrient or a combination of nutrients.\n\nThe guidance on replacement nutrients is relevant for a state of energy balance, in which total energy consumed is balanced by total energy expended. For energy balance, when the intake of one nutrient is reduced, the resulting energy deficit must be compensated for by intake of another nutrient. In cases of positive energy balance, and where a reduction in total energy intake is desired, SFA intake may be reduced in part or entirely without the need for a replacement nutrient.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People replacing saturated fat in energy balance",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "saturated_fat_replacement",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Replace saturated fat with polyunsaturated fatty acids (strong), plant-source monounsaturated fatty acids (conditional), or carbohydrates in naturally fibre-containing foods such as whole grains, vegetables, fruits and pulses (conditional); single or combined nutrients may be used. Under positive energy balance with desired energy reduction, replacement may be partly or wholly unnecessary."
+            },
+            "blockers": [
+              "Energy balance and desired energy reduction are not supported predicates; alternatives must not become an AND requirement.",
+              "Age eligibility is not defined in the excerpt."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "saturated_fat_replacement",
+          "recommendation": "PUFA strong; plant MUFA or carbohydrates in naturally fibre-containing whole grains, vegetables, fruits and pulses conditional; alternatives or combinations.",
+          "population": "energy balance",
+          "exceptions": "May reduce without replacement when energy balance is positive and energy reduction desired."
+        }
+      ]
+    },
+    {
+      "id": "who-sfa-foods-sparingly",
+      "document_id": "who-saturated-trans",
+      "split": "test",
+      "location": "PDF page 14 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 14 (1-based)",
+          "text": "These recommendations do not preclude consumption of particular foods. However, foods containing high levels of SFA should be consumed sparingly to meet the recommended level of intake."
+        }
+      ],
+      "content": "These recommendations do not preclude consumption of particular foods. However, foods containing high levels of SFA should be consumed sparingly to meet the recommended level of intake.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People covered by the saturated-fat recommendations",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "saturated_fat_foods",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Consume high-saturated-fat foods sparingly to meet the recommended intake; the recommendations do not ban particular foods."
+            },
+            "blockers": [
+              "Covered population and numerical intake limit are not specified in this excerpt; sparingly has no numeric amount."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "saturated_fat_foods",
+          "recommendation": "High-SFA foods sparingly; particular foods not categorically precluded."
+        }
+      ]
+    },
+    {
+      "id": "who-sfa-child-development",
+      "document_id": "who-saturated-trans",
+      "split": "test",
+      "location": "PDF page 12 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 12 (1-based)",
+          "text": "Evidence from the systematic review conducted in children indicates that reducing SFA intake does not compromise children’s linear growth, micronutrient status, cognitive development or sexual development."
+        }
+      ],
+      "content": "Evidence from the systematic review conducted in children indicates that reducing SFA intake does not compromise children’s linear growth, micronutrient status, cognitive development or sexual development.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Evidence statement; no independent intake or total-fat restriction rule."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "saturated_fat_child_evidence",
+          "definition": "Review evidence indicates reducing SFA does not compromise linear growth, micronutrient status, cognitive development or sexual development."
+        }
+      ]
+    },
+    {
+      "id": "who-tfa-levels",
+      "document_id": "who-saturated-trans",
+      "split": "test",
+      "location": "PDF page 14 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 14 (1-based)",
+          "text": "WHO recommends that adults and children reduce trans-fatty acid intake to 1% of total energy intake (strong recommendation). 2. WHO suggests further reducing trans-fatty acid intake to less than 1% of total energy intake (conditional recommendation)."
+        }
+      ],
+      "content": "WHO recommends that adults and children reduce trans-fatty acid intake to 1% of total energy intake (strong recommendation). 2. WHO suggests further reducing trans-fatty acid intake to less than 1% of total energy intake (conditional recommendation).",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Adults and children",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "trans_fat",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Reduce trans-fatty acids to 1% of total energy; strong recommendation."
+            },
+            "blockers": [
+              "Trans fat is outside the production prompt's supported numeric nutrient subjects; preserve the amount as qualitative advice.",
+              "Adults and children are named but a numerical age boundary is not supplied in this excerpt; do not infer an age threshold or apply to infants."
+            ]
+          },
+          {
+            "applicability": [],
+            "population_note": "Adults and children",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "trans_fat",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Further reduce trans-fatty acids below 1% of energy; conditional recommendation."
+            },
+            "blockers": [
+              "Trans fat is outside the production prompt's supported numeric nutrient subjects; preserve the amount as qualitative advice.",
+              "Adults and children are named but a numerical age boundary is not supplied in this excerpt; do not infer an age threshold or apply to infants.",
+              "Strict less-than cannot be encoded by an inclusive ceiling."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "trans_fat",
+          "relation": "lte",
+          "value": 1,
+          "unit": "% energy",
+          "strength": "strong",
+          "population": "adults and children"
+        },
+        {
+          "subject": "trans_fat",
+          "relation": "lt",
+          "value": 1,
+          "unit": "% energy",
+          "strength": "conditional",
+          "population": "adults and children"
+        }
+      ]
+    },
+    {
+      "id": "who-tfa-preferred-replacements",
+      "document_id": "who-saturated-trans",
+      "split": "test",
+      "location": "PDF page 14 (1-based); PDF page 15 (1-based); PDF page 15 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 14 (1-based)",
+          "text": "WHO recommends replacing trans-fatty acids in the diet with polyunsaturated fatty acids or monounsaturated fatty acids primarily from plant sources (conditional recommendation)."
+        },
+        {
+          "location": "PDF page 15 (1-based)",
+          "text": "To facilitate implementing this recommendation, replacing TFA can be achieved via polyunsaturated fatty acids or monounsaturated fatty acids alone, or a combination of the two."
+        },
+        {
+          "location": "PDF page 15 (1-based)",
+          "text": "This guidance on replacement nutrients is relevant for a state of energy balance, in which total energy consumed is balanced by total energy expended. For energy balance, when the intake of one nutrient is reduced, the resulting energy deficit must be compensated for by intake of another nutrient. In cases of positive energy balance, and where a reduction in total energy intake is desired, TFA intake may be reduced in part or entirely without the need for a replacement nutrient."
+        }
+      ],
+      "content": "WHO recommends replacing trans-fatty acids in the diet with polyunsaturated fatty acids or monounsaturated fatty acids primarily from plant sources (conditional recommendation).\n\nTo facilitate implementing this recommendation, replacing TFA can be achieved via polyunsaturated fatty acids or monounsaturated fatty acids alone, or a combination of the two.\n\nThis guidance on replacement nutrients is relevant for a state of energy balance, in which total energy consumed is balanced by total energy expended. For energy balance, when the intake of one nutrient is reduced, the resulting energy deficit must be compensated for by intake of another nutrient. In cases of positive energy balance, and where a reduction in total energy intake is desired, TFA intake may be reduced in part or entirely without the need for a replacement nutrient.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People replacing trans fat in energy balance",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "trans_fat_replacement",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Conditionally replace trans-fatty acids with polyunsaturated or monounsaturated fatty acids primarily from plant sources, singly or together. Replacement may be unnecessary partly or wholly when positive energy balance and desired energy reduction coexist."
+            },
+            "blockers": [
+              "Energy balance and desired energy reduction are unsupported predicates; age eligibility not defined in the excerpt."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "trans_fat_replacement",
+          "recommendation": "PUFA or MUFA primarily from plant sources, alone or combined.",
+          "strength": "conditional",
+          "population": "energy balance",
+          "exceptions": "Positive energy balance with desired energy reduction may not require replacement."
+        }
+      ]
+    },
+    {
+      "id": "who-tfa-saturated-not-preferred",
+      "document_id": "who-saturated-trans",
+      "split": "test",
+      "location": "PDF page 15 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 15 (1-based)",
+          "text": "Replacement of TFA with saturated fatty acids did not improve disease outcomes or blood lipids in the two systematic reviews. Saturated fatty acids are therefore not a preferred replacement for TFA."
+        }
+      ],
+      "content": "Replacement of TFA with saturated fatty acids did not improve disease outcomes or blood lipids in the two systematic reviews. Saturated fatty acids are therefore not a preferred replacement for TFA.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People replacing trans-fatty acids",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "trans_fat_replacement",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Do not prefer saturated fatty acids as the replacement for trans-fatty acids: the two reviews found no improvement in disease outcomes or blood lipids."
+            },
+            "blockers": [
+              "Population eligibility not numerically defined; not-preferred is qualitative and not an absolute food exclusion."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "trans_fat_replacement",
+          "recommendation": "Saturated fatty acids not preferred; no improvement in disease outcomes or blood lipids in two reviews."
+        }
+      ]
+    },
+    {
+      "id": "who-tfa-definition-and-foods",
+      "document_id": "who-saturated-trans",
+      "split": "test",
+      "location": "PDF page 16 (1-based); PDF page 16 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 16 (1-based)",
+          "text": "For the purposes of these recommendations, TFA includes all fatty acids with a double bond in the trans configuration, regardless of whether the TFA come from ruminant sources or are produced industrially.2 ▶▶ These recommendations do not preclude consumption of particular foods. However, foods containing high levels of industrially produced TFA should largely be avoided."
+        },
+        {
+          "location": "PDF page 16 (1-based)",
+          "text": "This definition includes conjugated linoleic acid."
+        }
+      ],
+      "content": "For the purposes of these recommendations, TFA includes all fatty acids with a double bond in the trans configuration, regardless of whether the TFA come from ruminant sources or are produced industrially.2 ▶▶ These recommendations do not preclude consumption of particular foods. However, foods containing high levels of industrially produced TFA should largely be avoided.\n\nThis definition includes conjugated linoleic acid.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People covered by the trans-fat recommendations",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "industrial_trans_fat_foods",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Largely avoid foods high in industrially produced trans-fatty acids; particular foods are not categorically precluded."
+            },
+            "blockers": [
+              "Covered population and numerical target are not specified here; largely avoid is qualitative, not a universal categorical exclusion."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "trans_fat",
+          "definition": "All fatty acids with a trans double bond, regardless of ruminant or industrial origin; includes conjugated linoleic acid."
+        },
+        {
+          "subject": "industrial_trans_fat_foods",
+          "recommendation": "Foods high in industrial TFA should largely be avoided."
+        }
+      ]
+    },
+    {
+      "id": "who-fat-adult-quantity",
+      "document_id": "who-total-fat",
+      "split": "test",
+      "location": "PDF page 10 (1-based); PDF page 15 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 10 (1-based)",
+          "text": "To reduce the risk of unhealthy weight gain, WHO suggests that adults limit total fat intake to 30% of total energy intake or less (conditional recommendation)"
+        },
+        {
+          "location": "PDF page 15 (1-based)",
+          "text": "The recommendation on level of total fat intake in this guideline (recommendation 1) is intended for the general adult population. Owing to limited evidence, it was not possible to recommend a level of total fat intake for children."
+        }
+      ],
+      "content": "To reduce the risk of unhealthy weight gain, WHO suggests that adults limit total fat intake to 30% of total energy intake or less (conditional recommendation)\n\nThe recommendation on level of total fat intake in this guideline (recommendation 1) is intended for the general adult population. Owing to limited evidence, it was not possible to recommend a level of total fat intake for children.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "General adult population",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "ceiling",
+              "subject": "fat",
+              "amount": 30,
+              "upper": null,
+              "unit": "% energy",
+              "advice": "Conditionally limit total fat to 30% of total energy or less to reduce risk of unhealthy weight gain; general adults only."
+            },
+            "blockers": [
+              "Adults are named without a numerical age cutoff; do not invent an age threshold or apply the adult quantity target to children."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fat",
+          "relation": "lte",
+          "value": 30,
+          "unit": "% energy",
+          "strength": "conditional",
+          "population": "general adults; no quantity recommendation for children"
+        }
+      ]
+    },
+    {
+      "id": "who-fat-child-quality-distinction",
+      "document_id": "who-total-fat",
+      "split": "test",
+      "location": "PDF page 11 (1-based); PDF page 12 (1-based); PDF page 10 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 11 (1-based)",
+          "text": "However, the evidence was considered insufficient to support the formulation of a recommendation for children owing to the limited number of studies and inconsistent results identified for children, and the conclusion that the adult data could not reasonably be extrapolated to children given the unique energy requirements for optimal growth and development throughout childhood and adolescence."
+        },
+        {
+          "location": "PDF page 12 (1-based)",
+          "text": "Rationale for recommendation 2 ▶▶ This recommendation is taken from recommendations found in the WHO guideline, Saturated fatty acid and trans-fatty acid intake for adults and children which are based on effects of these nutrients on mortality and CVD outcomes. Remarks for recommendation 2 ▶▶ This recommendation is relevant for all individuals aged 2 years and older."
+        },
+        {
+          "location": "PDF page 10 (1-based)",
+          "text": "Fat consumed should be primarily unsaturated fatty acids, with no more than 10% of total energy intake coming from saturated fatty acids and no more than 1% of total energy intake coming from trans-fatty acids (strong recommendation)"
+        }
+      ],
+      "content": "However, the evidence was considered insufficient to support the formulation of a recommendation for children owing to the limited number of studies and inconsistent results identified for children, and the conclusion that the adult data could not reasonably be extrapolated to children given the unique energy requirements for optimal growth and development throughout childhood and adolescence.\n\nRationale for recommendation 2 ▶▶ This recommendation is taken from recommendations found in the WHO guideline, Saturated fatty acid and trans-fatty acid intake for adults and children which are based on effects of these nutrients on mortality and CVD outcomes. Remarks for recommendation 2 ▶▶ This recommendation is relevant for all individuals aged 2 years and older.\n\nFat consumed should be primarily unsaturated fatty acids, with no more than 10% of total energy intake coming from saturated fatty acids and no more than 1% of total energy intake coming from trans-fatty acids (strong recommendation)",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 2
+              }
+            ],
+            "population_note": "All individuals aged 2 years and older",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "fat_quality",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Fat consumed should be primarily unsaturated; strong recommendation. Fat-quality guidance applies from age 2, unlike adult total-fat quantity guidance."
+            },
+            "blockers": []
+          },
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 2
+              }
+            ],
+            "population_note": "All individuals aged 2 years and older",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "ceiling",
+              "subject": "saturated_fat",
+              "amount": 10,
+              "upper": null,
+              "unit": "% energy",
+              "advice": "No more than 10% of total energy; strong fat-quality recommendation for all individuals aged 2 years and older."
+            },
+            "blockers": []
+          },
+          {
+            "applicability": [
+              {
+                "fact": "age_years",
+                "operator": "gte",
+                "value": 2
+              }
+            ],
+            "population_note": "All individuals aged 2 years and older",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "trans_fat",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "No more than 1% of total energy; strong fat-quality recommendation for all individuals aged 2 years and older."
+            },
+            "blockers": [
+              "Trans fat is outside the production prompt's supported numeric nutrient subjects; preserve the amount as qualitative advice."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fat_quality",
+          "recommendation": "Primarily unsaturated",
+          "population": "age ≥2",
+          "strength": "strong"
+        },
+        {
+          "subject": "saturated_fat",
+          "relation": "lte",
+          "value": 10,
+          "unit": "% energy",
+          "population": "age ≥2",
+          "strength": "strong"
+        },
+        {
+          "subject": "trans_fat",
+          "relation": "lte",
+          "value": 1,
+          "unit": "% energy",
+          "population": "age ≥2",
+          "strength": "strong"
+        },
+        {
+          "subject": "child_total_fat",
+          "definition": "Adult total-fat data could not reasonably be extrapolated because growth/development energy requirements are unique."
+        }
+      ]
+    },
+    {
+      "id": "who-fat-already-below-threshold",
+      "document_id": "who-total-fat",
+      "split": "test",
+      "location": "PDF page 11 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 11 (1-based)",
+          "text": "The threshold of 30% in this recommendation should not be interpreted as an upper value of intake to be achieved by increasing fat intake among those with nutritionally adequate total fat intakes that are already less than 30% of total energy intake."
+        }
+      ],
+      "content": "The threshold of 30% in this recommendation should not be interpreted as an upper value of intake to be achieved by increasing fat intake among those with nutritionally adequate total fat intakes that are already less than 30% of total energy intake.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "People with nutritionally adequate total fat intake already below 30% of energy",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "fat",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Do not increase a nutritionally adequate fat intake already below 30% of energy just to reach the threshold."
+            },
+            "blockers": [
+              "Nutritional adequacy and current intake threshold are not supported patient predicates; this is not a minimum target."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fat",
+          "recommendation": "30% is not a target to reach by increasing an already nutritionally adequate lower intake."
+        }
+      ]
+    },
+    {
+      "id": "who-fat-energy-balance-caveat",
+      "document_id": "who-total-fat",
+      "split": "test",
+      "location": "PDF page 11 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 11 (1-based)",
+          "text": "Evaluation of the evidence suggests that the observed effect of reducing total fat intake on measures of body fatness is mediated, at least in part, by dietary behaviours that affect energy balance. In most trials, those who reduced their total fat intake also decreased their total energy intake (even though that was not intended in the trial design), and this led to decreasing weight. This finding suggests that there may be a tendency for those habitually consuming greater amounts of total fat to also consume more energy than needed, resulting in excess energy intake and subsequent weight gain. However, individuals who can maintain energy balance (or otherwise prevent excess energy intake) at higher fat intakes may be able to consume total fat at levels greater than 30% of total energy intake without increasing their risk of unhealthy weight gain."
+        }
+      ],
+      "content": "Evaluation of the evidence suggests that the observed effect of reducing total fat intake on measures of body fatness is mediated, at least in part, by dietary behaviours that affect energy balance. In most trials, those who reduced their total fat intake also decreased their total energy intake (even though that was not intended in the trial design), and this led to decreasing weight. This finding suggests that there may be a tendency for those habitually consuming greater amounts of total fat to also consume more energy than needed, resulting in excess energy intake and subsequent weight gain. However, individuals who can maintain energy balance (or otherwise prevent excess energy intake) at higher fat intakes may be able to consume total fat at levels greater than 30% of total energy intake without increasing their risk of unhealthy weight gain.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Mechanistic interpretation and caveat; no individual high-fat prescription."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fat_energy_balance",
+          "definition": "Lower fat effects mediated at least partly by energy balance; people preventing excess energy intake may consume >30% energy as fat without increasing unhealthy-weight-gain risk."
+        }
+      ]
+    },
+    {
+      "id": "who-fat-weight-loss-scope",
+      "document_id": "who-total-fat",
+      "split": "test",
+      "location": "PDF page 11 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 11 (1-based)",
+          "text": "The scope of this guideline was limited to developing recommendations for the prevention of unhealthy weight gain, not for the management of existing overweight or obesity. Therefore, studies conducted with overweight participants actively pursuing weight loss (i.e. “weight loss studies”) were not included in the systematic review used to inform the recommendation. The recommendation may therefore not apply to individuals actively pursuing weight loss through modification of the diet, although current evidence does suggest that lower fat, restricted-calorie diets may be one of several effective, short-term strategies for losing excess body weight."
+        }
+      ],
+      "content": "The scope of this guideline was limited to developing recommendations for the prevention of unhealthy weight gain, not for the management of existing overweight or obesity. Therefore, studies conducted with overweight participants actively pursuing weight loss (i.e. “weight loss studies”) were not included in the systematic review used to inform the recommendation. The recommendation may therefore not apply to individuals actively pursuing weight loss through modification of the diet, although current evidence does suggest that lower fat, restricted-calorie diets may be one of several effective, short-term strategies for losing excess body weight.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "Scope and evidence caveat; no personalized weight-loss intake target."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "total_fat_scope",
+          "definition": "Prevention of unhealthy weight gain, not management of existing overweight/obesity; active weight-loss trials excluded, recommendation may not apply to active dietary weight loss."
+        }
+      ]
+    },
+    {
+      "id": "who-fat-undernutrition-context",
+      "document_id": "who-total-fat",
+      "split": "test",
+      "location": "PDF page 12 (1-based)",
+      "excerpts": [
+        {
+          "location": "PDF page 12 (1-based)",
+          "text": "The decision to implement this recommendation must be made in the context of achieving or maintaining nutritional adequacy and avoiding excess energy intake. In populations where undernutrition is not prevalent, the recommendation can generally be safely implemented as needed, provided that individual energy requirements are met, and recognizing that energy requirements are increased in pregnant and lactating women. Consideration must be given to populations in which prevalence of undernutrition is a concern and where total fat intake may already be low. In such settings, maintaining or even increasing total fat intake of individuals (in line with guidance on fat quality in recommendation 2) may be important to achieve adequate energy intake, as well as maintain or improve the overall diet."
+        }
+      ],
+      "content": "The decision to implement this recommendation must be made in the context of achieving or maintaining nutritional adequacy and avoiding excess energy intake. In populations where undernutrition is not prevalent, the recommendation can generally be safely implemented as needed, provided that individual energy requirements are met, and recognizing that energy requirements are increased in pregnant and lactating women. Consideration must be given to populations in which prevalence of undernutrition is a concern and where total fat intake may already be low. In such settings, maintaining or even increasing total fat intake of individuals (in line with guidance on fat quality in recommendation 2) may be important to achieve adequate energy intake, as well as maintain or improve the overall diet.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Populations implementing total-fat guidance, including settings with undernutrition and low fat intake",
+            "exceptions": [],
+            "exception_note": "None stated in this passage.",
+            "action": {
+              "kind": "assessment",
+              "subject": "fat",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Implement in the context of nutritional adequacy and avoiding excess energy; meet individual energy requirements, recognizing higher requirements in pregnancy/lactation. Where undernutrition and low fat intake are concerns, maintaining or increasing fat may be important, consistent with fat-quality guidance."
+            },
+            "blockers": [
+              "Nutritional adequacy, prevalence of undernutrition, current intake and energy requirements are not supported predicates; no numeric increase is supplied."
+            ]
+          }
+        ],
+        "limitations": [
+          "Static team-labelled reference; independent clinical adjudication not performed."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fat_implementation",
+          "recommendation": "Meet energy requirements and adequacy; consider maintaining/increasing fat where undernutrition and low fat intake are concerns; pregnancy/lactation increase energy needs."
+        }
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "who-na-adult-limit-question",
+      "split": "dev",
+      "ablation": true,
+      "question": "What sodium intake does WHO recommend for adults, how is adulthood defined here, and what exclusions apply?",
+      "passage_ids": [
+        "who-na-adult-limit"
+      ],
+      "reference_answer": {
+        "answer": "WHO strongly recommends sodium below 2 g/day (5 g/day salt) for people aged 16 or older. Exclusions include illnesses or drug therapy causing hyponatraemia or acute water accumulation, or requiring physician-supervised diets, such as heart failure and type I diabetes.",
+        "required_patterns": [
+          "(?i)\\b2\\s{0,3}g/day",
+          "\\b16\\b",
+          "(?i)\\bhyponatraemia\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-na-adult-limit"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-na-child-adjustment-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Should a 10-year-old receive the unadjusted adult sodium maximum under this guideline?",
+      "passage_ids": [
+        "who-na-child-adjustment"
+      ],
+      "reference_answer": {
+        "answer": "No. For children aged 2–15, WHO strongly recommends reducing sodium to control blood pressure, with the adult maximum adjusted downward using energy requirements relative to adults. The passage supplies no child-specific gram target, and the stated illness, drug-therapy and physician-supervised-diet exclusions still apply.",
+        "required_patterns": [
+          "\\b2[–-]15\\b",
+          "(?i)\\bdownward\\b",
+          "(?i)\\benergy\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-na-child-adjustment"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-na-clinical-exclusions-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Can the general sodium recommendation automatically be applied to someone with heart failure requiring a physician-supervised diet?",
+      "passage_ids": [
+        "who-na-clinical-exclusions"
+      ],
+      "reference_answer": {
+        "answer": "No. People requiring physician-supervised diets, including patients with heart failure, are excluded. These subpopulations were not considered in the evidence review and guideline generation; seek clinician-directed advice.",
+        "required_patterns": [
+          "(?i)\\bheart failure\\b",
+          "(?i)\\bexcluded\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-na-clinical-exclusions"
+        ],
+        "needs_clinician": true,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-na-iodization-question",
+      "split": "dev",
+      "ablation": true,
+      "question": "Does WHO regard salt reduction as incompatible with salt iodization?",
+      "passage_ids": [
+        "who-na-iodization"
+      ],
+      "reference_answer": {
+        "answer": "No. They are compatible. Countries should monitor salt intake and iodization and adjust iodization over time so people consuming the recommended sodium amount still receive sufficient iodine.",
+        "required_patterns": [
+          "(?i)\\bcompatible\\b",
+          "(?i)\\bmonitor\\b",
+          "(?i)\\biodine\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-na-iodization"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-na-potassium-complement-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Does the sodium guideline replace potassium guidance, and what combined public-health action is described?",
+      "passage_ids": [
+        "who-na-potassium-complement"
+      ],
+      "reference_answer": {
+        "answer": "It complements rather than replaces potassium guidance. Public-health interventions should reduce sodium and simultaneously increase potassium intake through foods.",
+        "required_patterns": [
+          "(?i)\\bcomplements?\\b",
+          "(?i)\\bfoods\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-na-potassium-complement"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-na-molar-ratio-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Does an approximately one-to-one sodium-to-potassium molar ratio establish the optimal ratio?",
+      "passage_ids": [
+        "who-na-molar-ratio"
+      ],
+      "reference_answer": {
+        "answer": "No. Approximately one to one is the molar ratio if both guidelines are achieved. The sodium recommendations do not address the optimal ratio.",
+        "required_patterns": [
+          "(?i)\\bmolar\\b",
+          "(?i)\\bdo not address\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-na-molar-ratio"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-na-child-energy-data-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "What data can a country use to adjust the paediatric sodium maximum if local energy-requirement data are unavailable?",
+      "passage_ids": [
+        "who-na-child-energy-data"
+      ],
+      "reference_answer": {
+        "answer": "Use data from another country with similar population demographics and dietary habits. The adjustment compares paediatric energy requirements with those of adults approximately 20–50 years old and lowers the adult 2 g/day maximum.",
+        "required_patterns": [
+          "(?i)\\bsimilar\\b",
+          "(?i)\\bdietary habits\\b",
+          "20[–-]50"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-na-child-energy-data"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-na-evidence-certainty-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Was the sodium evidence equally strong for blood pressure and mortality or cardiovascular events?",
+      "passage_ids": [
+        "who-na-evidence-certainty"
+      ],
+      "reference_answer": {
+        "answer": "No. Evidence for blood pressure was high quality, while evidence for all-cause mortality, cardiovascular disease, stroke and coronary heart disease was lower quality. WHO said the recommendations should be reviewed as more mortality and cardiovascular-outcome evidence becomes available.",
+        "required_patterns": [
+          "(?i)\\bhigh quality\\b",
+          "(?i)\\blower quality\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-na-evidence-certainty"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-k-adult-food-minimum-question",
+      "split": "dev",
+      "ablation": true,
+      "question": "What potassium amount does WHO suggest for adults and how does its strength differ from the advice to increase food potassium?",
+      "passage_ids": [
+        "who-k-adult-food-minimum"
+      ],
+      "reference_answer": {
+        "answer": "For adults aged 16 or older, WHO strongly recommends increasing potassium from food but conditionally suggests at least 90 mmol/day (3510 mg/day). People with impaired urinary potassium excretion are excluded.",
+        "required_patterns": [
+          "\\b3510\\b",
+          "(?i)\\bconditionally\\b",
+          "(?i)\\burinary\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-k-adult-food-minimum"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-k-child-adjustment-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Does WHO give all 2–15-year-olds the adult potassium minimum unchanged?",
+      "passage_ids": [
+        "who-k-child-adjustment"
+      ],
+      "reference_answer": {
+        "answer": "No. The conditional recommendation adjusts the adult minimum downward according to children’s energy requirements relative to adults and increases potassium through food. It excludes impaired urinary potassium excretion; no fixed child-specific amount is supplied here.",
+        "required_patterns": [
+          "(?i)\\bconditional\\b",
+          "(?i)\\bdownward\\b",
+          "(?i)\\burinary\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-k-child-adjustment"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-k-renal-exclusion-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Do the potassium recommendations include pregnant women with hypertension, and what key exclusion remains?",
+      "passage_ids": [
+        "who-k-renal-exclusion"
+      ],
+      "reference_answer": {
+        "answer": "They include people with or without hypertension, including pregnant and lactating women, except those with impaired urinary potassium excretion.",
+        "required_patterns": [
+          "(?i)\\bpregnant\\b",
+          "(?i)\\bimpaired urinary potassium excretion\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-k-renal-exclusion"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-k-ratio-at-high-sodium-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Does the potassium guideline identify an optimal sodium-to-potassium ratio, and what does it say about maintaining the approximate ratio at higher sodium intakes?",
+      "passage_ids": [
+        "who-k-ratio-at-high-sodium"
+      ],
+      "reference_answer": {
+        "answer": "It does not identify an optimal ratio. Meeting both guidelines gives approximately a one-to-one molar ratio; maintaining that ratio at higher sodium consumption would require more potassium than the recommended level. The impaired urinary potassium excretion exclusion remains.",
+        "required_patterns": [
+          "(?i)\\bmolar ratio\\b",
+          "(?i)\\bmore potassium\\b",
+          "(?i)\\bexclusion\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-k-ratio-at-high-sodium"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-k-minimum-certainty-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Why is the adult potassium minimum conditional rather than proof of a precisely optimal intake?",
+      "passage_ids": [
+        "who-k-minimum-certainty"
+      ],
+      "reference_answer": {
+        "answer": "Evidence for benefit at at least 90 mmol/day is moderate or high quality, but evidence about the precise level that maximizes health benefits is limited. The value may change with additional high-quality trials.",
+        "required_patterns": [
+          "\\b90\\b",
+          "(?i)\\blimited\\b",
+          "(?i)\\btrials\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-k-minimum-certainty"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-k-child-energy-not-weight-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Why does WHO prefer energy requirements to simple body-weight scaling when adjusting children’s potassium intake?",
+      "passage_ids": [
+        "who-k-child-energy-not-weight"
+      ],
+      "reference_answer": {
+        "answer": "Energy intake per unit body weight is relatively high during rapid growth, so body-weight scaling could make the target too low. Use energy requirements relative to adults aged 20–50; comparable-country data can substitute when local data are unavailable.",
+        "required_patterns": [
+          "(?i)\\btoo low\\b",
+          "(?i)\\benergy\\b",
+          "20[–-]50"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-k-child-energy-not-weight"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-k-sweat-losses-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Does WHO say special food or beverage products are necessary to replace potassium lost during prolonged intense activity?",
+      "passage_ids": [
+        "who-k-sweat-losses"
+      ],
+      "reference_answer": {
+        "answer": "For most people, food can replace potassium losses without specially formulated products. Non-acclimated people exercising intensely for extended periods, especially in heat with large sweat losses, should consume higher potassium levels. The impaired urinary excretion exclusion still applies.",
+        "required_patterns": [
+          "(?i)\\bmost people\\b",
+          "(?i)\\bnon-acclimated\\b",
+          "(?i)\\bexclusion\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-k-sweat-losses"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-k-food-no-upper-limit-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Can the statement that no potassium upper limit was considered be read as recommending unlimited potassium supplements?",
+      "passage_ids": [
+        "who-k-food-no-upper-limit"
+      ],
+      "reference_answer": {
+        "answer": "No. The statement specifically recommends potassium through food and says no upper limit was considered in that context. It does not establish unlimited supplement safety, and people with impaired urinary potassium excretion are excluded.",
+        "required_patterns": [
+          "(?i)\\bfood\\b",
+          "(?i)\\bsupplement\\b",
+          "(?i)\\bexcluded\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-k-food-no-upper-limit"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-sfa-levels-question",
+      "split": "test",
+      "ablation": true,
+      "question": "How do the strengths of WHO’s saturated-fat recommendation to 10% and its further reduction below 10% differ?",
+      "passage_ids": [
+        "who-sfa-levels"
+      ],
+      "reference_answer": {
+        "answer": "Reducing saturated fatty acids to 10% of total energy is a strong recommendation for adults and children; further reducing below 10% is conditional. The excerpt does not define an infant age boundary.",
+        "required_patterns": [
+          "(?i)\\bstrong\\b",
+          "(?i)\\bconditional\\b",
+          "\\b10%"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-sfa-levels"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-sfa-replacement-options-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Which replacements for saturated fat does WHO recommend, and are their recommendation strengths identical?",
+      "passage_ids": [
+        "who-sfa-replacement-options"
+      ],
+      "reference_answer": {
+        "answer": "Polyunsaturated fatty acids are strongly recommended. Plant-source monounsaturated fats or carbohydrates from foods with naturally occurring fibre, such as whole grains, vegetables, fruits and pulses, are conditional options that can be used singly or together. Replacement guidance assumes energy balance; in positive energy balance where energy reduction is desired, replacement may be partly or wholly unnecessary.",
+        "required_patterns": [
+          "(?i)\\bpolyunsaturated\\b",
+          "(?i)\\bconditional\\b",
+          "(?i)\\benergy balance\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-sfa-replacement-options"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-sfa-foods-sparingly-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Does the saturated-fat guidance categorically ban particular foods?",
+      "passage_ids": [
+        "who-sfa-foods-sparingly"
+      ],
+      "reference_answer": {
+        "answer": "No. It does not preclude particular foods, but foods high in saturated fatty acids should be consumed sparingly to meet the recommended intake level.",
+        "required_patterns": [
+          "(?i)\\bsparingly\\b",
+          "(?i)\\bdoes not preclude\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-sfa-foods-sparingly"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-sfa-child-development-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Which childhood-development concerns did the saturated-fat review address?",
+      "passage_ids": [
+        "who-sfa-child-development"
+      ],
+      "reference_answer": {
+        "answer": "The review indicated that reducing saturated fatty acids did not compromise children’s linear growth, micronutrient status, cognitive development or sexual development. This evidence statement is not a recommendation to restrict all dietary fat.",
+        "required_patterns": [
+          "(?i)\\blinear growth\\b",
+          "(?i)\\bmicronutrient\\b",
+          "(?i)\\bcognitive\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-sfa-child-development"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-tfa-levels-question",
+      "split": "test",
+      "ablation": false,
+      "question": "What is the distinction between the trans-fat recommendations to 1% of energy and below 1%?",
+      "passage_ids": [
+        "who-tfa-levels"
+      ],
+      "reference_answer": {
+        "answer": "Reducing trans-fatty acid intake to 1% of total energy is strong; further reducing it below 1% is conditional. These recommendations name adults and children; this excerpt does not supply an infant age boundary.",
+        "required_patterns": [
+          "\\b1%",
+          "(?i)\\bstrong\\b",
+          "(?i)\\bconditional\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-tfa-levels"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-tfa-preferred-replacements-question",
+      "split": "test",
+      "ablation": true,
+      "question": "Must trans fat be replaced with both polyunsaturated and monounsaturated fats together?",
+      "passage_ids": [
+        "who-tfa-preferred-replacements"
+      ],
+      "reference_answer": {
+        "answer": "No. The conditional recommendation permits either alone or a combination, primarily from plant sources. Replacement guidance concerns energy balance; in positive energy balance where energy reduction is desired, trans fat may be reduced partly or entirely without replacement.",
+        "required_patterns": [
+          "(?i)\\bconditional\\b",
+          "(?i)\\bplant\\b",
+          "(?i)\\bwithout replacement\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-tfa-preferred-replacements"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-tfa-saturated-not-preferred-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Are saturated fatty acids a preferred replacement for trans fats according to WHO?",
+      "passage_ids": [
+        "who-tfa-saturated-not-preferred"
+      ],
+      "reference_answer": {
+        "answer": "No. The two systematic reviews found that replacing trans fats with saturated fatty acids did not improve disease outcomes or blood lipids, so saturated fatty acids are not a preferred replacement.",
+        "required_patterns": [
+          "(?i)\\bnot a preferred replacement\\b",
+          "(?i)\\bblood lipids\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-tfa-saturated-not-preferred"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-tfa-definition-and-foods-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Does WHO’s trans-fat definition exclude ruminant sources or conjugated linoleic acid, and which high-trans-fat foods should largely be avoided?",
+      "passage_ids": [
+        "who-tfa-definition-and-foods"
+      ],
+      "reference_answer": {
+        "answer": "No. It includes trans fatty acids from ruminant and industrial sources, including conjugated linoleic acid. Foods high in industrially produced trans fats should largely be avoided, though particular foods are not categorically precluded.",
+        "required_patterns": [
+          "(?i)\\bruminant\\b",
+          "(?i)\\bconjugated linoleic acid\\b",
+          "(?i)\\bindustrial\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-tfa-definition-and-foods"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-fat-adult-quantity-question",
+      "split": "test",
+      "ablation": true,
+      "question": "What total-fat quantity does WHO suggest to prevent unhealthy weight gain, and does that quantity recommendation extend to children?",
+      "passage_ids": [
+        "who-fat-adult-quantity"
+      ],
+      "reference_answer": {
+        "answer": "WHO conditionally suggests adults limit total fat to 30% of total energy or less. The quantity recommendation is for the general adult population; limited evidence prevented a total-fat level recommendation for children.",
+        "required_patterns": [
+          "\\b30%",
+          "(?i)\\bconditionally\\b",
+          "(?i)\\blimited evidence\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-fat-adult-quantity"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-fat-child-quality-distinction-question",
+      "split": "test",
+      "ablation": false,
+      "question": "For a 4-year-old, how does WHO distinguish total-fat quantity evidence from its fat-quality guidance?",
+      "passage_ids": [
+        "who-fat-child-quality-distinction"
+      ],
+      "reference_answer": {
+        "answer": "Adult total-fat quantity data could not reasonably be extrapolated to children because of their growth and development energy requirements. Fat-quality guidance does apply from age 2: primarily unsaturated fats, with no more than 10% of energy from saturated fat and 1% from trans fat, a strong recommendation.",
+        "required_patterns": [
+          "(?i)\\bage 2\\b",
+          "\\b10%",
+          "\\b1%",
+          "(?i)\\bgrowth\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-fat-child-quality-distinction"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-fat-already-below-threshold-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Should someone with a nutritionally adequate fat intake below 30% increase it just to reach 30%?",
+      "passage_ids": [
+        "who-fat-already-below-threshold"
+      ],
+      "reference_answer": {
+        "answer": "No. WHO explicitly says the threshold should not be interpreted as a value to reach by increasing fat intake when a nutritionally adequate intake is already below 30% of total energy.",
+        "required_patterns": [
+          "\\b30%",
+          "(?i)\\bnutritionally adequate\\b",
+          "(?i)\\bshould not\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-fat-already-below-threshold"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-fat-energy-balance-caveat-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Does the guideline say every person consuming over 30% of energy as fat necessarily gains unhealthy weight?",
+      "passage_ids": [
+        "who-fat-energy-balance-caveat"
+      ],
+      "reference_answer": {
+        "answer": "No. The observed effects are mediated at least partly by energy balance. Individuals who maintain energy balance or otherwise avoid excess energy intake may consume more than 30% of energy as fat without increasing their risk of unhealthy weight gain; this is a caveat, not a universal high-fat prescription.",
+        "required_patterns": [
+          "(?i)\\benergy balance\\b",
+          "(?i)\\bmay\\b",
+          "\\b30%"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-fat-energy-balance-caveat"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-fat-weight-loss-scope-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Was this total-fat recommendation developed as a treatment prescription for people actively pursuing dietary weight loss?",
+      "passage_ids": [
+        "who-fat-weight-loss-scope"
+      ],
+      "reference_answer": {
+        "answer": "No: its scope was preventing unhealthy weight gain, not managing existing overweight or obesity. Weight-loss trials were excluded, and the recommendation may not apply to people actively pursuing weight loss through dietary modification. Lower-fat restricted-calorie diets may be one of several short-term weight-loss strategies.",
+        "required_patterns": [
+          "(?i)\\bpreventing\\b",
+          "(?i)\\bexcluded\\b",
+          "(?i)\\bmay not apply\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-fat-weight-loss-scope"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    },
+    {
+      "id": "who-fat-undernutrition-context-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Should total-fat reduction be applied without considering undernutrition or pregnancy and lactation?",
+      "passage_ids": [
+        "who-fat-undernutrition-context"
+      ],
+      "reference_answer": {
+        "answer": "No. Implementation must preserve nutritional adequacy and meet energy requirements, which are increased in pregnancy and lactation. In settings with undernutrition and already low fat intake, maintaining or increasing fat in line with fat-quality guidance may be important.",
+        "required_patterns": [
+          "(?i)\\bnutritional adequacy\\b",
+          "(?i)\\bundernutrition\\b",
+          "(?i)\\bincreasing\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "who-fat-undernutrition-context"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence; preserve population, strength, units, exceptions and uncertainty. Patterns are lexical diagnostics, not semantic scoring."
+    }
+  ]
+}

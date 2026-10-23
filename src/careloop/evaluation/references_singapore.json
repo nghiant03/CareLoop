@@ -1,0 +1,2419 @@
+{
+  "schema_version": "careloop-source-references-v1",
+  "status": "frozen_team_labelled_not_independently_clinically_adjudicated",
+  "provenance": {
+    "method": "Static team-labelled source references, independently checked against the identified downloaded source bytes before the expanded benchmark freeze.",
+    "excerpt_normalization": "HTML: stdlib HTMLParser text nodes excluding scripts/styles, joined with spaces, then whitespace collapse. Excerpts are exact contiguous substrings. Multiple excerpts joined with blank lines are enumerated separately. Character offsets refer to this full normalized document text.",
+    "retrieved_at": null,
+    "retrieved_at_note": "No retrieval timestamp claimed; downloaded original bytes identified by SHA-256.",
+    "split_policy": "Source-family split: general plate and cardiometabolic food guidance (plate, Diabetes Hub, hypertension, fats) are dev. Child/teen and maternal nutrition (children, breastfeeding, antenatal supplements) are test, consistent with existing HealthHub RDA test assignment. Related family documents remain together. Publisher and broad nutrition topics overlap; test is not a claim of unseen pretraining or independently held-out clinical validation.",
+    "source_check": "All seven original HTML SHA-256 hashes and all 61 excerpt substrings and offsets independently checked against downloaded bytes. Extraction and AnswerDraft schemas, predicate evaluation, source links, splits and lexical exemplars checked locally.",
+    "pattern_checks": "Bounded lexical diagnostics only; semantic review must assess negation, qualifiers, exceptions and population. Seven answerable questions selected for evidence-removal ablation.",
+    "experiment_context": "The main 14-passage experiment was already run as an initial experiment. No prompts were tuned from its outputs. This expanded-reference check used source text and local schemas, with no evaluation model calls."
+  },
+  "limitations": [
+    "Team-labelled static references; not independently clinically adjudicated.",
+    "Seven HealthHub-hosted official pages (HPB, Ministry of Health, Tan Tock Seng Hospital and Pharmaceutical Society of Singapore contributions); ACE and PrimaryCarePages were not included.",
+    "Selection is source extraction and source-grounded answering, not endorsement of every source claim or proof of current clinical consensus. Historical or source-specific advice is retained as written.",
+    "No synthetic patients, observed patient outcomes or benchmark results. No RDA excerpts reused.",
+    "Family-level splitting reduces related-document leakage but does not eliminate shared publisher, cross-links, broad topic overlap or pretraining contamination.",
+    "HTML text was checked against downloaded bytes; no independent visual or clinical adjudication.",
+    "Numeric unsupported subjects, additional ranges, strict inequalities and unsupported applicability remain blocked qualitative advice rather than silently computable rules.",
+    "The breastfeeding energy article differs from RDA guidance; preserve source-specific qualifiers rather than resolving differences here.",
+    "All questions are answerable with supplied passages; evidence-removal ablation supplies the missing-evidence probe.",
+    "The breastfeeding article includes an apparently mismatched CDC reference URL outside selected passages; no corroboration through that citation is claimed."
+  ],
+  "documents": [
+    {
+      "id": "sg-plate",
+      "title": "Plan Your Meals with My Healthy Plate",
+      "edition": "Downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.healthhub.sg/well-being-and-lifestyle/food-diet-and-nutrition/plan-your-meals-with-my-healthy-plate",
+      "download_url": "https://www.healthhub.sg/well-being-and-lifestyle/food-diet-and-nutrition/plan-your-meals-with-my-healthy-plate",
+      "split": "dev",
+      "source_sha256": "398d72b0c555a28732b2b2d0a830466e2ba2a3d950c24316b6af6961bcc49ecc",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/sg-plate.html"
+    },
+    {
+      "id": "sg-children",
+      "title": "Healthy Food for Kids and Teens",
+      "edition": "Downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.healthhub.sg/well-being-and-lifestyle/food-diet-and-nutrition/a-healthy-food-foundation-for-kids-and-teens",
+      "download_url": "https://www.healthhub.sg/well-being-and-lifestyle/food-diet-and-nutrition/a-healthy-food-foundation-for-kids-and-teens",
+      "split": "test",
+      "source_sha256": "131c3219eea0ddd8ba434229a0cca137a5f165891132f6b712e07b03cd769493",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/sg-children.html"
+    },
+    {
+      "id": "sg-breastfeeding",
+      "title": "What To Eat While Breastfeeding",
+      "edition": "Downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.healthhub.sg/well-being-and-lifestyle/pregnancy-and-infant-health/what-to-eat-while-breastfeeding",
+      "download_url": "https://www.healthhub.sg/well-being-and-lifestyle/pregnancy-and-infant-health/what-to-eat-while-breastfeeding",
+      "split": "test",
+      "source_sha256": "c1e5096439a0269bbcfdd7e4dd87d65954e921c232b24382d5a7e202c94f05d9",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/sg-breastfeeding.html"
+    },
+    {
+      "id": "sg-antenatal",
+      "title": "Antenatal Supplements",
+      "edition": "Downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.healthhub.sg/medication-devices-and-treatment/medications/antenatal-supplements",
+      "download_url": "https://www.healthhub.sg/medication-devices-and-treatment/medications/antenatal-supplements",
+      "split": "test",
+      "source_sha256": "96b0761294b82e60387f56af3ee810c1e07d8934013b3e4f35dae854dc3d1a81",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/sg-antenatal.html"
+    },
+    {
+      "id": "sg-diabetes",
+      "title": "Practical tips and advice | Diabetes Hub",
+      "edition": "Downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.healthhub.sg/programmes/diabetes-hub/practical-tips-and-advice",
+      "download_url": "https://www.healthhub.sg/programmes/diabetes-hub/practical-tips-and-advice",
+      "split": "dev",
+      "source_sha256": "44ae41bbe52b01eb37274779fa3b93328850c320b719009fd1f6fe04cb279a06",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/sg-diabetes.html"
+    },
+    {
+      "id": "sg-hypertension",
+      "title": "High Blood Pressure: Healthy Eating Guide",
+      "edition": "Downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.healthhub.sg/health-conditions/high-blood-pressure-healthy-eating-guide",
+      "download_url": "https://www.healthhub.sg/health-conditions/high-blood-pressure-healthy-eating-guide",
+      "split": "dev",
+      "source_sha256": "d62a4aacc0c2874556be96aeea16f2918c639c88e631d5de3f2c9966bb18d52f",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/sg-hypertension.html"
+    },
+    {
+      "id": "sg-fats",
+      "title": "Unlocking the Truth About Fats: How to Choose the Right Ones for Your Health",
+      "edition": "Downloaded HTML snapshot; no edition or review date asserted",
+      "official_url": "https://www.healthhub.sg/well-being-and-lifestyle/food-diet-and-nutrition/getting-the-fats-right",
+      "download_url": "https://www.healthhub.sg/well-being-and-lifestyle/food-diet-and-nutrition/getting-the-fats-right",
+      "split": "dev",
+      "source_sha256": "51e986208fa97c486f56a1405c349c5560c20abe05e68a1ab6500f49c8a32cc6",
+      "artifact": "~/.local/share/careloop/public/evaluation/expanded-sources/sg-fats.html"
+    }
+  ],
+  "passages": [
+    {
+      "id": "sg-plate-balance",
+      "document_id": "sg-plate",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:37 (0-based, end-exclusive); HTML section: How to Use My Healthy Plate to Plan a Meal; normalized text characters 3908:4187 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:37 (0-based, end-exclusive)",
+          "text": "Plan Your Meals with My Healthy Plate"
+        },
+        {
+          "location": "HTML section: How to Use My Healthy Plate to Plan a Meal; normalized text characters 3908:4187 (0-based, end-exclusive)",
+          "text": "Place the foods in the proper place on your plate: Fill ½ of the plate for fruit and vegetables (optional for breakfast) Fill ¼ of the plate for lean meat and others, like beans, nuts, dairy products or eggs Fill ¼ of the plate for wholegrains, like brown rice or wholemeal bread"
+        }
+      ],
+      "content": "Plan Your Meals with My Healthy Plate\n\nPlace the foods in the proper place on your plate: Fill ½ of the plate for fruit and vegetables (optional for breakfast) Fill ¼ of the plate for lean meat and others, like beans, nuts, dairy products or eggs Fill ¼ of the plate for wholegrains, like brown rice or wholemeal bread",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Readers of this public nutrition guidance",
+            "exceptions": [],
+            "exception_note": "The fruit-and-vegetable half is optional for breakfast.",
+            "action": {
+              "kind": "assessment",
+              "subject": "diet",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Half is fruit and vegetables (optional for breakfast), a quarter is lean meat and others, and a quarter is wholegrains."
+            },
+            "blockers": [
+              "Plate proportions and meal-specific breakfast optionality are not computable nutrient actions or patient predicates."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "diet",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Readers of this public nutrition guidance",
+          "exclusions": "The fruit-and-vegetable half is optional for breakfast."
+        }
+      ]
+    },
+    {
+      "id": "sg-plate-whole-fruit",
+      "document_id": "sg-plate",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:37 (0-based, end-exclusive); HTML section: Here’s How It Works; normalized text characters 3454:3627 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:37 (0-based, end-exclusive)",
+          "text": "Plan Your Meals with My Healthy Plate"
+        },
+        {
+          "location": "HTML section: Here’s How It Works; normalized text characters 3454:3627 (0-based, end-exclusive)",
+          "text": "Fill half your plate with fruit and vegetables. Cook vegetables in a variety of ways: stir-fry, roast, steam, blanch, sauté. For fruit, eat them whole rather than as juices."
+        }
+      ],
+      "content": "Plan Your Meals with My Healthy Plate\n\nFill half your plate with fruit and vegetables. Cook vegetables in a variety of ways: stir-fry, roast, steam, blanch, sauté. For fruit, eat them whole rather than as juices.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Readers of this public nutrition guidance",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "diet",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Fill half the plate with fruit and vegetables. Eat fruit whole rather than as juices; vegetables can be stir-fried, roasted, steamed, blanched or sautéed."
+            },
+            "blockers": [
+              "Qualitative food-choice guidance is retained as assessment advice; no computable nutrient amount is stated."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "diet",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Readers of this public nutrition guidance",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-plate-next-meal",
+      "document_id": "sg-plate",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:37 (0-based, end-exclusive); HTML section: How to Plan Your Lunch or Dinner Using My Healthy Plate; normalized text characters 6326:6454 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:37 (0-based, end-exclusive)",
+          "text": "Plan Your Meals with My Healthy Plate"
+        },
+        {
+          "location": "HTML section: How to Plan Your Lunch or Dinner Using My Healthy Plate; normalized text characters 6326:6454 (0-based, end-exclusive)",
+          "text": "If you are unable to meet Quarter-Quarter-Half for your current meal, you can make up the missing food groups in your next meal."
+        }
+      ],
+      "content": "Plan Your Meals with My Healthy Plate\n\nIf you are unable to meet Quarter-Quarter-Half for your current meal, you can make up the missing food groups in your next meal.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Readers of this public nutrition guidance",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "timing",
+              "subject": "diet",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "You can make up the missing food groups in your next meal."
+            },
+            "blockers": [
+              "Failure to meet the current meal plate pattern is not a supported patient predicate; this is conditional meal-planning advice."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "diet",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Readers of this public nutrition guidance",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-child-fat-restriction",
+      "document_id": "sg-children",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive); HTML section: Choose Healthier Oils; normalized text characters 4275:4434 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive)",
+          "text": "Healthy Food for Kids and Teens"
+        },
+        {
+          "location": "HTML section: Choose Healthier Oils; normalized text characters 4275:4434 (0-based, end-exclusive)",
+          "text": "Note that if your child is under 2 years of age, fat restriction is not recommended as he is still growing rapidly and requires more energy to fuel his growth."
+        }
+      ],
+      "content": "Healthy Food for Kids and Teens\n\nNote that if your child is under 2 years of age, fat restriction is not recommended as he is still growing rapidly and requires more energy to fuel his growth.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Children under 2 years",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "fat",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "No. Fat restriction is not recommended under 2 years because the child is growing rapidly and needs energy for growth."
+            },
+            "blockers": [
+              "Strict age_years < 2 cannot be encoded with the supported inclusive lte predicate; review the age boundary."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fat",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Children under 2 years",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-child-vegetable-acceptance",
+      "document_id": "sg-children",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive); HTML section: Get Enough Fruit and Veggies; normalized text characters 4623:5052 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive)",
+          "text": "Healthy Food for Kids and Teens"
+        },
+        {
+          "location": "HTML section: Get Enough Fruit and Veggies; normalized text characters 4623:5052 (0-based, end-exclusive)",
+          "text": "Get your child into a routine of eating fruit and vegetables by offering him a variety of brightly coloured fruit and vegetables every day. If your child simply refuses to eat them, gently encourage him to try. If he still refuses, come up with creative ways to present the fruit or vegetables. For example, cut them into different shapes and sizes. It might take several attempts before he tries them. The key is not to give up!"
+        }
+      ],
+      "content": "Healthy Food for Kids and Teens\n\nGet your child into a routine of eating fruit and vegetables by offering him a variety of brightly coloured fruit and vegetables every day. If your child simply refuses to eat them, gently encourage him to try. If he still refuses, come up with creative ways to present the fruit or vegetables. For example, cut them into different shapes and sizes. It might take several attempts before he tries them. The key is not to give up!",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Children",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "diet",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Offer a colourful variety daily, gently encourage trying them, and try creative shapes and sizes. Several attempts may be needed."
+            },
+            "blockers": [
+              "Children and teenagers have no explicit numeric age boundaries in this passage; do not treat empty applicability as universal.",
+              "Qualitative food-choice guidance is retained as assessment advice; no computable nutrient amount is stated."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "diet",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Children",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-child-calcium-sources",
+      "document_id": "sg-children",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive); HTML section: Bone Up On Calcium; normalized text characters 5621:5833 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive)",
+          "text": "Healthy Food for Kids and Teens"
+        },
+        {
+          "location": "HTML section: Bone Up On Calcium; normalized text characters 5621:5833 (0-based, end-exclusive)",
+          "text": "The best calcium sources are dairy products such as milk, cheese and yoghurt. Other good sources include fortified food (e.g. soybean milk), dark green leafy vegetables and fish with edible bones (e.g. sardines)."
+        }
+      ],
+      "content": "Healthy Food for Kids and Teens\n\nThe best calcium sources are dairy products such as milk, cheese and yoghurt. Other good sources include fortified food (e.g. soybean milk), dark green leafy vegetables and fish with edible bones (e.g. sardines).",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Children and teenagers",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "calcium_food_sources",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Dairy sources include milk, cheese and yoghurt. Other sources include fortified soybean milk, dark green leafy vegetables and fish with edible bones such as sardines."
+            },
+            "blockers": [
+              "Children and teenagers have no explicit numeric age boundaries in this passage; do not treat empty applicability as universal.",
+              "Qualitative food-choice guidance is retained as assessment advice; no computable nutrient amount is stated."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "calcium_food_sources",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Children and teenagers",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-child-salt",
+      "document_id": "sg-children",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive); HTML section: Shake the Salt Habit; normalized text characters 5855:6148 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive)",
+          "text": "Healthy Food for Kids and Teens"
+        },
+        {
+          "location": "HTML section: Shake the Salt Habit; normalized text characters 5855:6148 (0-based, end-exclusive)",
+          "text": "Reducing the salt intake in children and teens reduces the risk of high blood pressure in adulthood. Take action to influence your child's liking for less or non-salty food early in life. Limit the use of salt, sauces and salty processed food (e.g. luncheon meat, salted vegetables and chips)."
+        }
+      ],
+      "content": "Healthy Food for Kids and Teens\n\nReducing the salt intake in children and teens reduces the risk of high blood pressure in adulthood. Take action to influence your child's liking for less or non-salty food early in life. Limit the use of salt, sauces and salty processed food (e.g. luncheon meat, salted vegetables and chips).",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Children and teenagers",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "sodium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Limit salt, sauces and salty processed foods such as luncheon meat, salted vegetables and chips."
+            },
+            "blockers": [
+              "Children and teenagers have no explicit numeric age boundaries in this passage; do not treat empty applicability as universal.",
+              "Qualitative food-choice guidance is retained as assessment advice; no computable nutrient amount is stated."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Children and teenagers",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-child-added-sugar",
+      "document_id": "sg-children",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive); HTML section: Watch the Sugar; normalized text characters 6165:6581 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive)",
+          "text": "Healthy Food for Kids and Teens"
+        },
+        {
+          "location": "HTML section: Watch the Sugar; normalized text characters 6165:6581 (0-based, end-exclusive)",
+          "text": "Added sugar only provides extra calories to your child's diet, with little other nutritional value. Consuming more calories than he can burn through physical activity can lead to undesirable weight gain. Sugary food and drinks also increase the risk of tooth decay, especially if dental hygiene is neglected. Most children have a sweet tooth, so encourage them to consume less food and drinks containing added sugar."
+        }
+      ],
+      "content": "Healthy Food for Kids and Teens\n\nAdded sugar only provides extra calories to your child's diet, with little other nutritional value. Consuming more calories than he can burn through physical activity can lead to undesirable weight gain. Sugary food and drinks also increase the risk of tooth decay, especially if dental hygiene is neglected. Most children have a sweet tooth, so encourage them to consume less food and drinks containing added sugar.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Children",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "added_sugar",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Encourage children to consume fewer foods and drinks containing added sugar. Added sugar provides calories with little other nutritional value; excess calories can lead to weight gain, and sugary foods and drinks increase tooth-decay risk, especially with neglected dental hygiene."
+            },
+            "blockers": [
+              "Children and teenagers have no explicit numeric age boundaries in this passage; do not treat empty applicability as universal.",
+              "Qualitative food-choice guidance is retained as assessment advice; no computable nutrient amount is stated."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "added_sugar",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Children",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-lactation-water",
+      "document_id": "sg-breastfeeding",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive); HTML section: Essential nutrients; normalized text characters 3057:3382 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive)",
+          "text": "What To Eat While Breastfeeding"
+        },
+        {
+          "location": "HTML section: Essential nutrients; normalized text characters 3057:3382 (0-based, end-exclusive)",
+          "text": "Water is especially important for a breastfeeding mother. With water making up 88% of breast milk, it is the most critical nutrient needed to produce ample breast milk to meet the demands of a suckling baby. Hence, do drink enough water and fluids such as milk and soup – aim to drink at least 1.5 to 2 litres of water daily."
+        }
+      ],
+      "content": "What To Eat While Breastfeeding\n\nWater is especially important for a breastfeeding mother. With water making up 88% of breast milk, it is the most critical nutrient needed to produce ample breast milk to meet the demands of a suckling baby. Hence, do drink enough water and fluids such as milk and soup – aim to drink at least 1.5 to 2 litres of water daily.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "breastfeeding",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "Breastfeeding mothers",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "water",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "The article says to aim for at least 1.5 to 2 litres of water daily and to drink enough fluids such as milk and soup."
+            },
+            "blockers": [
+              "Water is outside the supported numeric nutrient subjects. The wording at least 1.5 to 2 is not an unambiguous closed range; retain it in advice."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "water",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Breastfeeding mothers",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-lactation-energy",
+      "document_id": "sg-breastfeeding",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive); HTML section: How Do I Ensure That I Eat Enough for Me and My Baby?; normalized text characters 3901:4102 (0-based, end-exclusive); HTML section: How Do I Ensure That I Eat Enough for Me and My Baby?; normalized text characters 4380:4620 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive)",
+          "text": "What To Eat While Breastfeeding"
+        },
+        {
+          "location": "HTML section: How Do I Ensure That I Eat Enough for Me and My Baby?; normalized text characters 3901:4102 (0-based, end-exclusive)",
+          "text": "A well-nourished breastfeeding mother will need an additional 330 to 400 kilocalories (kcal) 1 per day. This means that a breastfeeding mother should consume approximately 2,000 to 2,800 kcal per day*."
+        },
+        {
+          "location": "HTML section: How Do I Ensure That I Eat Enough for Me and My Baby?; normalized text characters 4380:4620 (0-based, end-exclusive)",
+          "text": "*The amount of additional calories needed for an individual breastfeeding woman is affected by age, body mass index (BMI), activity level and extent of breastfeeding. Do consult a dietitian to understand your individual intake requirements."
+        }
+      ],
+      "content": "What To Eat While Breastfeeding\n\nA well-nourished breastfeeding mother will need an additional 330 to 400 kilocalories (kcal) 1 per day. This means that a breastfeeding mother should consume approximately 2,000 to 2,800 kcal per day*.\n\n*The amount of additional calories needed for an individual breastfeeding woman is affected by age, body mass index (BMI), activity level and extent of breastfeeding. Do consult a dietitian to understand your individual intake requirements.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "breastfeeding",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "Well-nourished breastfeeding mothers",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "energy",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "It describes an additional 330 to 400 kcal per day for a well-nourished breastfeeding mother, approximately 2,000 to 2,800 kcal total per day. Age, BMI, activity and extent of breastfeeding affect requirements; consult a dietitian for individual needs."
+            },
+            "blockers": [
+              "The additional action cannot encode an additional range without loss; keep the additional range and approximate total separate in advice.",
+              "Well-nourished status, BMI, activity and extent of breastfeeding are not supported applicability predicates."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "energy",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Well-nourished breastfeeding mothers",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-lactation-supplements",
+      "document_id": "sg-breastfeeding",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive); HTML section: Is It Necessary for Me To Take Supplements?; normalized text characters 4998:5454 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive)",
+          "text": "What To Eat While Breastfeeding"
+        },
+        {
+          "location": "HTML section: Is It Necessary for Me To Take Supplements?; normalized text characters 4998:5454 (0-based, end-exclusive)",
+          "text": "Vitamins and supplements may not be necessary if you have a varied and balanced diet. Ensure that the foods you eat provide enough carbohydrates for energy, calcium for strong bones and protein to help your baby grow. Just continue to eat nutritious foods as advised for your pregnancy diet, and you’re all set! However, if you feel that your calcium intake and sun exposure had reduced post-delivery, you may wish to supplement with Vitamin D and calcium."
+        }
+      ],
+      "content": "What To Eat While Breastfeeding\n\nVitamins and supplements may not be necessary if you have a varied and balanced diet. Ensure that the foods you eat provide enough carbohydrates for energy, calcium for strong bones and protein to help your baby grow. Just continue to eat nutritious foods as advised for your pregnancy diet, and you’re all set! However, if you feel that your calcium intake and sun exposure had reduced post-delivery, you may wish to supplement with Vitamin D and calcium.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "breastfeeding",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "Breastfeeding mothers",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "supplements",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "No. Supplements may not be necessary with a varied, balanced diet. If calcium intake and sun exposure have reduced after delivery, vitamin D and calcium supplementation may be considered."
+            },
+            "blockers": [
+              "Diet adequacy, reduced calcium intake and sun exposure are unsupported predicates; preserve conditional advice without inventing doses."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "supplements",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Breastfeeding mothers",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-lactation-milk-myth",
+      "document_id": "sg-breastfeeding",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive); HTML section: Myths About Breastfeeding; normalized text characters 5520:5805 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:31 (0-based, end-exclusive)",
+          "text": "What To Eat While Breastfeeding"
+        },
+        {
+          "location": "HTML section: Myths About Breastfeeding; normalized text characters 5520:5805 (0-based, end-exclusive)",
+          "text": "Myth: Mothers need to drink more milk to produce milk. Fact: Drinking more milk does not influence the production of breast milk. However, it is a source of fluid that keeps mothers hydrated. The calcium found in milk also helps to maintain the mother’s bone mass during breastfeeding."
+        }
+      ],
+      "content": "What To Eat While Breastfeeding\n\nMyth: Mothers need to drink more milk to produce milk. Fact: Drinking more milk does not influence the production of breast milk. However, it is a source of fluid that keeps mothers hydrated. The calcium found in milk also helps to maintain the mother’s bone mass during breastfeeding.",
+      "reference_extraction": {
+        "rules": [],
+        "limitations": [
+          "The passage corrects a myth and explains milk benefits; it states no intake recommendation.",
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "milk_production",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Breastfeeding mothers",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-pregnancy-folate-timing",
+      "document_id": "sg-antenatal",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:21 (0-based, end-exclusive); HTML section: Folic Acid; normalized text characters 2498:2605 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:21 (0-based, end-exclusive)",
+          "text": "Antenatal Supplements"
+        },
+        {
+          "location": "HTML section: Folic Acid; normalized text characters 2498:2605 (0-based, end-exclusive)",
+          "text": "Folic Acid ( usually taken from preconception (before getting pregnant) until the 12 th week of pregnancy )"
+        }
+      ],
+      "content": "Antenatal Supplements\n\nFolic Acid ( usually taken from preconception (before getting pregnant) until the 12 th week of pregnancy )",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Preconception and pregnancy",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "timing",
+              "subject": "folic_acid",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "It is usually taken from preconception until the 12th week of pregnancy."
+            },
+            "blockers": [
+              "Preconception status and gestational week are unsupported patient predicates; pregnant=true would incorrectly exclude preconception."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "folic_acid",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Preconception and pregnancy",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-pregnancy-multivitamin-review",
+      "document_id": "sg-antenatal",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:21 (0-based, end-exclusive); HTML section: Prenatal multivitamins; normalized text characters 3447:3723 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:21 (0-based, end-exclusive)",
+          "text": "Antenatal Supplements"
+        },
+        {
+          "location": "HTML section: Prenatal multivitamins; normalized text characters 3447:3723 (0-based, end-exclusive)",
+          "text": "Not all multivitamins are safe in pregnancy as they may contain higher than necessary contents e.g. some multivitamins may contain higher doses of Vitamin A that may not be safe in pregnancy. Check with your healthcare professional before buying any multivitamins on your own."
+        }
+      ],
+      "content": "Antenatal Supplements\n\nNot all multivitamins are safe in pregnancy as they may contain higher than necessary contents e.g. some multivitamins may contain higher doses of Vitamin A that may not be safe in pregnancy. Check with your healthcare professional before buying any multivitamins on your own.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "pregnant",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "Pregnant people",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "multivitamins",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Some multivitamins contain higher-than-necessary amounts, including vitamin A doses that may not be safe in pregnancy. Check with a healthcare professional before buying them."
+            },
+            "blockers": []
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "multivitamins",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Pregnant people",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-pregnancy-iron-spacing",
+      "document_id": "sg-antenatal",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:21 (0-based, end-exclusive); HTML section: Iron / Other considerations; normalized text characters 6554:6787 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:21 (0-based, end-exclusive)",
+          "text": "Antenatal Supplements"
+        },
+        {
+          "location": "HTML section: Iron / Other considerations; normalized text characters 6554:6787 (0-based, end-exclusive)",
+          "text": "Most iron supplements may need to be spaced at least 2 hours apart from coffee, tea, milk, dairy products, and calcium or other iron-containing supplements to improve absorption (Exception: iron polymaltose e.g. Haemo / Maltofer ® )."
+        }
+      ],
+      "content": "Antenatal Supplements\n\nMost iron supplements may need to be spaced at least 2 hours apart from coffee, tea, milk, dairy products, and calcium or other iron-containing supplements to improve absorption (Exception: iron polymaltose e.g. Haemo / Maltofer ® ).",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "pregnant",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "Pregnant people using iron supplements",
+            "exceptions": [
+              {
+                "fact": "medications",
+                "operator": "contains",
+                "value": "iron polymaltose"
+              }
+            ],
+            "exception_note": "Iron polymaltose, e.g. Haemo / Maltofer, is excepted.",
+            "action": {
+              "kind": "timing",
+              "subject": "iron_supplement_timing",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Most may need at least 2 hours of separation from coffee, tea, milk, dairy, calcium or other iron-containing supplements. Iron polymaltose (for example Haemo or Maltofer) is the stated exception."
+            },
+            "blockers": [
+              "Confirm iron-supplement use, formulation and co-administration timing; medication-name matching and timing require review, and no computable timing action is supplied."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "iron_supplement_timing",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Pregnant people using iron supplements",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-pregnancy-vitamin-d",
+      "document_id": "sg-antenatal",
+      "split": "test",
+      "location": "HTML document title; normalized text characters 0:21 (0-based, end-exclusive); HTML section: Vitamin D; normalized text characters 6788:7152 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:21 (0-based, end-exclusive)",
+          "text": "Antenatal Supplements"
+        },
+        {
+          "location": "HTML section: Vitamin D; normalized text characters 6788:7152 (0-based, end-exclusive)",
+          "text": "Vitamin D ( only required when determined by your doctor ) What is this for Helps to increase the absorption of calcium and reduce complications in pregnancy e.g. pre-eclampsia (a serious condition that usually presents as high blood pressure with or without protein in the urine). How to take Follow the instructions as stated on the medication label / packaging."
+        }
+      ],
+      "content": "Antenatal Supplements\n\nVitamin D ( only required when determined by your doctor ) What is this for Helps to increase the absorption of calcium and reduce complications in pregnancy e.g. pre-eclampsia (a serious condition that usually presents as high blood pressure with or without protein in the urine). How to take Follow the instructions as stated on the medication label / packaging.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "pregnant",
+                "operator": "eq",
+                "value": true
+              }
+            ],
+            "population_note": "Pregnant people",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "vitamin_d",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Vitamin D is only required when determined by the doctor. Follow the medication label or packaging instructions."
+            },
+            "blockers": [
+              "Doctor-determined need is an unsupported predicate; no dose is supplied."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "vitamin_d",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Pregnant people",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-diabetes-mealtimes",
+      "document_id": "sg-diabetes",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:40 (0-based, end-exclusive); HTML section: Meal times; normalized text characters 3131:3488 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:40 (0-based, end-exclusive)",
+          "text": "Practical tips and advice | Diabetes Hub"
+        },
+        {
+          "location": "HTML section: Meal times; normalized text characters 3131:3488 (0-based, end-exclusive)",
+          "text": "People with diabetes are recommended to have regular meal times every day. For persons on regular insulin treatment and certain oral diabetes medications (i.e., sulfonylureas such as glipizide, gliclazide, glimepiride, tolbutamide), it is especially important not to skip or delay meals. This is to prevent the risk of hypoglycaemia (low blood sugar level)."
+        }
+      ],
+      "content": "Practical tips and advice | Diabetes Hub\n\nPeople with diabetes are recommended to have regular meal times every day. For persons on regular insulin treatment and certain oral diabetes medications (i.e., sulfonylureas such as glipizide, gliclazide, glimepiride, tolbutamide), it is especially important not to skip or delay meals. This is to prevent the risk of hypoglycaemia (low blood sugar level).",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes; especially regular insulin or sulfonylurea users",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "timing",
+              "subject": "diet",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Have regular meal times every day. Especially with regular insulin or sulfonylureas, do not skip or delay meals, to prevent hypoglycaemia."
+            },
+            "blockers": [
+              "Insulin OR multiple sulfonylureas cannot be encoded as an ANDed medication list; preserve the subgroup emphasis in advice."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "diet",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "People with diabetes; especially regular insulin or sulfonylurea users",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-diabetes-fasting-review",
+      "document_id": "sg-diabetes",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:40 (0-based, end-exclusive); HTML section: Meal times; normalized text characters 3489:3705 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:40 (0-based, end-exclusive)",
+          "text": "Practical tips and advice | Diabetes Hub"
+        },
+        {
+          "location": "HTML section: Meal times; normalized text characters 3489:3705 (0-based, end-exclusive)",
+          "text": "You should consult your doctor if you have to fast or change your meal times for a prolonged period of time (e.g., religious reasons such as Ramadan), as your diabetic medications may have to be adjusted accordingly."
+        }
+      ],
+      "content": "Practical tips and advice | Diabetes Hub\n\nYou should consult your doctor if you have to fast or change your meal times for a prolonged period of time (e.g., religious reasons such as Ramadan), as your diabetic medications may have to be adjusted accordingly.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes planning fasting or prolonged changed meal times",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "meal_timing_review",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Consult the doctor because diabetes medications may need adjustment."
+            },
+            "blockers": [
+              "Planned fasting or prolonged meal-time change is an unsupported patient predicate."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "meal_timing_review",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "People with diabetes planning fasting or prolonged changed meal times",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-diabetes-carb-reduction",
+      "document_id": "sg-diabetes",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:40 (0-based, end-exclusive); HTML section: Meal times; normalized text characters 3875:4221 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:40 (0-based, end-exclusive)",
+          "text": "Practical tips and advice | Diabetes Hub"
+        },
+        {
+          "location": "HTML section: Meal times; normalized text characters 3875:4221 (0-based, end-exclusive)",
+          "text": "If you are planning to substantially reduce the amount of carbohydrates in your meals, you may be at risk of hypoglycaemia if you are on insulin or certain oral medications (sulfonylureas such as glipizide, gliclazide, glimepiride, tolbutamide). Do discuss with your doctor on how your medication can be adjusted to match any change in your diet."
+        }
+      ],
+      "content": "Practical tips and advice | Diabetes Hub\n\nIf you are planning to substantially reduce the amount of carbohydrates in your meals, you may be at risk of hypoglycaemia if you are on insulin or certain oral medications (sulfonylureas such as glipizide, gliclazide, glimepiride, tolbutamide). Do discuss with your doctor on how your medication can be adjusted to match any change in your diet.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes on insulin or sulfonylureas planning substantial carbohydrate reduction",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "carbohydrate",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Reducing carbohydrates substantially can create a risk of hypoglycaemia with insulin or sulfonylureas. Discuss medication adjustment with the doctor to match diet changes."
+            },
+            "blockers": [
+              "Planned carbohydrate reduction is unsupported; insulin OR sulfonylureas cannot be represented as an ANDed medication list."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "carbohydrate",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "People with diabetes on insulin or sulfonylureas planning substantial carbohydrate reduction",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-diabetes-coconut-substitution",
+      "document_id": "sg-diabetes",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:40 (0-based, end-exclusive); HTML section: Healthier cooking / Malay; normalized text characters 5371:5534 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:40 (0-based, end-exclusive)",
+          "text": "Practical tips and advice | Diabetes Hub"
+        },
+        {
+          "location": "HTML section: Healthier cooking / Malay; normalized text characters 5371:5534 (0-based, end-exclusive)",
+          "text": "Use low-fat or skimmed milk in curries and gravies, instead of coconut milk Cook meat together with gravy instead of stir-frying separately Use leaner cuts of meat"
+        }
+      ],
+      "content": "Practical tips and advice | Diabetes Hub\n\nUse low-fat or skimmed milk in curries and gravies, instead of coconut milk Cook meat together with gravy instead of stir-frying separately Use leaner cuts of meat",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "diet",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Use low-fat or skimmed milk instead of coconut milk in curries and gravies. Cook meat together with gravy instead of stir-frying separately, and use leaner cuts."
+            },
+            "blockers": [
+              "Qualitative food-choice guidance is retained as assessment advice; no computable nutrient amount is stated."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "diet",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "People with diabetes",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-diabetes-drinks",
+      "document_id": "sg-diabetes",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:40 (0-based, end-exclusive); HTML section: Choose healthier options when eating out; normalized text characters 7335:7544 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:40 (0-based, end-exclusive)",
+          "text": "Practical tips and advice | Diabetes Hub"
+        },
+        {
+          "location": "HTML section: Choose healthier options when eating out; normalized text characters 7335:7544 (0-based, end-exclusive)",
+          "text": "For drinks: Request for water. Ask for less (\"siew dai\") or no added sugar (\"kosong“) options Choose drinks with reduced sugar or no sugar (e.g., drinks with Healthier Choice Symbol or Nutri-Grade mark A or B)"
+        }
+      ],
+      "content": "Practical tips and advice | Diabetes Hub\n\nFor drinks: Request for water. Ask for less (\"siew dai\") or no added sugar (\"kosong“) options Choose drinks with reduced sugar or no sugar (e.g., drinks with Healthier Choice Symbol or Nutri-Grade mark A or B)",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "diabetes"
+              }
+            ],
+            "population_note": "People with diabetes",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "drinks",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Request water, ask for less or no added sugar, or choose reduced-sugar or no-sugar drinks such as Healthier Choice Symbol or Nutri-Grade A or B options."
+            },
+            "blockers": [
+              "Qualitative food-choice guidance is retained as assessment advice; no computable nutrient amount is stated."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "drinks",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "People with diabetes",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-hypertension-home-seasoning",
+      "document_id": "sg-hypertension",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:41 (0-based, end-exclusive); HTML section: Eating at Home; normalized text characters 3507:3761 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:41 (0-based, end-exclusive)",
+          "text": "High Blood Pressure: Healthy Eating Guide"
+        },
+        {
+          "location": "HTML section: Eating at Home; normalized text characters 3507:3761 (0-based, end-exclusive)",
+          "text": "Cook with less salt, sauces, stock cubes, and seasoning powders as many of these flavourings contain a lot of sodium. Enhance the taste of food with natural herbs and spices like onion, ginger, garlic, chilli, parsley, spring onions, cinnamon and cloves."
+        }
+      ],
+      "content": "High Blood Pressure: Healthy Eating Guide\n\nCook with less salt, sauces, stock cubes, and seasoning powders as many of these flavourings contain a lot of sodium. Enhance the taste of food with natural herbs and spices like onion, ginger, garlic, chilli, parsley, spring onions, cinnamon and cloves.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "hypertension"
+              }
+            ],
+            "population_note": "People with hypertension",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "sodium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Use less salt, sauces, stock cubes and seasoning powders, and flavour food with herbs and spices such as onion, ginger and garlic."
+            },
+            "blockers": [
+              "Qualitative food-choice guidance is retained as assessment advice; no computable nutrient amount is stated."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "People with hypertension",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-hypertension-eating-out",
+      "document_id": "sg-hypertension",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:41 (0-based, end-exclusive); HTML section: Eating Out; normalized text characters 3890:4189 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:41 (0-based, end-exclusive)",
+          "text": "High Blood Pressure: Healthy Eating Guide"
+        },
+        {
+          "location": "HTML section: Eating Out; normalized text characters 3890:4189 (0-based, end-exclusive)",
+          "text": "Ask for your food to be prepared with less salt and sauces, where possible. Ask for the sauces to be served on the side. Taste food and try not to add more salt or sauces to the food at the table if the food is already palatable. Avoid drinking soup stock and sauces as they contain a lot of sodium."
+        }
+      ],
+      "content": "High Blood Pressure: Healthy Eating Guide\n\nAsk for your food to be prepared with less salt and sauces, where possible. Ask for the sauces to be served on the side. Taste food and try not to add more salt or sauces to the food at the table if the food is already palatable. Avoid drinking soup stock and sauces as they contain a lot of sodium.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "hypertension"
+              }
+            ],
+            "population_note": "People with hypertension",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "sodium",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Ask for less salt and sauces and for sauces on the side. Taste before adding salt or sauces; avoid drinking soup stock and sauces because they contain much sodium."
+            },
+            "blockers": [
+              "Qualitative food-choice guidance is retained as assessment advice; no computable nutrient amount is stated."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "sodium",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "People with hypertension",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-hypertension-produce",
+      "document_id": "sg-hypertension",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:41 (0-based, end-exclusive); HTML section: Increase Intake of Fibre-Rich Food; normalized text characters 4689:4817 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:41 (0-based, end-exclusive)",
+          "text": "High Blood Pressure: Healthy Eating Guide"
+        },
+        {
+          "location": "HTML section: Increase Intake of Fibre-Rich Food; normalized text characters 4689:4817 (0-based, end-exclusive)",
+          "text": "Choose fruits or vegetables instead of salty snack foods. Aim for two servings of fruits and two servings of vegetables per day."
+        }
+      ],
+      "content": "High Blood Pressure: Healthy Eating Guide\n\nChoose fruits or vegetables instead of salty snack foods. Aim for two servings of fruits and two servings of vegetables per day.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "hypertension"
+              }
+            ],
+            "population_note": "People with hypertension",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "fruit_and_vegetables",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Aim for two servings of fruits and two servings of vegetables per day, choosing them instead of salty snacks."
+            },
+            "blockers": [
+              "Food-group servings are outside supported numeric nutrient actions; preserve both quantities in advice."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fruit_and_vegetables",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "People with hypertension",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-hypertension-alcohol",
+      "document_id": "sg-hypertension",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:41 (0-based, end-exclusive); HTML section: Limit Alcohol Consumption; normalized text characters 5990:6271 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:41 (0-based, end-exclusive)",
+          "text": "High Blood Pressure: Healthy Eating Guide"
+        },
+        {
+          "location": "HTML section: Limit Alcohol Consumption; normalized text characters 5990:6271 (0-based, end-exclusive)",
+          "text": "Avoid alcohol if you have high blood triglycerides levels, kidney disease, diabetes mellitus or heart disease. Limit or avoid alcohol. If you choose to drink, moderate your intake of alcoholic drinks to not more than one standard drink per day (e.g. 100ml wine = 1 standard drink)."
+        }
+      ],
+      "content": "High Blood Pressure: Healthy Eating Guide\n\nAvoid alcohol if you have high blood triglycerides levels, kidney disease, diabetes mellitus or heart disease. Limit or avoid alcohol. If you choose to drink, moderate your intake of alcoholic drinks to not more than one standard drink per day (e.g. 100ml wine = 1 standard drink).",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "hypertension"
+              }
+            ],
+            "population_note": "People with hypertension; alcohol avoidance with listed conditions",
+            "exceptions": [],
+            "exception_note": "Avoid alcohol with high blood triglycerides, kidney disease, diabetes mellitus or heart disease; the one-drink advice must not override avoidance.",
+            "action": {
+              "kind": "assessment",
+              "subject": "alcohol",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Avoid alcohol with high blood triglycerides, kidney disease, diabetes mellitus or heart disease. Otherwise limit or avoid it; if choosing to drink, no more than one standard drink daily (the example is 100 ml wine)."
+            },
+            "blockers": [
+              "Alcohol is outside supported numeric nutrient subjects. This combined advice has condition-specific avoidance and a separate conditional one-drink limit; split those actions before computation so avoidance is not lost or applied universally."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "alcohol",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "People with hypertension; alcohol avoidance with listed conditions",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-hypertension-individual-diet",
+      "document_id": "sg-hypertension",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:41 (0-based, end-exclusive); HTML section: Dietitian / Your Doctor; normalized text characters 6739:7191 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:41 (0-based, end-exclusive)",
+          "text": "High Blood Pressure: Healthy Eating Guide"
+        },
+        {
+          "location": "HTML section: Dietitian / Your Doctor; normalized text characters 6739:7191 (0-based, end-exclusive)",
+          "text": "For more personalised dietary guidelines for hypertension, make an appointment with a dietitian. It is recommended that you consult a dietitian to evaluate your current eating habits and an assessment of your specific dietary needs for your health conditions. Individualised advice and a nutrition plan can be developed to meet your nutritional needs. Your Doctor You will need to obtain a referral from your doctor for a consultation with a dietitian."
+        }
+      ],
+      "content": "High Blood Pressure: Healthy Eating Guide\n\nFor more personalised dietary guidelines for hypertension, make an appointment with a dietitian. It is recommended that you consult a dietitian to evaluate your current eating habits and an assessment of your specific dietary needs for your health conditions. Individualised advice and a nutrition plan can be developed to meet your nutritional needs. Your Doctor You will need to obtain a referral from your doctor for a consultation with a dietitian.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [
+              {
+                "fact": "conditions",
+                "operator": "contains",
+                "value": "hypertension"
+              }
+            ],
+            "population_note": "People with hypertension seeking individual dietary advice",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "dietary_assessment",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Consult a dietitian to assess eating habits and specific dietary needs and develop an individual plan. The guide says to obtain a doctor’s referral for the dietitian consultation."
+            },
+            "blockers": []
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "dietary_assessment",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "People with hypertension seeking individual dietary advice",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-fat-energy-range",
+      "document_id": "sg-fats",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:76 (0-based, end-exclusive); HTML section: So how much fat should I have?; normalized text characters 2707:2850 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:76 (0-based, end-exclusive)",
+          "text": "Unlocking the Truth About Fats: How to Choose the Right Ones for Your Health"
+        },
+        {
+          "location": "HTML section: So how much fat should I have?; normalized text characters 2707:2850 (0-based, end-exclusive)",
+          "text": "Fat should make up about 25-30% of our total energy intake. Based on a typical 2000kcal diet, the total fat allowance is about 55 to 65g a day."
+        }
+      ],
+      "content": "Unlocking the Truth About Fats: How to Choose the Right Ones for Your Health\n\nFat should make up about 25-30% of our total energy intake. Based on a typical 2000kcal diet, the total fat allowance is about 55 to 65g a day.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Readers of this public nutrition guidance",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "range",
+              "subject": "fat",
+              "amount": 25,
+              "upper": 30,
+              "unit": "% energy",
+              "advice": "About 25–30% of total energy should be fat; the illustration for a typical 2000 kcal diet is about 55–65 g daily."
+            },
+            "blockers": [
+              "The range is approximate, not a hard bound; 55–65 g/day is an illustration conditional on a typical 2000 kcal diet."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fat",
+          "relation": "range",
+          "value": 25,
+          "unit": "% energy",
+          "population": "Readers of this public nutrition guidance",
+          "exclusions": "Not stated in this passage",
+          "upper": 30,
+          "qualifier": "about; grams-per-day example conditional on typical 2000 kcal diet"
+        }
+      ]
+    },
+    {
+      "id": "sg-fat-replacement",
+      "document_id": "sg-fats",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:76 (0-based, end-exclusive); HTML section: So what should I do?; normalized text characters 6121:6371 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:76 (0-based, end-exclusive)",
+          "text": "Unlocking the Truth About Fats: How to Choose the Right Ones for Your Health"
+        },
+        {
+          "location": "HTML section: So what should I do?; normalized text characters 6121:6371 (0-based, end-exclusive)",
+          "text": "As part of healthy eating, aim to consume fat in moderate amounts. Remember, having too much fat, even the good types, will provide excess calories. Limit the intake of saturated fat and trans fat in your diet, and replace them with unsaturated fats."
+        }
+      ],
+      "content": "Unlocking the Truth About Fats: How to Choose the Right Ones for Your Health\n\nAs part of healthy eating, aim to consume fat in moderate amounts. Remember, having too much fat, even the good types, will provide excess calories. Limit the intake of saturated fat and trans fat in your diet, and replace them with unsaturated fats.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Readers of this public nutrition guidance",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "fat",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Replace saturated and trans fats with unsaturated fats, but still consume fat moderately because even good fats provide excess calories if eaten in excess."
+            },
+            "blockers": [
+              "Qualitative food-choice guidance is retained as assessment advice; no computable nutrient amount is stated."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "fat",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Readers of this public nutrition guidance",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-fat-fish-frequency",
+      "document_id": "sg-fats",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:76 (0-based, end-exclusive); HTML section: At home; normalized text characters 6791:6904 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:76 (0-based, end-exclusive)",
+          "text": "Unlocking the Truth About Fats: How to Choose the Right Ones for Your Health"
+        },
+        {
+          "location": "HTML section: At home; normalized text characters 6791:6904 (0-based, end-exclusive)",
+          "text": "Consume fish at least twice a week. Replace meat in dishes with beans and bean products (e.g. tofu) on some days."
+        }
+      ],
+      "content": "Unlocking the Truth About Fats: How to Choose the Right Ones for Your Health\n\nConsume fish at least twice a week. Replace meat in dishes with beans and bean products (e.g. tofu) on some days.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Readers of this public nutrition guidance",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "protein_food_choices",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "Consume fish at least twice a week and replace meat with beans or bean products such as tofu on some days."
+            },
+            "blockers": [
+              "Fish frequency and food substitutions are outside supported numeric nutrient actions; retain the minimum frequency in advice."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "protein_food_choices",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Readers of this public nutrition guidance",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    },
+    {
+      "id": "sg-fat-cholesterol-limit",
+      "document_id": "sg-fats",
+      "split": "dev",
+      "location": "HTML document title; normalized text characters 0:76 (0-based, end-exclusive); HTML section: What about cholesterol?; normalized text characters 7983:8117 (0-based, end-exclusive)",
+      "excerpts": [
+        {
+          "location": "HTML document title; normalized text characters 0:76 (0-based, end-exclusive)",
+          "text": "Unlocking the Truth About Fats: How to Choose the Right Ones for Your Health"
+        },
+        {
+          "location": "HTML section: What about cholesterol?; normalized text characters 7983:8117 (0-based, end-exclusive)",
+          "text": "To be safe, limit your cholesterol intake to less than 300mg per day. Avoid consuming organ meat and shellfish more than twice a week."
+        }
+      ],
+      "content": "Unlocking the Truth About Fats: How to Choose the Right Ones for Your Health\n\nTo be safe, limit your cholesterol intake to less than 300mg per day. Avoid consuming organ meat and shellfish more than twice a week.",
+      "reference_extraction": {
+        "rules": [
+          {
+            "applicability": [],
+            "population_note": "Readers of this public nutrition guidance",
+            "exceptions": [],
+            "exception_note": "Not stated in this passage",
+            "action": {
+              "kind": "assessment",
+              "subject": "cholesterol",
+              "amount": null,
+              "upper": null,
+              "unit": null,
+              "advice": "It states less than 300 mg cholesterol daily and advises avoiding organ meat and shellfish more than twice a week."
+            },
+            "blockers": [
+              "Cholesterol and food frequency are outside supported numeric nutrient subjects. Strict less-than cannot be represented as an inclusive ceiling."
+            ]
+          }
+        ],
+        "limitations": [
+          "Team-labelled reference; not independently clinically adjudicated."
+        ]
+      },
+      "reference_facts": [
+        {
+          "subject": "cholesterol",
+          "relation": "qualitative",
+          "value": null,
+          "unit": null,
+          "population": "Readers of this public nutrition guidance",
+          "exclusions": "Not stated in this passage"
+        }
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "sg-plate-balance-question",
+      "split": "dev",
+      "ablation": true,
+      "question": "How does My Healthy Plate divide the plate, and what breakfast qualification is stated?",
+      "passage_ids": [
+        "sg-plate-balance"
+      ],
+      "reference_answer": {
+        "answer": "Half is fruit and vegetables (optional for breakfast), a quarter is lean meat and others, and a quarter is wholegrains.",
+        "required_patterns": [
+          "(?i)\\bhalf\\b",
+          "(?i)\\boptional for breakfast\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-plate-balance"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-plate-whole-fruit-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "What fruit form and vegetable cooking methods does this plate guidance suggest?",
+      "passage_ids": [
+        "sg-plate-whole-fruit"
+      ],
+      "reference_answer": {
+        "answer": "Eat fruit whole rather than as juices. Vegetables can be stir-fried, roasted, steamed, blanched or sautéed.",
+        "required_patterns": [
+          "(?i)\\bwhole\\b",
+          "(?i)\\bjuices\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-plate-whole-fruit"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-plate-next-meal-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "What does the plate guide suggest if a meal cannot meet Quarter-Quarter-Half?",
+      "passage_ids": [
+        "sg-plate-next-meal"
+      ],
+      "reference_answer": {
+        "answer": "You can make up the missing food groups in your next meal.",
+        "required_patterns": [
+          "(?i)\\bnext meal\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-plate-next-meal"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-child-fat-restriction-question",
+      "split": "test",
+      "ablation": true,
+      "question": "Is fat restriction recommended for a child under two in this passage?",
+      "passage_ids": [
+        "sg-child-fat-restriction"
+      ],
+      "reference_answer": {
+        "answer": "No. Fat restriction is not recommended under 2 years because the child is growing rapidly and needs energy for growth.",
+        "required_patterns": [
+          "(?i)\\bnot recommended\\b",
+          "\\b2\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-child-fat-restriction"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-child-vegetable-acceptance-question",
+      "split": "test",
+      "ablation": false,
+      "question": "How does the guidance suggest encouraging a child who refuses fruit and vegetables?",
+      "passage_ids": [
+        "sg-child-vegetable-acceptance"
+      ],
+      "reference_answer": {
+        "answer": "Offer a colourful variety daily, gently encourage trying them, and try creative shapes and sizes. Several attempts may be needed.",
+        "required_patterns": [
+          "(?i)\\bgently\\b",
+          "(?i)\\b(?:shapes|sizes)\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-child-vegetable-acceptance"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-child-calcium-sources-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Which dairy and non-dairy calcium sources are listed for children and teenagers?",
+      "passage_ids": [
+        "sg-child-calcium-sources"
+      ],
+      "reference_answer": {
+        "answer": "Dairy sources include milk, cheese and yoghurt. Other sources include fortified soybean milk, dark green leafy vegetables and fish with edible bones such as sardines.",
+        "required_patterns": [
+          "(?i)\\bfortified\\b",
+          "(?i)\\bedible bones\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-child-calcium-sources"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-child-salt-question",
+      "split": "test",
+      "ablation": false,
+      "question": "What salt-related foods should be limited for children and teens?",
+      "passage_ids": [
+        "sg-child-salt"
+      ],
+      "reference_answer": {
+        "answer": "Limit salt, sauces and salty processed foods such as luncheon meat, salted vegetables and chips.",
+        "required_patterns": [
+          "(?i)\\bsauces\\b",
+          "(?i)\\bprocessed\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-child-salt"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-child-added-sugar-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Why does this guidance encourage children to consume fewer foods and drinks with added sugar?",
+      "passage_ids": [
+        "sg-child-added-sugar"
+      ],
+      "reference_answer": {
+        "answer": "Added sugar adds calories with little other nutritional value; excess calories can lead to weight gain. Sugary foods and drinks also increase tooth-decay risk, especially with neglected dental hygiene.",
+        "required_patterns": [
+          "(?i)\\bcalories\\b",
+          "(?i)\\btooth.decay\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-child-added-sugar"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-lactation-water-question",
+      "split": "test",
+      "ablation": true,
+      "question": "What daily water guidance is stated for breastfeeding mothers?",
+      "passage_ids": [
+        "sg-lactation-water"
+      ],
+      "reference_answer": {
+        "answer": "The article says to aim for at least 1.5 to 2 litres of water daily and to drink enough fluids such as milk and soup.",
+        "required_patterns": [
+          "\\b1\\.5\\b",
+          "\\b2\\b",
+          "(?i)\\blitres\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-lactation-water"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-lactation-energy-question",
+      "split": "test",
+      "ablation": false,
+      "question": "What extra energy does this breastfeeding article describe, and what affects individual requirements?",
+      "passage_ids": [
+        "sg-lactation-energy"
+      ],
+      "reference_answer": {
+        "answer": "It describes an additional 330 to 400 kcal per day for a well-nourished breastfeeding mother, approximately 2,000 to 2,800 kcal total per day. Age, BMI, activity and extent of breastfeeding affect requirements; consult a dietitian for individual needs.",
+        "required_patterns": [
+          "(?i)\\badditional 330 to 400\\b",
+          "(?i)\\bdietitian\\b"
+        ],
+        "forbidden_patterns": [
+          "(?i)\\btotal (?:daily )?(?:intake|requirement) (?:is|of)\\s{1,3}330\\b"
+        ],
+        "source_ids": [
+          "sg-lactation-energy"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-lactation-supplements-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Does the article say all breastfeeding mothers must take supplements?",
+      "passage_ids": [
+        "sg-lactation-supplements"
+      ],
+      "reference_answer": {
+        "answer": "No. Supplements may not be necessary with a varied, balanced diet. If calcium intake and sun exposure have reduced after delivery, vitamin D and calcium supplementation may be considered.",
+        "required_patterns": [
+          "(?i)\\bmay not be necessary\\b",
+          "(?i)\\bsun exposure\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-lactation-supplements"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-lactation-milk-myth-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Does drinking more milk increase breast-milk production according to the passage?",
+      "passage_ids": [
+        "sg-lactation-milk-myth"
+      ],
+      "reference_answer": {
+        "answer": "No. Drinking more milk does not influence breast-milk production, although milk provides fluid for hydration and calcium to help maintain maternal bone mass.",
+        "required_patterns": [
+          "(?i)\\bdoes not influence\\b",
+          "(?i)\\bcalcium\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-lactation-milk-myth"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-pregnancy-folate-timing-question",
+      "split": "test",
+      "ablation": true,
+      "question": "What usual folic-acid timing does the antenatal leaflet give?",
+      "passage_ids": [
+        "sg-pregnancy-folate-timing"
+      ],
+      "reference_answer": {
+        "answer": "It is usually taken from preconception until the 12th week of pregnancy.",
+        "required_patterns": [
+          "(?i)\\bpreconception\\b",
+          "\\b12th\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-pregnancy-folate-timing"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-pregnancy-multivitamin-review-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Why should someone check with a healthcare professional before buying pregnancy multivitamins?",
+      "passage_ids": [
+        "sg-pregnancy-multivitamin-review"
+      ],
+      "reference_answer": {
+        "answer": "Some multivitamins contain higher-than-necessary amounts, including vitamin A doses that may not be safe in pregnancy. Check with a healthcare professional before buying them.",
+        "required_patterns": [
+          "(?i)\\bvitamin A\\b",
+          "(?i)\\bhealthcare professional\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-pregnancy-multivitamin-review"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-pregnancy-iron-spacing-question",
+      "split": "test",
+      "ablation": false,
+      "question": "What spacing and exception does the leaflet give for most iron supplements?",
+      "passage_ids": [
+        "sg-pregnancy-iron-spacing"
+      ],
+      "reference_answer": {
+        "answer": "Most may need at least 2 hours of separation from coffee, tea, milk, dairy, calcium or other iron-containing supplements. Iron polymaltose (for example Haemo or Maltofer) is the stated exception.",
+        "required_patterns": [
+          "\\b2 hours\\b",
+          "(?i)\\bpolymaltose\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-pregnancy-iron-spacing"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-pregnancy-vitamin-d-question",
+      "split": "test",
+      "ablation": false,
+      "question": "Who determines whether vitamin D is required during pregnancy, and where are dosing instructions obtained?",
+      "passage_ids": [
+        "sg-pregnancy-vitamin-d"
+      ],
+      "reference_answer": {
+        "answer": "Vitamin D is only required when determined by the doctor. Follow the medication label or packaging instructions.",
+        "required_patterns": [
+          "(?i)\\bdoctor\\b",
+          "(?i)\\b(?:label|packaging)\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-pregnancy-vitamin-d"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-diabetes-mealtimes-question",
+      "split": "dev",
+      "ablation": true,
+      "question": "What meal-timing advice is given for diabetes, especially with insulin or sulfonylureas?",
+      "passage_ids": [
+        "sg-diabetes-mealtimes"
+      ],
+      "reference_answer": {
+        "answer": "Have regular meal times every day. Especially with regular insulin or sulfonylureas, do not skip or delay meals, to prevent hypoglycaemia.",
+        "required_patterns": [
+          "(?i)\\bregular meal\\b",
+          "(?i)\\bhypoglycaemia\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-diabetes-mealtimes"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-diabetes-fasting-review-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "What should people with diabetes do before prolonged fasting or changed meal times?",
+      "passage_ids": [
+        "sg-diabetes-fasting-review"
+      ],
+      "reference_answer": {
+        "answer": "Consult the doctor because diabetes medications may need adjustment.",
+        "required_patterns": [
+          "(?i)\\bdoctor\\b",
+          "(?i)\\badjustment\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-diabetes-fasting-review"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-diabetes-carb-reduction-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Why discuss substantial carbohydrate reductions with the doctor when taking insulin or sulfonylureas?",
+      "passage_ids": [
+        "sg-diabetes-carb-reduction"
+      ],
+      "reference_answer": {
+        "answer": "Reducing carbohydrates substantially can create a risk of hypoglycaemia with insulin or sulfonylureas. Discuss medication adjustment with the doctor to match diet changes.",
+        "required_patterns": [
+          "(?i)\\bhypoglycaemia\\b",
+          "(?i)\\bdoctor\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-diabetes-carb-reduction"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-diabetes-coconut-substitution-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "What substitution does the diabetes cooking guide suggest for coconut milk in curries and gravies?",
+      "passage_ids": [
+        "sg-diabetes-coconut-substitution"
+      ],
+      "reference_answer": {
+        "answer": "Use low-fat or skimmed milk instead of coconut milk.",
+        "required_patterns": [
+          "(?i)\\blow-fat\\b",
+          "(?i)\\bskimmed\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-diabetes-coconut-substitution"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-diabetes-drinks-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "What drink choices does the diabetes guide recommend when eating out?",
+      "passage_ids": [
+        "sg-diabetes-drinks"
+      ],
+      "reference_answer": {
+        "answer": "Request water, ask for less or no added sugar, or choose reduced-sugar or no-sugar drinks such as Healthier Choice Symbol or Nutri-Grade A or B options.",
+        "required_patterns": [
+          "(?i)\\bwater\\b",
+          "(?i)\\bA or B\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-diabetes-drinks"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-hypertension-home-seasoning-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "How can home cooking reduce sodium without relying on salty seasonings?",
+      "passage_ids": [
+        "sg-hypertension-home-seasoning"
+      ],
+      "reference_answer": {
+        "answer": "Use less salt, sauces, stock cubes and seasoning powders, and flavour food with herbs and spices such as onion, ginger and garlic.",
+        "required_patterns": [
+          "(?i)\\bstock cubes\\b",
+          "(?i)\\bherbs and spices\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-hypertension-home-seasoning"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-hypertension-eating-out-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "What does the hypertension guide recommend about sauces and soup when eating out?",
+      "passage_ids": [
+        "sg-hypertension-eating-out"
+      ],
+      "reference_answer": {
+        "answer": "Ask for less salt and sauces and for sauces on the side. Taste before adding salt or sauces; avoid drinking soup stock and sauces because they contain much sodium.",
+        "required_patterns": [
+          "(?i)\\bon the side\\b",
+          "(?i)\\bsoup stock\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-hypertension-eating-out"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-hypertension-produce-question",
+      "split": "dev",
+      "ablation": true,
+      "question": "What fruit and vegetable servings does the hypertension guide advise?",
+      "passage_ids": [
+        "sg-hypertension-produce"
+      ],
+      "reference_answer": {
+        "answer": "Aim for two servings of fruits and two servings of vegetables per day, choosing them instead of salty snacks.",
+        "required_patterns": [
+          "(?i)\\btwo servings of fruits\\b",
+          "(?i)\\btwo servings of vegetables\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-hypertension-produce"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-hypertension-alcohol-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "Which conditions prompt alcohol avoidance, and what limit is stated for those choosing to drink?",
+      "passage_ids": [
+        "sg-hypertension-alcohol"
+      ],
+      "reference_answer": {
+        "answer": "Avoid alcohol with high blood triglycerides, kidney disease, diabetes mellitus or heart disease. Otherwise limit or avoid it; if choosing to drink, no more than one standard drink daily (the example is 100 ml wine).",
+        "required_patterns": [
+          "(?i)\\bkidney disease\\b",
+          "(?i)\\bone standard drink\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-hypertension-alcohol"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-hypertension-individual-diet-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "How does this guide direct someone to obtain personalised dietary advice for hypertension?",
+      "passage_ids": [
+        "sg-hypertension-individual-diet"
+      ],
+      "reference_answer": {
+        "answer": "Consult a dietitian to assess eating habits and specific dietary needs and develop an individual plan. The guide says to obtain a doctor’s referral for the dietitian consultation.",
+        "required_patterns": [
+          "(?i)\\bdietitian\\b",
+          "(?i)\\breferral\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-hypertension-individual-diet"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-fat-energy-range-question",
+      "split": "dev",
+      "ablation": true,
+      "question": "What approximate fat-energy share is described, and what daily fat allowance is illustrated for 2000 kcal?",
+      "passage_ids": [
+        "sg-fat-energy-range"
+      ],
+      "reference_answer": {
+        "answer": "About 25–30% of total energy should be fat; the illustration for a typical 2000 kcal diet is about 55–65 g daily.",
+        "required_patterns": [
+          "\\b25\\s{0,3}(?:[-–]|to)\\s{0,3}30\\s{0,3}(?:%|percent\\b)",
+          "\\b55\\s{0,3}(?:[-–]|to)\\s{0,3}65\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-fat-energy-range"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-fat-replacement-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "What should replace saturated and trans fats, and does that remove the need for moderation?",
+      "passage_ids": [
+        "sg-fat-replacement"
+      ],
+      "reference_answer": {
+        "answer": "Replace saturated and trans fats with unsaturated fats, but still consume fat moderately because even good fats provide excess calories if eaten in excess.",
+        "required_patterns": [
+          "(?i)\\bunsaturated\\b",
+          "(?i)\\bcalories\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-fat-replacement"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-fat-fish-frequency-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "What fish frequency and plant-protein substitution does the fats article suggest?",
+      "passage_ids": [
+        "sg-fat-fish-frequency"
+      ],
+      "reference_answer": {
+        "answer": "Consume fish at least twice a week and replace meat with beans or bean products such as tofu on some days.",
+        "required_patterns": [
+          "(?i)\\bat least twice a week\\b",
+          "(?i)\\btofu\\b"
+        ],
+        "forbidden_patterns": [],
+        "source_ids": [
+          "sg-fat-fish-frequency"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    },
+    {
+      "id": "sg-fat-cholesterol-limit-question",
+      "split": "dev",
+      "ablation": false,
+      "question": "What cholesterol and organ-meat/shellfish limits does this article state?",
+      "passage_ids": [
+        "sg-fat-cholesterol-limit"
+      ],
+      "reference_answer": {
+        "answer": "It states less than 300 mg cholesterol daily and advises avoiding organ meat and shellfish more than twice a week.",
+        "required_patterns": [
+          "\\b300 mg\\b",
+          "(?i)\\bless than\\b",
+          "(?i)\\btwice a week\\b"
+        ],
+        "forbidden_patterns": [
+          "(?i)\\b(?:at least|minimum of)\\s{1,3}300\\s{0,3}mg\\b"
+        ],
+        "source_ids": [
+          "sg-fat-cholesterol-limit"
+        ],
+        "needs_clinician": false,
+        "insufficient_evidence": false
+      },
+      "rubric": "Accept semantic equivalence. Preserve scope, units, qualifiers and exceptions. Patterns are bounded lexical diagnostics, not a substitute for semantic review."
+    }
+  ]
+}
