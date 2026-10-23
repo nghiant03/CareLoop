@@ -10,6 +10,38 @@ from careloop.evidence import acquisition, documents
 from careloop.workflow import WorkflowError
 
 
+@pytest.fixture(autouse=True)
+def recognized_pdf(monkeypatch):
+    # Route/transaction tests use deterministic OCR output; real OCR is tested separately.
+    from pypdf import PdfReader
+
+    def recognize(raw, first=1, last=None):
+        try:
+            reader = PdfReader(io.BytesIO(raw))
+            last = last or len(reader.pages)
+            if not 1 <= first <= last <= len(reader.pages):
+                raise ValueError("Page range falls outside the document")
+            pages = [
+                {
+                    "page": n,
+                    "blocks": [
+                        {"block_label": "text", "block_content": reader.pages[n - 1].extract_text()}
+                    ],
+                }
+                for n in range(first, last + 1)
+            ]
+            return {
+                "pages": pages,
+                "empty_pages": [],
+                "total_pages": len(reader.pages),
+                "selected_pages": [first, last],
+            }
+        except Exception as exc:
+            raise ValueError("Invalid test document") from exc
+
+    monkeypatch.setattr(documents, "extract_pdf", recognize)
+
+
 def pdf(text="Protein guidance for adults.", blank=False):
     writer = PdfWriter()
     page = writer.add_blank_page(width=600, height=800)
@@ -55,7 +87,7 @@ def test_pdf_original_passages_refresh_and_no_automatic_publication(client):
     assert source["document"]["metadata"]["warnings"]
     assert client.get(f"/api/evidence/sources/{source['id']}/document").content == raw
     chunks = client.get(f"/api/evidence/sources/{source['id']}/passages").json()
-    assert chunks[0]["location"] == "Page 1"
+    assert chunks[0]["location"] == "Page 1, block 1 (text)"
     for chunk in chunks:
         assert source["content"][chunk["start_offset"] : chunk["end_offset"]] == chunk["content"]
     assert client.get("/api/evidence/passages", params={"q": "protein"}).json() == []
@@ -110,7 +142,7 @@ def test_html_import_discovery_and_location_offsets(client, monkeypatch):
     )
     assert response.status_code == 201, response.text
     assert "Ignore me" not in response.json()["content"]
-    assert "Adult\tTest value" in response.json()["content"]
+    assert "<td>Adult</td><td>Test value</td>" in response.json()["content"]
     chunks = client.get(f"/api/evidence/sources/{response.json()['id']}/passages").json()
     assert chunks[0]["location"] == "Heading: Nutrition"
 
@@ -165,7 +197,7 @@ def test_url_policy_private_resolution_and_redirect_validation(monkeypatch):
 
 def test_chunks_keep_exact_offsets_and_limit():
     content, chunks = documents.passages([("Section A", "word " * 500), ("Section B", "ending")])
-    assert len(chunks) == 3
+    assert len(chunks) == 2
     assert all(content[p["start_offset"] : p["end_offset"]] == p["content"] for p in chunks)
     with pytest.raises(WorkflowError, match="million"):
-        documents.passages([("oversized", "x" * 1_000_001)])
+        documents.passages([("oversized", "x" * 10_000_001)])

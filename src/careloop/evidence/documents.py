@@ -1,13 +1,16 @@
-import json
-import subprocess
-import sys
 from html.parser import HTMLParser
 from urllib.parse import urljoin
 
 from careloop.evidence.acquisition import validate_url
+from careloop.evidence.pdf_worker import extract_pdf
+from careloop.evidence.structure import (
+    MAX_TEXT,
+    PARSER_VERSION,
+    html_sections,
+    ocr_sections,
+    split_text,
+)
 from careloop.workflow import WorkflowError
-
-MAX_TEXT = 1_000_000
 
 
 class DocumentHTML(HTMLParser):
@@ -88,10 +91,15 @@ def passages(sections):
     result, content = [], ""
     for location, text in sections:
         text = text.strip()
+        if len(content) + len(text) > MAX_TEXT:
+            raise WorkflowError(422, "Extracted text exceeds ten million characters")
         if "\x00" in text:
             raise WorkflowError(422, "Extracted text contains unsupported null characters")
-        for start in range(0, len(text), 1800):
-            chunk = text[start : start + 1800]
+        try:
+            units = split_text(text)
+        except ValueError as exc:
+            raise WorkflowError(422, f"{location}: {exc}") from exc
+        for chunk in units:
             if not chunk.strip():
                 continue
             if content:
@@ -108,10 +116,10 @@ def passages(sections):
                 }
             )
             if len(content) > MAX_TEXT:
-                raise WorkflowError(422, "Extracted text exceeds one million characters")
+                raise WorkflowError(422, "Extracted text exceeds ten million characters")
     if not result:
         raise WorkflowError(
-            422, "No extractable text; scanned documents require OCR or pasted text"
+            422, "No usable document content was recognized; inspect the original source"
         )
     return content, result
 
@@ -119,36 +127,19 @@ def passages(sections):
 def extract(payload, content_type, first_page=1, last_page=None):
     if payload.startswith(b"%PDF-"):
         try:
-            worker = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "careloop.evidence.pdf_worker",
-                    str(first_page),
-                    str(last_page or 0),
-                ],
-                input=payload,
-                capture_output=True,
-                timeout=20,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise WorkflowError(422, "PDF text extraction exceeded its time limit") from exc
-        if worker.returncode:
-            if worker.returncode == 2 and worker.stdout:
-                raise WorkflowError(422, json.loads(worker.stdout)["error"])
-            raise WorkflowError(422, "PDF unreadable, encrypted, or exceeds extraction limits")
-        parsed = json.loads(worker.stdout)
-        sections = [(f"Page {page['page']}", page["text"]) for page in parsed["pages"]]
+            parsed = extract_pdf(payload, first_page, last_page)
+        except ValueError as exc:
+            raise WorkflowError(422, str(exc)) from exc
+        sections = ocr_sections(parsed["pages"])
         content, chunks = passages(sections)
-        warnings = ["PDF reading order and tables need reviewer verification; no OCR performed"]
+        warnings = ["PaddleOCR-recognized text, numbers and table structure require source review"]
         if parsed["empty_pages"]:
             warnings.append(f"Pages without extractable text: {parsed['empty_pages']}")
         return (
             content,
             chunks,
             {
-                "parser": "pypdf-6-layout-v1",
+                "parser": PARSER_VERSION,
                 "media_type": "application/pdf",
                 "warnings": warnings,
                 "total_pages": parsed["total_pages"],
@@ -159,15 +150,20 @@ def extract(payload, content_type, first_page=1, last_page=None):
         raise WorkflowError(422, "Page selection applies only to PDFs")
     if "text/html" not in content_type.lower():
         raise WorkflowError(422, "Expected an HTML page or PDF document")
-    _, _, sections = html_document(payload)
+    try:
+        sections = html_sections(payload)
+    except UnicodeDecodeError as exc:
+        raise WorkflowError(422, "HTML must be UTF-8; submit decoded text instead") from exc
     content, chunks = passages(sections)
     return (
         content,
         chunks,
         {
-            "parser": "html-text-v1",
+            "parser": PARSER_VERSION,
             "media_type": "text/html",
-            "warnings": ["HTML navigation may remain; verify headings, tables and footnotes"],
+            "warnings": [
+                "HTML heading context and table markup retained; verify units and footnotes"
+            ],
         },
     )
 

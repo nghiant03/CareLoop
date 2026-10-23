@@ -24,7 +24,7 @@ class SourceInput(Decision):
     title: Text
     locator: Text
     edition: Text
-    content: Annotated[str, Field(min_length=1, max_length=1_000_000)]
+    content: Annotated[str, Field(min_length=1, max_length=10_000_000)]
 
 
 class Predicate(Model):
