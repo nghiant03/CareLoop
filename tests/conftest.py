@@ -8,7 +8,6 @@ from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
 from careloop.api import create_app
-from careloop.db import migrate
 
 
 @pytest.fixture
@@ -21,7 +20,6 @@ def database():
         conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
     scoped = make_conninfo(url, options=f"-csearch_path={schema}")
     try:
-        migrate(scoped)
         yield scoped
     finally:
         with psycopg.connect(url, autocommit=True) as conn:

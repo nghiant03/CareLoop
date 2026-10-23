@@ -1,12 +1,49 @@
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 
-from careloop.evidence import acquisition, documents, imports, service
+from careloop.evidence import acquisition, documents, extraction, imports, service
 from careloop.evidence.models import BatchInput
+from careloop.inference import InferenceClient, configured_client
 from careloop.workflow import WorkflowError, require_role
 
 router = APIRouter(prefix="/api/evidence", tags=["Evidence acquisition"])
+
+
+@router.post("/sources/{source_id}/extractions", status_code=201)
+def extract_rules(
+    source_id: UUID,
+    data: extraction.ExtractionInput,
+    request: Request,
+    client: Annotated[InferenceClient, Depends(configured_client)],
+):
+    return extraction.extract(request.app.state.pool, client, source_id, data)
+
+
+@router.get("/sources/{source_id}/extractions/{request_id}")
+def extraction_run(source_id: UUID, request_id: UUID, request: Request):
+    with request.app.state.pool.connection() as conn:
+        return extraction.get_run(conn, source_id, request_id)
+
+
+@router.get("/sources/{source_id}/extractions")
+def extraction_history(
+    source_id: UUID,
+    request: Request,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    with request.app.state.pool.connection() as conn:
+        service.source(conn, source_id)
+        return conn.execute(
+            """SELECT id, source_id, state, result, error, rule_ids, created_at, finished_at,
+            jsonb_build_object('model', request->>'model',
+                'decision', request->'decision') AS request
+            FROM evidence_extractions WHERE source_id=%s
+            ORDER BY created_at DESC, id DESC LIMIT %s OFFSET %s""",
+            (source_id, limit, offset),
+        ).fetchall()
 
 
 @router.post("/conflict-check")

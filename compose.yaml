@@ -15,23 +15,32 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
-  migrate:
-    build: .
-    environment:
-      CARELOOP_DATABASE_URL: postgresql://careloop:local-demo-only@db:5432/careloop
-    command: ["python", "-m", "careloop.db"]
-    depends_on:
-      db:
-        condition: service_healthy
   api:
-    build: .
+    build:
+      context: .
+      args:
+        OCR_BACKEND: gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
     environment:
       CARELOOP_DATABASE_URL: postgresql://careloop:local-demo-only@db:5432/careloop
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      CARELOOP_BOOTSTRAP: "1"
+      CARELOOP_DATA_DIR: /var/lib/careloop
+      CARELOOP_OCR_DEVICE: gpu:0
+    volumes:
+      - source_data_v1:/var/lib/careloop
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
       interval: 10s
@@ -46,3 +55,4 @@ services:
         condition: service_healthy
 volumes:
   database_v1:
+  source_data_v1:

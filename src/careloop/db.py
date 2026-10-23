@@ -1,4 +1,4 @@
-"""Explicit, transactional schema setup; the API never migrates on startup."""
+"""Transactional, checksum-verified schema setup called during application startup."""
 
 import hashlib
 import os
@@ -40,7 +40,3 @@ def migrate(url: str) -> None:
                 "INSERT INTO schema_migrations (name, checksum) VALUES (%s, %s)",
                 (migration.name, checksum),
             )
-
-
-if __name__ == "__main__":
-    migrate(database_url())

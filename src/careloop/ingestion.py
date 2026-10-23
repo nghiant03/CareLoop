@@ -5,13 +5,23 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from careloop.adapters import fndds, nhanes, sgfoodid
-from careloop.patients.csv_import import export_csv
+from careloop.foods.models import FoodInput
+from careloop.foods.service import save_food
+from careloop.patients.csv_import import export_csv, parse_csv
+from careloop.patients.models import CSVInput
+from careloop.patients.service import save_patient
+from careloop.workflow import require_role
 
 ADAPTERS = {"nhanes": nhanes, "fndds": fndds, "sgfoodid": sgfoodid}
 MAX_DOWNLOAD_BYTES = 20_000_000
 
 
 def acquire(source, directory, limit):
+    if source not in ADAPTERS:
+        raise ValueError("Unknown public data source")
+    minimum, maximum = (1, 5000) if source == "nhanes" else (0, 10000)
+    if not minimum <= limit <= maximum:
+        raise ValueError(f"Limit must be {minimum}–{maximum}")
     adapter = ADAPTERS[source]
     directory = directory.expanduser().resolve()
     for parent in [Path.cwd(), *Path.cwd().parents]:
@@ -63,3 +73,26 @@ def acquire(source, directory, limit):
     path = directory / f"manifest-{identity}-{limit}.json"
     path.write_text(json.dumps(manifest, indent=2) + "\n")
     return records, manifest, path
+
+
+def import_records(conn, source, records, actor, reason):
+    """Import normalized records in the caller's transaction with explicit attribution."""
+    if source == "nhanes":
+        data = CSVInput(content=export_csv(records, nhanes.NAMESPACE), actor=actor, reason=reason)
+        require_role(data, "clinician")
+        return [save_patient(conn, record) for record in parse_csv(data)]
+    if source not in ADAPTERS:
+        raise ValueError("Unknown public data source")
+    return [
+        save_food(
+            conn,
+            FoodInput(
+                namespace=ADAPTERS[source].NAMESPACE,
+                external_id=code,
+                body=body,
+                actor=actor,
+                reason=reason,
+            ),
+        )
+        for code, body in records
+    ]
