@@ -1,9 +1,10 @@
 # Meal planning
 
-Implementation choices, 2026-10-23. The planner assembles meals from reviewed food
+Implementation choices, 2026-10-23. The planner assembles meals from recorded food
 or dish portions. Each scheduled slot supports 1–5 distinct items; item counts are
-configurable per slot. Recipe preparation/instructions and conversational suggestions
-remain future work. [Food mining](MINING.md) supplies
+configurable per slot. Recipe preparation/instructions remain future work.
+Patient chat explains selected approved plans and retrieves checked substitution
+suggestions through the same services. [Food mining](MINING.md) supplies
 checked substitution recommendations. Reported intake
 is supported through [meal logging](LOGGING.md).
 
@@ -31,7 +32,7 @@ being ignored. No automatic tolerance or blanket calorie deficit is invented.
 
 ## Generation and approval
 
-`POST /api/plan-requests` accepts a patient/clinician actor, reason, exact target
+`POST /api/plan-requests` accepts a patient actor, reason, exact target
 ID/revision, start date, 1–7 days, unique schedule slots, and a selected pool of
 1–100 food IDs. The default schedule is breakfast/lunch/dinner; add snack explicitly.
 
@@ -44,13 +45,18 @@ certified or an evolutionary algorithm.
 
 `items_per_slot` sets an exact item count for each specified scheduled slot, for
 example `{"breakfast": 2, "lunch": 3, "dinner": 3}`. Omitted slots default to one
-for compatibility with existing requests, rather than imposing a one-item limit.
+item.
 Counts outside 1–5 or for unscheduled slots are rejected. The five-item maximum
 is an explicit compute bound, not a nutrition recommendation. Every item comes
-from the selected pool and must have reviewed slot suitability. A food appears
+from the selected pool; any selected food can appear at any requested meal. A food appears
 at most once within a meal; adjust its portion rather than duplicate it.
 
-`beam-items-v2` expands one item position at a time, retaining the best 32 partial
+All positive finite source portions matching the food's g/ml nutrient basis are
+available directly. Missing quantities are excluded; no serving-label conversion,
+density assumption or separate portion approval is needed. Per-food meal-slot
+restrictions have been removed. The patient's requested schedule is still enforced.
+
+`beam-source-portions-v3` expands one item position at a time, retaining the best 32 partial
 days. Interim nutrient scoring scales the day's goal by filled item positions;
 this is a search heuristic, not a prescribed meal-energy distribution. The selected
 pool must contain enough distinct eligible foods for each requested item count.
@@ -58,8 +64,8 @@ The exact item count, independent checker, and published constraints apply to al
 alternatives. Multi-item search quality still needs comparative evaluation.
 
 Stored `meals` remains a flat list of food items, keyed by `(day, slot, item)`;
-group entries with matching day/slot to display a meal. `item` is 1-based. Old
-snapshots without it mean item 1. Checks return both `meal_totals` and `daily_totals`.
+group entries with matching day/slot to display a meal. `item` is 1-based and
+defaults to 1 when omitted. Checks return both `meal_totals` and `daily_totals`.
 
 An independent checker recomputes totals with Decimal arithmetic, checks complete
 schedule coverage, portion units, restrictions, and each day's mandatory bounds.
@@ -85,7 +91,7 @@ replacement remains an explicitly unmet draft and cannot be approved. Approving
 a replacement supersedes its parent; competing stale replacement drafts cannot
 subsequently be approved.
 
-The item selector defaults to 1 for legacy requests. Substitution changes exactly
+The item selector defaults to 1. Substitution changes exactly
 one item and retains its siblings; the entire resulting plan is checked. Mining
 recommendations use the same item selector. Logging can confirm/change/skip items
 individually or atomically confirm/skip a whole meal.

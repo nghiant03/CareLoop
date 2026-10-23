@@ -9,7 +9,11 @@ and audit history. Versioned foods, checked planning alternatives, clinician pla
 approval, and substitution drafts are also implemented. Source adapters cover
 SG FoodID (the supplied Kaggle mirror), FNDDS, and NHANES. The connected frontend
 supports these review workflows, multi-item planning, logging and evidence acquisition.
-Hosted extraction/chat and the full public-data evaluation remain pending.
+Hosted extraction creates review-blocked drafts in the evidence workspace. Patient
+chat provides cited explanations of approved targets, selected plans and intake,
+plus checked substitution suggestions using GLM 5.3. Role-scoped
+workspaces separate patient actions, clinician review, and reviewer maintenance;
+see [UI routes](ui/README.md#workspaces). The full public-data evaluation remains pending.
 
 ## Run
 
@@ -17,12 +21,62 @@ Hosted extraction/chat and the full public-data evaluation remain pending.
 docker compose up --build -d
 ```
 
-The migration service initializes a fresh `careloop` database before the API
-starts. Open <http://localhost:5173> for the application,
+The API applies checksum-verified migrations before accepting requests.
+Open <http://localhost:5173> for the application,
 <http://localhost:8000/docs> for the interactive API and
 <http://localhost:8000/api/health> for readiness. Database access is on localhost
 port 55432; the Compose password is a public local-demo value, not a secret.
 The Compose project/volume is `careloop` / `database_v1`.
+
+On first boot, Compose enables background initialization: the complete SG FoodID
+catalogue is downloaded/imported, the four default evidence sources are acquired,
+and their parsed passages are processed into review-blocked rule drafts. The app
+is available while this runs; downloads and model calls can take time. Put
+`LLM_BASE_URL` and `LLM_API_KEY` in `.env` before starting for automatic extraction.
+No clinical approvals or publications are created.
+
+PDF parsing uses PaddleOCR PP-StructureV3 on CUDA GPU 0 with layout and table recognition.
+Compose reserves NVIDIA GPU 0 and installs the pinned PaddlePaddle CUDA 12.9 wheel.
+The host requires the NVIDIA driver and NVIDIA Container Toolkit. Verify access with
+`sudo docker compose exec api nvidia-smi`. A requested but unavailable GPU produces
+an explicit failure rather than silently falling back to CPU.
+
+If Docker has not yet registered the NVIDIA runtime:
+
+```sh
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+sudo docker compose up --build -d
+```
+
+To switch an existing CPU deployment, build the new image first with
+`sudo docker compose build api`, then recreate it with
+`sudo docker compose up -d --no-deps api` once the NVIDIA runtime is available.
+The database and source-data volumes are retained.
+The first PDF import downloads model weights; both models and completed OCR pages
+persist in `source_data_v1`. Completed CPU pages are reused when switching to CUDA.
+HTML imports retain native table structure and heading/unit context.
+This parser upgrade reparses previously acquired default source originals into new
+snapshots on the next API boot, then extracts new review-blocked drafts. Previous
+snapshots and decisions remain available. Rebuild with `docker compose up --build -d`.
+
+Inspect progress and failures at <http://localhost:8000/api/bootstrap> or with:
+
+```sh
+docker compose logs -f api
+curl -s http://localhost:8000/api/bootstrap
+```
+
+Sources and drafts appear in **Reviewer → Evidence review**, foods in **Food
+catalogue**. Completed jobs are retained in PostgreSQL; raw food artifacts use the
+`source_data_v1` volume. Restarts resume unfinished acquisition without duplicating
+imports or overwriting reviewed records. Missing provider configuration can be fixed
+in `.env`, then applied with `docker compose up -d --force-recreate api`.
+Failed or interrupted model requests remain in extraction history and require an
+explicit retry in evidence review; they are not silently sent twice. Initialization
+does not refresh completed sources automatically. Use the evidence refresh workflow
+for newer editions. Direct development starts opt in with `CARELOOP_BOOTSTRAP=1`
+and an external writable `CARELOOP_DATA_DIR`; Compose sets both automatically.
 
 For local Python development (Python 3.12+ and `uv`):
 
@@ -30,7 +84,6 @@ For local Python development (Python 3.12+ and `uv`):
 uv sync --frozen
 docker compose up -d db
 export CARELOOP_DATABASE_URL='postgresql://careloop:local-demo-only@127.0.0.1:55432/careloop'
-uv run python -m careloop.db
 uv run uvicorn careloop.api:create_app --factory --reload
 ```
 
@@ -49,9 +102,11 @@ Use `/docs` to submit each request with a reviewer demo actor and a reason:
 6. Create revisions or retire a rule using its expected latest revision.
 
 Approval does not publish. Editing does not replace an existing published version.
-No sources, rules, patients, or clinical recommendations are preloaded. Structured
+Default sources and review-blocked drafts are loaded by Compose initialization;
+patients and clinical approvals are not preloaded. Structured
 numeric conflicts block publication; broader interpretation remains manual.
-Hosted automatic extraction remains future work.
+Hosted extraction uses the configured provider and creates review-blocked drafts;
+see [inference configuration](docs/INFERENCE.md).
 
 ## Patient targets and public data
 
@@ -68,39 +123,22 @@ Patient/evidence changes flag affected targets without changing historical value
 See [patient contracts](docs/PATIENTS.md) for CSV columns, units, missing-fact
 semantics, conflict resolution, and the target-readiness boundary.
 
-Download real NHANES survey records and prepare 100 age-only profiles:
-
-```sh
-uv run --extra data careloop-data nhanes --limit 100
-```
-
-Raw data, normalized CSV, and a checksum/field-audit manifest are saved under
-`~/.local/share/careloop/public/nhanes/2021-2023/`. To also import into the migrated
-database selected by `CARELOOP_DATABASE_URL`:
-
-```sh
-uv run --extra data careloop-data nhanes --limit 100 --import-records --actor 'Demo clinician'
-```
-
-This does not create diagnoses or approvals. The adapter maps only respondent ID
+Public-data acquisition and imports are reusable functions in `ingestion.py`.
+One-time acquisition is performed during development; raw data, normalized exports,
+and checksum/field-audit manifests remain outside the repository.
+The NHANES adapter maps only respondent ID
 and observed survey age; other facts remain unknown. Re-importing the same external
 IDs fails atomically rather than overwriting records. See [source audit](docs/DATA.md).
 
 ## Singapore foods and planning
 
-Download and normalize all 2,689 records from the supplied SG FoodID mirror:
+All 2,689 records from the supplied SG FoodID mirror have been acquired and
+normalized. SG FoodID and FNDDS adapters feed the shared acquisition/import
+functions. Raw downloads and manifests stay under `~/.local/share/careloop/public/`.
+Compose imports the default catalogue automatically on first boot.
 
-```sh
-uv run --extra data careloop-data sgfoodid --limit 0
-```
-
-Add `--import-records --actor 'Demo reviewer'` to import into the migrated database
-configured by `CARELOOP_DATABASE_URL`. FNDDS uses the same command with `fndds` as
-the source. Raw downloads and manifests stay under `~/.local/share/careloop/public/`.
-The default limit is 100; zero selects all food records.
-
-Review food portions, meal slots, and relevant restriction classifications through
-the food API before requesting plans. `POST /api/plan-requests` creates three
+Recorded source portions are available directly; review any required restriction
+classifications before requesting plans. `POST /api/plan-requests` creates three
 checked alternatives; the clinician approves one through `/api/plans/{id}/approval`.
 See [food contracts](docs/FOODS.md) and [planning](docs/PLANNING.md) for the bounded search,
 nutrient requirements, substitutions, and reassessment behavior.
@@ -123,7 +161,7 @@ existing substitution-draft workflow for clinician approval. Direct nearest-neig
 cluster-assisted, and same-category methods are available.
 
 See [mining](docs/MINING.md) for API parameters, algorithm limits, and the reproducible
-SG FoodID retrieval pilot (`uv run python -m careloop.evaluate_foods`).
+SG FoodID retrieval pilot and its saved results.
 
 ## Multi-item meals and evidence acquisition
 

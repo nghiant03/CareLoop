@@ -54,20 +54,19 @@ and an end-user agreement, contrary to the public-download-only constraint.
 
 ## Implemented participant acquisition
 
-`uv run --extra data careloop-data nhanes --limit 100` downloads
+`ingestion.acquire("nhanes", directory, 100)` downloads
 [DEMO_L XPORT](https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/DEMO_L.xpt)
 and writes immutable-content-named raw data, normalized CSV, and a manifest outside
 the checkout. The [current codebook](https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/DEMO_L.htm)
-is recorded in the manifest. The previously assumed `/Nchs/Nhanes/2021-2023/DEMO_L.htm`
-route returned a CDC page-not-found document despite HTTP 200; the adapter checks
-the XPORT header rather than trusting status alone.
+is recorded in the manifest. Acquisition checks the XPORT header because a CDC
+page-not-found response can return HTTP 200.
 
-The first adapter maps **only SEQN and RIDAGEYR** to external identity and observed
+The adapter maps **only SEQN and RIDAGEYR** to external identity and observed
 survey age. Sex, diagnoses, pregnancy, labs, measurements, allergies, and preferences
 remain unknown. It does not infer absent conditions or create approvals. Exact
 observation date is unknown; the provenance records the survey edition instead.
 Age 80 is top-coded (80 or older), so those records are excluded rather than treated
-as exact age 80. The first adapter supports ages 2–79 inclusive; this dataset limit
+as exact age 80. The adapter supports ages 2–79 inclusive; this dataset limit
 does not narrow the application's broader age-2+ requirement.
 
 Observed acquisition on 2026-10-23 (local date), using pandas 3.1.0:
@@ -94,8 +93,35 @@ mapped and unknown fields, transformation identifier, counts, and selection poli
 
 The actual 100-record CSV was imported successfully through HTTP into temporary
 PostgreSQL during verification, then that test database was removed. No persistent
-application database has been populated. Use `--import-records` with the documented
+application database was populated by that verification. Use `--import-records` with the documented
 database URL to import explicitly; duplicate external identities roll back the batch.
+
+### Local stratified sample, 2026-10-24
+
+A user-authorized one-off import populated the running local application with 32
+NHANES respondents. This is separate from the age-only adapter above. Selection
+uses the lowest unused SEQN: two per recorded sex in each age band 2–5, 6–9,
+10–17, 18–39, 40–64 and 65–79, plus two each with recorded pregnancy, reported
+hypertension without reported diabetes, reported diabetes without reported
+hypertension, and both reports. It is a convenience sample, not representative.
+
+Official DEMO_L, BPQ_L, DIQ_L and BMX_L files were joined one-to-one on SEQN.
+Mappings were checked against their CDC codebooks: RIDAGEYR (age), RIAGENDR
+(recorded male/female), RIDEXPRG 1/2 (pregnant/not pregnant at examination),
+BMXWT/BMXHT (measured kg/cm), BPQ020=1 (self-reported professional hypertension
+diagnosis), and DIQ010=1 (self-reported diabetes, type unspecified). Unknowns and
+unmapped facts remain null; borderline diabetes is not mapped to pre-diabetes.
+Positive condition reports are not an exhaustive clinical diagnosis inventory.
+Interview age and examination measurements/status have different observation
+contexts; exact dates are unavailable. No CKD stages or diabetes types were inferred.
+
+Read-back verified all 32 records and provenance: 15 male, 17 female, two recorded
+pregnancies, nine hypertension reports, five diabetes reports (groups overlap),
+27 measured weights and 26 measured heights. No targets or plans were approved.
+Raw data remain under the public-data directory; selection scripts, component
+checksums, raw selected fields, CSV and verification results are retained outside
+Git in `~/.local/share/careloop/reviews/2026-10-24/`. Verification used the CSV
+import API followed by `GET /api/patients/{id}` for every imported record.
 
 ## Food ingestion
 
@@ -107,7 +133,7 @@ attributes it to SG FoodID and declares **CC0: Public Domain**; this is a third-
 mirror, not an official HPB release endpoint. Uploader: `adisongoh`; version 1 was
 updated 2026-07-20. Metadata and source attribution are retained with the raw ZIP.
 
-`uv run --extra data careloop-data sgfoodid --limit 0` acquired all **2,689 foods**:
+The SG FoodID acquisition acquired all **2,689 foods**:
 2,089 per 100 g and 600 per 100 ml, with 3,295 parsed portions. It includes local
 hawker dishes such as steamed/roasted chicken rice and claypot chicken rice.
 
@@ -137,7 +163,7 @@ was removed afterward; use `--import-records` to populate the configured deploym
 
 ### FNDDS composition and portions
 
-`uv run --extra data careloop-data fndds --limit 100` downloads the official nutrient
+`ingestion.acquire("fndds", directory, 100)` downloads the official nutrient
 and portion workbooks and translates their per-100 g edible nutrient values and
 portion weights. The source contains **5,431 foods** and **22,046 portion rows**.
 One nonpositive portion is omitted. The 100-record acquisition included 418 usable

@@ -31,6 +31,9 @@ established frontend visual style.
   approve, publish, and retire rules; maintain food catalogue records.
 - Use a demo role switcher. Actor names are attestations/demo labels, not verified
   identities. No individual clinician assignment is required.
+- Separate role-specific navigation and browser routes. Clinicians review plans
+  and intake rather than using patient generation/logging controls; reviewers see
+  food and evidence maintenance rather than patient workspaces.
 
 ## Evidence and rule lifecycle
 
@@ -101,6 +104,9 @@ activity inputs, and supported weight-goal policies remain to be specified.
 - Prepared dishes with optional sides/fruit/drinks and sensible portion adjustments
   were recommended. Exact composition and portion policies remain data-dependent;
   the user did not select a fixed recipe-generation requirement.
+- Use the source's recorded quantities directly. Per-food meal-slot assignments and
+  separate portion enablement are not required; retain source units and do not infer
+  weights from serving names or convert volume to mass without density.
 - Budget and cooking time were not selected optimization objectives. Do not invent
   price/time data or add them as mandatory features.
 
@@ -138,10 +144,9 @@ against simpler non-clustered recommendations.
 
 ## Deployment and implementation choices
 
-Single local deployment with PostgreSQL and Docker Compose. No old patient-record
-migration is required. Remaining external cleanup is tracked in [implementation status](IMPLEMENTATION.md).
+Single local deployment with PostgreSQL and Docker Compose.
 
 Engineering choices are documented in [architecture](ARCHITECTURE.md) and the
-workflow contracts; they are not additional user-approved requirements. Hosted
-model selection, reference formulas, measurable latency targets, and external-plan
-input remain open.
+workflow contracts; they are not additional user-approved requirements. GLM 5.3 is
+the selected hosted default. Reference formulas, measurable latency targets, and
+external-plan input remain open.

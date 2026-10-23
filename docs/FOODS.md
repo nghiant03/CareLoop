@@ -1,12 +1,12 @@
 # Food catalogue
 
-Implementation choices, 2026-10-23. See [planning](PLANNING.md) for how reviewed
+Implementation choices, 2026-10-23. See [planning](PLANNING.md) for how source
 foods enter plans, and [data audits](DATA.md) for source coverage and measurements.
 
 ## Source integration
 
 Food adapters support the supplied Kaggle SG FoodID mirror and USDA FNDDS
-2021–2023. Imports are explicit, atomic CLI batches, not API startup side effects.
+2021–2023. Imports use explicit, atomic function calls with caller-owned transactions.
 No clinical recommendations or approvals are seeded. See
 [architecture](ARCHITECTURE.md#workflow-integration) for acquisition, adapter, and
 persistence boundaries, and [data](DATA.md) for source audits.
@@ -23,12 +23,15 @@ that basis. There is no assumed density conversion. SG FoodID portions are adjus
 by the source edible percentage; raw serving labels and source rows remain visible.
 Unknown/trace values are null, not zero. Total, added, and free sugars are separate.
 
-Reviewers explicitly assign:
+Planning uses all recorded portions with a positive finite quantity matching the
+nutrient basis, without separate portion enablement or per-food meal-slot labels.
+The planner can place a selected food at any requested meal. Household labels alone
+do not supply weights, and no density is inferred. All 3,295 acquired Singapore
+portions across 2,689 foods pass these quantity/unit checks.
 
-- `meal_slots`: breakfast/lunch/dinner/snack suitability as an item in that meal.
-- `planning_portions`: IDs of appropriate portions from the source list.
-- Optional ingredient, vegetarian, egg/dairy, and allergen classifications.
-- A supporting `review_note` whenever assigning these annotations.
+Reviewers can add ingredient, vegetarian, egg/dairy, and allergen classifications
+with a supporting `review_note`. Legacy `meal_slots` and `planning_portions` keys
+are accepted and discarded on input; saved historical snapshots are not rewritten.
 
 Importing a dish called “vegetarian” does not assign a vegetarian classification.
 Source descriptions are not ingredient lists. Source consistency discrepancies

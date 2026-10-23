@@ -20,6 +20,7 @@ current and historical records. All clinicians can access all patients.
 | `pregnant`, `breastfeeding`, `dialysis` | Explicit boolean or unknown |
 | `weight_kg`, `height_cm` | Recorded measurements in kg/cm |
 | `egfr` | Recorded eGFR in mL/min/1.73 m²; no diagnosis/stage inference |
+| `has_ckd` | Explicit CKD status: true (Yes), false (No), or null (Unknown) |
 | `ckd_stage` | `G1`, `G2`, `G3a`, `G3b`, `G4`, or `G5`, if recorded |
 | `conditions`, `medications`, `allergies` | Exact, case-sensitive labels |
 | `vegetarian`, `include_eggs`, `include_dairy` | Explicit dietary choices or unknown |
@@ -28,6 +29,10 @@ current and historical records. All clinicians can access all patients.
 All fact fields are optional when entering records. Null is unknown; an empty list
 means explicitly known absence. No defaults invent diagnoses or allergies. Age is
 required to approve targets; recorded dialysis blocks approval as outside scope.
+The editor shows CKD stage only for Yes; choosing No or Unknown clears the stage.
+The API rejects No combined with a stage. Legacy stage-only records imply Yes
+when validated or evaluated, without rewriting historical snapshots. A missing
+status and missing stage remain Unknown; eGFR alone never establishes CKD.
 One snapshot date is supported; independently dated observations, terminology
 mapping, fact freshness policies, and ongoing age calculation remain future work.
 
@@ -65,6 +70,10 @@ Proposals use only published, non-retired revisions. Predicates are evaluated as
 - Numeric fields support `eq`, `gte`, and `lte`; boolean/text fields support `eq`;
   list fields support `contains`. Unsupported fields/types/operators block
   completion rather than becoming false. There is no arbitrary expression execution.
+- Explicit `has_ckd=false` makes a CKD-stage predicate false without requiring a
+  stage. This excludes stage-scoped applicability but does not trigger a stage
+  exception. Yes/Unknown without a stage still requires clarification for stage
+  predicates. Conflict analysis treats No CKD and required CKD stages as disjoint.
 - Narrative population/exception notes are shown for clinician review. They are
   not executable predicates: reviewers must encode conditions explicitly before
   publication. Complex Boolean groups and unimplemented facts need rule revisions.

@@ -9,10 +9,14 @@ not additional product requirements.
 ```text
 src/careloop/
   api.py                  HTTP routes and application lifetime
-  db.py                   Explicit migration command
+  db.py                   Transactional migrations called by API startup
   workflow.py             Shared audit and demo-role transaction helpers
-  cli.py                  Import command orchestration
   ingestion.py            Public downloads and external artifact manifests
+  inference.py            Shared configured OpenAI-compatible provider client
+  answers.py              Cited-education prompts, schema validation, source-ID resolution
+  chat.py                 Approved patient context, retrieval and persisted conversation turns
+  chat_workflows.py       Plan/intake/substitution attachments and revision stamps
+  evaluation/             Frozen experiments, independent audits and offline reports
   migrations/             Ordered, checksum-verified SQL migrations
   evidence/
     models.py             Input contracts and structural validation
@@ -20,6 +24,7 @@ src/careloop/
     acquisition.py        Approved-domain HTTPS downloads and discovery
     documents.py          Bounded document parsing and passages
     conflicts.py          Structured population/numeric conflict checks
+    extraction.py         Hosted extraction runs and review-blocked drafts
   patients/               Facts, CSV import, applicability, target review, routes
   adapters/               Source format → domain model translation (no side effects)
   foods/                  Versioned nutrients, portions, reviewer annotations
@@ -31,7 +36,8 @@ ui/
   src/App.tsx             Application shell, routing and demo session
   src/api.ts              Single typed API client and contracts
   src/state.ts            Shared session and asynchronous request state
-  src/screens/            Patients, foods, plans, logging and evidence
+  src/navigation.ts       Shared role-specific browser route and menu definitions
+  src/screens/            Patient/reviewer/clinician workflows, extraction and cited chat
   src/components/         Shared headers and form/display controls
 ```
 
@@ -79,6 +85,11 @@ interactive documentation at `/docs`.
 Each write carries `actor: {name, role}` and `reason`. Reviewer actions require the
 reviewer label. These labels implement demo workflow guards, not authentication.
 Reads are available across the local demo. Keep the deployment loopback-bound.
+Patient requests cover generation, substitutions, logging, and chat; clinician
+writes cover patient facts, targets and plan approval. Browser routes use explicit
+`/patient/`, `/clinician/`, and `/reviewer/` prefixes and descriptive hyphenated names.
+Disallowed browser routes redirect to the selected role's home without mounting
+the other role's workspace. Clinician intake review is read-only.
 
 `GET /api/evidence/catalogue` returns one consistent snapshot of the generation,
 drafts, approval labels, published bodies, and retirement state. Consumers must
@@ -101,12 +112,12 @@ Planning consumes only approved, current targets and adds food/restriction check
 Target readiness alone is not sufficient for planning. Food and target changes
 flag affected plans transactionally, while their pinned snapshots remain readable.
 
-Acquired sources feed the structured draft contract; future hosted extraction must
-use the same review boundary. Model and data-source pilots remain separate,
+Acquired sources and hosted extraction feed the structured draft contract and
+share its review boundary. Model experiments live in `notebooks/`; data-source pilots remain separate,
 measurable work; neither clinical rules nor generated patient cohorts are seeded.
 The NHANES adapter translates explicitly selected public demographic records; no
 diagnoses, target approvals, or clinical histories are inferred. SG FoodID and
 FNDDS adapters translate food records. Acquisition and output artifacts belong to
-`ingestion.py`; command parsing and database-import orchestration belong to `cli.py`.
+`ingestion.py`, including transaction-scoped import functions with explicit actors/reasons.
 Adapters only read source formats and construct domain models. See
 [foods](FOODS.md) and [planning](PLANNING.md) for unit and lifecycle contracts.

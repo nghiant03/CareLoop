@@ -1,8 +1,9 @@
 # Meal logging
 
 Implemented API contract, 2026-10-23. Intake is patient-reported observation,
-not a plan approval or a safety classification. Patient and clinician demo roles
-can record it; actor labels are not authenticated identities.
+not a plan approval or a safety classification. The patient demo role records and
+corrects it; clinicians have a read-only intake review workspace. Actor labels are
+not authenticated identities.
 
 ## Entries
 

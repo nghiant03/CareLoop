@@ -16,7 +16,7 @@ See [README](README.md) for run and verification commands.
 - [Planning](docs/PLANNING.md): search, checking, approval, and substitutions.
 - [Logging](docs/LOGGING.md): reported intake, corrections, and completeness.
 - [Mining](docs/MINING.md): recommendations and the retrieval pilot.
-- [Inference](docs/INFERENCE.md): hosted-model pilot and Neuralwatt Basic budget.
+- [Inference](docs/INFERENCE.md): provider configuration, shared library, and model experiment.
 - [Evaluation](docs/EVALUATION.md): planned reproducible benchmarks and limits.
 - [UI](ui/README.md): frontend structure and development commands.
 
@@ -27,7 +27,6 @@ See [README](README.md) for run and verification commands.
 - Preserve the established UI visual style and single application/API-client structure.
 - Keep raw datasets, credentials, and runtime state outside source control.
 - Inventory exact CareLoop-owned storage before deletion; other projects are excluded.
-- Do not recreate the GitNexus index unless requested.
 - Inspect unfamiliar/uncommitted changes before overwriting. Do not delegate unless asked.
 - Document verification commands and report failures, skips, and unavailable tooling honestly.
 - Keep comments brief; explain non-obvious reasons or invariants rather than restating code.

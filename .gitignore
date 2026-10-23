@@ -19,7 +19,6 @@ htmlcov/
 .agents/
 .crush/
 .jj/
-.gitnexus/
 
 # External datasets and runtime state do not belong in the checkout
 /data/

@@ -13,13 +13,13 @@ behaviour is mined. The algorithms do not establish allergen safety or suitabili
 - `clusters`: 1–8, default 4; only cluster retrieval uses the fitted assignments.
 - `limit`: 1–20 distinct foods, default 5.
 
-The patient or clinician role can request recommendations against a current,
+The patient role can request recommendations against a current,
 clinician-approved plan and current approved targets. The original food is excluded
 as a replacement. No silent catalogue-wide sample or automatic fallback is used.
 The response includes pool revision IDs, model parameters/assignments, exclusions,
 checked portion counts, and rejected portions with whole-plan violations.
 
-Retrieval is followed by the planner's meal-slot, reviewed-portion, allergy,
+Retrieval is followed by the planner's source-portion quantity/unit, allergy,
 vegetarian, egg/dairy, and target-nutrient completeness checks. Each eligible
 portion at scales 0.5, 1, and 1.5 replaces the requested item and passes through
 the independent whole-plan Decimal checker. At most 500 portion choices are
@@ -62,17 +62,9 @@ target checks still pass. Categories alone are not suitability evidence.
 
 ## Public-food retrieval pilot
 
-Run from a normalized `careloop-data` food export, with explicit report output:
-
-```sh
-uv run python -m careloop.evaluate_foods \
-  --input /path/to/normalized-foods.jsonl \
-  --output ~/.local/share/careloop/public/evaluation/food-mining-pilot.json \
-  --limit 300 --clusters 4 --top 5
-```
-
-The command validates food records, records the input checksum, selects the first
-300 source identities ordered by SHA-256(identity), and saves parameters,
+`evaluate_foods.evaluate_export(path, limit=300, clusters=4, top=5)` returns a
+report from a normalized food export. It validates records, records the input
+checksum, selects the first 300 source identities ordered by SHA-256(identity), and returns parameters,
 memberships, per-query recommendations, aggregate metrics, runtime, and environment.
 Selection is deterministic. Queries are included in the fitted catalogue model;
 this is a transductive retrieval pilot, not a held-out generalization benchmark.
