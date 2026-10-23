@@ -1,6 +1,13 @@
 import { useState } from 'react';
-import { api, label, slots, type Food, type FoodBody } from '../api';
-import { Details, Feedback, Field, FoodPicker, Form, Panel } from '../components/shared';
+import { api, label, type Food, type FoodBody } from '../api';
+import {
+  Details,
+  Feedback,
+  Field,
+  FoodPicker,
+  Form,
+  Panel,
+} from '../components/shared';
 import { decision, useSession, useTask } from '../state';
 
 export default function Foods() {
@@ -49,9 +56,9 @@ function FoodEditor({
         </ul>
       )}
       <p className="text-ink-3 mb-4">
-        Nutrients are per 100 {body.basis}. Review portions and meal
-        compatibility explicitly; source names do not establish ingredient or
-        allergen safety.
+        Nutrients are per 100 {body.basis}. Planning uses recorded source
+        portions. Ingredient and allergen classifications need supporting
+        evidence.
       </p>
       <Form
         busy={task.busy || actor.role !== 'reviewer'}
@@ -87,50 +94,27 @@ function FoodEditor({
             />
           </Field>
         </div>
-        <fieldset>
-          <legend className="font-semibold mb-2">Meal suitability</legend>
-          <div className="flex flex-wrap gap-4">
-            {slots.map((slot) => (
-              <label key={slot} className="flex gap-2 items-center capitalize">
-                <input
-                  type="checkbox"
-                  checked={body.meal_slots.includes(slot)}
-                  onChange={(e) =>
-                    update({
-                      meal_slots: e.target.checked
-                        ? [...body.meal_slots, slot]
-                        : body.meal_slots.filter((s) => s !== slot),
-                    })
-                  }
-                />
-                {slot}
-              </label>
+        <section aria-label="Source portions">
+          <h3 className="font-semibold mb-2">Source portions</h3>
+          <p className="text-sm text-ink-3 mb-2">
+            These recorded quantities are available for planning at any meal.
+          </p>
+          {!body.portions.length && (
+            <p className="notice">
+              No source portion with a recorded quantity is available.
+            </p>
+          )}
+          <ul>
+            {body.portions.map((portion) => (
+              <li key={portion.id} className="py-2">
+                <span>
+                  {portion.label} · {portion.grams ?? portion.millilitres}{' '}
+                  {body.basis} edible
+                </span>
+              </li>
             ))}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend className="font-semibold mb-2">Planning portions</legend>
-          {body.portions.map((portion) => (
-            <label key={portion.id} className="flex gap-3 items-start py-2">
-              <input
-                className="mt-1"
-                type="checkbox"
-                checked={body.planning_portions.includes(portion.id)}
-                onChange={(e) =>
-                  update({
-                    planning_portions: e.target.checked
-                      ? [...body.planning_portions, portion.id]
-                      : body.planning_portions.filter((s) => s !== portion.id),
-                  })
-                }
-              />
-              <span>
-                {portion.label} · {portion.grams ?? portion.millilitres}{' '}
-                {body.basis} edible
-              </span>
-            </label>
-          ))}
-        </fieldset>
+          </ul>
+        </section>
         <div className="grid sm:grid-cols-3 gap-4">
           {(['vegetarian', 'contains_egg', 'contains_dairy'] as const).map(
             (key) => (

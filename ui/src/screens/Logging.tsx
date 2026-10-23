@@ -25,6 +25,8 @@ import { decision, useResource, useSession, useTask } from '../state';
 
 export default function Logging() {
   const { actor, patientId } = useSession();
+  const canLog = actor.role === 'patient';
+  const [entryHistory, setEntryHistory] = useState<unknown>(null);
   const [params] = useSearchParams();
   const [date, setDate] = useState(localDate);
   const [planId, setPlanId] = useState(params.get('plan') ?? '');
@@ -88,7 +90,7 @@ export default function Logging() {
         task={task}
         error={saved.error || plan.error || summary.error}
       />
-      <Panel title="Record your meals">
+      <Panel title={canLog ? 'Record your meals' : 'Review patient intake'}>
         <div className="grid gap-4 sm:grid-cols-2 mb-4">
           <Field label="Date">
             <input
@@ -99,6 +101,7 @@ export default function Logging() {
               onChange={(e) => {
                 setDate(e.target.value);
                 setEditor(null);
+                setEntryHistory(null);
               }}
             />
           </Field>
@@ -107,8 +110,9 @@ export default function Logging() {
               className="field"
               value={permittedPlan}
               onChange={(e) => {
-                setPlanId(e.target.value);
-                setEditor(null);
+                  setPlanId(e.target.value);
+                  setEditor(null);
+                  setEntryHistory(null);
               }}
             >
               <option value="">Independent entries only</option>
@@ -125,8 +129,8 @@ export default function Logging() {
         </div>
         {plan.data?.needs_review && (
           <p className="notice notice-warn mb-4">
-            This historical plan needs review. You can still record what you
-            ate; logging does not approve it again.
+            This historical plan needs review. Recorded intake remains
+            historical; logging does not approve the plan again.
           </p>
         )}
         {plan.data && !meals.length && (
@@ -144,32 +148,33 @@ export default function Logging() {
               <div className="flex flex-wrap items-center gap-3 justify-between mb-3">
                 <h3 className="font-bold capitalize">{slot}</h3>
                 <div className="flex flex-wrap gap-2">
-                  {['as_planned', 'skipped'].map((status) => (
-                    <button
-                      key={status}
-                      className="btn-ghost"
-                      disabled={task.busy || actor.role === 'reviewer'}
-                      onClick={() =>
-                        void task.run(async () => {
-                          await api(
-                            `/patients/${patientId}/meal-log-confirmations`,
-                            {
-                              ...decision(actor, 'Record whole-meal intake'),
-                              plan_id: permittedPlan,
-                              logged_on: date,
-                              slot,
-                              status,
-                            },
-                          );
-                          refresh();
-                        })
-                      }
-                    >
-                      {status === 'as_planned'
-                        ? 'Confirm whole meal'
-                        : 'Skip whole meal'}
-                    </button>
-                  ))}
+                  {canLog &&
+                    ['as_planned', 'skipped'].map((status) => (
+                      <button
+                        key={status}
+                        className="btn-ghost"
+                        disabled={task.busy || actor.role === 'reviewer'}
+                        onClick={() =>
+                          void task.run(async () => {
+                            await api(
+                              `/patients/${patientId}/meal-log-confirmations`,
+                              {
+                                ...decision(actor, 'Record whole-meal intake'),
+                                plan_id: permittedPlan,
+                                logged_on: date,
+                                slot,
+                                status,
+                              },
+                            );
+                            refresh();
+                          })
+                        }
+                      >
+                        {status === 'as_planned'
+                          ? 'Confirm whole meal'
+                          : 'Skip whole meal'}
+                      </button>
+                    ))}
                 </div>
               </div>
               <ul className="divide-y divide-rule">
@@ -193,12 +198,14 @@ export default function Logging() {
                           {logged ? label(logged.body.status) : 'Unlogged'}
                         </p>
                       </div>
-                      <button
-                        className="btn-ghost"
-                        onClick={() => setEditor({ meal, entry: logged })}
-                      >
-                        {logged ? 'Correct entry' : 'Record item'}
-                      </button>
+                      {canLog && (
+                        <button
+                          className="btn-ghost"
+                          onClick={() => setEditor({ meal, entry: logged })}
+                        >
+                          {logged ? 'Correct entry' : 'Record item'}
+                        </button>
+                      )}
                     </li>
                   );
                 })}
@@ -206,15 +213,17 @@ export default function Logging() {
             </section>
           );
         })}
-        <button
-          className="btn-primary mt-4"
-          disabled={!date || actor.role === 'reviewer'}
-          onClick={() => setEditor({})}
-        >
-          Add independent food entry
-        </button>
+        {canLog && (
+          <button
+            className="btn-primary mt-4"
+            disabled={!date || actor.role === 'reviewer'}
+            onClick={() => setEditor({})}
+          >
+            Add independent food entry
+          </button>
+        )}
       </Panel>
-      {editor && (
+      {canLog && editor && (
         <LogEditor
           key={`${date}-${editor.entry?.id ?? 'new'}-${editor.meal?.slot ?? ''}-${editor.meal?.item ?? ''}`}
           date={date}
@@ -267,40 +276,57 @@ export default function Logging() {
                       </div>
                       <button
                         className="btn-ghost"
-                        onClick={() => setEditor({ entry })}
+                        onClick={() =>
+                          canLog
+                            ? setEditor({ entry })
+                            : void task.run(
+                                async () =>
+                                  setEntryHistory(
+                                    await api(
+                                      `/patients/${patientId}/meal-logs/${entry.id}`,
+                                    ),
+                                  ),
+                                '',
+                              )
+                        }
                       >
-                        Correct entry
+                        {canLog ? 'Correct entry' : 'View entry history'}
                       </button>
                     </li>
                   ))}
                 </ul>
               )}
-              <button
-                className="btn-ghost mt-4"
-                disabled={task.busy || actor.role === 'reviewer'}
-                onClick={() =>
-                  void task.run(async () => {
-                    await api(dayPath, {
-                      ...decision(actor, 'Update daily logging completeness'),
-                      complete: !summary.data!.complete,
-                    });
-                    setVersion((v) => v + 1);
-                  })
-                }
-              >
-                {summary.data.complete
-                  ? 'Reopen this day'
-                  : 'Mark day complete'}
-              </button>
+              {canLog && (
+                <button
+                  className="btn-ghost mt-4"
+                  disabled={task.busy || actor.role === 'reviewer'}
+                  onClick={() =>
+                    void task.run(async () => {
+                      await api(dayPath, {
+                        ...decision(actor, 'Update daily logging completeness'),
+                        complete: !summary.data!.complete,
+                      });
+                      setVersion((v) => v + 1);
+                    })
+                  }
+                >
+                  {summary.data.complete
+                    ? 'Reopen this day'
+                    : 'Mark day complete'}
+                </button>
+              )}
               <p className="text-sm text-ink-3 mt-3">
-                Mark complete when all intake has been recorded. Later entries
-                or corrections reopen the day; unknown nutrient values remain
+                A complete day includes all reported intake. Later entries or
+                corrections reopen the day; unknown nutrient values remain
                 unknown.
               </p>
             </>
           )
         )}
       </Panel>
+      {entryHistory != null && (
+        <Details title="Recorded entry revisions" value={entryHistory} />
+      )}
       {comparison.data && (
         <Panel title="Compared with approved targets">
           {comparison.data.target_needs_review && (
@@ -312,8 +338,10 @@ export default function Logging() {
             {comparison.data.comparisons.map((item, i) => (
               <li key={i} className="py-3 flex flex-wrap gap-3 justify-between">
                 <span>
-                  <span className="capitalize">{label(item.target_item.action.subject)}</span> ·{' '}
-                  {quantity(item.recorded)} {item.target_item.action.unit}
+                  <span className="capitalize">
+                    {label(item.target_item.action.subject)}
+                  </span>{' '}
+                  · {quantity(item.recorded)} {item.target_item.action.unit}
                 </span>
                 <strong className="font-medium">{label(item.status)}</strong>
               </li>

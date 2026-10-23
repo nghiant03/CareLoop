@@ -106,11 +106,13 @@ export function Form({
   // Synchronize native interaction-based validation with assistive technology.
   const sync = (event: FormEvent<HTMLFormElement>) => {
     const target = event.target;
-    if (!(
-      target instanceof HTMLInputElement ||
-      target instanceof HTMLSelectElement ||
-      target instanceof HTMLTextAreaElement
-    ))
+    if (
+      !(
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLSelectElement ||
+        target instanceof HTMLTextAreaElement
+      )
+    )
       return;
     let invalid = false;
     try {
@@ -143,25 +145,43 @@ export function FoodPicker({
   selected,
   onChange,
   multiple = true,
+  embedded = false,
 }: {
   selected: Food[];
   onChange: (foods: Food[]) => void;
   multiple?: boolean;
+  embedded?: boolean;
 }) {
   const id = useId();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
+  const SearchContainer = embedded ? 'div' : 'form';
   const foods = useResource<Food[]>(
     `/foods?q=${encodeURIComponent(search)}&limit=100`,
   );
   return (
     <div>
-      <form
+      <SearchContainer
         className="flex gap-2 items-end mb-3"
         onSubmit={(e) => {
           e.preventDefault();
+          e.stopPropagation();
           setSearch(query);
         }}
+        onKeyDown={
+          embedded
+            ? (e) => {
+                if (
+                  e.key === 'Enter' &&
+                  e.target instanceof HTMLInputElement &&
+                  !e.nativeEvent.isComposing
+                ) {
+                  e.preventDefault();
+                  setSearch(query);
+                }
+              }
+            : undefined
+        }
       >
         <div className="flex-1">
           <label htmlFor={id} className="micro-label block mb-1">
@@ -174,8 +194,14 @@ export function FoodPicker({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <button className="btn-ghost">Search</button>
-      </form>
+        <button
+          type={embedded ? 'button' : 'submit'}
+          className="btn-ghost"
+          onClick={embedded ? () => setSearch(query) : undefined}
+        >
+          Search
+        </button>
+      </SearchContainer>
       <Feedback error={foods.error} />
       {foods.loading ? (
         <p role="status">Loading foods…</p>
@@ -210,9 +236,9 @@ export function FoodPicker({
                 <span className="font-semibold block">{food.body.name}</span>
                 <span className="text-sm text-ink-3">
                   {food.body.category} ·{' '}
-                  {food.body.planning_portions.length
-                    ? 'Planning portions reviewed'
-                    : 'Planning review needed'}
+                  {food.body.portions.length
+                    ? `${food.body.portions.length} source portion${food.body.portions.length === 1 ? '' : 's'}`
+                    : 'No source portions'}
                 </span>
               </span>
             </label>

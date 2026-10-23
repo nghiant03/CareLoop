@@ -10,21 +10,24 @@ import {
 import WorkspaceHeader from './components/WorkspaceHeader';
 import PageHeader from './components/PageHeader';
 import { type Actor, type Patient, type Role } from './api';
-import { Empty, Feedback } from './components/shared';
+import { Feedback } from './components/shared';
 import { Session, useResource } from './state';
 import Patients from './screens/Patients';
 import Foods from './screens/Foods';
 import Plans from './screens/Plans';
 import Logging from './screens/Logging';
 import Evidence from './screens/Evidence';
+import Chat from './screens/Chat';
+import { workspaces, workspaceDescriptions } from './navigation';
 
-const navigation = [
-  { to: '/', label: 'Patients & targets' },
-  { to: '/plan', label: 'Meal plans' },
-  { to: '/adherence', label: 'Meal log' },
-  { to: '/foods', label: 'Food catalogue' },
-  { to: '/knowledge-review', label: 'Evidence review' },
-];
+const screens = {
+  patients: Patients,
+  plans: Plans,
+  logging: Logging,
+  chat: Chat,
+  foods: Foods,
+  evidence: Evidence,
+};
 
 export default function App() {
   const [actor, setActor] = useState<Actor>({
@@ -35,12 +38,16 @@ export default function App() {
   const [version, setVersion] = useState(0);
   const [page, setPage] = useState(0);
   const patients = useResource<Patient[]>(
-    `/patients?limit=100&offset=${page * 100}`,
+    actor.role === 'reviewer'
+      ? null
+      : `/patients?limit=100&offset=${page * 100}`,
     version,
   );
   const health = useResource<{ status: string }>('/health', version);
   const navigate = useNavigate();
   const location = useLocation();
+  const navigation = workspaces[actor.role];
+  const home = navigation[0].to;
   const heading =
     navigation.find((item) => item.to === location.pathname)?.label ??
     'CareLoop';
@@ -61,24 +68,18 @@ export default function App() {
         </a>
         <WorkspaceHeader label="Reviewed nutrition">
           <nav className="workspace-navigation" aria-label="Main navigation">
-            {navigation
-              .filter(
-                (item) =>
-                  actor.role !== 'patient' ||
-                  ['/plan', '/adherence'].includes(item.to),
-              )
-              .map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end
-                  className={({ isActive }) =>
-                    `workspace-nav-link ${isActive ? 'is-active' : ''}`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
+            {navigation.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end
+                className={({ isActive }) =>
+                  `workspace-nav-link ${isActive ? 'is-active' : ''}`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
           </nav>
         </WorkspaceHeader>
         <section
@@ -94,13 +95,7 @@ export default function App() {
                 onChange={(e) => {
                   const role = e.target.value as Role;
                   setActor({ name: `Demo ${role}`, role });
-                  navigate(
-                    role === 'patient'
-                      ? '/plan'
-                      : role === 'reviewer'
-                        ? '/knowledge-review'
-                        : '/',
-                  );
+                  navigate(workspaces[role][0].to);
                 }}
               >
                 <option value="clinician">Clinician</option>
@@ -121,43 +116,47 @@ export default function App() {
                 }
               />
             </label>
-            <label className="flex-1 min-w-48">
-              <span className="micro-label block mb-1">Patient</span>
-              <select
-                className="field"
-                value={patientId}
-                onChange={(e) => setPatientId(e.target.value)}
-              >
-                <option value="">Select patient</option>
-                {patientId &&
-                  !patients.data?.some((p) => p.id === patientId) && (
-                    <option value={patientId}>
-                      Selected patient · {patientId.slice(0, 8)}
-                    </option>
-                  )}
-                {patients.data?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.body.display_name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex gap-2">
-              <button
-                className="btn-ghost"
-                disabled={!page || patients.loading}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous patients
-              </button>
-              <button
-                className="btn-ghost"
-                disabled={patients.data?.length !== 100 || patients.loading}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                More patients
-              </button>
-            </div>
+            {actor.role !== 'reviewer' && (
+              <>
+                <label className="flex-1 min-w-48">
+                  <span className="micro-label block mb-1">Patient</span>
+                  <select
+                    className="field"
+                    value={patientId}
+                    onChange={(e) => setPatientId(e.target.value)}
+                  >
+                    <option value="">Select patient</option>
+                    {patientId &&
+                      !patients.data?.some((p) => p.id === patientId) && (
+                        <option value={patientId}>
+                          Selected patient · {patientId.slice(0, 8)}
+                        </option>
+                      )}
+                    {patients.data?.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.body.display_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    className="btn-ghost"
+                    disabled={!page || patients.loading}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    Previous patients
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    disabled={patients.data?.length !== 100 || patients.loading}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    More patients
+                  </button>
+                </div>
+              </>
+            )}
             <p className="text-sm text-ink-3 basis-full">
               Demo roles label audit events; they are not authenticated
               identities. Approval is always explicit.
@@ -169,8 +168,7 @@ export default function App() {
           className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-12"
         >
           <PageHeader code="WORK" title={heading}>
-            Review source evidence and patient targets, plan meals, and record
-            intake with revision history.
+            {workspaceDescriptions[actor.role]}
           </PageHeader>
           <Feedback error={patients.error || health.error} />
           {(patients.error || health.error) && (
@@ -183,31 +181,13 @@ export default function App() {
           )}
           <div key={`${patientId}-${actor.role}-${location.pathname}`}>
             <Routes>
-              <Route
-                path="/"
-                element={
-                  actor.role === 'patient' ? (
-                    <Navigate to="/plan" replace />
-                  ) : (
-                    <Patients />
-                  )
-                }
-              />
-              <Route path="/plan" element={<Plans />} />
-              <Route path="/adherence" element={<Logging />} />
-              <Route path="/foods" element={<Foods />} />
-              <Route path="/knowledge-review" element={<Evidence />} />
-              <Route
-                path="/chat"
-                element={
-                  <Empty>
-                    Cited conversational answers require the hosted-model
-                    integration and pilot. Patient targets, plans, source
-                    evidence and intake are available in the workspaces above.
-                  </Empty>
-                }
-              />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              {navigation.map((item) => {
+                const Screen = screens[item.screen];
+                return (
+                  <Route key={item.to} path={item.to} element={<Screen />} />
+                );
+              })}
+              <Route path="*" element={<Navigate to={home} replace />} />
             </Routes>
           </div>
         </main>

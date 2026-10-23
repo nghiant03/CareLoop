@@ -61,8 +61,6 @@ export type FoodBody = {
     grams?: number | null;
     millilitres?: number | null;
   }>;
-  meal_slots: string[];
-  planning_portions: string[];
   review_note?: string;
   allergen_status: Record<string, string>;
   vegetarian: boolean | null;
@@ -173,6 +171,64 @@ export type Rule = {
 };
 export type Catalogue = { generation: number; rules: Rule[] };
 
+export type Passage = { ordinal: number; location: string; content: string };
+export type ExtractionRun = {
+  id: string;
+  state: 'pending' | 'completed' | 'failed';
+  error: string | null;
+  rule_ids: string[];
+  created_at: string;
+  result: { limitations: string[] } | null;
+  request: { model: string; decision: { passage_ordinal: number } };
+};
+export type ChatContext = {
+  ready: boolean;
+  reason: string | null;
+  patient_revision: number;
+  target_id: string | null;
+  target_revision: number | null;
+  evidence_generation?: number;
+  facts?: Facts;
+  target_items?: TargetItem[];
+};
+export type ChatRun = {
+  id: string;
+  question: string;
+  model: string;
+  created_at: string;
+  state: 'pending' | 'completed' | 'failed';
+  error: string | null;
+  stale?: boolean;
+  workflow?: { plan_id?: string | null; logged_on?: string | null };
+  context: Pick<
+    ChatContext,
+    'patient_revision' | 'target_id' | 'target_revision' | 'evidence_generation'
+  >;
+  result: {
+    answer: string;
+    needs_clinician: boolean;
+    insufficient_evidence: boolean;
+    suggestions?: {
+      plan_id: string;
+      recommendations: Recommendation[];
+      checked_portions: number;
+      eligible_foods: number;
+      approval_required: boolean;
+    } | null;
+    citations: Array<{
+      source_id: string;
+      title: string;
+      kind: string;
+      location: string;
+      quote: string;
+      edition?: string;
+      locator?: string;
+      document_id?: string;
+      target_id?: string;
+    }>;
+  } | null;
+};
+
 export const slots = ['breakfast', 'lunch', 'dinner', 'snack'];
 export const units: Record<string, string> = {
   energy: 'kcal/day',
@@ -186,7 +242,8 @@ export const units: Record<string, string> = {
   potassium: 'mg/day',
   phosphorus: 'mg/day',
 };
-export const label = (value: string) => value.replaceAll('_', ' ');
+export const label = (value: string) =>
+  value === 'has_ckd' ? 'CKD status' : value.replaceAll('_', ' ');
 export const quantity = (value: string | number | null | undefined) =>
   value == null
     ? 'Unknown'

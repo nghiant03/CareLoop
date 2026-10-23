@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import App from './App';
 
 const patient = {
@@ -154,4 +154,66 @@ test('API failures have an explicit retry path instead of appearing as an empty 
   expect(
     screen.getByRole('button', { name: 'Retry API connection' }),
   ).toBeTruthy();
+});
+
+function RouteProbe() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <>
+      <output aria-label="Current route">{location.pathname}</output>
+      <button onClick={() => navigate('/patient/nutrition-questions')}>
+        Open patient URL
+      </button>
+    </>
+  );
+}
+
+test('role-scoped URLs and menus prevent cross-role workspace access', async () => {
+  render(
+    <MemoryRouter initialEntries={['/reviewer/evidence']}>
+      <App />
+      <RouteProbe />
+    </MemoryRouter>,
+  );
+  const user = userEvent.setup();
+  await waitFor(() =>
+    expect(screen.getByLabelText('Current route').textContent).toBe(
+      '/clinician/patients',
+    ),
+  );
+  expect(screen.getByRole('link', { name: 'Plan review' })).toBeTruthy();
+  expect(
+    screen.queryByRole('link', { name: 'Nutrition questions' }),
+  ).toBeNull();
+  expect(screen.queryByRole('link', { name: 'Food catalogue' })).toBeNull();
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Demo role' }),
+    'reviewer',
+  );
+  expect(screen.getByRole('link', { name: 'Evidence review' })).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Food catalogue' })).toBeTruthy();
+  expect(screen.queryByRole('link', { name: 'Plan review' })).toBeNull();
+  expect(
+    screen.queryByRole('combobox', { name: 'Patient' }),
+  ).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Open patient URL' }));
+  await waitFor(() =>
+    expect(screen.getByLabelText('Current route').textContent).toBe(
+      '/reviewer/evidence',
+    ),
+  );
+  expect(
+    request.mock.calls.some(([path]) => String(path).includes('/chat')),
+  ).toBe(false);
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Demo role' }),
+    'patient',
+  );
+  expect(
+    screen
+      .getByRole('link', { name: 'Nutrition questions' })
+      .getAttribute('href'),
+  ).toBe('/patient/nutrition-questions');
+  expect(screen.queryByRole('link', { name: 'Evidence review' })).toBeNull();
 });

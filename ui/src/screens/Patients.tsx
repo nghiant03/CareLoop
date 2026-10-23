@@ -8,7 +8,14 @@ import {
   type Patient,
   type Target,
 } from '../api';
-import { Details, Empty, Feedback, Field, Form, Panel } from '../components/shared';
+import {
+  Details,
+  Empty,
+  Feedback,
+  Field,
+  Form,
+  Panel,
+} from '../components/shared';
 import { decision, useResource, useSession, useTask } from '../state';
 
 export default function Patients() {
@@ -166,7 +173,13 @@ function PatientEditor({
 }) {
   const { actor } = useSession();
   const [name, setName] = useState(patient?.body.display_name ?? '');
-  const [facts, setFacts] = useState<Facts>(patient?.body.facts ?? {});
+  const [facts, setFacts] = useState<Facts>(() => {
+    const saved = patient?.body.facts ?? {};
+    return {
+      ...saved,
+      has_ckd: saved.has_ckd ?? (saved.ckd_stage ? true : null),
+    };
+  });
   const [listInputs, setListInputs] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       ['conditions', 'medications', 'allergies', 'dislikes'].map((key) => [
@@ -268,18 +281,42 @@ function PatientEditor({
               ))}
             </select>
           </Field>
-          <Field label="CKD stage">
+          <Field label="CKD status">
             <select
+              name="has_ckd"
               className="field"
-              value={String(facts.ckd_stage ?? '')}
-              onChange={(e) => set('ckd_stage', e.target.value || null)}
+              value={facts.has_ckd == null ? '' : String(facts.has_ckd)}
+              onChange={(e) => {
+                const status =
+                  e.target.value === '' ? null : e.target.value === 'true';
+                setFacts((current) => ({
+                  ...current,
+                  has_ckd: status,
+                  ckd_stage:
+                    status === true ? (current.ckd_stage ?? null) : null,
+                }));
+              }}
             >
               <option value="">Unknown</option>
-              {['G1', 'G2', 'G3a', 'G3b', 'G4', 'G5'].map((s) => (
-                <option key={s}>{s}</option>
-              ))}
+              <option value="true">Yes</option>
+              <option value="false">No</option>
             </select>
           </Field>
+          {facts.has_ckd === true && (
+            <Field label="CKD stage">
+              <select
+                name="ckd_stage"
+                className="field"
+                value={String(facts.ckd_stage ?? '')}
+                onChange={(e) => set('ckd_stage', e.target.value || null)}
+              >
+                <option value="">Unknown</option>
+                {['G1', 'G2', 'G3a', 'G3b', 'G4', 'G5'].map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </Field>
+          )}
           {[
             'pregnant',
             'breastfeeding',

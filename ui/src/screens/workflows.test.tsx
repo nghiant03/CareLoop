@@ -38,20 +38,18 @@ const plan: Plan = {
   target_revision: 2,
   request: { start_date: localDate(), days: 1, schedule: ['lunch'] },
   body: {
-    meals: foods
-      .slice(0, 2)
-      .map((food, i) => ({
-        day: 1,
-        slot: 'lunch',
-        item: i + 1,
-        food_id: food.id,
-        food_revision: 1,
-        food: food.body,
-        portion_id: 'portion',
-        scale: 1,
-        quantity: '100',
-        unit: 'g',
-      })),
+    meals: foods.slice(0, 2).map((food, i) => ({
+      day: 1,
+      slot: 'lunch',
+      item: i + 1,
+      food_id: food.id,
+      food_revision: 1,
+      food: food.body,
+      portion_id: 'portion',
+      scale: 1,
+      quantity: '100',
+      unit: 'g',
+    })),
     check: {
       valid: true,
       violations: [],
@@ -97,12 +95,16 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mount(child: React.ReactNode, route = '/') {
+function mount(
+  child: React.ReactNode,
+  route = '/',
+  role: 'patient' | 'clinician' = 'patient',
+) {
   render(
     <MemoryRouter initialEntries={[route]}>
       <Session.Provider
         value={{
-          actor: { name: 'Test clinician', role: 'clinician' },
+          actor: { name: `Test ${role}`, role },
           patientId: 'patient-1',
           refreshPatients: vi.fn(),
         }}
@@ -139,7 +141,7 @@ test('planning sends multi-item counts and exact approved target revision', asyn
 });
 
 test('logging sends the selected meal item, not the first item in its slot', async () => {
-  mount(<Logging />, '/adherence?plan=plan-1');
+  mount(<Logging />, '/patient/meal-log?plan=plan-1');
   const user = userEvent.setup();
   const buttons = await screen.findAllByRole('button', { name: 'Record item' });
   await user.click(buttons[1]);
@@ -171,4 +173,35 @@ test('logging sends the selected meal item, not the first item in its slot', asy
     scale: 1.5,
   });
   expect(sent.food_id).toBeUndefined();
+});
+
+test('clinician plan review hides patient generation and substitution controls', async () => {
+  mount(<Plans />, '/clinician/plan-review', 'clinician');
+  expect(
+    screen.queryByRole('button', { name: 'Generate three alternatives' }),
+  ).toBeNull();
+  await userEvent
+    .setup()
+    .click(await screen.findByRole('button', { name: 'Open plan' }));
+  expect(screen.queryByRole('button', { name: /Find replacement/ })).toBeNull();
+  expect(
+    screen
+      .getByRole('link', { name: 'Review recorded intake' })
+      .getAttribute('href'),
+  ).toBe('/clinician/intake-review?plan=plan-1');
+});
+
+test('clinician intake view is read-only', async () => {
+  mount(<Logging />, '/clinician/intake-review?plan=plan-1', 'clinician');
+  await screen.findByText('Rice');
+  expect(screen.queryByRole('button', { name: 'Record item' })).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Confirm whole meal' }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Add independent food entry' }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Mark day complete' }),
+  ).toBeNull();
 });

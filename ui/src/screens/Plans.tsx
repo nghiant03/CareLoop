@@ -22,6 +22,7 @@ import {
   Totals,
 } from '../components/shared';
 import { decision, useResource, useSession, useTask } from '../state';
+import { paths } from '../navigation';
 
 export default function Plans() {
   const { actor, patientId } = useSession();
@@ -57,123 +58,129 @@ export default function Plans() {
   return (
     <>
       <Feedback task={task} error={ready.error || saved.error} />
-      <Panel title="Build a meal plan">
-        {ready.loading ? (
-          <p role="status">Checking target readiness…</p>
-        ) : (
-          !ready.data?.targets_ready && (
-            <p className="notice notice-warn mb-4">
-              Current clinician-approved targets are required.{' '}
-              <Link className="underline" to="/">
-                Review patient targets
-              </Link>
-              .
-            </p>
-          )
-        )}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <h3 className="font-semibold mb-3">Food pool</h3>
-            <FoodPicker selected={foods} onChange={setFoods} />
-          </div>
-          <Form
-            busy={task.busy || actor.role === 'reviewer'}
-            onSubmit={() =>
-              void task.run(async () => {
-                const target = ready.data?.approved_target;
-                if (!target) throw new Error('Approve current targets first.');
-                const result = await api<{
-                  alternatives: Plan[];
-                  outcome: unknown;
-                }>('/plan-requests', {
-                  ...decision(actor, 'Generate multi-item meal alternatives'),
-                  target_id: target.id,
-                  target_revision: target.approved_revision,
-                  start_date: startDate,
-                  days,
-                  schedule: slots.filter((s) => counts[s] > 0),
-                  items_per_slot: Object.fromEntries(
-                    slots
-                      .filter((s) => counts[s] > 0)
-                      .map((s) => [s, counts[s]]),
-                  ),
-                  food_ids: foods.map((f) => f.id),
-                });
-                setAlternatives(result.alternatives);
-                setPlan(result.alternatives[0] ?? null);
-                setOutcome(result.outcome);
-                setVersion((v) => v + 1);
-              }, 'Search finished. Review the checked alternatives.')
-            }
-          >
-            <Field label="Start date">
-              <input
-                type="date"
-                className="field"
-                required
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </Field>
-            <Field label="Number of days">
-              <input
-                type="number"
-                className="field"
-                min="1"
-                max="7"
-                required
-                value={days}
-                onChange={(e) => setDays(Number(e.target.value))}
-              />
-            </Field>
-            <fieldset>
-              <legend className="font-semibold mb-3">Items per meal</legend>
-              <div className="grid grid-cols-2 gap-3">
-                {slots.map((slot) => (
-                  <Field
-                    key={slot}
-                    label={label(slot)}
-                    hint="0 omits this meal"
-                  >
-                    <input
-                      type="number"
-                      className="field"
-                      min="0"
-                      max="5"
-                      required
-                      value={counts[slot]}
-                      onChange={(e) =>
-                        setCounts((v) => ({
-                          ...v,
-                          [slot]: Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </Field>
-                ))}
-              </div>
-            </fieldset>
-            <p className="text-sm text-ink-3">
-              Choose enough distinct reviewed foods for each meal. Every item is
-              checked against mandatory restrictions and daily targets.
-            </p>
-            <button
-              className="btn-primary"
-              disabled={
-                !ready.data?.targets_ready ||
-                !foods.length ||
-                foods.length > 100 ||
-                !Object.values(counts).some(Boolean)
+      {actor.role === 'patient' && (
+        <Panel title="Build a meal plan">
+          {ready.loading ? (
+            <p role="status">Checking target readiness…</p>
+          ) : (
+            !ready.data?.targets_ready && (
+              <p className="notice notice-warn mb-4">
+                Current clinician-approved targets are required. Ask your
+                clinician to review your targets.
+              </p>
+            )
+          )}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div>
+              <h3 className="font-semibold mb-3">Food pool</h3>
+              <FoodPicker selected={foods} onChange={setFoods} />
+            </div>
+            <Form
+              busy={task.busy}
+              onSubmit={() =>
+                void task.run(async () => {
+                  const target = ready.data?.approved_target;
+                  if (!target)
+                    throw new Error('Approve current targets first.');
+                  const result = await api<{
+                    alternatives: Plan[];
+                    outcome: unknown;
+                  }>('/plan-requests', {
+                    ...decision(actor, 'Generate multi-item meal alternatives'),
+                    target_id: target.id,
+                    target_revision: target.approved_revision,
+                    start_date: startDate,
+                    days,
+                    schedule: slots.filter((s) => counts[s] > 0),
+                    items_per_slot: Object.fromEntries(
+                      slots
+                        .filter((s) => counts[s] > 0)
+                        .map((s) => [s, counts[s]]),
+                    ),
+                    food_ids: foods.map((f) => f.id),
+                  });
+                  setAlternatives(result.alternatives);
+                  setPlan(result.alternatives[0] ?? null);
+                  setOutcome(result.outcome);
+                  setVersion((v) => v + 1);
+                }, 'Search finished. Review the checked alternatives.')
               }
             >
-              Generate three alternatives
-            </button>
-          </Form>
-        </div>
-        {outcome != null && (
-          <Details title="Search outcome and exclusions" value={outcome} />
-        )}
-      </Panel>
+              <Field label="Start date">
+                <input
+                  type="date"
+                  className="field"
+                  required
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </Field>
+              <Field label="Number of days">
+                <input
+                  type="number"
+                  className="field"
+                  min="1"
+                  max="7"
+                  required
+                  value={days}
+                  onChange={(e) => setDays(Number(e.target.value))}
+                />
+              </Field>
+              <fieldset>
+                <legend className="font-semibold mb-3">Items per meal</legend>
+                <div className="grid grid-cols-2 gap-3">
+                  {slots.map((slot) => (
+                    <Field
+                      key={slot}
+                      label={label(slot)}
+                      hint="0 omits this meal"
+                    >
+                      <input
+                        type="number"
+                        className="field"
+                        min="0"
+                        max="5"
+                        required
+                        value={counts[slot]}
+                        onChange={(e) =>
+                          setCounts((v) => ({
+                            ...v,
+                            [slot]: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </Field>
+                  ))}
+                </div>
+              </fieldset>
+              <p className="text-sm text-ink-3">
+                Choose enough distinct foods with source portions for each meal. Every item
+                is checked against mandatory restrictions and daily targets.
+              </p>
+              <button
+                className="btn-primary"
+                disabled={
+                  !ready.data?.targets_ready ||
+                  !foods.length ||
+                  foods.length > 100 ||
+                  !Object.values(counts).some(Boolean)
+                }
+              >
+                Generate three alternatives
+              </button>
+            </Form>
+          </div>
+          {outcome != null && (
+            <Details title="Search outcome and exclusions" value={outcome} />
+          )}
+        </Panel>
+      )}
+      {actor.role === 'clinician' && (
+        <p className="notice mb-6">
+          Review patient-requested plans and approve a checked alternative.
+          Generation and substitution requests are in the patient workspace.
+        </p>
+      )}
       {!!alternatives.length && (
         <div
           className="flex flex-wrap gap-3 mb-6"
@@ -215,7 +222,12 @@ export default function Plans() {
           <ul className="divide-y divide-rule">
             {saved.data.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-3 py-3">
-                <span className="flex-1"><span className="capitalize">{label(p.objective)}</span><span className="block text-sm text-ink-3">{p.start_date} · {p.id.slice(0, 8)}</span></span>
+                <span className="flex-1">
+                  <span className="capitalize">{label(p.objective)}</span>
+                  <span className="block text-sm text-ink-3">
+                    {p.start_date} · {p.id.slice(0, 8)}
+                  </span>
+                </span>
                 <span
                   className={`flag ${p.needs_review ? 'flag-warn' : p.approved_at ? 'flag-ok' : 'flag-neutral'}`}
                 >
@@ -289,7 +301,9 @@ function PlanDetail({
           {plan.request.schedule.map((slot) => (
             <section key={slot} className="py-3">
               <h4 className="font-semibold capitalize mb-2">{slot}</h4>
-              {plan.body.check.meal_totals?.[day]?.[slot] && <Totals values={plan.body.check.meal_totals[day][slot]} />}
+              {plan.body.check.meal_totals?.[day]?.[slot] && (
+                <Totals values={plan.body.check.meal_totals[day][slot]} />
+              )}
               <ul className="divide-y divide-rule">
                 {plan.body.meals
                   .filter((m) => m.day === Number(day) && m.slot === slot)
@@ -309,40 +323,42 @@ function PlanDetail({
                           }
                         </p>
                       </div>
-                      {plan.approved_at && !plan.needs_review && (
-                        <button
-                          className="btn-ghost"
-                          disabled={task.busy || actor.role === 'reviewer'}
-                          onClick={() =>
-                            void task.run(async () => {
-                              if (!pool.length)
-                                throw new Error(
-                                  'Select replacement candidates in the food pool above.',
+                      {actor.role === 'patient' &&
+                        plan.approved_at &&
+                        !plan.needs_review && (
+                          <button
+                            className="btn-ghost"
+                            disabled={task.busy}
+                            onClick={() =>
+                              void task.run(async () => {
+                                if (!pool.length)
+                                  throw new Error(
+                                    'Select replacement candidates in the food pool above.',
+                                  );
+                                const result = await api<{
+                                  recommendations: Recommendation[];
+                                }>(
+                                  `/plans/${plan.id}/substitution-recommendations`,
+                                  {
+                                    ...decision(
+                                      actor,
+                                      'Find an item replacement',
+                                    ),
+                                    day: m.day,
+                                    slot: m.slot,
+                                    item: m.item ?? 1,
+                                    food_ids: pool.map((f) => f.id),
+                                  },
                                 );
-                              const result = await api<{
-                                recommendations: Recommendation[];
-                              }>(
-                                `/plans/${plan.id}/substitution-recommendations`,
-                                {
-                                  ...decision(
-                                    actor,
-                                    'Find an item replacement',
-                                  ),
-                                  day: m.day,
-                                  slot: m.slot,
-                                  item: m.item ?? 1,
-                                  food_ids: pool.map((f) => f.id),
-                                },
-                              );
-                              setSelected(m);
-                              setRecommendations(result.recommendations);
-                              setReport(result);
-                            }, '')
-                          }
-                        >
-                          Find replacement for item {m.item ?? 1}
-                        </button>
-                      )}
+                                setSelected(m);
+                                setRecommendations(result.recommendations);
+                                setReport(result);
+                              }, '')
+                            }
+                          >
+                            Find replacement for item {m.item ?? 1}
+                          </button>
+                        )}
                     </li>
                   ))}
               </ul>
@@ -426,8 +442,13 @@ function PlanDetail({
           </Form>
         )}
       {plan.approved_at && (
-        <Link className="btn-primary mt-5" to={`/adherence?plan=${plan.id}`}>
-          Log this plan
+        <Link
+          className="btn-primary mt-5"
+          to={`${actor.role === 'clinician' ? paths.intakeReview : paths.mealLog}?plan=${plan.id}`}
+        >
+          {actor.role === 'clinician'
+            ? 'Review recorded intake'
+            : 'Log this plan'}
         </Link>
       )}
     </Panel>
