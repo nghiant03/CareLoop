@@ -37,5 +37,12 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+  web:
+    build: ./ui
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
 volumes:
   database_v1:
