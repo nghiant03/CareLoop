@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import get_args
 
 from careloop.foods.models import Allergen, Nutrients
+from careloop.foods.portions import source_portions
 from careloop.patients.engine import UNITS
 
 
@@ -44,11 +45,11 @@ def food_restrictions(food, facts):
 
 
 def portion_quantity(food, portion_id, scale):
-    if scale not in (0.5, 1.0, 1.5) or portion_id not in food["planning_portions"]:
-        raise ValueError("Unreviewed portion or unsupported scale")
-    portion = next((p for p in food["portions"] if p["id"] == portion_id), None)
+    if scale not in (0.5, 1.0, 1.5):
+        raise ValueError("Unsupported portion scale")
+    portion = next((p for p in source_portions(food) if p["id"] == portion_id), None)
     if portion is None:
-        raise ValueError("Portion not found")
+        raise ValueError("No usable source quantity for this portion")
     field = "grams" if food.get("basis", "g") == "g" else "millilitres"
     if portion.get(field) is None:
         raise ValueError("Portion unit does not match nutrient basis")
@@ -92,16 +93,11 @@ def check_plan(meals, days, schedule, facts, items, items_per_slot=None):
             continue
         for issue in food_restrictions(food, facts):
             violations.append({"day": day, "slot": slot, "issue": issue})
-        if slot not in food["meal_slots"]:
-            violations.append(
-                {"day": day, "slot": slot, "issue": "Food not reviewed for this slot"}
-            )
         try:
             quantity = portion_quantity(food, meal["portion_id"], meal["scale"])
         except ValueError as exc:
             violations.append({"day": day, "slot": slot, "issue": str(exc)})
             continue
-        # Historical mass-based snapshots use `grams`.
         recorded = meal.get("quantity", meal.get("grams"))
         if Decimal(str(recorded)) != quantity or meal.get("unit", "g") != food.get("basis", "g"):
             violations.append({"day": day, "slot": slot, "issue": "Portion quantity/unit mismatch"})

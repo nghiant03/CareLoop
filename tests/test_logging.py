@@ -104,6 +104,7 @@ def test_plan_ownership_approval_date_roles_and_input_validation(client):
     )
     assert client.post(base, json=planned(plan, logged_on="2026-11-02")).status_code == 422
     assert client.post(base, json={**planned(plan), **REVIEWER}).status_code == 403
+    assert client.post(base, json={**planned(plan), **CLINICIAN}).status_code == 403
     assert client.post(base, json=planned(plan, status="changed_quantity")).status_code == 422
     assert client.post(base, json=planned(plan, scale=1)).status_code == 422
     assert (
@@ -180,7 +181,7 @@ def test_historical_plan_and_food_snapshots_remain_loggable(client):
     assert logged.json()["body"]["consumed"]["food_revision"] == 1
     assert client.get(f"/api/plans/{plan['id']}").json()["needs_review"]
     entry = logged.json()
-    invalid = {**planned(plan, slot="lunch"), **CLINICIAN, "expected_revision": 1}
+    invalid = {**planned(plan, slot="lunch"), "expected_revision": 1}
     assert (
         client.post(
             f"/api/patients/{p['id']}/meal-logs/{entry['id']}/revisions", json=invalid

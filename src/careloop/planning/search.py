@@ -1,3 +1,4 @@
+from careloop.foods.portions import source_portions
 from careloop.planning.checker import check_plan, food_restrictions, portion_quantity, preflight
 
 OBJECTIVES = {
@@ -19,15 +20,14 @@ def candidates(foods, schedule, facts, items):
         missing = sorted(key for key in required if food["nutrients"].get(key) is None)
         if missing:
             reasons.append("Unknown nutrients: " + ", ".join(missing))
-        if not food["planning_portions"] or not set(schedule) & set(food["meal_slots"]):
-            reasons.append("No reviewed planning portion/meal slot")
+        portions = source_portions(food)
+        if not portions:
+            reasons.append("No source portion with a usable quantity matching the nutrient basis")
         if reasons:
             excluded.append({"food_id": str(row["id"]), "reasons": reasons})
             continue
         for slot in schedule:
-            if slot not in food["meal_slots"]:
-                continue
-            for portion_id in sorted(set(food["planning_portions"])):
+            for portion_id in sorted(p["id"] for p in portions):
                 for scale in (0.5, 1.0, 1.5):
                     options[slot].append(
                         {
@@ -71,7 +71,9 @@ def rank(meals, actions, fraction, facts, previous, objective):
     return 1000 * violation + weights[0] * fit + weights[1] * disliked + weights[2] * repeated
 
 
-def generate(foods, request, facts, items):
+def generate(foods, request, facts, items, *, beam_width=BEAM_WIDTH):
+    if not isinstance(beam_width, int) or not 1 <= beam_width <= BEAM_WIDTH:
+        raise ValueError(f"Beam width must be between 1 and {BEAM_WIDTH}")
     issues = preflight(facts, items)
     if issues:
         return [], {"status": "blocked", "blockers": issues}
@@ -88,6 +90,7 @@ def generate(foods, request, facts, items):
     if issues:
         return [], {"status": "blocked", "blockers": issues, "excluded_foods": excluded}
     alternatives = []
+    evaluations = 0
     positions = [
         (slot, item)
         for slot in request.schedule
@@ -112,7 +115,8 @@ def generate(foods, request, facts, items):
                         meals, actions, position / len(positions), facts, used, objective
                     )
                 )
-                beam = expanded[:BEAM_WIDTH]
+                evaluations += len(expanded)
+                beam = expanded[:beam_width]
             valid = [
                 meals
                 for meals in beam
@@ -137,7 +141,8 @@ def generate(foods, request, facts, items):
         if any(a["check"]["valid"] for a in alternatives)
         else "search_failed",
         "excluded_foods": excluded,
-        "algorithm": "beam-items-v2",
-        "beam_width": BEAM_WIDTH,
+        "algorithm": "beam-source-portions-v3",
+        "beam_width": beam_width,
+        "scored_partial_plans": evaluations,
         "infeasibility_proven": False,
     }

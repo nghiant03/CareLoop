@@ -4,6 +4,8 @@ from test_patients import CLINICIAN, REVIEWER, approve, patient, propose, rule
 
 from careloop.planning.checker import check_plan
 
+PATIENT = {"actor": {"name": "Test patient", "role": "patient"}, "reason": "Test request"}
+
 
 def food(client, code="one", *, energy=330, sodium=100, name="Reviewed test dish", **overrides):
     body = {
@@ -12,8 +14,6 @@ def food(client, code="one", *, energy=330, sodium=100, name="Reviewed test dish
         "nutrients": {"energy": energy, "protein": 10, "sodium": sodium},
         "portions": [{"id": "serving", "label": "test serving", "grams": 100}],
         "provenance": {"kind": "manual", "source": "test://fixture", "notes": "Not clinical data"},
-        "meal_slots": ["breakfast", "lunch", "dinner", "snack"],
-        "planning_portions": ["serving"],
         "review_note": "Test-only planning annotations",
         **overrides,
     }
@@ -77,7 +77,7 @@ def request(client, target, foods, **options):
     response = client.post(
         "/api/plan-requests",
         json={
-            **CLINICIAN,
+            **PATIENT,
             "target_id": target["id"],
             "target_revision": target["latest_revision"],
             "start_date": "2026-11-01",
@@ -93,6 +93,51 @@ def request(client, target, foods, **options):
 def approve_plan(client, plan):
     return client.post(
         f"/api/plans/{plan['id']}/approval", json={**CLINICIAN, "review_note": "Test review"}
+    )
+
+
+def test_patient_requests_and_clinician_approvals_have_separate_roles(client):
+    _, target = ready(client)
+    f = food(client)
+    for actor in (CLINICIAN, REVIEWER):
+        assert (
+            client.post(
+                "/api/plan-requests",
+                json={
+                    **actor,
+                    "target_id": target["id"],
+                    "target_revision": target["latest_revision"],
+                    "start_date": "2026-11-01",
+                    "days": 1,
+                    "food_ids": [f["id"]],
+                },
+            ).status_code
+            == 403
+        )
+    plan = request(client, target, [f])["alternatives"][0]
+    assert (
+        client.post(
+            f"/api/plans/{plan['id']}/approval",
+            json={
+                **PATIENT,
+                "review_note": "Cannot self-approve",
+            },
+        ).status_code
+        == 403
+    )
+    assert approve_plan(client, plan).status_code == 200
+    assert (
+        client.post(
+            f"/api/plans/{plan['id']}/substitutions",
+            json={
+                **CLINICIAN,
+                "day": 1,
+                "slot": "lunch",
+                "food_id": f["id"],
+                "portion_id": "serving",
+            },
+        ).status_code
+        == 403
     )
 
 
@@ -151,15 +196,20 @@ def test_unknown_allergens_vegetarian_and_egg_dairy_choices_are_mandatory(client
     assert all(p["body"]["check"]["valid"] for p in result["alternatives"])
 
 
-def test_missing_patient_choices_and_unreviewed_catalogue_block(client):
+def test_missing_patient_choices_block_but_source_portions_need_no_enablement(client):
     _, target = ready(client, allergies=None)
     f = food(client)
     assert request(client, target, [f])["outcome"]["status"] == "blocked"
     _, target = ready(client)
     raw = food(client, "raw", meal_slots=[], planning_portions=[], review_note=None)
     result = request(client, target, [raw])
+    assert all(plan["body"]["check"]["valid"] for plan in result["alternatives"])
+    assert len(result["alternatives"]) == 3
+    assert "meal_slots" not in raw["body"] and "planning_portions" not in raw["body"]
+    no_quantity = food(client, "no-quantity", portions=[], review_note=None)
+    result = request(client, target, [no_quantity])
     assert result["alternatives"] == []
-    assert "No reviewed" in result["outcome"]["excluded_foods"][0]["reasons"][0]
+    assert "No source portion" in result["outcome"]["excluded_foods"][0]["reasons"][0]
 
 
 def test_unmet_search_is_not_infeasibility_and_cannot_be_approved(client):
@@ -239,7 +289,7 @@ def test_new_allergen_flags_affected_meals_and_blocks_new_requests(client):
     response = client.post(
         "/api/plan-requests",
         json={
-            **CLINICIAN,
+            **PATIENT,
             "target_id": target["id"],
             "target_revision": 2,
             "start_date": "2026-11-01",
@@ -252,7 +302,7 @@ def test_new_allergen_flags_affected_meals_and_blocks_new_requests(client):
         client.post(
             f"/api/plans/{plan['id']}/substitutions",
             json={
-                **CLINICIAN,
+                **PATIENT,
                 "day": 1,
                 "slot": "lunch",
                 "food_id": f["id"],
@@ -274,7 +324,7 @@ def test_substitution_draft_is_checked_and_does_not_mutate_parent(client):
     bad = client.post(
         f"/api/plans/{parent['id']}/substitutions",
         json={
-            **CLINICIAN,
+            **PATIENT,
             "day": 1,
             "slot": "lunch",
             "food_id": salty["id"],
@@ -286,7 +336,7 @@ def test_substitution_draft_is_checked_and_does_not_mutate_parent(client):
     draft = client.post(
         f"/api/plans/{parent['id']}/substitutions",
         json={
-            **CLINICIAN,
+            **PATIENT,
             "day": 1,
             "slot": "lunch",
             "food_id": replacement["id"],

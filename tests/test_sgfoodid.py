@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from careloop.adapters.sgfoodid import MAPPING, normalize
-from careloop.foods.models import FoodBody, Portion
+from careloop.foods.models import Portion
 from careloop.planning.checker import check_plan, portion_quantity
 
 
@@ -62,10 +62,6 @@ def test_ml_basis_trace_added_sugar_and_independent_serving_check():
     assert body.nutrients.added_sugars == 1
     assert counts["unknown_qualifier_counts"]["Trace"] == 1
     food = body.model_dump(mode="json")
-    food.update(
-        planning_portions=["serving_0"], meal_slots=["lunch"], review_note="Test annotation"
-    )
-    food = FoodBody.model_validate(food).model_dump(mode="json")
     quantity = portion_quantity(food, "serving_0", 1)
     meals = [
         {

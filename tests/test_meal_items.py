@@ -2,7 +2,6 @@ from copy import deepcopy
 from decimal import Decimal
 
 from test_logging import PATIENT
-from test_patients import CLINICIAN
 from test_planning import approve_plan, food, ready, request
 
 from careloop.planning.checker import check_plan
@@ -71,14 +70,14 @@ def test_item_substitution_recommendation_and_sibling_preservation(client):
     )
     response = client.post(
         f"/api/plans/{plan['id']}/substitution-recommendations",
-        json={**CLINICIAN, "day": 1, "slot": "lunch", "item": 2, "food_ids": [replacement["id"]]},
+        json={**PATIENT, "day": 1, "slot": "lunch", "item": 2, "food_ids": [replacement["id"]]},
     )
     assert response.status_code == 200, response.text
     assert response.json()["recommendations"][0]["substitution"]["item"] == 2
     draft = client.post(
         f"/api/plans/{plan['id']}/substitutions",
         json={
-            **CLINICIAN,
+            **PATIENT,
             "day": 1,
             "slot": "lunch",
             "item": 2,

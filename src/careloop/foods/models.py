@@ -71,9 +71,15 @@ class FoodBody(Model):
     vegetarian: StrictBool | None = None
     contains_egg: StrictBool | None = None
     contains_dairy: StrictBool | None = None
-    meal_slots: list[Slot] = Field(default_factory=list)
-    planning_portions: list[str] = Field(default_factory=list)
     review_note: Text | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_planning_annotations(cls, value):
+        # Historical snapshots remain readable; obsolete gates no longer affect planning.
+        if isinstance(value, dict):
+            return {k: v for k, v in value.items() if k not in {"meal_slots", "planning_portions"}}
+        return value
 
     @model_validator(mode="after")
     def reviewed_fields(self):
@@ -83,14 +89,8 @@ class FoodBody(Model):
         ids = [portion.id for portion in self.portions]
         if len(set(ids)) != len(ids):
             raise ValueError("Portion IDs must be unique")
-        if not set(self.planning_portions) <= set(ids):
-            raise ValueError("Planning portions must reference supplied portions")
-        if len(set(self.meal_slots)) != len(self.meal_slots):
-            raise ValueError("Meal slots must be unique")
         annotations = (
             self.allergen_status
-            or self.meal_slots
-            or self.planning_portions
             or self.vegetarian is not None
             or self.contains_egg is not None
             or self.contains_dairy is not None

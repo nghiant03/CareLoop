@@ -1,8 +1,8 @@
 from decimal import Decimal
 
 import pytest
-from test_patients import CLINICIAN, REVIEWER
-from test_planning import approve_plan, food, ready, request
+from test_patients import REVIEWER
+from test_planning import PATIENT, approve_plan, food, ready, request
 
 from careloop.evaluate_foods import evaluate
 from careloop.foods.clustering import fit, retrieve, vector
@@ -71,7 +71,7 @@ def recommend(client, plan, foods, **changes):
     return client.post(
         f"/api/plans/{plan['id']}/substitution-recommendations",
         json={
-            **CLINICIAN,
+            **PATIENT,
             "day": 1,
             "slot": "lunch",
             "food_ids": [f["id"] for f in foods],
@@ -99,7 +99,7 @@ def test_checked_recommendations_differences_and_approval_workflow(client, metho
     parent = client.get(f"/api/plans/{plan['id']}").json()
     assert not parent["needs_review"]
     draft = client.post(
-        f"/api/plans/{plan['id']}/substitutions", json={**CLINICIAN, **result["substitution"]}
+        f"/api/plans/{plan['id']}/substitutions", json={**PATIENT, **result["substitution"]}
     )
     assert draft.status_code == 201, draft.text
     assert draft.json()["approved_at"] is None

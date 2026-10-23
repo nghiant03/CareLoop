@@ -33,5 +33,5 @@ def test_fndds_basis_nulls_and_zero_portions():
     assert body.nutrients.total_sugars == 1
     assert body.portions[0].grams == 244
     assert body.allergen_status == {} and body.vegetarian is None
-    assert body.planning_portions == [] and body.meal_slots == []
+    assert "planning_portions" not in body.model_dump() and "meal_slots" not in body.model_dump()
     assert counts["omitted_nonpositive_missing_or_oversized_portions"] == 1

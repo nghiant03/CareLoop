@@ -11,8 +11,7 @@ from careloop.workflow import WorkflowError, lock_catalogue, record_event, requi
 
 
 def begin(conn, data):
-    if data.actor.role not in {"patient", "clinician"}:
-        raise WorkflowError(403, "Planning requires the patient or clinician demo role")
+    require_role(data, "patient")
     lock_catalogue(conn)
 
 

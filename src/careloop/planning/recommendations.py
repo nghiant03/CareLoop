@@ -59,21 +59,26 @@ def recommend(conn, plan_id, data):
     if index is None:
         raise WorkflowError(422, "Requested meal does not exist")
     original = plan["body"]["meals"][index]
-    source = {
-        "id": original["food_id"],
-        "latest_revision": original["food_revision"],
-        "body": original["food"],
-    }
     foods = [
         get_food(conn, identity)
         for identity in sorted(data.food_ids)
         if str(identity) != original["food_id"]
     ]
+    return recommend_records(plan, facts, target["body"]["items"], foods, data, index)
+
+
+def recommend_records(plan, facts, items, foods, data, index):
+    """Pure retrieval/checking shared by the approved workflow and frozen experiments."""
+    original = plan["body"]["meals"][index]
+    source = {
+        "id": original["food_id"],
+        "latest_revision": original["food_revision"],
+        "body": original["food"],
+    }
+    foods = [row for row in foods if str(row["id"]) != original["food_id"]]
     model = fit([source, *foods], data.clusters)
     retrieved = retrieve(foods, source, model, data.method)
-    options, excluded = candidates(
-        [row for row, _ in retrieved], [data.slot], facts, target["body"]["items"]
-    )
+    options, excluded = candidates([row for row, _ in retrieved], [data.slot], facts, items)
     choices = options[data.slot]
     if len(choices) > MAX_SLOT_CANDIDATES:
         raise WorkflowError(422, f"Narrow the pool: at most {MAX_SLOT_CANDIDATES} portion choices")
@@ -88,7 +93,7 @@ def recommend(conn, plan_id, data):
             plan["request"]["days"],
             plan["request"]["schedule"],
             facts,
-            target["body"]["items"],
+            items,
             plan["request"].get("items_per_slot"),
         )
         selection = {
@@ -102,7 +107,7 @@ def recommend(conn, plan_id, data):
             continue
         text = (meal["food"]["name"] + " " + meal["food"]["category"]).casefold()
         disliked = any(d.casefold() in text for d in facts.get("dislikes") or [])
-        fit_score = target_fit(check["daily_totals"][str(data.day)], target["body"]["items"])
+        fit_score = target_fit(check["daily_totals"][str(data.day)], items)
         similarity = distances[meal["food_id"]]
         score = fit_score + 0.25 * disliked
         if data.method != "same_category":

@@ -10,12 +10,11 @@ from careloop.logging.models import LogInput
 from careloop.patients.engine import UNITS
 from careloop.patients.service import get_patient, get_target
 from careloop.planning.service import get_plan
-from careloop.workflow import WorkflowError, lock_catalogue, record_event
+from careloop.workflow import WorkflowError, lock_catalogue, record_event, require_role
 
 
 def begin(conn, patient_id, data):
-    if data.actor.role not in {"patient", "clinician"}:
-        raise WorkflowError(403, "Logging requires the patient or clinician demo role")
+    require_role(data, "patient")
     lock_catalogue(conn)
     get_patient(conn, patient_id)
 
