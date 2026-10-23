@@ -3,7 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request
 
 from careloop.planning import service
-from careloop.planning.models import PlanApproval, PlanInput, SubstitutionInput
+from careloop.planning.models import PlanApproval, PlanInput, RecommendationInput, SubstitutionInput
+from careloop.planning.recommendations import recommend
 
 router = APIRouter(prefix="/api", tags=["Meal plans"])
 
@@ -49,4 +50,11 @@ def approve(plan_id: UUID, data: PlanApproval, request: Request):
 def substitute(plan_id: UUID, data: SubstitutionInput, request: Request):
     with request.app.state.pool.connection() as conn:
         result = service.substitute(conn, plan_id, data)
+    return result
+
+
+@router.post("/plans/{plan_id}/substitution-recommendations")
+def recommendations(plan_id: UUID, data: RecommendationInput, request: Request):
+    with request.app.state.pool.connection() as conn:
+        result = recommend(conn, plan_id, data)
     return result

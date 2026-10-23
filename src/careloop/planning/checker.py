@@ -60,14 +60,36 @@ def portion_quantity(food, portion_id, scale):
     return Decimal(str(portion[field])) * Decimal(str(scale))
 
 
-def check_plan(meals, days, schedule, facts, items):
+def check_plan(meals, days, schedule, facts, items, items_per_slot=None):
     violations = [{"issue": message} for message in preflight(facts, items)]
-    expected = {(day, slot) for day in range(1, days + 1) for slot in schedule}
-    actual = [(m["day"], m["slot"]) for m in meals]
+    counts = items_per_slot or {}
+    expected = {
+        (day, slot, item)
+        for day in range(1, days + 1)
+        for slot in schedule
+        for item in range(1, counts.get(slot, 1) + 1)
+    }
+    actual = [(m["day"], m["slot"], m.get("item", 1)) for m in meals]
     if len(actual) != len(expected) or set(actual) != expected:
         violations.append({"issue": "Meal coverage does not match requested days/schedule"})
+    seen_foods = set()
+    for meal in meals:
+        key = (meal["day"], meal["slot"], meal.get("food_id"))
+        if meal.get("food_id") and key in seen_foods:
+            violations.append(
+                {
+                    "day": meal["day"],
+                    "slot": meal["slot"],
+                    "issue": "Repeated food within a meal; adjust its portion instead",
+                }
+            )
+        seen_foods.add(key)
     totals = {
         day: {key: Decimal(0) for key in Nutrients.model_fields} for day in range(1, days + 1)
+    }
+    meal_totals = {
+        day: {slot: {key: Decimal(0) for key in Nutrients.model_fields} for slot in schedule}
+        for day in totals
     }
     for meal in meals:
         day, slot, food = meal["day"], meal["slot"], meal["food"]
@@ -94,6 +116,12 @@ def check_plan(meals, days, schedule, facts, items):
                 totals[day][nutrient] = None
             else:
                 totals[day][nutrient] += Decimal(str(value)) * quantity / Decimal(100)
+            if slot in meal_totals[day]:
+                slot_totals = meal_totals[day][slot]
+                if value is None or slot_totals[nutrient] is None:
+                    slot_totals[nutrient] = None
+                else:
+                    slot_totals[nutrient] += Decimal(str(value)) * quantity / Decimal(100)
     for day, nutrients in totals.items():
         for item in items:
             action = item["action"]
@@ -124,6 +152,15 @@ def check_plan(meals, days, schedule, facts, items):
     return {
         "valid": not violations,
         "violations": violations,
+        "meal_totals": {
+            str(day): {
+                slot: {
+                    key: str(value) if value is not None else None for key, value in values.items()
+                }
+                for slot, values in slots.items()
+            }
+            for day, slots in meal_totals.items()
+        },
         "daily_totals": {
             str(day): {
                 key: str(value) if value is not None else None for key, value in nutrients.items()

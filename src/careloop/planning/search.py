@@ -85,23 +85,33 @@ def generate(foods, request, facts, items):
             issues.append(
                 f"Narrow the food pool for {slot}: candidate limit is {MAX_SLOT_CANDIDATES}"
             )
+        elif len({choice["food_id"] for choice in choices}) < request.items_per_slot.get(slot, 1):
+            issues.append(f"Not enough distinct eligible foods for {slot}'s requested item count")
     if issues:
         return [], {"status": "blocked", "blockers": issues, "excluded_foods": excluded}
     alternatives = []
+    positions = [
+        (slot, item)
+        for slot in request.schedule
+        for item in range(1, request.items_per_slot.get(slot, 1) + 1)
+    ]
     actions = [item["action"] for item in items]
     for objective in OBJECTIVES:
         plan, used = [], set()
         for day in range(1, request.days + 1):
             beam = [[]]
-            for position, slot in enumerate(request.schedule, 1):
+            for position, (slot, item) in enumerate(positions, 1):
                 expanded = [
-                    partial + [{**choice, "day": day}]
+                    partial + [{**choice, "day": day, "item": item}]
                     for partial in beam
                     for choice in options[slot]
+                    if not any(
+                        m["slot"] == slot and m["food_id"] == choice["food_id"] for m in partial
+                    )
                 ]
                 expanded.sort(
                     key=lambda meals: rank(
-                        meals, actions, position / len(request.schedule), facts, used, objective
+                        meals, actions, position / len(positions), facts, used, objective
                     )
                 )
                 beam = expanded[:BEAM_WIDTH]
@@ -110,21 +120,28 @@ def generate(foods, request, facts, items):
             valid = [
                 meals
                 for meals in beam
-                if check_plan([{**m, "day": 1} for m in meals], 1, request.schedule, facts, items)[
-                    "valid"
-                ]
+                if check_plan(
+                    [{**m, "day": 1} for m in meals],
+                    1,
+                    request.schedule,
+                    facts,
+                    items,
+                    request.items_per_slot,
+                )["valid"]
             ]
             chosen = (valid or beam)[0]
             plan.extend(chosen)
             used.update(m["food_id"] for m in chosen)
-        check = check_plan(plan, request.days, request.schedule, facts, items)
+        check = check_plan(
+            plan, request.days, request.schedule, facts, items, request.items_per_slot
+        )
         alternatives.append({"objective": objective, "meals": plan, "check": check})
     return alternatives, {
         "status": "drafts_available"
         if any(a["check"]["valid"] for a in alternatives)
         else "search_failed",
         "excluded_foods": excluded,
-        "algorithm": "beam-v1",
+        "algorithm": "beam-items-v2",
         "beam_width": BEAM_WIDTH,
         "infeasibility_proven": False,
     }

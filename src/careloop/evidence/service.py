@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from psycopg.types.json import Jsonb
 
+from careloop.evidence.conflicts import analyse
 from careloop.evidence.models import (
     BatchInput,
     Decision,
@@ -36,10 +37,15 @@ def source(conn, source_id):
     row = conn.execute("SELECT * FROM evidence_sources WHERE id = %s", (source_id,)).fetchone()
     if row is None:
         raise WorkflowError(404, "Source not found")
+    row["document"] = conn.execute(
+        """SELECT original_sha256, metadata, refresh_of FROM evidence_documents
+        WHERE source_id=%s""",
+        (source_id,),
+    ).fetchone()
     return row
 
 
-def create_source(conn, data: SourceInput):
+def create_source(conn, data: SourceInput, extracted_passages=None):
     begin_write(conn, data)
     source_id = uuid4()
     checksum = hashlib.sha256(data.content.encode()).hexdigest()
@@ -48,6 +54,32 @@ def create_source(conn, data: SourceInput):
            VALUES (%s, %s, %s, %s, %s, %s)""",
         (source_id, data.title, data.locator, data.edition, data.content, checksum),
     )
+    chunks = (
+        extracted_passages
+        if extracted_passages is not None
+        else [
+            {
+                "ordinal": start // 1800 + 1,
+                "location": "Submitted text",
+                "content": data.content[start : start + 1800],
+                "start_offset": start,
+                "end_offset": min(start + 1800, len(data.content)),
+            }
+            for start in range(0, len(data.content), 1800)
+        ]
+    )
+    for chunk in chunks:
+        conn.execute(
+            "INSERT INTO evidence_passages VALUES (%s,%s,%s,%s,%s,%s)",
+            (
+                source_id,
+                chunk["ordinal"],
+                chunk["location"],
+                chunk["content"],
+                chunk["start_offset"],
+                chunk["end_offset"],
+            ),
+        )
     audit(conn, data, "source.created", source_id, {"content_sha256": checksum})
     return source(conn, source_id)
 
@@ -128,11 +160,35 @@ def approve(conn, data: BatchInput):
     return {"approved": [ref.model_dump(mode="json") for ref in data.rules]}
 
 
+def conflict_report(conn, data):
+    generation = begin_write(conn, data)
+    validate_selection(conn, data)
+    rows = conn.execute("""SELECT r.id AS rule_id, v.revision, v.body
+        FROM evidence_rules r JOIN evidence_revisions v
+        ON (v.rule_id,v.revision)=(r.id,r.active_revision) WHERE NOT r.retired""").fetchall()
+    combined = {str(row["rule_id"]): row for row in rows}
+    for ref in data.rules:
+        combined[str(ref.rule_id)] = conn.execute(
+            """SELECT rule_id, revision, body FROM evidence_revisions
+               WHERE rule_id=%s AND revision=%s""",
+            (ref.rule_id, ref.revision),
+        ).fetchone()
+    result = analyse(
+        [combined[key] for key in sorted(combined)], {str(ref.rule_id) for ref in data.rules}
+    )
+    return {"generation": generation, **result}
+
+
 def publish(conn, data: PublicationInput):
     generation = begin_write(conn, data)
     if generation != data.expected_generation:
         raise WorkflowError(409, "Evidence catalogue changed; repeat conflict review")
     validate_selection(conn, data, publishing=True)
+    conflicts = conflict_report(conn, data)
+    if conflicts["blocking_conflicts"]:
+        raise WorkflowError(
+            409, "Resolve incompatible numeric rules before publication; see conflict-check"
+        )
     publication_id = uuid4()
     conn.execute(
         """INSERT INTO evidence_publications (id, actor, reason, conflict_review)
@@ -157,6 +213,7 @@ def publish(conn, data: PublicationInput):
             "rules": [ref.model_dump(mode="json") for ref in data.rules],
             "reviewed_generation": generation,
             "conflict_review": data.conflict_review,
+            "structured_conflict_check": conflicts,
         },
     )
     invalidate_evidence(conn, data)

@@ -193,7 +193,7 @@ def test_restart_and_migration_idempotency(client, database):
         assert restarted.get("/api/health").status_code == 200
         assert restarted.get(f"/api/evidence/rules/{rule['id']}").json() == rule
     with psycopg.connect(database) as conn:
-        assert conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 3
+        assert conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 6
         conn.execute("UPDATE schema_migrations SET checksum = 'tampered'")
     with pytest.raises(RuntimeError, match="Applied migration changed"):
         migrate(database)

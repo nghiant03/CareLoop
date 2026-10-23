@@ -7,6 +7,8 @@ dependencies = [
   "fastapi>=0.115,<1",
   "uvicorn>=0.30,<1",
   "psycopg[binary,pool]>=3.2,<4",
+  "pypdf>=6,<7",
+  "fonttools>=4.60,<5",
 ]
 
 [project.optional-dependencies]

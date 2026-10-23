@@ -105,6 +105,7 @@ def approve_plan(conn, plan_id, data):
         plan["request"]["schedule"],
         facts,
         target["body"]["items"],
+        plan["request"].get("items_per_slot"),
     )
     if not check["valid"]:
         raise WorkflowError(409, "An unmet draft cannot be approved")
@@ -134,7 +135,7 @@ def substitute(conn, plan_id, data):
         (
             i
             for i, m in enumerate(plan["body"]["meals"])
-            if m["day"] == data.day and m["slot"] == data.slot
+            if m["day"] == data.day and m["slot"] == data.slot and m.get("item", 1) == data.item
         ),
         None,
     )
@@ -149,6 +150,7 @@ def substitute(conn, plan_id, data):
     meals[index] = {
         "day": data.day,
         "slot": data.slot,
+        "item": data.item,
         "food_id": str(data.food_id),
         "food_revision": food["latest_revision"],
         "food": food["body"],
@@ -158,7 +160,12 @@ def substitute(conn, plan_id, data):
         "unit": food["body"].get("basis", "g"),
     }
     check = check_plan(
-        meals, plan["request"]["days"], plan["request"]["schedule"], facts, target["body"]["items"]
+        meals,
+        plan["request"]["days"],
+        plan["request"]["schedule"],
+        facts,
+        target["body"]["items"],
+        plan["request"].get("items_per_slot"),
     )
     request_id = uuid4()
     conn.execute(

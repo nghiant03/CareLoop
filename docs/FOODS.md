@@ -32,7 +32,7 @@ Unknown/trace values are null, not zero. Total, added, and free sugars are separ
 
 Reviewers explicitly assign:
 
-- `meal_slots`: breakfast/lunch/dinner/snack suitability for this whole portion.
+- `meal_slots`: breakfast/lunch/dinner/snack suitability as an item in that meal.
 - `planning_portions`: IDs of appropriate portions from the source list.
 - Optional ingredient, vegetarian, egg/dairy, and allergen classifications.
 - A supporting `review_note` whenever assigning these annotations.

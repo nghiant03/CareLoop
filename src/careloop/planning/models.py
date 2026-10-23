@@ -17,9 +17,12 @@ class PlanInput(Decision):
         default_factory=lambda: ["breakfast", "lunch", "dinner"]
     )
     food_ids: Annotated[list[UUID], Field(min_length=1, max_length=100)]
+    items_per_slot: dict[Slot, Annotated[int, Field(ge=1, le=5)]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def unique_selection(self):
+        if not set(self.items_per_slot) <= set(self.schedule):
+            raise ValueError("Item counts must refer to scheduled meal slots")
         if len(set(self.schedule)) != len(self.schedule) or len(set(self.food_ids)) != len(
             self.food_ids
         ):
@@ -34,6 +37,23 @@ class PlanApproval(Decision):
 class SubstitutionInput(Decision):
     day: Annotated[int, Field(ge=1, le=7)]
     slot: Slot
+    item: Annotated[int, Field(ge=1, le=5)] = 1
     food_id: UUID
     portion_id: Text
     scale: Literal[0.5, 1.0, 1.5] = 1.0
+
+
+class RecommendationInput(Decision):
+    day: Annotated[int, Field(ge=1, le=7)]
+    slot: Slot
+    item: Annotated[int, Field(ge=1, le=5)] = 1
+    food_ids: Annotated[list[UUID], Field(min_length=1, max_length=100)]
+    method: Literal["cluster", "nearest", "same_category"] = "nearest"
+    clusters: Annotated[int, Field(ge=1, le=8)] = 4
+    limit: Annotated[int, Field(ge=1, le=20)] = 5
+
+    @model_validator(mode="after")
+    def unique_foods(self):
+        if len(set(self.food_ids)) != len(self.food_ids):
+            raise ValueError("Food IDs must be unique")
+        return self

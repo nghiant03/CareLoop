@@ -1,7 +1,8 @@
 # Evaluation plan
 
-Status: proposed evaluation design incorporating confirmed constraints,
-2026-10-23. Implement a reproducible evaluation command and generated report.
+Status: proposed full evaluation design incorporating confirmed constraints,
+2026-10-23. A [public-food retrieval pilot](MINING.md) now has a reproducible command
+and saved report; the unified evaluation command and full benchmarks remain pending.
 Run before the demonstration; an in-app evaluation dashboard is not required.
 Algorithms are free to choose. No clinician or dietitian is available.
 

@@ -27,6 +27,7 @@ def flag_plans(conn, decision, reason, *, target_id=None, food_id=None, plan_id=
                             {
                                 "day": meal["day"],
                                 "slot": meal["slot"],
+                                "item": meal.get("item", 1),
                                 "allergen": allergy,
                                 "status": status or "unknown",
                             }

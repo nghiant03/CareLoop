@@ -18,7 +18,9 @@ from careloop.evidence.models import (
     RevisionInput,
     SourceInput,
 )
+from careloop.evidence.routes import router as evidence_routes
 from careloop.foods.routes import router as food_routes
+from careloop.logging.routes import router as logging_routes
 from careloop.patients.routes import router as patient_routes
 from careloop.planning.routes import router as planning_routes
 
@@ -44,8 +46,10 @@ def create_app(url: str | None = None) -> FastAPI:
 
     app = FastAPI(title="CareLoop", version="0.1.0", lifespan=lifespan)
     app.include_router(patient_routes)
+    app.include_router(evidence_routes)
     app.include_router(food_routes)
     app.include_router(planning_routes)
+    app.include_router(logging_routes)
 
     @app.exception_handler(service.WorkflowError)
     async def workflow_error(request: Request, exc: service.WorkflowError):
