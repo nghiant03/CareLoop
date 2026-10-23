@@ -2,15 +2,24 @@
 
 ## Current state
 
-The user requested a fresh start: preserve `frontend/` and the agreed requirements,
+The user requested a fresh start: preserve the UI visual style and agreed requirements,
 delete the old implementation and GitNexus index, and rethink the entire code
 structure. The replacement under `src/careloop` implements PostgreSQL-backed
 evidence publication, patient/CSV entry, reviewed targets, a versioned food
 catalogue, checked meal plans/substitutions, and reassessment. Source adapters
 translate SG FoodID (the user-supplied Kaggle mirror), FNDDS, and NHANES; downloads
 belong to `ingestion.py`, CLI orchestration to `cli.py`, and persistence to workflow
-services. Tests live in `tests/`. See `README.md` for run
-and verification commands. Git history and repository metadata are preserved.
+services. Meal logging includes planned/independent intake, correction history,
+and daily summaries. Tests live in `tests/`. See `README.md` for run and
+verification commands. Git history and repository metadata are preserved.
+Food mining provides checked substitution recommendations and a public-data retrieval pilot.
+Planning supports multiple items per meal, item-level substitutions/logs, and whole-meal
+confirmation. Evidence acquisition retains URL/PDF originals, page/heading passages,
+refresh comparisons, and structured numeric publication checks; hosted extraction/chat
+remain pending.
+The frontend package is now `ui/`, with one application entry point, one API client,
+shared controls/state, and five screens. Retired frontend code and Impeccable-generated
+files have been removed; do not recreate parallel frontend implementations.
 External Docker/database removal is blocked by permissions;
 see [implementation status](docs/IMPLEMENTATION.md).
 
@@ -26,6 +35,8 @@ see [implementation status](docs/IMPLEMENTATION.md).
 - [Patients](docs/PATIENTS.md): facts, CSV, applicability, target approval/reassessment.
 - [Foods](docs/FOODS.md): composition/portion units, adapters, reviewer annotations.
 - [Planning](docs/PLANNING.md): bounded search, checking, approval, substitutions.
+- [Logging](docs/LOGGING.md): reported intake, immutable corrections, daily completeness.
+- [Mining](docs/MINING.md): nutrient clustering, checked recommendations, retrieval pilot.
 
 Requirements record decisions as of 2026-10-23; implementation status distinguishes
 completed slices from the remaining functionality.

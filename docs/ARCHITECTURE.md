@@ -22,11 +22,16 @@ src/careloop/
   foods/                  Versioned nutrients, portions, reviewer annotations
   planning/               Bounded search, independent checking, approvals/substitutions
 tests/                    Workflow and PostgreSQL integration tests
-frontend/                 Preserved interface awaiting new API integration
+ui/
+  src/App.tsx             Application shell, routing and demo session
+  src/api.ts              Single typed API client and contracts
+  src/state.ts            Shared session and asynchronous request state
+  src/screens/            Patients, foods, plans, logging and evidence
+  src/components/         Shared headers and form/display controls
 ```
 
-Add meal logs, food clustering, and cited questions as
-workflow modules when implemented. Share database access and audit conventions;
+Meal logging and food clustering are implemented in the corresponding backend
+workflow modules; cited questions remain pending. Share database access and audit conventions;
 avoid separate services, generic repositories, a second knowledge database, or
 mirroring every HTTP resource into multiple abstraction layers.
 

@@ -26,9 +26,8 @@ adapting workflows and API integration.
   and stale manual conflict reviews. Recorded blockers prevent approval/publication.
 - See [architecture](ARCHITECTURE.md) and [run/check commands](../README.md).
 
-Source discovery, guideline URL/PDF acquisition, hosted extraction, automatic
-clinical conflict analysis, logging, mining, chat, and
-frontend integration remain unimplemented. No clinical recommendations are seeded.
+Hosted extraction, broader clinical conflict interpretation and chat remain
+unimplemented. No clinical recommendations are seeded.
 
 Verification: 11 checks passed against isolated PostgreSQL 16.2, including atomic
 batch failure, immutable history, stale review rejection, concurrent edits,
@@ -91,7 +90,90 @@ new `careloop-data` CLI were exercised. Starlette emits one upstream httpx
 deprecation warning. Docker image execution/PostgreSQL 18 remain unverified from
 the agent environment; database integration checks use the isolated local server.
 
+## Fourth implemented slice — meal logging, 2026-10-23
+
+- Planned-meal confirmation, changed quantities, replacement, skipped meals, and
+  independent food/portion entries through patient/clinician API workflows.
+- Pinned food snapshots, immutable correction revisions, stale-edit and duplicate
+  planned-entry protection, and transactional audit records.
+- Decimal recorded-intake totals preserving missing nutrients and g/ml bases;
+  optional plan-slot coverage distinguishes skipped and unlogged meals.
+- Explicit day-completion declarations; subsequent writes reopen the day.
+- Historical approved plans remain loggable without bypassing reassessment or
+  approving recorded replacements. See [logging contracts](LOGGING.md).
+
+Verification: **53 tests passed** on isolated PostgreSQL 16.2, including concurrent
+confirmation deduplication, stale correction rejection, revision history, missing
+nutrients, mass/volume arithmetic, historical food snapshots, and day completeness.
+Lint and diff whitespace checks pass. The existing Starlette/httpx deprecation
+warning remains. Docker/PostgreSQL 18 execution remains unverified.
+
+## Fifth implemented slice — food mining, 2026-10-23
+
+- Deterministic nutrient clustering, direct nearest-neighbour and same-category
+  baselines, with explicit missing-feature exclusions and revision-bound pools.
+- Ranked substitution recommendations on current approved plans, using existing
+  restrictions and independent whole-plan checks before returning any candidate.
+- Nutrient differences, target-fit/dislike scores, and explicit draft/approval
+  handoff; similarity never substitutes for suitability checks.
+- Reproducible public-food retrieval pilot command and saved report. On 300 SG
+  FoodID records, clustering did not improve nutrient similarity/category agreement;
+  nearest-neighbour retrieval remains the default. See [mining](MINING.md).
+
+Verification: **60 tests passed** on isolated PostgreSQL 16.2. Coverage includes
+deterministic clustering, missing-feature exclusions, all three recommendation
+methods, restrictions, whole-day bounds, stale state, approval handoff, and pilot
+metric accounting. Lint, wheel build, and diff whitespace checks pass. The existing
+Starlette/httpx warning remains; Docker/PostgreSQL 18 execution is still unverified.
+
+## Sixth implemented slice — meal items and evidence acquisition, 2026-10-23
+
+- Multi-item meals with exact per-slot counts (1–5), distinct foods per meal,
+  bounded item-level search, independent item coverage and meal/day nutrient totals.
+- Item-level substitutions, recommendations, reassessment alerts, logging and
+  immutable corrections; atomic whole-meal confirmation/skipping. Old snapshots
+  retain implicit item 1, and a migration expands log identity without rewriting history.
+- Recorded-intake comparisons against approved target revisions, including unknown,
+  partial-day, and stale-target distinctions.
+- Approved-domain link discovery, pinned-address HTTPS acquisition, bounded PDF
+  parsing with optional page ranges, retained originals/checksums, HTML heading/PDF
+  page passages, lexical search, and immutable refresh comparisons.
+- Structured population-overlap and same-unit numeric conflict checks at publication.
+  Broader clinical interpretation still requires manual review; no automatic rule
+  extraction or hosted patient answers are claimed.
+- Real KDIGO download and selected-page API import verified in a temporary database;
+  raw original and report are outside Git. See [evidence](EVIDENCE.md).
+
 ## Delivery sequence
+
+The connected frontend now replaces the mounted legacy workflows in place while
+preserving the navy/blue visual system. It supports patient/target review, food
+annotations, multi-item plan generation and approval, item/whole-meal logging,
+intake comparisons, and evidence acquisition/review/publication. Saved source and
+plan lists traverse API pagination. The package is now named `ui`, with active
+screens consolidated under `ui/src/screens/`, a direct `App.tsx`, and one API/state
+layer. Retired components and their obsolete-contract tests have been removed.
+After consolidation, the five active UI contract/component tests pass, as do the
+UI production build, lint and Compose configuration validation. The earlier
+58-test count included 53 tests for the retired implementation.
+
+Frontend Docker/Nginx configuration and the Compose `web` service serve port 5173.
+The development proxy retains `/api`. Actual container execution remains blocked
+by Docker permissions. No persistent deployment database has been seeded.
+
+Verification for the current backend: **73 tests passed**, Ruff and wheel build
+passed, with one Starlette/httpx deprecation warning. Frontend contract/component
+checks: **58 passed**. Live browser checks exercised generation, explicit approval,
+whole-meal logging, day completion and reviewer navigation against a temporary API.
+Both desktop/mobile capture rounds showed no horizontal overflow or browser
+exceptions. Final frontend build/lint, Compose configuration, documentation links,
+packaged migrations and diff whitespace checks passed. Temporary UI verification
+servers stopped normally and their database storage was removed.
+
+Remaining product work includes the hosted-model pilot, structured extraction and
+cited chat, broader NHANES clinical-field integration, the full frozen evaluation,
+reviewed public-food suitability/restriction coverage, and deployment verification.
+Recipe preparation instructions are not implemented.
 
 1. Specify a minimal new module layout and contracts from the agreed workflows.
 2. Establish PostgreSQL, local Docker Compose, demo roles, explicit schema setup,
@@ -117,7 +199,7 @@ GitNexus index/config/generated skills, old secrets, and the external dataset
 directory `/home/nghiant/.local/share/careloop/datasets` and the old retrieval report
 under `/home/nghiant/.local/share/careloop/artifact-archive`. Git/Jujutsu and agent-session
 metadata remain. Replacement implementation status is recorded above. The retained
-frontend's legacy API integration still needs replacement.
+UI now lives in `ui/`; its historical components and Impeccable files were removed.
 
 Old Compose project: `careloop-app`. Old databases: `careloop_clinical` and
 `careloop_knowledge`; old Compose volumes were declared as `postgres_data` and
