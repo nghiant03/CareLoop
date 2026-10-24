@@ -1,21 +1,85 @@
 # CareLoop
 
-A local academic nutrition application with clinician-reviewed targets and plans.
-See the agreed [requirements](docs/REQUIREMENTS.md).
+CareLoop connects clinician-reviewed nutrition targets with meal planning and
+patient-reported intake. It is a local academic decision-support prototype for
+helping patients put a reviewed nutrition plan into practice.
 
-**Available now:** PostgreSQL-backed evidence review/publication, manual and CSV
-patient entry, cited target proposals, clinician completion/approval, reassessment,
-and audit history. Versioned foods, checked planning alternatives, clinician plan
-approval, and substitution drafts are also implemented. Source adapters cover
-SG FoodID (the supplied Kaggle mirror), FNDDS, and NHANES. The connected frontend
-supports these review workflows, multi-item planning, logging and evidence acquisition.
-Hosted extraction creates review-blocked drafts in the evidence workspace. Patient
-chat provides cited explanations of approved targets, selected plans and intake,
-plus checked substitution suggestions using GLM 5.3. Role-scoped
-workspaces separate patient actions, clinician review, and reviewer maintenance;
-see [UI routes](ui/README.md#workspaces). The full public-data evaluation remains pending.
+The workflow covers evidence review, target approval, checked meal alternatives,
+plan approval, and follow-up through meal records and cited explanations.
+See the agreed [requirements](docs/REQUIREMENTS.md) for scope.
+
+## Key capabilities
+
+- **Reviewed targets with source context.** Clinicians review cited proposals,
+  resolve missing information, and approve an exact target revision.
+- **Meal alternatives checked against approved targets.** The planner considers
+  recorded restrictions, food portions, nutrient fit, dislikes, and variety.
+  An independent checker recomputes the resulting plan before approval.
+- **Food replacements checked against the whole plan.** A substitution changes
+  one item, retains the other meals, and creates a separate draft for clinician
+  approval. It does not overwrite the approved plan.
+- **Intake records that preserve uncertainty.** Patients can confirm meals,
+  change quantities, record replacements or skips, and correct earlier entries.
+  Unlogged intake remains unknown rather than becoming zero.
+- **Cited patient explanations.** Chat uses approved targets and selected plan
+  or intake records. Checked substitution suggestions use the planning services;
+  a chat response does not change targets or approve a plan.
+- **Reassessment and history.** Relevant patient, evidence, or food changes can
+  trigger review while earlier plans and their recorded values remain readable.
+
+## Workspaces
+
+| Role | Main actions |
+| --- | --- |
+| Reviewer | Acquire evidence, review and publish rules, maintain food records |
+| Clinician | Enter patient facts, review and approve targets, approve plans, review intake |
+| Patient | Request meal alternatives and replacements, record intake, ask nutrition questions |
+
+Role selection and actor labels support the local demonstration workflow. They
+are **not authentication**. Keep the application on the loopback-bound endpoints
+in the supplied configuration.
+
+## Current implementation and limits
+
+The application uses FastAPI and Python, PostgreSQL, and a React/TypeScript
+frontend with Vite and Tailwind. Meal generation uses deterministic bounded beam
+search with independent numerical checking. Nutrient-based retrieval supports
+food substitutions. Hosted extraction and cited chat use an OpenAI-compatible
+provider, with GLM 5.3 as the application default. PDF parsing uses PaddleOCR.
+See [architecture](docs/ARCHITECTURE.md) for the implemented module boundaries.
+
+The current implementation differs from the original proposal: the application
+stores its versioned evidence in PostgreSQL and uses beam search for planning.
+Neo4j and a genetic algorithm are proposal-stage choices, not current runtime
+components.
+
+The complete public-data evaluation remains pending. Engineering tests and
+small development pilots do not establish clinical effectiveness. Some food
+composition values are estimates and are labelled in the interface. This is a
+decision-support and education prototype, not a diagnosis or prescribing system.
+See [implementation status](docs/IMPLEMENTATION.md) and
+[evaluation](docs/EVALUATION.md) for completed work and remaining limitations.
 
 ## Run
+
+### Prerequisites
+
+The default full-stack Compose configuration requires:
+
+- Docker with Compose support.
+- An NVIDIA GPU available as GPU 0, its host driver, and NVIDIA Container Toolkit.
+  The API image installs a Linux x86-64 CUDA wheel. The default stack is not an
+  out-of-the-box macOS/Apple Silicon setup.
+- An OpenAI-compatible provider endpoint and API key for hosted extraction and
+  chat. Local planning and numerical checking do not use the language model.
+- Network access for the first food/source downloads and OCR model acquisition.
+
+Before the first start, copy `.env.example` to `.env` if you do not already have
+one, then set `LLM_BASE_URL` and `LLM_API_KEY`. Keep an existing configuration;
+`.env` is Git-ignored. See [inference configuration](docs/INFERENCE.md) for provider
+requirements and defaults.
+
+### Start the stack
 
 ```sh
 docker compose up --build -d
@@ -78,6 +142,8 @@ does not refresh completed sources automatically. Use the evidence refresh workf
 for newer editions. Direct development starts opt in with `CARELOOP_BOOTSTRAP=1`
 and an external writable `CARELOOP_DATA_DIR`; Compose sets both automatically.
 
+### Local development
+
 For local Python development (Python 3.12+ and `uv`):
 
 ```sh
@@ -86,6 +152,37 @@ docker compose up -d db
 export CARELOOP_DATABASE_URL='postgresql://careloop:local-demo-only@127.0.0.1:55432/careloop'
 uv run uvicorn careloop.api:create_app --factory --reload
 ```
+
+The database-only Compose command above does not start the GPU API service.
+For the frontend, follow [UI development](ui/README.md#run), which proxies requests
+to the local API. This route does not install or verify an OCR runtime; see
+[evidence acquisition](docs/EVIDENCE.md) before testing PDF imports.
+
+## First-use workflow
+
+A fresh installation does not contain a ready-to-use patient or an automatically
+approved clinical plan. The background bootstrap imports foods and prepares
+review-blocked evidence drafts only.
+
+1. **Reviewer:** inspect acquired sources and rule drafts, resolve blockers,
+   approve selected revisions, and publish them. Rule approval and publication
+   are separate actions.
+2. **Clinician:** create or import a patient, record the required facts, and
+   review the proposed targets. Complete an individual daily energy range and
+   other required decisions, then approve the target revision.
+3. **Patient:** request meal alternatives from the catalogue. Missing facts,
+   unsuitable foods, or unmet bounds can block generation; inspect the reported
+   reasons rather than treating a failed search as proof that no plan is possible.
+4. **Clinician:** review a checked alternative and explicitly approve it.
+5. **Patient:** follow the approved plan, record actual intake, or request a
+   checked substitution. Nutrition questions can attach the approved plan or
+   a selected intake date.
+6. **Clinician:** review recorded intake at follow-up and reassess targets when
+   the underlying information changes.
+
+For walkthroughs, use explicitly synthetic records and preserve the manual review
+and approval steps.
+The sections below provide API-level details for each stage.
 
 ## Review workflow
 
