@@ -1,4 +1,5 @@
 from careloop.foods.portions import source_portions
+from careloop.nutrition import food_values, required_nutrients, target_value
 from careloop.planning.checker import check_plan, food_restrictions, portion_quantity, preflight
 
 OBJECTIVES = {
@@ -13,11 +14,11 @@ MAX_SLOT_CANDIDATES = 500
 def candidates(foods, schedule, facts, items):
     options = {slot: [] for slot in schedule}
     excluded = []
-    required = {item["action"]["subject"] for item in items}
+    required = set().union(*(required_nutrients(item["action"]) for item in items))
     for row in foods:
         food = row["body"]
         reasons = food_restrictions(food, facts)
-        missing = sorted(key for key in required if food["nutrients"].get(key) is None)
+        missing = sorted(key for key in required if food_values(food).get(key) is None)
         if missing:
             reasons.append("Unknown nutrients: " + ", ".join(missing))
         portions = source_portions(food)
@@ -47,17 +48,28 @@ def candidates(foods, schedule, facts, items):
 def rank(meals, actions, fraction, facts, previous, objective):
     fit = violation = 0.0
     for action in actions:
-        total = sum(
-            float(m["quantity"]) * m["food"]["nutrients"][action["subject"]] / 100 for m in meals
-        )
-        low = action["amount"] * fraction
+        totals = {
+            key: sum(float(m["quantity"]) * food_values(m["food"])[key] / 100 for m in meals)
+            for key in required_nutrients(action)
+        }
+        actual = target_value(action, totals)
+        if actual is None:
+            violation += 1
+            continue
+        total = float(actual)
+        scale = 1 if action["unit"] == "%energy" else fraction
+        low = action["amount"] * scale
         if action["kind"] == "range":
-            high = action["upper"] * fraction
+            high = action["upper"] * scale
             middle = (low + high) / 2
             fit += abs(total - middle) / max(middle, 1)
             violation += max(low - total, total - high, 0) / max(high, 1)
         elif action["kind"] == "ceiling":
             violation += max(total - low, 0) / max(low, 1)
+            if action.get("upper_exclusive", False) and total == low:
+                violation += 0.000001
+        elif action["kind"] == "minimum":
+            violation += max(low - total, 0) / max(low, 1)
         else:
             fit += abs(total - low) / max(low, 1)
     dislikes = [d.casefold() for d in facts.get("dislikes") or []]
@@ -71,13 +83,50 @@ def rank(meals, actions, fraction, facts, previous, objective):
     return 1000 * violation + weights[0] * fit + weights[1] * disliked + weights[2] * repeated
 
 
-def generate(foods, request, facts, items, *, beam_width=BEAM_WIDTH):
+def shortlist(choices, actions, fraction, facts):
+    """Bound automatic search after eligibility checks, retaining distinct foods first."""
+    ranked = sorted(
+        choices,
+        key=lambda choice: (
+            rank([choice], actions, fraction, facts, set(), "nutrient_fit"),
+            choice["food_id"],
+            choice["portion_id"],
+            choice["scale"],
+        ),
+    )
+    first, remaining, seen = [], [], set()
+    for choice in ranked:
+        if choice["food_id"] in seen:
+            remaining.append(choice)
+        else:
+            seen.add(choice["food_id"])
+            first.append(choice)
+    return (first + remaining)[:MAX_SLOT_CANDIDATES]
+
+
+def generate(foods, request, facts, items, *, beam_width=BEAM_WIDTH, automatic_pool=False):
     if not isinstance(beam_width, int) or not 1 <= beam_width <= BEAM_WIDTH:
         raise ValueError(f"Beam width must be between 1 and {BEAM_WIDTH}")
     issues = preflight(facts, items)
     if issues:
         return [], {"status": "blocked", "blockers": issues}
     options, excluded = candidates(foods, request.schedule, facts, items)
+    counts = {slot: len(choices) for slot, choices in options.items()}
+    actions = [item["action"] for item in items]
+    positions_count = sum(request.items_per_slot.get(slot, 1) for slot in request.schedule)
+    if automatic_pool:
+        options = {
+            slot: shortlist(choices, actions, 1 / positions_count, facts)
+            if len(choices) > MAX_SLOT_CANDIDATES
+            else choices
+            for slot, choices in options.items()
+        }
+    search_scope = {
+        "eligible_food_count": len(foods) - len(excluded),
+        "eligible_portion_counts": counts,
+        "searched_portion_counts": {slot: len(choices) for slot, choices in options.items()},
+        "shortlisted": any(counts[slot] > len(choices) for slot, choices in options.items()),
+    }
     for slot, choices in options.items():
         if not choices:
             issues.append(f"No eligible candidate in the selected food pool for {slot}")
@@ -88,7 +137,12 @@ def generate(foods, request, facts, items, *, beam_width=BEAM_WIDTH):
         elif len({choice["food_id"] for choice in choices}) < request.items_per_slot.get(slot, 1):
             issues.append(f"Not enough distinct eligible foods for {slot}'s requested item count")
     if issues:
-        return [], {"status": "blocked", "blockers": issues, "excluded_foods": excluded}
+        return [], {
+            "status": "blocked",
+            "blockers": issues,
+            "excluded_foods": excluded,
+            **search_scope,
+        }
     alternatives = []
     evaluations = 0
     positions = [
@@ -96,7 +150,6 @@ def generate(foods, request, facts, items, *, beam_width=BEAM_WIDTH):
         for slot in request.schedule
         for item in range(1, request.items_per_slot.get(slot, 1) + 1)
     ]
-    actions = [item["action"] for item in items]
     for objective in OBJECTIVES:
         plan, used = [], set()
         for day in range(1, request.days + 1):
@@ -141,7 +194,8 @@ def generate(foods, request, facts, items, *, beam_width=BEAM_WIDTH):
         if any(a["check"]["valid"] for a in alternatives)
         else "search_failed",
         "excluded_foods": excluded,
-        "algorithm": "beam-source-portions-v3",
+        "algorithm": "beam-source-portions-v5",
+        **search_scope,
         "beam_width": beam_width,
         "scored_partial_plans": evaluations,
         "infeasibility_proven": False,

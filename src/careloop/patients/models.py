@@ -23,8 +23,12 @@ class Facts(Model):
     medications: list[Text] | None = None
     allergies: list[Text] | None = None
     vegetarian: StrictBool | None = None
-    include_eggs: StrictBool | None = None
-    include_dairy: StrictBool | None = None
+    include_eggs: StrictBool | None = Field(
+        default=None, deprecated=True, description="Legacy observation; no longer a planning gate"
+    )
+    include_dairy: StrictBool | None = Field(
+        default=None, deprecated=True, description="Legacy observation; no longer a planning gate"
+    )
     dislikes: list[Text] | None = None
 
     @model_validator(mode="after")
@@ -92,6 +96,8 @@ class TargetEdit(Decision):
     selected: Annotated[list[RuleRef], Field(max_length=100)]
     manual: Annotated[list[ManualTarget], Field(max_length=100)]
     dispositions: Annotated[list[Disposition], Field(max_length=100)]
+    assessments: Annotated[list[Disposition], Field(max_length=100)] = Field(default_factory=list)
+    guidance: Annotated[list[RuleRef], Field(max_length=100)] = Field(default_factory=list)
 
 
 class TargetApproval(Decision):

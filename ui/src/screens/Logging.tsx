@@ -19,6 +19,7 @@ import {
   FoodPicker,
   Form,
   Panel,
+  ListFilter,
   Totals,
 } from '../components/shared';
 import { decision, useResource, useSession, useTask } from '../state';
@@ -31,6 +32,8 @@ export default function Logging() {
   const [date, setDate] = useState(localDate);
   const [planId, setPlanId] = useState(params.get('plan') ?? '');
   const [version, setVersion] = useState(0);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
   const [editor, setEditor] = useState<{ meal?: Meal; entry?: Log } | null>(
     null,
   );
@@ -84,6 +87,13 @@ export default function Logging() {
         ) + 1
       : 0;
   const meals = plan.data?.body.meals.filter((m) => m.day === number) ?? [];
+  const entries = (summary.data?.entries ?? []).filter(
+    (e) =>
+      (!status || e.body.status === status) &&
+      `${e.body.consumed?.food.name ?? 'Skipped item'} ${e.body.slot}`
+        .toLowerCase()
+        .includes(query.trim().toLowerCase()),
+  );
   return (
     <>
       <Feedback
@@ -100,6 +110,8 @@ export default function Logging() {
               value={date}
               onChange={(e) => {
                 setDate(e.target.value);
+                setQuery('');
+                setStatus('');
                 setEditor(null);
                 setEntryHistory(null);
               }}
@@ -110,9 +122,9 @@ export default function Logging() {
               className="field"
               value={permittedPlan}
               onChange={(e) => {
-                  setPlanId(e.target.value);
-                  setEditor(null);
-                  setEntryHistory(null);
+                setPlanId(e.target.value);
+                setEditor(null);
+                setEntryHistory(null);
               }}
             >
               <option value="">Independent entries only</option>
@@ -237,6 +249,23 @@ export default function Logging() {
         />
       )}
       <Panel title="Recorded intake">
+        <ListFilter
+          name="intake entries"
+          query={query}
+          onQuery={setQuery}
+          status={status}
+          onStatus={setStatus}
+          shown={entries.length}
+          total={summary.data?.entries.length ?? 0}
+          scope="Selected date"
+          statuses={[
+            'as_planned',
+            'changed_quantity',
+            'replaced',
+            'skipped',
+            'independent',
+          ].map((value) => ({ value, label: label(value) }))}
+        />
         <Feedback error={comparison.error} />
         {summary.loading ? (
           <p role="status">Loading daily intake…</p>
@@ -253,14 +282,15 @@ export default function Logging() {
                     : 'Partial day'}
                 </span>
               </div>
-              {!summary.data.entries.length ? (
+              {!entries.length ? (
                 <Empty>
-                  No intake recorded on this date. Unlogged meals are not
-                  skipped meals.
+                  {summary.data.entries.length
+                    ? 'No entries match these filters.'
+                    : 'No intake recorded on this date. Unlogged meals are not skipped meals.'}
                 </Empty>
               ) : (
                 <ul className="divide-y divide-rule">
-                  {summary.data.entries.map((entry) => (
+                  {entries.map((entry) => (
                     <li
                       key={entry.id}
                       className="flex flex-wrap items-center justify-between gap-3 py-3"

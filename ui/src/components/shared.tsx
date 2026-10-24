@@ -61,6 +61,73 @@ export function Panel({
 export function Empty({ children }: { children: ReactNode }) {
   return <p className="py-5 text-ink-3">{children}</p>;
 }
+export function ListFilter({
+  name,
+  query,
+  onQuery,
+  status,
+  onStatus,
+  statuses,
+  shown,
+  total,
+  scope = '',
+}: {
+  name: string;
+  query: string;
+  onQuery: (value: string) => void;
+  status: string;
+  onStatus: (value: string) => void;
+  statuses: Array<{ value: string; label: string }>;
+  shown: number;
+  total: number;
+  scope?: string;
+}) {
+  return (
+    <div className="mb-4 space-y-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-48">
+          <Field label={`Search ${name}`}>
+            <input
+              type="search"
+              className="field"
+              value={query}
+              onChange={(e) => onQuery(e.target.value)}
+            />
+          </Field>
+        </div>
+        <Field label={`${name} status`}>
+          <select
+            className="field"
+            value={status}
+            onChange={(e) => onStatus(e.target.value)}
+          >
+            <option value="">All statuses</option>
+            {statuses.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <button
+          type="button"
+          className="btn-ghost"
+          disabled={!query && !status}
+          onClick={() => {
+            onQuery('');
+            onStatus('');
+          }}
+        >
+          Clear {name} filters
+        </button>
+      </div>
+      <p role="status" className="text-sm text-ink-3">
+        Showing {shown} of {total} {name}
+        {scope ? ` · ${scope}` : ''}
+      </p>
+    </div>
+  );
+}
 export function Details({ title, value }: { title: string; value: unknown }) {
   return (
     <details className="my-3">
@@ -106,13 +173,11 @@ export function Form({
   // Synchronize native interaction-based validation with assistive technology.
   const sync = (event: FormEvent<HTMLFormElement>) => {
     const target = event.target;
-    if (
-      !(
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLSelectElement ||
-        target instanceof HTMLTextAreaElement
-      )
-    )
+    if (!(
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLTextAreaElement
+    ))
       return;
     let invalid = false;
     try {
@@ -132,7 +197,7 @@ export function Form({
       onInvalid={sync}
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit();
+        if (!busy) onSubmit();
       }}
     >
       <fieldset disabled={busy} className="space-y-4 min-w-0">
@@ -207,9 +272,11 @@ export function FoodPicker({
         <p role="status">Loading foods…</p>
       ) : (
         <div className="max-h-64 overflow-y-auto divide-y divide-rule border border-rule rounded-md">
-          {!foods.data?.length && (
+          {!foods.error && !foods.data?.length && (
             <p className="p-3 text-ink-3">
-              No foods found. Import catalogue records first.
+              {search
+                ? 'No foods match this search. Clear the search or try another name.'
+                : 'No foods found. Import catalogue records first.'}
             </p>
           )}
           {foods.data?.map((food) => (
@@ -246,8 +313,34 @@ export function FoodPicker({
         </div>
       )}
       <p className="text-sm text-ink-3 mt-2">
-        Showing up to 100 matches. {selected.length} selected.
+        Showing up to 100 matches. {selected.length} selected.{' '}
+        {
+          selected.filter((f) => !foods.data?.some((row) => row.id === f.id))
+            .length
+        }{' '}
+        outside these results.
       </p>
+      {(query || search) && (
+        <button
+          type="button"
+          className="btn-ghost mt-2"
+          onClick={() => {
+            setQuery('');
+            setSearch('');
+          }}
+        >
+          Clear food search
+        </button>
+      )}
+      {multiple && selected.length > 0 && (
+        <button
+          type="button"
+          className="btn-ghost mt-2"
+          onClick={() => onChange([])}
+        >
+          Clear food selection
+        </button>
+      )}
       {!!selected.length && (
         <div className="flex flex-wrap gap-2 mt-2">
           {selected.map((food) => (

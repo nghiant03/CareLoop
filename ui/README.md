@@ -21,6 +21,69 @@ prefix to the Compose API service and serves client-side routes.
 
 ## Workspaces
 
+Foods and meal plans visibly label estimated composition, with expandable methods
+and uncertainty details derived from food snapshots. Plan totals using these values
+are approximations. Verification: 31 UI tests, build/lint and detector passed.
+Deploy with `sudo docker compose up --build -d api web`.
+
+Egg/dairy inclusion preference controls have been removed from the patient editor
+and evidence fact picker. The backend no longer uses those legacy preferences as
+planning gates. Explicit egg/milk allergies are still handled through allergy
+records. Verification: 30 UI tests, build, lint and detector passed; deploy API
+and web together with `sudo docker compose up --build -d api web`.
+
+Meal plans default to searching all eligible catalogue foods. Food choices
+(optional) lets patients restrict the pool or exclude foods; selecting individual
+foods is no longer required. Replacement recommendations use the same scope.
+Search outcomes explain blockers and bounded shortlisting. Verification: 30 UI
+tests, build and lint passed. Deploy API and web together:
+`sudo docker compose up --build -d api web`.
+
+Patient life-stage fields use a native Pregnancy and breastfeeding disclosure:
+collapsed by default for male, expanded for other/unknown sex. Switching sex resets
+that display default but preserves all recorded Yes/No/Unknown values. The collapsed
+summary shows both recorded values. Verification: 28 UI tests, build and lint passed;
+mechanical detector reported no findings. Browser visual checks remain unavailable.
+Deploy this UI change with `sudo docker compose up --build -d --no-deps web`.
+
+### Usability review, 2026-10-24
+
+| Surface inspected | Changes |
+|---|---|
+| Patient target review | Select required assessments and advisory guidance; explicit decision fields; text/status/category filters; hidden selections retained; readable saved blockers |
+| Evidence | Explicit reviewer assessment category/rationale; guidance-category filter; failed loads no longer described as an empty catalogue |
+| Extraction | Current-page history search/status filter, passage empty state, extract action disabled without a selected passage |
+| Foods and shared pickers | Clear search/selection, hidden-selection count, accurate no-match vs empty-catalogue text |
+| Plans (patient/clinician) | Saved-plan search/status filter; accurate empty/error states and retry |
+| Intake (patient/clinician) | Date-scoped entry search/status filter without changing complete-day totals |
+| Nutrition questions | Current-page question/answer search and run-status filter |
+| App shell/shared forms | Current-page patient search, loading/count feedback, focusable skip-link target; submit handler respects disabled/busy state |
+
+Advisory guidance never becomes a meal-planning constraint. Required assessment
+selection still needs a recorded clinical decision; numeric targets can be entered
+separately. Existing target sets need a new proposal after the reviewed category
+publication. History filters indicate page/date scope instead of implying a global
+search. Backend checks enforce category eligibility and duplicate-reference rules.
+Verification: 26 UI tests, build and lint passed; mechanical detector found no
+issues. Browser visual validation remains unavailable. API/web deployment and the
+reviewed category publication are pending; see [evidence](../docs/EVIDENCE.md).
+
+Nutrition target controls now distinguish mandatory minimums from soft intake goals,
+offer `% of daily energy` for supported nutrients, and expose strict ceilings.
+Food review includes trans fat and documented fruit/vegetable gram contributions.
+Changing a target's nutrient/unit clears incompatible amounts. The form keeps native
+numeric limits and interaction-based validation. Verification: 23 UI tests, build
+and lint passed; deployment needs the updated API and web together. Apply the
+source-backed rule batch using the command in [evidence](../docs/EVIDENCE.md).
+
+Evidence tables now render with preserved merged cells, sticky column headers and
+keyboard-accessible horizontal scrolling across evidence, patient and chat views.
+The shared renderer rebuilds an allowlist of React elements rather than injecting
+HTML. Verification: `npm run test -- --reporter=dot` (22 passed), `npm run build`,
+and `npm run lint` passed; detector found no findings. Tests cover merged cells,
+entities, literal comparisons and removal of executable source markup. Browser
+visual verification was unavailable; deployment still requires the web rebuild.
+
 Evidence review now includes combined rule filters, visible-result selection,
 hidden-selection counts, scannable advice/population summaries, expandable source
 quotes and extraction history, and a cancel action in the rule editor. Acquisition

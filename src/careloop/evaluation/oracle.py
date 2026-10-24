@@ -17,7 +17,7 @@ def audit(meals, case):
     violations = []
     if len(actual) != len(expected) or set(actual) != expected:
         violations.append("schedule_coverage")
-    required_facts = ("allergies", "vegetarian", "include_eggs", "include_dairy")
+    required_facts = ("allergies", "vegetarian")
     violations.extend(f"unknown:{key}" for key in required_facts if facts.get(key) is None)
     if not any(a["subject"] == "energy" and a["kind"] == "range" for a in actions):
         violations.append("missing_energy_range")
@@ -44,12 +44,6 @@ def audit(meals, case):
                 violations.append("allergen_not_absent")
         if facts.get("vegetarian") is True and food["vegetarian"] is not True:
             violations.append("vegetarian_not_established")
-        for inclusion, field in (
-            ("include_eggs", "contains_egg"),
-            ("include_dairy", "contains_dairy"),
-        ):
-            if facts.get(inclusion) is False and food[field] is not False:
-                violations.append(f"{field}_not_absent")
         portion = next((p for p in food["portions"] if p["id"] == meal["portion_id"]), None)
         basis = food.get("basis", "g")
         amount = (portion or {}).get("grams" if basis == "g" else "millilitres")

@@ -13,6 +13,7 @@ export type Patient = {
   body: { display_name: string; facts: Facts; provenance: Provenance };
 };
 export type Action = {
+  upper_exclusive?: boolean;
   kind: string;
   subject: string;
   amount?: number | null;
@@ -36,13 +37,36 @@ export type Target = {
   needs_review: boolean;
   review_reasons?: string[];
   body: {
+    energy_proposal?: {
+      method: string;
+      source: string;
+      source_title: string;
+      quote: string;
+      review: string[];
+      issues: string[];
+      calculation: string | null;
+      action: Action | null;
+    };
     items: TargetItem[];
     blockers: unknown[];
     dispositions?: Array<{ rule: RuleRef; reason: string }>;
+    assessments?: Array<{
+      rule: RuleRef;
+      reason: string;
+      action: Action;
+      citation: { quote: string; location: string };
+    }>;
+    guidance?: Array<{
+      rule: RuleRef;
+      action: Action;
+      citation: { quote: string; location: string };
+    }>;
   };
   evaluation: Array<
     RuleRef & {
       status: string;
+      category?: 'target' | 'assessment' | 'advisory';
+      review_note?: string | null;
       source_action: Action;
       missing: string[];
       issues: string[];
@@ -51,6 +75,8 @@ export type Target = {
   >;
 };
 export type FoodBody = {
+  source_details?: Record<string, string>;
+  food_groups?: { fruit_and_vegetables?: number | null };
   name: string;
   category: string;
   basis: 'g' | 'ml';
@@ -83,11 +109,26 @@ export type Meal = {
   unit: string;
 };
 export type Check = {
+  uses_estimates?: boolean;
+  estimated_inputs?: unknown[];
   valid: boolean;
   violations: unknown[];
   daily_totals: Record<string, Record<string, string | null>>;
   meal_totals?: Record<string, Record<string, Record<string, string | null>>>;
 };
+
+export function foodEstimates(food: FoodBody): Record<string, unknown> {
+  try {
+    const metadata = JSON.parse(
+      food.source_details?.careloop_estimates ?? '{}',
+    );
+    return metadata?.estimates && typeof metadata.estimates === 'object'
+      ? metadata.estimates
+      : {};
+  } catch {
+    return {};
+  }
+}
 export type Plan = {
   id: string;
   start_date?: string;
@@ -151,6 +192,8 @@ export type Predicate = {
   value: string | number | boolean;
 };
 export type RuleBody = {
+  review_role?: 'required' | 'advisory';
+  review_note?: string | null;
   source_id: string;
   quote: string;
   location: string;
@@ -190,6 +233,11 @@ export type ChatContext = {
   evidence_generation?: number;
   facts?: Facts;
   target_items?: TargetItem[];
+  guidance?: Array<{
+    rule: RuleRef;
+    action: Action;
+    citation: { quote: string; location: string };
+  }>;
 };
 export type ChatRun = {
   id: string;
@@ -236,6 +284,8 @@ export const units: Record<string, string> = {
   carbohydrate: 'g/day',
   fat: 'g/day',
   saturated_fat: 'g/day',
+  trans_fat: 'g/day',
+  fruit_and_vegetables: 'g/day',
   fibre: 'g/day',
   free_sugars: 'g/day',
   sodium: 'mg/day',

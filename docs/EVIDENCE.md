@@ -1,5 +1,108 @@
 # Evidence sources and ingestion
 
+## Condition coverage expansion, published 2026-10-24
+
+Published 28 additions in `a3514ad6-92b4-42bc-b863-46cf4475dd35`, bringing the active
+catalogue to 52 rules. These are user-authorized AI source reviews, not independent
+clinician sign-off. Required assessments, optional guidance and executable targets
+remain separate; adding a rule does not imply an enforceable numerical constraint.
+
+| Population | New coverage | Source |
+|---|---|---|
+| CKD, including children | Plant-forward/less-ultraprocessed diet guidance; individual sodium/phosphorus/potassium/protein review | KDIGO 2024, 3.3.1–3.3.2 |
+| Adult CKD | Protein-suitability assessment; G3a/G3b/G4/G5 each have a 0.8 g/kg/day soft protein reference, excluding dialysis/pregnancy/lactation | KDIGO 2024, 3.3.1.1 and 3.3.1.3 |
+| Paediatric CKD | Growth-specific energy/protein assessment; do not impose protein restriction | KDIGO 2024, 3.3.1.4 |
+| Adolescents 11 to under 18 | Fibre minimum 25 g/day; fruit/vegetable minimum 400 g/day, subject to individual therapeutic review | WHO Healthy diet |
+| Hypertension | DASH components; lower-sodium food alternatives | HPB Lifestyle Prescriptions |
+| Prediabetes | Wholegrain/protein/vegetable meal pairing; inherited salt/sugar/soluble-fibre advice | HPB Lifestyle Prescriptions |
+| Type 2 diabetes | Inherited wholegrain substitution; meal pairing | HPB Lifestyle Prescriptions |
+| Type 2 diabetes at hypoglycaemia risk | Wholegrain substitution; meal pairing; required alcohol-risk review | HPB Lifestyle Prescriptions |
+| Pregnancy | Calcium reference review; adult pregnancy iron reference review | Singapore RDA |
+| Breastfeeding | Calcium reference review; adult lactation B12 reference review | Singapore RDA |
+| Dialysis | Separate protein, potassium and phosphorus assessments | NKF protein/potassium/phosphorus pages |
+| Gout | Balanced diet and limits of diet evidence; weight-related counselling | NICE NG219 1.4.1–1.4.2 |
+
+Adult CKD protein is an `intake` fit reference, not a hard ceiling; the required
+suitability review addresses metabolic instability, nutrition status and appropriate
+body weight. Paediatric CKD targets require age/growth-specific assessment. No
+universal renal potassium/phosphorus restriction is introduced. Calcium, iron and
+B12 remain assessment-only because food composition/planner support is absent;
+these RDA references are not supplement prescriptions. Dialysis remains outside
+the supported planning population despite the new review guidance. Condition
+labels still use the exact documented vocabulary; seizure disorders and other
+unreviewed diagnoses do not gain disease-specific coverage from this expansion.
+
+The adolescent additions use a conservative age >=11 and <18 subset of the quoted
+WHO “older than 10” scope. Age 10 to under 11 remains a coverage gap requiring
+source-boundary review; existing 2–5/6–9 bands are unchanged. General targets must
+still be reviewed for individual renal needs rather than treated as therapeutic
+prescriptions solely because they match age.
+
+Acquisition retained original HTML, SHA256 metadata and extracted text externally
+for [NKF protein](https://www.kidney.org/kidney-topics/ckd-diet-how-much-protein-right-amount),
+[potassium](https://www.kidney.org/kidney-topics/potassium-your-ckd-diet),
+[phosphorus](https://www.kidney.org/kidney-topics/phosphorus-and-your-ckd-diet), and
+[NICE gout](https://www.nice.org.uk/guidance/ng219/chapter/Recommendations).
+These four were registered through the text-source API; the acquired-document
+allowlist was not changed. Original KDIGO/WHO/HPB/RDA snapshots were reused.
+Every rule quotation was checked against the retained source before publication.
+
+Audit directory: `~/.local/share/careloop/reviews/2026-10-24/condition-expansion/`.
+It contains source snapshots, `plan.json`, events, conflicts, publication,
+read-back catalogue and `coverage-matrix.json`. The publication had zero blocking
+conflicts and 21 reviewed overlaps (dietary pattern, protein, meal composition,
+calcium, wholegrains and alcohol). Repeating the publisher made no changes:
+
+```sh
+uv run python -m careloop.evidence.condition_rules --sources ~/.local/share/careloop/reviews/2026-10-24/condition-expansion/sources.json --output ~/.local/share/careloop/reviews/2026-10-24/condition-expansion --apply
+```
+
+Omit `--apply` to prepare only. The publisher preserves unrelated drafts, rejects
+changed/ambiguous owned rules, supports resuming identical drafts, and verifies
+published revisions by read-back. Create fresh target proposals to use these rules;
+historical patient facts and approvals were not rewritten.
+
+## Published-rule category review, 2026-10-24 (application pending)
+
+All 24 active rules were reviewed against their retained quotations. The explicit
+manifest at `~/.local/share/careloop/reviews/2026-10-24/rule-categories/review.json`
+records each original body/revision, proposed classification and rationale:
+
+| Category | Count | Reviewed scope |
+|---|---:|---|
+| Executable target | 10 | Six adult WHO limits/minimums, two child fibre minimums, CKD sodium, hypertension sodium |
+| Required assessment | 8 | Individual energy, pregnancy/lactation totals, diabetes portions/timing, hypoglycaemia meal consistency, sodium-wasting nephropathy, CKD G4/G5 assessment |
+| Advisory guidance | 6 | Dietary variety, carbohydrate quality, fat quality, protein-source variety, prediabetes wholegrain substitution, gout alcohol counselling |
+
+This is user-authorized AI source review, not independent clinician sign-off.
+Classification changes do not alter the clinical actions, quotations, population
+predicates or exceptions. Four general WHO advisory rules now need no mandatory
+disposition; individual energy assessment remains required. Preview evaluation of
+Synthea `0149d553` produced six applicable targets, one required energy assessment,
+four advisory rules and 13 not-applicable rules. The preview is not a saved target.
+
+`review_role` is explicit (`required` by default; `advisory` only for assessment
+actions with a review note). The extraction provider continues producing required,
+review-blocked drafts; it does not decide what becomes optional. Reviewers can
+change classification in the structured editor. Patient evaluation derives target
+versus required-assessment capability from supported actions/units and preserves
+the explicit advisory role. See [patient selection](PATIENTS.md#rule-categories-and-selection).
+
+The running API lacks this field. The apply attempt refused before any catalogue
+write; Docker permission is denied in the agent session. After rebuilding:
+
+```sh
+sudo docker compose up --build -d api web
+uv run python -m careloop.evidence.categorize_rules --review ~/.local/share/careloop/reviews/2026-10-24/rule-categories/review.json --apply
+```
+
+The command validates classification-only changes, resolves the full batch before
+writing, rejects stale/unrelated drafts, resumes identical revisions, checks
+conflicts and verifies publication by read-back. Fourteen assessment rules get
+explicit reviewed classification revisions; the ten numeric rules need none.
+Re-running is idempotent. Generate fresh patient proposals after publication;
+historical proposals retain their original evaluations and approval workflow.
+
 Status: authoritative-domain link discovery, URL/PDF acquisition, page/heading
 passages, lexical retrieval, refresh comparisons, and structured numeric conflict
 checks are implemented, 2026-10-23. Hosted extraction creates review-blocked drafts
@@ -8,6 +111,85 @@ interpretation/reference evaluation remains pending.
 Food and participant datasets are documented separately in [DATA.md](DATA.md).
 
 ## General nutrition and life stages
+
+### Executable general and concrete rules (published 2026-10-24)
+
+`src/careloop/evidence/diet_rules.py` prepares nine reviewed numeric rules from the
+retained WHO and KDIGO sources. It revises matching assessment rules instead of
+duplicating them: adult fruit/vegetables >=400 g/day, fibre >=25 g/day, free sugars
+<10% energy, saturated fat <=10% energy, sodium <2,000 mg/day, and child fibre
+>=15 g/day (2–5) / >=21 g/day (6–9). It adds adult trans fat <=1% energy and an
+adult CKD sodium <2,000 mg/day rule requiring explicit CKD presence. Sodium rules
+carry the sodium-wasting-nephropathy exception and therapeutic-review context.
+The existing hypertension rule remains separately source-scoped. CKD protein
+restrictions still require source-context/suitability review, especially in cancer,
+malnutrition or metabolic instability; no universal protein restriction is added.
+
+Age >=18 is an explicit reviewer-selected adult subset. Child age bands preserve
+the retained source's stated boundaries. No rule supplies a universal energy
+prescription. Missing free-sugar/trans-fat/food-group composition blocks food
+eligibility rather than inventing zeros. The capability now exists independently
+of completeness of the current food catalogue. Percentage, minimum and strict
+ceiling semantics are documented in [planning](PLANNING.md).
+
+The plan and publication audit are retained at
+`~/.local/share/careloop/reviews/2026-10-24/executable-diet/`. After the user rebuilt
+API/web, all nine rules were published and read-back verified in publication
+`1ad13384-0ecd-4da1-b5ce-3a5e53e00be7`; the catalogue now has 24 active rules.
+There were no blocking conflicts. Two sodium overlap findings were covered by the
+recorded review of strict WHO/KDIGO limits versus the inclusive hypertension limit.
+The initial attempt stopped at duplicate child-fibre extraction drafts. Matching
+now prefers the unique published rule, preserves unrelated drafts, and resolves
+the entire batch before writing. Existing identical revisions resume without a
+new revision. Both blocked child extraction drafts remain unchanged at revision 1.
+To repeat the deployment/update from the repository root:
+
+```sh
+sudo docker compose up --build -d api web
+uv run python -m careloop.evidence.diet_rules --output ~/.local/share/careloop/reviews/2026-10-24/executable-diet --apply
+```
+
+The command retains the source snapshot/plan, revision events, conflict report and
+publication response, verifies active revisions by read-back, and is idempotent.
+Omit `--apply` to prepare without API writes. Publication marks affected targets
+for review; regenerate proposals and obtain clinician approval separately.
+Unknown/ambiguous source matches or blocking conflicts stop the update. The
+historical publication below records the earlier assessment-only baseline.
+
+### Published adult baseline, 2026-10-24
+
+Following a user-requested coverage review, nine adult baseline rules were added
+and published from WHO Healthy diet (live page checked against retained source
+`168c9131-2b3b-404f-a84e-5e737cb13ef4`). Topics: dietary variety, individualized
+energy balance, wholegrain/pulse carbohydrate sources, fruit and vegetables
+(at least 400 g/day), naturally occurring fibre (at least 25 g/day), free sugars
+(less than 10% energy, optional further reduction), unsaturated-fat substitutions,
+saturated/trans-fat energy limits, and salt/sodium reduction. Age >=18 is an
+explicit reviewer-selected adult subset, not a claim that the source excludes
+younger populations. The existing general protein guidance remains published.
+
+These are `assessment` rules: the current planner cannot faithfully enforce
+food-group gram totals, minimum-only intakes, strict inequalities or percentages
+of individualized energy through these actions. Values remain in the advice and
+verbatim quotes; none is converted into a universal 2,000 kcal diet or an invented
+gram target. General advice does not replace therapeutic diets. Sodium guidance
+explicitly requires review of sodium-wasting nephropathy and potassium-salt risk.
+
+Publication `523d7c9e-bd76-4f39-8f88-e10ee878bcfd` brought active rules from 13 to
+22. Zero blocking conflicts; seven overlaps were explicitly reviewed (energy vs
+pregnancy/lactation, carbohydrate quality vs diabetes-related guidance, sodium vs
+hypertension/nephropathy). Actor is labelled user-authorized AI demo review, not
+independent clinician sign-off. No patient facts or target approvals were changed.
+Read-back verified all nine published revisions; 36 engine checks covered a healthy
+adult, MIMIC 10003046 revision 2, a child and unknown age. Adult cases produce
+`needs_clinician`, children `not_applicable`, and unknown age `incomplete`.
+
+Audit scripts, source snapshot, review plan, conflict report, publication response
+and verification are retained outside Git in
+`~/.local/share/careloop/reviews/2026-10-24/general-diet/` (script in its parent).
+Initial creation of an energy quote concatenated nonadjacent passages and was
+rejected by the API's verbatim check; changed to a contiguous retained excerpt
+before approval. Existing identical drafts were reused on retry.
 
 - [Singapore RDA tables](https://www.healthhub.sg/well-being-and-lifestyle/food-diet-and-nutrition/recommended_dietary_allowances):
   age/sex/life-stage recommendations. Observed page review date: November 2022.
@@ -157,6 +339,12 @@ identifies hidden selections, and review actions apply to the complete selection
 Select-visible excludes retired rules. Acquisition, retained source text, supporting
 quotes and saved extraction runs use expandable sections. Run history opens after
 a new extraction completes; pending-request recovery stays visible.
+Retained HTML tables in evidence are rebuilt as allowlisted React elements in
+source previews, extraction passages, rule quotations, target citations and chat
+citations. Table headers, row/column spans and source wording are preserved;
+wide tables scroll in a named keyboard-focusable region. Source scripts, event
+handlers, styles, images and links are not injected. Plain-text comparisons remain
+literal. Original stored evidence and verbatim editor fields are unchanged.
 Extraction prompt v3 supports explicit `has_ckd` boolean predicates independently
 of stage; it does not infer CKD from eGFR or missing information.
 A crash can leave a pending run with an unknown provider outcome; it is not retried.

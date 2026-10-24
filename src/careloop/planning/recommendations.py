@@ -2,9 +2,10 @@ from decimal import Decimal
 
 from careloop.foods.clustering import fit, retrieve
 from careloop.foods.models import Nutrients
-from careloop.foods.service import get_food
+from careloop.foods.service import planning_pool
+from careloop.nutrition import target_value
 from careloop.planning.checker import check_plan
-from careloop.planning.search import MAX_SLOT_CANDIDATES, candidates
+from careloop.planning.search import MAX_SLOT_CANDIDATES, candidates, shortlist
 from careloop.planning.service import begin, current_context, get_plan
 from careloop.workflow import WorkflowError
 
@@ -36,7 +37,15 @@ def target_fit(totals, items):
         goal = action["amount"]
         if action["kind"] == "range":
             goal = (goal + action["upper"]) / 2
-        result += abs(float(totals[action["subject"]]) - goal) / max(goal, 1)
+        actual = target_value(action, totals)
+        if actual is None:
+            return float("inf")
+        distance = (
+            max(goal - float(actual), 0)
+            if action["kind"] == "minimum"
+            else abs(float(actual) - goal)
+        )
+        result += distance / max(goal, 1)
     return result
 
 
@@ -60,14 +69,22 @@ def recommend(conn, plan_id, data):
         raise WorkflowError(422, "Requested meal does not exist")
     original = plan["body"]["meals"][index]
     foods = [
-        get_food(conn, identity)
-        for identity in sorted(data.food_ids)
-        if str(identity) != original["food_id"]
+        row
+        for row in planning_pool(conn, data.food_ids, data.excluded_food_ids)
+        if str(row["id"]) != original["food_id"]
     ]
-    return recommend_records(plan, facts, target["body"]["items"], foods, data, index)
+    return recommend_records(
+        plan,
+        facts,
+        target["body"]["items"],
+        foods,
+        data,
+        index,
+        automatic_pool=data.food_ids is None,
+    )
 
 
-def recommend_records(plan, facts, items, foods, data, index):
+def recommend_records(plan, facts, items, foods, data, index, *, automatic_pool=False):
     """Pure retrieval/checking shared by the approved workflow and frozen experiments."""
     original = plan["body"]["meals"][index]
     source = {
@@ -80,6 +97,10 @@ def recommend_records(plan, facts, items, foods, data, index):
     retrieved = retrieve(foods, source, model, data.method)
     options, excluded = candidates([row for row, _ in retrieved], [data.slot], facts, items)
     choices = options[data.slot]
+    eligible_portions = len(choices)
+    if automatic_pool and len(choices) > MAX_SLOT_CANDIDATES:
+        meal_count = sum(m["day"] == data.day for m in plan["body"]["meals"])
+        choices = shortlist(choices, [item["action"] for item in items], 1 / meal_count, facts)
     if len(choices) > MAX_SLOT_CANDIDATES:
         raise WorkflowError(422, f"Narrow the pool: at most {MAX_SLOT_CANDIDATES} portion choices")
     distances = {str(row["id"]): distance for row, distance in retrieved}
@@ -147,6 +168,8 @@ def recommend_records(plan, facts, items, foods, data, index):
         ],
         "retrieved_foods": len(retrieved),
         "checked_portions": len(choices),
+        "eligible_portions": eligible_portions,
+        "shortlisted": eligible_portions > len(choices),
         "eligible_foods": len(best),
         "recommendations": list(best.values())[: data.limit],
         "excluded_foods": excluded,

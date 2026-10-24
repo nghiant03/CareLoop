@@ -58,6 +58,7 @@ def context(conn, patient_id):
         "target_revision": target["approved_revision"],
         "facts": patient["body"]["facts"],
         "target_items": target["body"]["items"],
+        "guidance": target["body"].get("guidance", []),
         "evidence_generation": conn.execute("SELECT generation FROM evidence_catalogue").fetchone()[
             "generation"
         ],
@@ -82,6 +83,16 @@ def sources(conn, snapshot, question):
             "text": json.dumps(snapshot["target_items"], sort_keys=True),
         },
     ]
+    if snapshot.get("guidance"):
+        result.append(
+            {
+                "id": "approved-guidance",
+                "kind": "approved_guidance",
+                "title": "Selected dietary guidance (not planner constraints)",
+                "location": f"Target revision {snapshot['target_revision']}",
+                "text": json.dumps(snapshot["guidance"], sort_keys=True),
+            }
+        )
     # Retrieve published rule quotations, not unreviewed neighbouring document text.
     query = " OR ".join(re.findall(r"[a-zA-Z]+", question))
     rows = conn.execute(

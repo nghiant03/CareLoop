@@ -5,6 +5,7 @@ from uuid import uuid4
 from psycopg.types.json import Jsonb
 
 from careloop.patients import engine
+from careloop.patients.energy import energy_proposal
 from careloop.planning.invalidation import flag_plans
 from careloop.workflow import WorkflowError, lock_catalogue, record_event, require_role
 
@@ -140,8 +141,8 @@ def invalidate_evidence(conn, decision):
             flag_plans(conn, decision, "evidence_changed", target_id=candidate["id"])
 
 
-def blockers(evaluation, items, dispositions, facts):
-    result = engine.target_blockers(evaluation, items, dispositions)
+def blockers(evaluation, items, dispositions, facts, assessments=()):
+    result = engine.target_blockers(evaluation, items, dispositions, assessments)
     if facts.get("age_years") is None:
         result.append({"missing": ["age_years"], "issue": "Age is required for target approval"})
     if facts.get("dialysis") is True:
@@ -157,7 +158,12 @@ def propose(conn, patient_id, data):
     facts = patient["body"]["facts"]
     evaluation = engine.evaluate(active_rules(conn), facts)
     items = [engine.evidence_item(r) for r in evaluation if r["status"] == "applicable"]
-    body = {"items": items, "dispositions": [], "blockers": blockers(evaluation, items, [], facts)}
+    body = {
+        "items": items,
+        "dispositions": [],
+        "blockers": blockers(evaluation, items, [], facts),
+        "energy_proposal": energy_proposal(facts),
+    }
     target_id = uuid4()
     conn.execute(
         """INSERT INTO target_sets
@@ -218,11 +224,35 @@ def edit_target(conn, target_id, data):
             raise WorkflowError(422, "Disposition must reference an unselected, actionable rule")
         seen.add(key)
         dispositions.append(disposition.model_dump(mode="json"))
+    assessments, guidance = [], []
+    for collection, status, output in (
+        (data.assessments, "needs_clinician", assessments),
+        (data.guidance, "advisory", guidance),
+    ):
+        for choice in collection:
+            ref = choice.rule if status == "needs_clinician" else choice
+            key = (str(ref.rule_id), ref.revision)
+            if key in seen or key not in results or results[key]["status"] != status:
+                raise WorkflowError(422, "Select each eligible assessment or guidance rule once")
+            seen.add(key)
+            result = results[key]
+            output.append(
+                {
+                    "rule": ref.model_dump(mode="json"),
+                    "citation": result["citation"],
+                    "action": result["source_action"],
+                    **(
+                        {"reason": choice.reason, "author": data.actor.name}
+                        if status == "needs_clinician"
+                        else {}
+                    ),
+                }
+            )
     for manual in data.manual:
         action = manual.action
         if action.kind in {"assessment", "additional"} or (
-            action.kind in {"intake", "ceiling", "range"}
-            and engine.UNITS.get(action.subject) != action.unit
+            action.kind in engine.NUMERIC_KINDS
+            and not engine.supported_unit(action.subject, action.unit)
         ):
             raise WorkflowError(422, "Manual targets require a completed action in supported units")
         items.append(
@@ -236,8 +266,14 @@ def edit_target(conn, target_id, data):
     body = {
         "items": items,
         "dispositions": dispositions,
-        "blockers": blockers(target["evaluation"], items, dispositions, patient["body"]["facts"]),
+        "assessments": assessments,
+        "guidance": guidance,
+        "blockers": blockers(
+            target["evaluation"], items, dispositions, patient["body"]["facts"], assessments
+        ),
     }
+    if "energy_proposal" in target["body"]:
+        body["energy_proposal"] = target["body"]["energy_proposal"]
     revision = target["latest_revision"] + 1
     conn.execute("UPDATE target_sets SET latest_revision = %s WHERE id = %s", (revision, target_id))
     conn.execute(
@@ -259,6 +295,7 @@ def approve_target(conn, target_id, data):
         target["body"]["items"],
         target["body"]["dispositions"],
         patient["body"]["facts"],
+        target["body"].get("assessments", []),
     ):
         raise WorkflowError(409, "Resolve missing facts, competing targets, and review items first")
     old = conn.execute(
@@ -294,6 +331,17 @@ def target_readiness(conn, patient_id):
         ORDER BY approved_at DESC, id LIMIT 1""",
         (patient_id,),
     ).fetchone()
+    if current is not None:
+        try:
+            require_current(conn, get_target(conn, current["id"]), current["approved_revision"])
+        except WorkflowError as error:
+            if error.status != 409:
+                raise
+            return {
+                "targets_ready": False,
+                "approved_target": None,
+                "reason": "Rule applicability changed; propose and review current targets",
+            }
     return {
         "targets_ready": current is not None,
         "approved_target": current,

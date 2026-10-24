@@ -20,7 +20,7 @@ The response includes pool revision IDs, model parameters/assignments, exclusion
 checked portion counts, and rejected portions with whole-plan violations.
 
 Retrieval is followed by the planner's source-portion quantity/unit, allergy,
-vegetarian, egg/dairy, and target-nutrient completeness checks. Each eligible
+vegetarian and target-nutrient completeness checks. Each eligible
 portion at scales 0.5, 1, and 1.5 replaces the requested item and passes through
 the independent whole-plan Decimal checker. At most 500 portion choices are
 allowed; larger requests ask the caller to narrow the pool. Only passing choices

@@ -3,4 +3,6 @@
 !uv.lock
 !src/
 !src/**
+!scripts/
+!scripts/download_paddle.py
 **/__pycache__/

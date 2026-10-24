@@ -1,10 +1,21 @@
+# syntax=docker/dockerfile:1
 FROM python:3.12-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /usr/local/bin/uv
 WORKDIR /app
 ARG OCR_BACKEND=gpu
+ENV UV_HTTP_TIMEOUT=300 UV_HTTP_RETRIES=5 UV_LINK_MODE=copy
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml uv.lock ./
+COPY scripts/download_paddle.py /app/scripts/download_paddle.py
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,target=/root/.cache/careloop-wheels,sharing=locked \
+    if [ "$OCR_BACKEND" = gpu ]; then python scripts/download_paddle.py; fi && \
+    uv sync --frozen --no-dev --no-install-project --no-editable --no-install-package paddlepaddle-gpu --extra ocr --extra "ocr-${OCR_BACKEND}"
 COPY src ./src
-RUN uv sync --frozen --no-dev --no-editable --extra ocr --extra "ocr-${OCR_BACKEND}"
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,target=/root/.cache/careloop-wheels,sharing=locked \
+    uv sync --frozen --no-dev --no-editable --no-install-package paddlepaddle-gpu --extra ocr --extra "ocr-${OCR_BACKEND}" && \
+    if [ "$OCR_BACKEND" = gpu ]; then python scripts/download_paddle.py --install; fi
 
 FROM python:3.12-slim
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1

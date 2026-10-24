@@ -27,6 +27,7 @@ MAPPING = {
     "protein": "Protein (g)",
     "fat": "Total Fat (g)",
     "saturated_fat": "Saturated Fat (g)",
+    "trans_fat": "Trans Fat (g)",
     "carbohydrate": "Carbohydrate (g)",
     "total_sugars": "Sugar (g)",
     "added_sugars": "Added Sugar (g)",
@@ -106,6 +107,13 @@ def normalize(rows, checksum, limit):
         default_quantity = serving(row["Default Serving Size"], basis, edible)
         portions = []
         warnings = []
+        if (
+            nutrients.get("trans_fat") is not None
+            and nutrients.get("fat") is not None
+            and nutrients["trans_fat"] > nutrients["fat"]
+        ):
+            warnings.append("Source trans fat exceeds total fat; retained as unknown")
+            nutrients["trans_fat"] = None
         labels = [row["Default Serving Size"]]
         if row["Alternative Serving Size(s)"] not in {"", "-"}:
             labels += re.split(r",\s*(?=\d)", row["Alternative Serving Size(s)"])

@@ -1,14 +1,22 @@
 from decimal import Decimal
 from typing import get_args
 
-from careloop.foods.models import Allergen, Nutrients
+from careloop.foods.estimates import estimate_details
+from careloop.foods.models import TOTAL_FIELDS, Allergen
 from careloop.foods.portions import source_portions
-from careloop.patients.engine import UNITS
+from careloop.nutrition import (
+    NUMERIC_KINDS,
+    food_values,
+    outside_bound,
+    required_nutrients,
+    supported_unit,
+    target_value,
+)
 
 
 def preflight(facts, items):
     issues = []
-    for fact in ("allergies", "vegetarian", "include_eggs", "include_dairy"):
+    for fact in ("allergies", "vegetarian"):
         if facts.get(fact) is None:
             issues.append(f"Clarify patient {fact}")
     for allergy in facts.get("allergies") or []:
@@ -18,11 +26,11 @@ def preflight(facts, items):
     if not any(a["subject"] == "energy" and a["kind"] == "range" for a in actions):
         issues.append("A clinician-approved daily energy range is required for planning")
     for action in actions:
-        if action["kind"] not in {"range", "ceiling", "intake"}:
+        if action["kind"] not in NUMERIC_KINDS:
             issues.append(
                 f"Planner cannot enforce target action: {action['kind']} / {action['subject']}"
             )
-        elif UNITS.get(action["subject"]) != action["unit"]:
+        elif not supported_unit(action["subject"], action["unit"]):
             issues.append(
                 f"Unsupported target nutrient/unit: {action['subject']} / {action['unit']}"
             )
@@ -37,10 +45,6 @@ def food_restrictions(food, facts):
             issues.append(f"{allergy}: {status}")
     if facts.get("vegetarian") is True and food["vegetarian"] is not True:
         issues.append("Vegetarian suitability not established")
-    if facts.get("include_eggs") is False and food["contains_egg"] is not False:
-        issues.append("Egg exclusion not established")
-    if facts.get("include_dairy") is False and food["contains_dairy"] is not False:
-        issues.append("Dairy exclusion not established")
     return issues
 
 
@@ -80,11 +84,9 @@ def check_plan(meals, days, schedule, facts, items, items_per_slot=None):
                 }
             )
         seen_foods.add(key)
-    totals = {
-        day: {key: Decimal(0) for key in Nutrients.model_fields} for day in range(1, days + 1)
-    }
+    totals = {day: {key: Decimal(0) for key in TOTAL_FIELDS} for day in range(1, days + 1)}
     meal_totals = {
-        day: {slot: {key: Decimal(0) for key in Nutrients.model_fields} for slot in schedule}
+        day: {slot: {key: Decimal(0) for key in TOTAL_FIELDS} for slot in schedule}
         for day in totals
     }
     for meal in meals:
@@ -101,8 +103,9 @@ def check_plan(meals, days, schedule, facts, items, items_per_slot=None):
         recorded = meal.get("quantity", meal.get("grams"))
         if Decimal(str(recorded)) != quantity or meal.get("unit", "g") != food.get("basis", "g"):
             violations.append({"day": day, "slot": slot, "issue": "Portion quantity/unit mismatch"})
-        for nutrient in Nutrients.model_fields:
-            value = food["nutrients"].get(nutrient)
+        amounts = food_values(food)
+        for nutrient in TOTAL_FIELDS:
+            value = amounts.get(nutrient)
             if value is None or totals[day][nutrient] is None:
                 totals[day][nutrient] = None
             else:
@@ -116,18 +119,23 @@ def check_plan(meals, days, schedule, facts, items, items_per_slot=None):
     for day, nutrients in totals.items():
         for item in items:
             action = item["action"]
-            if action["kind"] not in {"range", "ceiling", "intake"}:
+            if action["kind"] not in NUMERIC_KINDS or not supported_unit(
+                action["subject"], action["unit"]
+            ):
                 continue
-            value = nutrients.get(action["subject"])
+            value = target_value(action, nutrients)
             if value is None:
                 violations.append(
-                    {"day": day, "nutrient": action["subject"], "issue": "Unknown total"}
+                    {
+                        "day": day,
+                        "nutrient": action["subject"],
+                        "issue": "Unknown total"
+                        if action["unit"] != "%energy"
+                        else "Unknown percentage: nutrient or positive energy total unavailable",
+                    }
                 )
                 continue
-            lower = Decimal(str(action["amount"]))
-            violated = (action["kind"] == "ceiling" and value > lower) or (
-                action["kind"] == "range" and not lower <= value <= Decimal(str(action["upper"]))
-            )
+            violated = outside_bound(action, value)
             if violated:
                 violations.append(
                     {
@@ -138,10 +146,29 @@ def check_plan(meals, days, schedule, facts, items, items_per_slot=None):
                         "kind": action["kind"],
                         "amount": action["amount"],
                         "upper": action.get("upper"),
+                        "unit": action["unit"],
+                        "upper_exclusive": action.get("upper_exclusive", False),
                     }
                 )
+    required = set().union(*(required_nutrients(item["action"]) for item in items))
+    estimated = {}
+    for meal in meals:
+        fields = {
+            key: value for key, value in estimate_details(meal["food"]).items() if key in required
+        }
+        if fields:
+            identity = (meal.get("food_id", meal["food"]["name"]), meal.get("food_revision"))
+            estimated[identity] = {
+                "food_id": meal.get("food_id"),
+                "name": meal["food"]["name"],
+                "food_revision": meal.get("food_revision"),
+                "fields": fields,
+            }
     return {
         "valid": not violations,
+        "uses_estimates": bool(estimated),
+        "estimated_inputs": list(estimated.values()),
+        "composition_basis": "includes_estimates" if estimated else "recorded_values",
         "violations": violations,
         "meal_totals": {
             str(day): {

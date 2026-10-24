@@ -42,6 +42,18 @@ def test_edible_yield_matches_real_source_reference_without_changing_per100_valu
     assert body.vegetarian is None and body.allergen_status == {}
 
 
+def test_trans_fat_is_imported_and_implausible_values_remain_unknown():
+    row = source_row()
+    row["Total Fat (g) - Per 100"] = "5"
+    row["Trans Fat (g) - Per 100"] = "0.1"
+    records, _ = normalize([row], "a" * 64, 0)
+    assert records[0][1].nutrients.trans_fat == 0.1
+    row["Trans Fat (g) - Per 100"] = "38.5"
+    records, _ = normalize([row], "a" * 64, 0)
+    assert records[0][1].nutrients.trans_fat is None
+    assert any("exceeds total fat" in w for w in records[0][1].import_warnings)
+
+
 def test_ml_basis_trace_added_sugar_and_independent_serving_check():
     row = source_row("Test beverage", "Per 100ml", "1 can = 330ml")
     row.update(

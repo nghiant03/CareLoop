@@ -118,6 +118,11 @@ function mount(
 test('planning sends multi-item counts and exact approved target revision', async () => {
   mount(<Plans />);
   const user = userEvent.setup();
+  await user.click(screen.getByText(/Food choices \(optional\)/));
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Foods to consider' }),
+    'selected',
+  );
   await user.click(await screen.findByRole('checkbox', { name: /Rice/ }));
   await user.click(screen.getByRole('checkbox', { name: /Fish/ }));
   await user.click(screen.getByRole('checkbox', { name: /Vegetables/ }));
@@ -138,6 +143,78 @@ test('planning sends multi-item counts and exact approved target revision', asyn
   expect(
     await screen.findByText('Checked draft. Clinician approval is required.'),
   ).toBeTruthy();
+});
+
+test('planning searches the catalogue by default without food selection', async () => {
+  mount(<Plans />);
+  const user = userEvent.setup();
+  const generate = screen.getByRole('button', {
+    name: 'Generate three alternatives',
+  });
+  await waitFor(() =>
+    expect((generate as HTMLButtonElement).disabled).toBe(false),
+  );
+  expect(screen.queryByRole('checkbox', { name: /Rice/ })).toBeNull();
+  await user.click(generate);
+  await waitFor(() =>
+    expect(request.mock.calls.some(([p]) => p === '/api/plan-requests')).toBe(
+      true,
+    ),
+  );
+  const sent = JSON.parse(
+    request.mock.calls.find(([p]) => p === '/api/plan-requests')![1].body,
+  );
+  expect(sent.food_ids).toBeUndefined();
+  expect(sent.excluded_food_ids).toEqual([]);
+});
+
+test('plans visibly disclose estimated food composition from stored snapshots', async () => {
+  const original = request.getMockImplementation()!;
+  const estimated = structuredClone(plan);
+  estimated.body.meals[0].food.source_details = {
+    careloop_estimates: JSON.stringify({
+      estimates: {
+        sodium: { value: 100, method: 'cohort_median', confidence: 'low' },
+      },
+    }),
+  };
+  request.mockImplementation(async (path: string, init?: RequestInit) =>
+    path === '/api/plans/plan-1'
+      ? new Response(JSON.stringify(estimated), { status: 200 })
+      : original(path, init),
+  );
+  mount(<Plans />);
+  await userEvent
+    .setup()
+    .click(await screen.findByRole('button', { name: 'Open plan' }));
+  expect(
+    await screen.findByText(/Uses estimated food composition/),
+  ).toBeTruthy();
+  expect(screen.getByText('Food estimates and methods')).toBeTruthy();
+});
+
+test('optional exclusions leave the rest of the catalogue available', async () => {
+  mount(<Plans />);
+  const user = userEvent.setup();
+  await user.click(screen.getByText(/Food choices \(optional\)/));
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Foods to consider' }),
+    'exclude',
+  );
+  await user.click(await screen.findByRole('checkbox', { name: /Fish/ }));
+  await user.click(
+    screen.getByRole('button', { name: 'Generate three alternatives' }),
+  );
+  await waitFor(() =>
+    expect(request.mock.calls.some(([p]) => p === '/api/plan-requests')).toBe(
+      true,
+    ),
+  );
+  const sent = JSON.parse(
+    request.mock.calls.find(([p]) => p === '/api/plan-requests')![1].body,
+  );
+  expect(sent.food_ids).toBeUndefined();
+  expect(sent.excluded_food_ids).toEqual(['food-1']);
 });
 
 test('logging sends the selected meal item, not the first item in its slot', async () => {

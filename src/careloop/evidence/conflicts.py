@@ -1,5 +1,7 @@
 from collections import defaultdict
 
+from careloop.nutrition import NUMERIC_KINDS, incompatible
+from careloop.patients.conditions import condition_matches
 from careloop.patients.engine import BOOL_FACTS, LIST_FACTS, NUMERIC_FACTS, predicate
 
 
@@ -36,6 +38,10 @@ def overlap(left, right):
         else:
             required = {value for _, value, negated in conditions if not negated}
             excluded = {value for _, value, negated in conditions if negated}
+            if fact == "conditions" and any(
+                condition_matches(value, exception) for value in required for exception in excluded
+            ):
+                return False
             if required & excluded:
                 return False
             if fact not in LIST_FACTS and len(required) > 1:
@@ -45,16 +51,10 @@ def overlap(left, right):
     return True
 
 
-def bounds(action):
-    if action["kind"] == "ceiling":
-        return 0, action["amount"]
-    if action["kind"] == "range":
-        return action["amount"], action["upper"]
-    return None
-
-
 def signature(action):
-    return tuple(action.get(k) for k in ("kind", "unit", "amount", "upper"))
+    return tuple(action.get(k) for k in ("kind", "unit", "amount", "upper")) + (
+        action.get("upper_exclusive", False),
+    )
 
 
 def analyse(rows, selected_ids):
@@ -78,7 +78,7 @@ def analyse(rows, selected_ids):
         common = overlap(left["body"], right["body"])
         if common is False:
             continue
-        if signature(a) == signature(b) and a["kind"] in {"range", "ceiling", "intake"}:
+        if signature(a) == signature(b) and a["kind"] in NUMERIC_KINDS:
             continue
         finding = {
             "rules": [
@@ -92,14 +92,7 @@ def analyse(rows, selected_ids):
                 for row in (left, right)
             ],
         }
-        x, y = bounds(a), bounds(b)
-        if (
-            common is True
-            and x
-            and y
-            and a["unit"] == b["unit"]
-            and max(x[0], y[0]) > min(x[1], y[1])
-        ):
+        if common is True and incompatible(a, b):
             blocking.append(
                 {**finding, "issue": "Overlapping populations have incompatible numeric bounds"}
             )

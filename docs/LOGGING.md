@@ -69,3 +69,12 @@ An already-exceeded upper bound can be shown on a partial day. Unknown nutrients
 remain unknown; unsupported qualitative/unit comparisons are explicitly labelled.
 Completeness remains a user declaration. These are intake comparisons, not clinical
 outcome assessments. The connected meal-log workspace presents these comparisons.
+
+Minimums use `below_minimum`, `at_or_above_minimum` or `partial_below_minimum`;
+historical `intake` goals retain their existing labels. Strict ceilings treat equality
+as outside the bound. `%energy` comparisons calculate percentages from recorded
+nutrient grams and recorded energy; `recorded` and `difference_from_amount` are in
+the target's percentage unit. All incomplete-day percentage comparisons report
+`partial_day`, since later intake can change the ratio in either direction. Missing
+values or zero daily energy yield unknown intake. Historical log snapshots lacking
+new trans-fat/food-group fields remain unknown without rewriting stored observations.

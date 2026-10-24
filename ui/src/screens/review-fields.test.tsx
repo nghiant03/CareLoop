@@ -14,27 +14,105 @@ afterEach(() => {
 
 test('rule filters combine and preserve explicit selections across hidden results', async () => {
   const rules: Rule[] = [
-    { id: 'draft', latest_revision: 1, active_revision: null, approved_by: null, retired: false,
-      draft: { source_id: 's1', quote: 'Evidence', location: 'Page 1', applicability: [], exceptions: [], blockers: ['Review population'], population_note: 'Children', exception_note: 'None', action: { kind: 'assessment', subject: 'protein', advice: 'Assess protein needs' } } },
-    { id: 'published', latest_revision: 1, active_revision: 1, approved_by: 'Reviewer', retired: false,
-      draft: { source_id: 's2', quote: 'Evidence', location: 'Page 2', applicability: [], exceptions: [], blockers: [], population_note: 'Hypertension', exception_note: 'None', action: { kind: 'ceiling', subject: 'sodium', advice: 'Limit sodium' } } },
+    {
+      id: 'draft',
+      latest_revision: 1,
+      active_revision: null,
+      approved_by: null,
+      retired: false,
+      draft: {
+        source_id: 's1',
+        quote: 'Evidence',
+        location: 'Page 1',
+        applicability: [],
+        exceptions: [],
+        blockers: ['Review population'],
+        population_note: 'Children',
+        exception_note: 'None',
+        action: {
+          kind: 'assessment',
+          subject: 'protein',
+          advice: 'Assess protein needs',
+        },
+      },
+    },
+    {
+      id: 'published',
+      latest_revision: 1,
+      active_revision: 1,
+      approved_by: 'Reviewer',
+      retired: false,
+      draft: {
+        source_id: 's2',
+        quote: 'Evidence',
+        location: 'Page 2',
+        applicability: [],
+        exceptions: [],
+        blockers: [],
+        population_note: 'Hypertension',
+        exception_note: 'None',
+        action: { kind: 'ceiling', subject: 'sodium', advice: 'Limit sodium' },
+      },
+    },
   ];
-  vi.stubGlobal('fetch', vi.fn(async (path: string) => new Response(JSON.stringify(
-    path === '/api/evidence/catalogue' ? { generation: 1, rules }
-      : path.includes('/sources') ? [{ id: 's1', title: 'Child guideline', edition: '2024', locator: 'https://example.org/child' }, { id: 's2', title: 'Adult guideline', edition: '2025', locator: 'https://example.org/adult' }]
-      : { seeds: [] },
-  ))));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (path: string) =>
+        new Response(
+          JSON.stringify(
+            path === '/api/evidence/catalogue'
+              ? { generation: 1, rules }
+              : path.includes('/sources')
+                ? [
+                    {
+                      id: 's1',
+                      title: 'Child guideline',
+                      edition: '2024',
+                      locator: 'https://example.org/child',
+                    },
+                    {
+                      id: 's2',
+                      title: 'Adult guideline',
+                      edition: '2025',
+                      locator: 'https://example.org/adult',
+                    },
+                  ]
+                : { seeds: [] },
+          ),
+        ),
+    ),
+  );
   mount(<Evidence />, 'reviewer');
   const user = userEvent.setup();
   await screen.findByText('Assess protein needs');
-  await user.selectOptions(screen.getByRole('combobox', { name: 'Rule source' }), 's1');
-  await user.selectOptions(screen.getByRole('combobox', { name: 'Rule subject' }), 'protein');
-  await user.selectOptions(screen.getByRole('combobox', { name: 'Rule status' }), 'Draft');
-  await user.click(screen.getByRole('checkbox', { name: 'With review blockers' }));
-  await user.type(screen.getByRole('searchbox', { name: 'Search rules' }), 'children');
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Rule source' }),
+    's1',
+  );
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Rule subject' }),
+    'protein',
+  );
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Rule status' }),
+    'Draft',
+  );
+  await user.click(
+    screen.getByRole('checkbox', { name: 'With review blockers' }),
+  );
+  await user.type(
+    screen.getByRole('searchbox', { name: 'Search rules' }),
+    'children',
+  );
   expect(screen.queryByText('Limit sodium')).toBeNull();
-  await user.click(screen.getByRole('button', { name: 'Select visible rules' }));
-  await user.selectOptions(screen.getByRole('combobox', { name: 'Rule status' }), 'Published');
+  await user.click(
+    screen.getByRole('button', { name: 'Select visible rules' }),
+  );
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Rule status' }),
+    'Published',
+  );
   expect(screen.getByText(/No rules match/)).toBeTruthy();
   expect(screen.getByText(/1 selected \(1 hidden by filters\)/)).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Clear filters' }));
@@ -131,6 +209,68 @@ test('existing stage-only patient records retain their stage and show CKD Yes', 
     (screen.getByRole('combobox', { name: 'CKD stage' }) as HTMLSelectElement)
       .value,
   ).toBe('G3b');
+});
+
+test('male collapses life-stage fields; switching sex preserves recorded facts', async () => {
+  const fetch = patientFetch({
+    sex: 'male',
+    pregnant: false,
+    breastfeeding: true,
+  });
+  mount(<Patients />);
+  const user = userEvent.setup();
+  const summary = await screen.findByText('Pregnancy and breastfeeding');
+  expect(summary.closest('details')?.open).toBe(false);
+  expect(screen.getByText('Pregnant: No · Breastfeeding: Yes')).toBeTruthy();
+  await user.click(summary);
+  expect(summary.closest('details')?.open).toBe(true);
+  expect(
+    (
+      screen.getByRole('combobox', {
+        name: 'breastfeeding',
+      }) as HTMLSelectElement
+    ).value,
+  ).toBe('true');
+  const sex = screen.getByRole('combobox', { name: 'Sex' });
+  await user.selectOptions(sex, 'female');
+  expect(
+    screen.getByText('Pregnancy and breastfeeding').closest('details')?.open,
+  ).toBe(true);
+  await user.selectOptions(sex, 'male');
+  expect(
+    screen.getByText('Pregnancy and breastfeeding').closest('details')?.open,
+  ).toBe(false);
+  await user.type(
+    screen.getByRole('textbox', { name: 'Reason and observation provenance' }),
+    'Reviewed facts',
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Save patient revision' }),
+  );
+  await waitFor(() =>
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(
+      true,
+    ),
+  );
+  const post = fetch.mock.calls.find(([, init]) => init?.method === 'POST')!;
+  expect(JSON.parse(String(post[1]?.body)).body.facts).toMatchObject({
+    sex: 'male',
+    pregnant: false,
+    breastfeeding: true,
+  });
+});
+
+test('life-stage fields start expanded for unknown sex without assuming No', async () => {
+  patientFetch({});
+  mount(<Patients />);
+  expect(
+    (await screen.findByText('Pregnancy and breastfeeding')).closest('details')
+      ?.open,
+  ).toBe(true);
+  expect(
+    (screen.getByRole('combobox', { name: 'pregnant' }) as HTMLSelectElement)
+      .value,
+  ).toBe('');
 });
 
 test('rule list and editor identify the rule source even when a different source is selected', async () => {

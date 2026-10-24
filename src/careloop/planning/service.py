@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from psycopg.types.json import Jsonb
 
-from careloop.foods.service import get_food
+from careloop.foods.service import get_food, planning_pool
 from careloop.patients.service import get_target, require_current
 from careloop.planning.checker import check_plan, portion_quantity
 from careloop.planning.invalidation import flag_plans
@@ -61,10 +61,17 @@ def store_plan(conn, data, request_id, alternative, parent_plan_id=None):
 def request_plans(conn, data):
     begin(conn, data)
     target, facts = current_context(conn, data.target_id, data.target_revision)
-    foods = [get_food(conn, food_id) for food_id in sorted(data.food_ids)]
-    alternatives, outcome = generate(foods, data, facts, target["body"]["items"])
+    foods = planning_pool(conn, data.food_ids, data.excluded_food_ids)
+    alternatives, outcome = generate(
+        foods, data, facts, target["body"]["items"], automatic_pool=data.food_ids is None
+    )
+    outcome["pool_mode"] = "catalogue" if data.food_ids is None else "selected"
+    outcome["pool_food_count"] = len(foods)
     request_id = uuid4()
     request_body = data.model_dump(mode="json", exclude={"actor", "reason"})
+    request_body["food_pool_revisions"] = [
+        {"food_id": str(row["id"]), "revision": row["latest_revision"]} for row in foods
+    ]
     conn.execute(
         """INSERT INTO plan_requests
         (id, patient_id, target_id, target_revision, body, outcome)

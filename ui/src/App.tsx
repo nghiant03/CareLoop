@@ -37,6 +37,7 @@ export default function App() {
   const [patientId, setPatientId] = useState('');
   const [version, setVersion] = useState(0);
   const [page, setPage] = useState(0);
+  const [patientSearch, setPatientSearch] = useState('');
   const patients = useResource<Patient[]>(
     actor.role === 'reviewer'
       ? null
@@ -118,6 +119,17 @@ export default function App() {
             </label>
             {actor.role !== 'reviewer' && (
               <>
+                <label>
+                  <span className="micro-label block mb-1">
+                    Search patients on this page
+                  </span>
+                  <input
+                    type="search"
+                    className="field"
+                    value={patientSearch}
+                    onChange={(e) => setPatientSearch(e.target.value)}
+                  />
+                </label>
                 <label className="flex-1 min-w-48">
                   <span className="micro-label block mb-1">Patient</span>
                   <select
@@ -127,16 +139,28 @@ export default function App() {
                   >
                     <option value="">Select patient</option>
                     {patientId &&
-                      !patients.data?.some((p) => p.id === patientId) && (
+                      !patients.data?.some(
+                        (p) =>
+                          p.id === patientId &&
+                          p.body.display_name
+                            .toLowerCase()
+                            .includes(patientSearch.trim().toLowerCase()),
+                      ) && (
                         <option value={patientId}>
                           Selected patient · {patientId.slice(0, 8)}
                         </option>
                       )}
-                    {patients.data?.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.body.display_name}
-                      </option>
-                    ))}
+                    {patients.data
+                      ?.filter((p) =>
+                        p.body.display_name
+                          .toLowerCase()
+                          .includes(patientSearch.trim().toLowerCase()),
+                      )
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.body.display_name}
+                        </option>
+                      ))}
                   </select>
                 </label>
                 <div className="flex gap-2">
@@ -155,6 +179,11 @@ export default function App() {
                     More patients
                   </button>
                 </div>
+                <p role="status" className="text-sm text-ink-3">
+                  {patients.loading
+                    ? 'Loading patients…'
+                    : `${patients.data?.filter((p) => p.body.display_name.toLowerCase().includes(patientSearch.trim().toLowerCase())).length ?? 0} matches on page ${page + 1}`}
+                </p>
               </>
             )}
             <p className="text-sm text-ink-3 basis-full">
@@ -165,6 +194,7 @@ export default function App() {
         </section>
         <main
           id="main"
+          tabIndex={-1}
           className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 pb-12"
         >
           <PageHeader code="WORK" title={heading}>

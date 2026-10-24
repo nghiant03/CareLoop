@@ -123,6 +123,45 @@ checksums, raw selected fields, CSV and verification results are retained outsid
 Git in `~/.local/share/careloop/reviews/2026-10-24/`. Verification used the CSV
 import API followed by `GET /api/patients/{id}` for every imported record.
 
+### Mixed-source extension, 2026-10-24
+
+Added and read-back verified **20** profiles in the running application: 8 NHANES,
+8 [MIMIC-IV demo 2.2](https://physionet.org/content/mimic-iv-demo/2.2/), and 4
+[Synthea April 2020 CSV sample](https://github.com/synthetichealth/synthea-sample-data/blob/main/downloads/synthea_sample_data_csv_apr2020.zip).
+The pool increased from 32 to **52** (40 NHANES, 8 MIMIC, 4 synthetic). Existing
+records were compared unchanged, and all new records have no proposed targets.
+This is an audited one-off CSV import, not a new general ingestion CLI adapter.
+
+- NHANES: lowest unused SEQN for each recorded sex in ages 2–17, 18–39, 40–64,
+  and 65–79. Same component mappings and unknown-value policy as above.
+- MIMIC: lowest unused subject ID per recorded sex in admission-age bands 18–44,
+  45–64, 65–74 and 75–89. Each profile uses its earliest admission and a discharge
+  snapshot. Approximate admission age is anchor_age + admission year − anchor_year;
+  the exact birthday is unavailable. Anchor ages >=90 were excluded. `observed_on`
+  retains the deidentified discharge date (future years are shifted, not current
+  observations). Conditions retain verbatim ICD dictionary titles for that admission,
+  including history/status codes; they are not an independently confirmed active
+  chronic-condition inventory. No CKD stage, dialysis, measurements or medication
+  history is inferred. Exact rule-label normalization requires clinician review.
+- Synthea: four living simulated profiles, one per age band (2–17 female, 18–39
+  male, 40–64 female, 65–100 male), selected by lowest unused UUID. Names explicitly
+  include `SYNTHETIC`; generated names/SSNs/addresses are not imported. Snapshot date
+  is the latest weight/height observation date. Age uses the simulated birthdate;
+  only same-day numeric kg/cm measurements and source conditions active by START/STOP
+  are mapped. Missing facts remain unknown, including CKD and pregnancy.
+
+Namespaces are `nhanes:2021-2023:DEMO_L`, `mimic-iv-demo:2.2`, and
+`synthea:sample-csv-apr2020`. All source downloads, checksums, selected raw rows,
+CSV, import response and full read-back verification remain outside Git under
+`~/.local/share/careloop/reviews/2026-10-24/mixed-patients/`. MIMIC files matched
+the publisher's SHA256SUMS; its dictionary download needed ranged retries after
+timeouts. Synthea ZIP SHA256 is
+`4194b18c11eaedcf0d5d5dd448d8ac9661f14381e2ef9f109215dc42266cd38a`.
+The script's initial preparation failed on a NumPy boolean serialization, corrected
+before any write. `sample_import.py prepare` validates through the application's
+CSV/Pydantic models; `sample_import.py import` creates through the API and verifies
+every saved body/provenance and absence of targets. Import refuses duplicate identities.
+
 ## Food ingestion
 
 ### Singapore: supplied Kaggle SG FoodID mirror

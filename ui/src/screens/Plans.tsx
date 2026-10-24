@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   api,
+  foodEstimates,
   label,
   localDate,
   quantity,
@@ -19,10 +20,27 @@ import {
   FoodPicker,
   Form,
   Panel,
+  ListFilter,
   Totals,
 } from '../components/shared';
 import { decision, useResource, useSession, useTask } from '../state';
 import { paths } from '../navigation';
+
+type PoolMode = 'catalogue' | 'selected' | 'exclude';
+type SearchOutcome = {
+  status: string;
+  blockers?: string[];
+  pool_food_count?: number;
+  eligible_food_count?: number;
+  shortlisted?: boolean;
+};
+const poolSelection = (mode: PoolMode, foods: Food[]) =>
+  mode === 'selected'
+    ? { food_ids: foods.map((food) => food.id) }
+    : {
+        excluded_food_ids:
+          mode === 'exclude' ? foods.map((food) => food.id) : [],
+      };
 
 export default function Plans() {
   const { actor, patientId } = useSession();
@@ -38,6 +56,7 @@ export default function Plans() {
     true,
   );
   const [foods, setFoods] = useState<Food[]>([]);
+  const [poolMode, setPoolMode] = useState<PoolMode>('catalogue');
   const [counts, setCounts] = useState<Record<string, number>>({
     breakfast: 2,
     lunch: 3,
@@ -48,7 +67,18 @@ export default function Plans() {
   const [startDate, setStartDate] = useState(localDate);
   const [alternatives, setAlternatives] = useState<Plan[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [outcome, setOutcome] = useState<unknown>(null);
+  const [outcome, setOutcome] = useState<SearchOutcome | null>(null);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
+  const visiblePlans = (saved.data ?? []).filter(
+    (p) =>
+      (!status ||
+        (p.needs_review ? 'review' : p.approved_at ? 'approved' : 'draft') ===
+          status) &&
+      `${p.objective} ${p.start_date} ${p.id}`
+        .toLowerCase()
+        .includes(query.toLowerCase().trim()),
+  );
   if (!patientId)
     return <Empty>Select a patient to create or review meal plans.</Empty>;
   const changed = (value: Plan) => {
@@ -72,8 +102,51 @@ export default function Plans() {
           )}
           <div className="grid gap-6 lg:grid-cols-2">
             <div>
-              <h3 className="font-semibold mb-3">Food pool</h3>
-              <FoodPicker selected={foods} onChange={setFoods} />
+              <p className="text-ink-3 mb-4">
+                The planner searches the catalogue and checks foods against your
+                recorded allergies, dietary choices, source portions and
+                approved targets. You do not need to select foods first.
+              </p>
+              <details>
+                <summary className="cursor-pointer font-semibold text-line">
+                  Food choices (optional) ·{' '}
+                  {poolMode === 'catalogue'
+                    ? 'Full catalogue'
+                    : poolMode === 'selected'
+                      ? `${foods.length} selected foods`
+                      : `${foods.length} excluded foods`}
+                </summary>
+                <fieldset
+                  disabled={task.busy}
+                  className="space-y-4 mt-4 min-w-0"
+                >
+                  <Field label="Foods to consider">
+                    <select
+                      className="field"
+                      value={poolMode}
+                      onChange={(e) => setPoolMode(e.target.value as PoolMode)}
+                    >
+                      <option value="catalogue">
+                        All eligible catalogue foods
+                      </option>
+                      <option value="selected">Only foods I select</option>
+                      <option value="exclude">
+                        Catalogue except foods I exclude
+                      </option>
+                    </select>
+                  </Field>
+                  {poolMode !== 'catalogue' && (
+                    <>
+                      <p className="text-sm text-ink-3">
+                        {poolMode === 'selected'
+                          ? 'Choose 1–100 foods to narrow the search.'
+                          : 'Choose up to 100 foods to leave out. The rest of the catalogue remains available.'}
+                      </p>
+                      <FoodPicker selected={foods} onChange={setFoods} />
+                    </>
+                  )}
+                </fieldset>
+              </details>
             </div>
             <Form
               busy={task.busy}
@@ -84,7 +157,7 @@ export default function Plans() {
                     throw new Error('Approve current targets first.');
                   const result = await api<{
                     alternatives: Plan[];
-                    outcome: unknown;
+                    outcome: SearchOutcome;
                   }>('/plan-requests', {
                     ...decision(actor, 'Generate multi-item meal alternatives'),
                     target_id: target.id,
@@ -97,7 +170,7 @@ export default function Plans() {
                         .filter((s) => counts[s] > 0)
                         .map((s) => [s, counts[s]]),
                     ),
-                    food_ids: foods.map((f) => f.id),
+                    ...poolSelection(poolMode, foods),
                   });
                   setAlternatives(result.alternatives);
                   setPlan(result.alternatives[0] ?? null);
@@ -154,15 +227,15 @@ export default function Plans() {
                 </div>
               </fieldset>
               <p className="text-sm text-ink-3">
-                Choose enough distinct foods with source portions for each meal. Every item
+                Each meal uses distinct foods with recorded portions. Every item
                 is checked against mandatory restrictions and daily targets.
               </p>
               <button
                 className="btn-primary"
                 disabled={
                   !ready.data?.targets_ready ||
-                  !foods.length ||
-                  foods.length > 100 ||
+                  (poolMode === 'selected' && !foods.length) ||
+                  (poolMode !== 'catalogue' && foods.length > 100) ||
                   !Object.values(counts).some(Boolean)
                 }
               >
@@ -171,7 +244,35 @@ export default function Plans() {
             </Form>
           </div>
           {outcome != null && (
-            <Details title="Search outcome and exclusions" value={outcome} />
+            <div className="mt-4" role="status">
+              <p className="notice">
+                {outcome.status === 'drafts_available'
+                  ? 'Checked alternatives are ready below for review.'
+                  : outcome.status === 'blocked'
+                    ? 'The planner needs more information or eligible foods before it can build a plan.'
+                    : 'No valid alternative was found in this bounded search. This does not prove that no suitable plan exists.'}
+              </p>
+              {outcome.pool_food_count != null && (
+                <p className="text-sm text-ink-3 mt-2">
+                  {outcome.pool_food_count} foods considered
+                  {outcome.eligible_food_count != null
+                    ? ` · ${outcome.eligible_food_count} passed food eligibility checks`
+                    : ''}
+                  .
+                  {outcome.shortlisted
+                    ? ' A ranked shortlist was used to keep the search bounded.'
+                    : ''}
+                </p>
+              )}
+              {outcome.blockers && (
+                <ul className="list-disc pl-5 mt-2">
+                  {outcome.blockers.map((issue) => (
+                    <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+              )}
+              <Details title="Search outcome and exclusions" value={outcome} />
+            </div>
           )}
         </Panel>
       )}
@@ -210,17 +311,46 @@ export default function Plans() {
           key={`${plan.id}-${plan.approved_at}-${plan.needs_review}`}
           plan={plan}
           pool={foods}
+          poolMode={poolMode}
           onChanged={changed}
         />
       )}
       <Panel title="Saved plans">
+        <ListFilter
+          name="saved plans"
+          query={query}
+          onQuery={setQuery}
+          status={status}
+          onStatus={setStatus}
+          shown={visiblePlans.length}
+          total={saved.data?.length ?? 0}
+          statuses={[
+            { value: 'draft', label: 'Draft' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'review', label: 'Review required' },
+          ]}
+        />
         {saved.loading ? (
           <p role="status">Loading plans…</p>
-        ) : !saved.data?.length ? (
-          <Empty>No plans saved yet.</Empty>
+        ) : saved.error ? (
+          <Empty>
+            Plans could not be loaded.{' '}
+            <button
+              className="btn-ghost"
+              onClick={() => setVersion((v) => v + 1)}
+            >
+              Retry plans
+            </button>
+          </Empty>
+        ) : !visiblePlans.length ? (
+          <Empty>
+            {saved.data?.length
+              ? 'No plans match these filters.'
+              : 'No plans saved yet.'}
+          </Empty>
         ) : (
           <ul className="divide-y divide-rule">
-            {saved.data.map((p) => (
+            {visiblePlans.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-3 py-3">
                 <span className="flex-1">
                   <span className="capitalize">{label(p.objective)}</span>
@@ -261,10 +391,12 @@ export default function Plans() {
 function PlanDetail({
   plan,
   pool,
+  poolMode,
   onChanged,
 }: {
   plan: Plan;
   pool: Food[];
+  poolMode: PoolMode;
   onChanged: (p: Plan) => void;
 }) {
   const { actor } = useSession();
@@ -275,6 +407,16 @@ function PlanDetail({
     Recommendation[] | null
   >(null);
   const [report, setReport] = useState<unknown>(null);
+  const estimatedFoods = Array.from(
+    new Map(
+      plan.body.meals
+        .filter((meal) => Object.keys(foodEstimates(meal.food)).length)
+        .map((meal) => [
+          meal.food_id,
+          { name: meal.food.name, estimates: foodEstimates(meal.food) },
+        ]),
+    ).values(),
+  );
   return (
     <Panel title={`${label(plan.objective)} · ${plan.request.start_date}`}>
       <Feedback task={task} />
@@ -289,6 +431,15 @@ function PlanDetail({
               ? 'Checked draft. Clinician approval is required.'
               : 'Unmet draft. This plan cannot be approved.'}
       </p>
+      {estimatedFoods.length > 0 && (
+        <div className="mb-4">
+          <p className="notice notice-warn">
+            Uses estimated food composition. Totals and target checks include
+            approximations, not verified measurements.
+          </p>
+          <Details title="Food estimates and methods" value={estimatedFoods} />
+        </div>
+      )}
       {!plan.body.check.valid && (
         <Details title="Unmet constraints" value={plan.body.check.violations} />
       )}
@@ -328,13 +479,13 @@ function PlanDetail({
                         !plan.needs_review && (
                           <button
                             className="btn-ghost"
-                            disabled={task.busy}
+                            disabled={
+                              task.busy ||
+                              (poolMode === 'selected' && !pool.length) ||
+                              (poolMode !== 'catalogue' && pool.length > 100)
+                            }
                             onClick={() =>
                               void task.run(async () => {
-                                if (!pool.length)
-                                  throw new Error(
-                                    'Select replacement candidates in the food pool above.',
-                                  );
                                 const result = await api<{
                                   recommendations: Recommendation[];
                                 }>(
@@ -347,7 +498,7 @@ function PlanDetail({
                                     day: m.day,
                                     slot: m.slot,
                                     item: m.item ?? 1,
-                                    food_ids: pool.map((f) => f.id),
+                                    ...poolSelection(poolMode, pool),
                                   },
                                 );
                                 setSelected(m);

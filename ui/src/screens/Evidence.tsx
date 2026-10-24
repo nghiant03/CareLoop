@@ -19,6 +19,7 @@ import {
 } from '../components/shared';
 import { decision, useResource, useSession, useTask } from '../state';
 import Extraction from './Extraction';
+import EvidenceText from '../components/EvidenceText';
 
 export default function Evidence() {
   const { actor } = useSession();
@@ -66,6 +67,7 @@ export default function Evidence() {
   const [status, setStatus] = useState('');
   const [filterSource, setFilterSource] = useState('');
   const [subject, setSubject] = useState('');
+  const [category, setCategory] = useState('');
   const [blockedOnly, setBlockedOnly] = useState(false);
   const [selectedOnly, setSelectedOnly] = useState(false);
   const rules = catalogue.data?.rules ?? [];
@@ -89,6 +91,12 @@ export default function Evidence() {
       (!status || ruleStatus(r) === status) &&
       (!filterSource || r.draft.source_id === filterSource) &&
       (!subject || r.draft.action.subject === subject) &&
+      (!category ||
+        (r.draft.review_role === 'advisory'
+          ? 'advisory'
+          : ['assessment', 'additional'].includes(r.draft.action.kind)
+            ? 'assessment'
+            : 'target') === category) &&
       (!blockedOnly || r.draft.blockers.length > 0) &&
       (!selectedOnly || chosen.includes(r.id)) &&
       terms.every((term) => text.includes(term))
@@ -102,6 +110,7 @@ export default function Evidence() {
     setStatus('');
     setFilterSource('');
     setSubject('');
+    setCategory('');
     setBlockedOnly(false);
     setSelectedOnly(false);
   };
@@ -393,9 +402,7 @@ export default function Evidence() {
               <summary className="cursor-pointer text-sm font-semibold text-line">
                 Read retained source text
               </summary>
-              <pre className="font-sans text-sm whitespace-pre-wrap break-words max-h-96 overflow-auto border border-rule p-4 my-4">
-                {source.data.content}
-              </pre>
+              <EvidenceText text={source.data.content ?? ''} />
             </details>
             <button
               className="btn-primary"
@@ -522,6 +529,18 @@ export default function Evidence() {
           </Field>
         </div>
         <div className="flex flex-wrap items-center gap-4 mb-4">
+          <Field label="Guidance category">
+            <select
+              className="field"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              <option value="">All categories</option>
+              <option value="target">Target actions</option>
+              <option value="assessment">Required assessments</option>
+              <option value="advisory">Advisory guidance</option>
+            </select>
+          </Field>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -579,11 +598,13 @@ export default function Evidence() {
           </div>
         </div>
         {catalogue.loading && <p role="status">Loading rules…</p>}
-        {!catalogue.data?.rules.length && !catalogue.loading && (
-          <Empty>
-            No structured rules yet. Create a draft from retained source text.
-          </Empty>
-        )}
+        {!catalogue.data?.rules.length &&
+          !catalogue.loading &&
+          !catalogue.error && (
+            <Empty>
+              No structured rules yet. Create a draft from retained source text.
+            </Empty>
+          )}
         {!!rules.length && !visible.length && (
           <Empty>
             No rules match these filters. Clear filters or try another search.
@@ -629,6 +650,15 @@ export default function Evidence() {
               <p className="mt-3 font-medium break-words">
                 {rule.draft.action.advice}
               </p>
+              <p className="text-sm text-ink-3">
+                {rule.draft.review_role === 'advisory'
+                  ? 'Advisory guidance · optional, non-blocking'
+                  : ['assessment', 'additional'].includes(
+                        rule.draft.action.kind,
+                      )
+                    ? 'Required clinical assessment'
+                    : 'Target action · applicability and units checked per patient'}
+              </p>
               <p className="text-sm text-ink-3 mt-1">
                 Population: {rule.draft.population_note}
               </p>
@@ -649,7 +679,7 @@ export default function Evidence() {
                   Supporting quote · {rule.draft.location}
                 </summary>
                 <blockquote className="text-sm mt-3 whitespace-pre-wrap break-words">
-                  {rule.draft.quote}
+                  <EvidenceText text={rule.draft.quote} />
                 </blockquote>
               </details>
               <Details
@@ -888,8 +918,54 @@ function RuleEditor({
         <ActionFields
           evidence
           action={body.action}
-          onChange={(action) => setBody((b) => ({ ...b, action }))}
+          onChange={(action) =>
+            setBody((b) => ({
+              ...b,
+              action,
+              review_role:
+                action.kind === 'assessment' ? b.review_role : 'required',
+            }))
+          }
         />
+        {body.action.kind === 'assessment' && (
+          <>
+            <Field label="Assessment category">
+              <select
+                className="field"
+                value={body.review_role ?? 'required'}
+                onChange={(e) =>
+                  setBody((b) => ({
+                    ...b,
+                    review_role: e.target.value as 'required' | 'advisory',
+                  }))
+                }
+              >
+                <option value="required">Required clinical assessment</option>
+                <option value="advisory">
+                  Advisory guidance (optional, non-blocking)
+                </option>
+              </select>
+            </Field>
+            <Field label="Classification rationale">
+              <textarea
+                className="field"
+                required={body.review_role === 'advisory'}
+                value={body.review_note ?? ''}
+                onChange={(e) =>
+                  setBody((b) => ({
+                    ...b,
+                    review_note: e.target.value || null,
+                  }))
+                }
+              />
+            </Field>
+            <p className="text-sm text-ink-3">
+              Use advisory only for source-backed counselling that does not
+              require an individual clinical decision before target approval.
+              Publication applies the reviewed classification.
+            </p>
+          </>
+        )}
         <PredicateFields
           title="Applicability (all conditions)"
           predicates={body.applicability}
@@ -969,8 +1045,6 @@ function PredicateFields({
     'breastfeeding',
     'dialysis',
     'vegetarian',
-    'include_eggs',
-    'include_dairy',
   ];
   const lists = ['conditions', 'medications', 'allergies', 'dislikes'];
   const change = (index: number, patch: Partial<Predicate>) =>

@@ -4,10 +4,16 @@ from uuid import uuid4
 
 from psycopg.types.json import Jsonb
 
-from careloop.foods.models import Nutrients
+from careloop.foods.models import TOTAL_FIELDS
 from careloop.foods.service import get_food
 from careloop.logging.models import LogInput
-from careloop.patients.engine import UNITS
+from careloop.nutrition import (
+    NUMERIC_KINDS,
+    food_values,
+    outside_bound,
+    supported_unit,
+    target_value,
+)
 from careloop.patients.service import get_patient, get_target
 from careloop.planning.service import get_plan
 from careloop.workflow import WorkflowError, lock_catalogue, record_event, require_role
@@ -54,7 +60,7 @@ def snapshot(conn, patient_id, data):
     body["planned_meal"] = meal
     if data.status == "skipped":
         body["consumed"] = None
-        body["nutrients"] = dict.fromkeys(Nutrients.model_fields, "0")
+        body["nutrients"] = dict.fromkeys(TOTAL_FIELDS, "0")
         return body
     if data.status in {"replaced", "independent"}:
         food = get_food(conn, data.food_id)
@@ -78,11 +84,10 @@ def snapshot(conn, patient_id, data):
     quantity = Decimal(str(portion[field])) * Decimal(str(consumed["scale"]))
     consumed.update(quantity=str(quantity), unit=unit)
     body["consumed"] = consumed
+    amounts = food_values(food)
     body["nutrients"] = {
-        key: None
-        if food["nutrients"].get(key) is None
-        else str(Decimal(str(food["nutrients"][key])) * quantity / 100)
-        for key in Nutrients.model_fields
+        key: None if amounts.get(key) is None else str(Decimal(str(amounts[key])) * quantity / 100)
+        for key in TOTAL_FIELDS
     }
     return body
 
@@ -148,8 +153,8 @@ def day_summary(conn, patient_id, logged_on, plan_id=None):
         (patient_id, logged_on),
     ).fetchone()
     totals = {}
-    for key in Nutrients.model_fields:
-        values = [row["body"]["nutrients"][key] for row in rows]
+    for key in TOTAL_FIELDS:
+        values = [row["body"]["nutrients"].get(key) for row in rows]
         totals[key] = (
             None
             if not values or None in values
@@ -227,12 +232,14 @@ def compare_targets(conn, patient_id, logged_on, target_id):
     comparisons = []
     for item in body["items"]:
         action = item["action"]
-        value = summary["recorded_totals"].get(action["subject"])
+        comparable = action["kind"] in NUMERIC_KINDS and supported_unit(
+            action["subject"], action.get("unit")
+        )
+        actual_value = target_value(action, summary["recorded_totals"]) if comparable else None
+        value = str(actual_value) if actual_value is not None else None
         status = "unknown_intake"
         difference = None
-        if action["kind"] not in {"range", "ceiling", "intake"} or UNITS.get(
-            action["subject"]
-        ) != action.get("unit"):
+        if not comparable:
             status = "not_numerically_comparable"
         elif value is not None:
             amount, actual = Decimal(str(action["amount"])), Decimal(value)
@@ -240,8 +247,16 @@ def compare_targets(conn, patient_id, logged_on, target_id):
             if action["kind"] == "ceiling":
                 status = (
                     "above_ceiling"
-                    if actual > amount
+                    if outside_bound(action, actual)
                     else ("within_ceiling" if summary["complete"] else "partial_within_ceiling")
+                )
+            elif action["kind"] == "minimum":
+                status = (
+                    "at_or_above_minimum"
+                    if actual >= amount
+                    else "below_minimum"
+                    if summary["complete"]
+                    else "partial_below_minimum"
                 )
             elif action["kind"] == "range":
                 if actual > Decimal(str(action["upper"])):
@@ -256,6 +271,13 @@ def compare_targets(conn, patient_id, logged_on, target_id):
                     if actual >= amount
                     else ("below_goal" if summary["complete"] else "partial_below_goal")
                 )
+        if (
+            comparable
+            and action["unit"] == "%energy"
+            and not summary["complete"]
+            and value is not None
+        ):
+            status = "partial_day"
         comparisons.append(
             {
                 "target_item": item,

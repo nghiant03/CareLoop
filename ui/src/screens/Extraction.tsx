@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { api, type ExtractionRun, type Passage } from '../api';
-import { Empty, Feedback, Field, Form, Panel } from '../components/shared';
+import {
+  Empty,
+  Feedback,
+  Field,
+  Form,
+  Panel,
+  ListFilter,
+} from '../components/shared';
 import { decision, useResource, useSession, useTask } from '../state';
+import EvidenceText from '../components/EvidenceText';
 
 export default function Extraction({
   sourceId,
@@ -17,6 +25,8 @@ export default function Extraction({
   const [version, setVersion] = useState(0);
   const [page, setPage] = useState(0);
   const [runPage, setRunPage] = useState(0);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
   const [ordinal, setOrdinal] = useState('');
   const [reason, setReason] = useState('');
   const [requestId, setRequestId] = useState<string | null>(null);
@@ -34,6 +44,13 @@ export default function Extraction({
   const unresolved =
     requestId !== null && (!outcome || outcome.state === 'pending');
   const refresh = () => setVersion((v) => v + 1);
+  const visibleRuns = (runs.data ?? []).filter(
+    (run) =>
+      (!status || run.state === status) &&
+      `${run.request.decision.passage_ordinal} ${run.error ?? ''} ${run.request.model} ${run.id}`
+        .toLowerCase()
+        .includes(query.trim().toLowerCase()),
+  );
 
   return (
     <Panel title="Extract rules from a passage">
@@ -44,6 +61,12 @@ export default function Extraction({
       </p>
       <Feedback task={task} error={passages.error || runs.error} />
       {passages.loading && <p role="status">Loading passages…</p>}
+      {!passages.loading && !passages.error && !passages.data?.length && (
+        <Empty>
+          No passages on this page. Go back or acquire a source with retained
+          text.
+        </Empty>
+      )}
       <Form
         busy={task.busy || actor.role !== 'reviewer' || unresolved}
         onSubmit={() =>
@@ -87,8 +110,8 @@ export default function Extraction({
           </select>
         </Field>
         {selected && (
-          <blockquote className="whitespace-pre-wrap break-words text-sm border border-rule p-4 max-h-80 overflow-auto">
-            {selected.content}
+          <blockquote className="min-w-0 text-sm border border-rule p-4">
+            <EvidenceText text={selected.content} />
           </blockquote>
         )}
         <div className="flex flex-wrap gap-3">
@@ -125,7 +148,11 @@ export default function Extraction({
             onChange={(e) => setReason(e.target.value)}
           />
         </Field>
-        <button type="submit" className="btn-primary">
+        <button
+          type="submit"
+          className="btn-primary"
+          disabled={!selected || passages.loading}
+        >
           Extract review drafts
         </button>
       </Form>
@@ -193,11 +220,30 @@ export default function Extraction({
           </button>
         </div>
         {runs.loading && <p role="status">Loading extraction runs…</p>}
+        <ListFilter
+          name="extraction runs"
+          query={query}
+          onQuery={setQuery}
+          status={status}
+          onStatus={setStatus}
+          shown={visibleRuns.length}
+          total={runs.data?.length ?? 0}
+          scope={`Current page ${runPage + 1}`}
+          statuses={['pending', 'completed', 'failed'].map((value) => ({
+            value,
+            label: value,
+          }))}
+        />
+        {!runs.loading && !!runs.data?.length && !visibleRuns.length && (
+          <Empty>
+            No runs match on this page. Clear filters or browse another page.
+          </Empty>
+        )}
         {!runs.loading && !runs.error && !runs.data?.length && (
           <Empty>No runs yet. Select a passage to create review drafts.</Empty>
         )}
         <ul className="divide-y divide-rule">
-          {runs.data?.map((run) => (
+          {visibleRuns.map((run) => (
             <li key={run.id} className="py-4 space-y-2">
               <p className="font-semibold">
                 Passage {run.request.decision.passage_ordinal} · {run.state}

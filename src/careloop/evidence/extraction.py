@@ -27,7 +27,7 @@ from careloop.inference import (
 from careloop.patients import engine
 from careloop.workflow import WorkflowError, record_event, require_role
 
-PROMPT_VERSION = "source-rule-extraction-v3"
+PROMPT_VERSION = "source-rule-extraction-v4"
 REVIEW_BLOCKER = "Review extracted applicability, exceptions, and source context before approval"
 
 
@@ -84,12 +84,19 @@ def messages(passage):
                 "does not supply an age cutoff: do not invent age_years >= 18. 'CKD G3–G5' cannot "
                 "be encoded as a conjunction of stage equalities or as numeric stage bounds. "
                 "Do not infer eGFR bounds from stages.\n"
-                "ACTIONS\nKeep intake, ceiling, range, and additional amounts distinct. Never turn "
+                "ACTIONS\nKeep intake (soft reference goal), minimum (mandatory at least), "
+                "ceiling, "
+                "range, and additional amounts distinct. Never turn "
                 "qualitative advice into numbers. Normalize equivalent unit spelling only "
                 "(g/kg body weight/d to g/kg/day); do not calculate or convert amounts. Subjects: "
-                "energy, protein, carbohydrate, fat, saturated_fat, fibre, free_sugars, sodium, "
-                "potassium, phosphorus. Other guidance stays qualitative or blocked. A strict "
-                "less-than bound needs a blocker because ceiling uses <=. "
+                "energy, protein, carbohydrate, fat, saturated_fat, trans_fat, fibre, free_sugars, "
+                "sodium, potassium, phosphorus, fruit_and_vegetables. A food-group minimum uses "
+                "fruit_and_vegetables in g/day; it requires reviewed edible gram contributions. "
+                "Use %energy for protein, carbohydrate, free_sugars, fat, saturated_fat "
+                "or trans_fat percentages of total daily energy, without converting to grams "
+                "or assuming calories. "
+                "For strictly less than use ceiling with upper_exclusive=true; otherwise false. "
+                "Other guidance stays qualitative or blocked. "
                 "Use null for inapplicable "
                 "numeric fields, not invented values. If no recommendation is stated, return "
                 "rules=[] and explain the missing evidence in limitations.\n"

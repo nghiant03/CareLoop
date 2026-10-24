@@ -37,6 +37,7 @@ def extracted():
                     "upper": None,
                     "unit": "mg/day",
                     "advice": "Test recommendation",
+                    "upper_exclusive": False,
                 },
                 "blockers": [],
             }

@@ -173,7 +173,7 @@ def test_three_checked_alternatives_seven_days_and_selection(client):
     assert approve_plan(client, result["alternatives"][0]).status_code == 409
 
 
-def test_unknown_allergens_vegetarian_and_egg_dairy_choices_are_mandatory(client):
+def test_allergy_and_vegetarian_checks_remain_after_preference_removal(client):
     _, target = ready(
         client, allergies=["egg"], vegetarian=True, include_eggs=False, include_dairy=False
     )
@@ -183,7 +183,7 @@ def test_unknown_allergens_vegetarian_and_egg_dairy_choices_are_mandatory(client
     assert result["alternatives"] == []
     reasons = result["outcome"]["excluded_foods"][0]["reasons"]
     assert "egg: unknown" in reasons
-    assert len(reasons) == 4
+    assert len(reasons) == 2
     safe = food(
         client,
         "reviewed",
@@ -194,6 +194,15 @@ def test_unknown_allergens_vegetarian_and_egg_dairy_choices_are_mandatory(client
     )
     result = request(client, target, [safe])
     assert all(p["body"]["check"]["valid"] for p in result["alternatives"])
+
+
+def test_legacy_egg_dairy_preferences_do_not_block_generation_or_approval(client):
+    for value in (None, False):
+        _, target = ready(client, include_eggs=value, include_dairy=value)
+        candidate = food(client, f"legacy-{value}", contains_egg=None, contains_dairy=None)
+        result = request(client, target, [candidate])
+        assert result["outcome"]["status"] == "drafts_available"
+        assert approve_plan(client, result["alternatives"][0]).status_code == 200
 
 
 def test_missing_patient_choices_block_but_source_portions_need_no_enablement(client):

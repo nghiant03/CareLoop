@@ -33,6 +33,7 @@ class Nutrients(Model):
     carbohydrate: Amount | None = None
     fat: Amount | None = None
     saturated_fat: Amount | None = None
+    trans_fat: Amount | None = None
     fibre: Amount | None = None
     total_sugars: Amount | None = None
     added_sugars: Amount | None = None
@@ -40,6 +41,14 @@ class Nutrients(Model):
     sodium: Amount | None = None
     potassium: Amount | None = None
     phosphorus: Amount | None = None
+
+
+class FoodGroups(Model):
+    # Edible qualifying grams per 100 g or 100 ml, not a category inferred from names.
+    fruit_and_vegetables: Amount | None = None
+
+
+TOTAL_FIELDS = (*Nutrients.model_fields, *FoodGroups.model_fields)
 
 
 class Portion(Model):
@@ -60,6 +69,7 @@ class FoodBody(Model):
     category: Text
     basis: Literal["g", "ml"] = "g"
     nutrients: Nutrients
+    food_groups: FoodGroups = Field(default_factory=FoodGroups)
     portions: Annotated[list[Portion], Field(max_length=100)]
     provenance: Provenance
     source_details: dict[str, str] = Field(default_factory=dict)
@@ -83,6 +93,9 @@ class FoodBody(Model):
 
     @model_validator(mode="after")
     def reviewed_fields(self):
+        contribution = self.food_groups.fruit_and_vegetables
+        if self.basis == "g" and contribution is not None and contribution > 100:
+            raise ValueError("Food-group grams cannot exceed 100 per 100 g")
         for portion in self.portions:
             if (self.basis == "g") != (portion.grams is not None):
                 raise ValueError("Portion units must match the nutrient basis")
@@ -95,6 +108,7 @@ class FoodBody(Model):
             or self.contains_egg is not None
             or self.contains_dairy is not None
             or self.ingredients is not None
+            or contribution is not None
         )
         if annotations and not self.review_note:
             raise ValueError("Reviewer annotations require a supporting review note")

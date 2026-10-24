@@ -34,16 +34,28 @@ class Predicate(Model):
 
 
 class Action(Model):
-    kind: Literal["intake", "ceiling", "range", "additional", "exclusion", "timing", "assessment"]
+    kind: Literal[
+        "intake", "minimum", "ceiling", "range", "additional", "exclusion", "timing", "assessment"
+    ]
     subject: Text
     amount: Annotated[float, Field(ge=0)] | None = None
     upper: Annotated[float, Field(ge=0)] | None = None
     unit: Text | None = None
     advice: Text
+    upper_exclusive: bool = False
 
     @model_validator(mode="after")
     def numeric_shape(self):
-        numeric = self.kind in {"intake", "ceiling", "range", "additional"}
+        numeric = self.kind in {"intake", "minimum", "ceiling", "range", "additional"}
+        if self.upper_exclusive and self.kind != "ceiling":
+            raise ValueError("Only ceilings support an exclusive upper bound")
+        if self.unit == "%energy":
+            from careloop.nutrition import ENERGY_FACTORS
+
+            if self.subject not in ENERGY_FACTORS or self.kind == "additional":
+                raise ValueError("Unsupported energy-percentage action")
+            if any(v is not None and v > 100 for v in (self.amount, self.upper)):
+                raise ValueError("Energy percentages must be between 0 and 100")
         if numeric and (self.amount is None or self.unit is None):
             raise ValueError("Numeric recommendations require an amount and unit")
         if not numeric and any(v is not None for v in (self.amount, self.upper, self.unit)):
@@ -57,6 +69,8 @@ class Action(Model):
 
 
 class RuleBody(Model):
+    review_role: Literal["required", "advisory"] = "required"
+    review_note: Text | None = None
     source_id: UUID
     quote: Text
     location: Text
@@ -66,6 +80,14 @@ class RuleBody(Model):
     exception_note: Text
     action: Action
     blockers: Annotated[list[Text], Field(max_length=50)] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def advisory_scope(self):
+        if self.review_role == "advisory" and (
+            self.action.kind != "assessment" or not self.review_note
+        ):
+            raise ValueError("Advisory guidance requires an assessment action and review note")
+        return self
 
 
 class DraftInput(Decision):

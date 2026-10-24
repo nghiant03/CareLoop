@@ -21,6 +21,19 @@ def get_food(conn, food_id):
     return row
 
 
+def planning_pool(conn, food_ids=None, excluded_food_ids=()):
+    if food_ids is not None:
+        return [get_food(conn, identity) for identity in sorted(food_ids)]
+    rows = conn.execute(
+        """SELECT f.id, f.latest_revision, r.body FROM foods f JOIN food_revisions r
+        ON (r.food_id, r.revision) = (f.id, f.latest_revision) ORDER BY f.id"""
+    ).fetchall()
+    excluded = {str(identity) for identity in excluded_food_ids}
+    if excluded - {str(row["id"]) for row in rows}:
+        raise WorkflowError(404, "An excluded food no longer exists")
+    return [row for row in rows if str(row["id"]) not in excluded]
+
+
 def save_food(conn, data, food_id=None):
     require_role(data, "reviewer")
     lock_catalogue(conn)

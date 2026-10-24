@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import EvidenceText from '../components/EvidenceText';
 import {
   api,
   label,
@@ -9,11 +10,11 @@ import {
   type Target,
 } from '../api';
 import {
-  Details,
   Empty,
   Feedback,
   Field,
   Form,
+  ListFilter,
   Panel,
 } from '../components/shared';
 import { decision, useResource, useSession, useTask } from '../state';
@@ -317,14 +318,7 @@ function PatientEditor({
               </select>
             </Field>
           )}
-          {[
-            'pregnant',
-            'breastfeeding',
-            'dialysis',
-            'vegetarian',
-            'include_eggs',
-            'include_dairy',
-          ].map((key) => (
+          {['dialysis', 'vegetarian'].map((key) => (
             <Field key={key} label={label(key)}>
               <select
                 className="field"
@@ -343,6 +337,48 @@ function PatientEditor({
             </Field>
           ))}
         </div>
+        <details
+          key={`life-stage-${facts.sex ?? 'unknown'}`}
+          open={facts.sex !== 'male'}
+        >
+          <summary className="cursor-pointer font-semibold text-line">
+            Pregnancy and breastfeeding
+            <span className="block text-sm font-normal text-ink-3 mt-1">
+              Pregnant:{' '}
+              {facts.pregnant == null
+                ? 'Unknown'
+                : facts.pregnant
+                  ? 'Yes'
+                  : 'No'}
+              {' · '}Breastfeeding:{' '}
+              {facts.breastfeeding == null
+                ? 'Unknown'
+                : facts.breastfeeding
+                  ? 'Yes'
+                  : 'No'}
+            </span>
+          </summary>
+          <div className="grid gap-4 sm:grid-cols-2 mt-4">
+            {['pregnant', 'breastfeeding'].map((key) => (
+              <Field key={key} label={label(key)}>
+                <select
+                  className="field"
+                  value={facts[key] == null ? '' : String(facts[key])}
+                  onChange={(e) =>
+                    set(
+                      key,
+                      e.target.value === '' ? null : e.target.value === 'true',
+                    )
+                  }
+                >
+                  <option value="">Unknown</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </Field>
+            ))}
+          </div>
+        </details>
         <details>
           <summary className="cursor-pointer font-semibold text-line">
             Conditions, medicines, allergies and preferences
@@ -414,7 +450,7 @@ function PatientEditor({
   );
 }
 
-function TargetEditor({
+export function TargetEditor({
   target,
   onSaved,
 }: {
@@ -424,15 +460,47 @@ function TargetEditor({
   const { actor } = useSession();
   const task = useTask();
   const [reason, setReason] = useState('');
-  const storedSelection = target.body.items.flatMap((item) =>
-    item.rule ? [item.rule.rule_id] : [],
-  );
+  const storedSelection = [
+    ...target.body.items,
+    ...(target.body.assessments ?? []),
+    ...(target.body.guidance ?? []),
+  ].flatMap((item) => (item.rule ? [item.rule.rule_id] : []));
   const storedDispositions = Object.fromEntries(
-    (target.body.dispositions ?? []).map((d) => [d.rule.rule_id, d.reason]),
+    [
+      ...(target.body.dispositions ?? []),
+      ...(target.body.assessments ?? []),
+    ].map((d) => [d.rule.rule_id, d.reason]),
   );
   const [selected, setSelected] = useState<string[]>(storedSelection);
   const [dispositions, setDispositions] =
     useState<Record<string, string>>(storedDispositions);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
+  const [category, setCategory] = useState('');
+  const categoryOf = (e: Target['evaluation'][number]) =>
+    e.category ?? (e.status === 'needs_clinician' ? 'assessment' : 'target');
+  const requiresDecision = (e: Target['evaluation'][number]) =>
+    e.status === 'needs_clinician' ||
+    (e.status === 'applicable' && !selected.includes(e.rule_id));
+  const unresolved = target.evaluation.filter(
+    (e) => requiresDecision(e) && !dispositions[e.rule_id]?.trim(),
+  );
+  const visible = target.evaluation.filter(
+    (e) =>
+      (!category || categoryOf(e) === category) &&
+      (!status ||
+        (status === 'selected'
+          ? selected.includes(e.rule_id)
+          : status === 'unresolved'
+            ? unresolved.includes(e)
+            : e.status === status)) &&
+      `${e.source_action.subject} ${e.source_action.advice} ${e.citation.quote} ${e.citation.location} ${e.rule_id}`
+        .toLowerCase()
+        .includes(query.trim().toLowerCase()),
+  );
+  const hiddenSelected = selected.filter(
+    (id) => !visible.some((e) => e.rule_id === id),
+  ).length;
   const [manual, setManual] = useState<
     Array<{ action: Action; rationale: string }>
   >(
@@ -467,7 +535,9 @@ function TargetEditor({
         {target.body.items.map((item, i) => (
           <li key={i} className="py-3">
             <strong className="capitalize">{label(item.action.subject)}</strong>{' '}
-            · {label(item.action.kind)} {item.action.amount ?? ''}
+            · {label(item.action.kind)}{' '}
+            {item.action.upper_exclusive ? '< ' : ''}
+            {item.action.amount ?? ''}
             {item.action.upper != null ? `–${item.action.upper}` : ''}{' '}
             {item.action.unit}
             <p className="text-sm text-ink-3">
@@ -478,22 +548,109 @@ function TargetEditor({
             </p>
             {item.citation && (
               <blockquote className="mt-2 text-sm">
-                {item.citation.quote} — {item.citation.location}
+                <EvidenceText text={item.citation.quote} />
+                <p className="text-ink-3 mt-2">{item.citation.location}</p>
               </blockquote>
             )}
           </li>
         ))}
       </ul>
       {!!target.body.blockers.length && (
-        <Details
-          title={`${target.body.blockers.length} issues to resolve`}
-          value={target.body.blockers}
-        />
+        <details className="my-3">
+          <summary className="cursor-pointer font-semibold">
+            {target.body.blockers.length} stored issues to resolve
+          </summary>
+          <ul className="list-disc pl-5 mt-2">
+            {target.body.blockers.map((entry, i) => {
+              const issue = entry as {
+                rule_id?: string;
+                issue?: string;
+                missing?: string[];
+                issues?: string[];
+              };
+              const rule = target.evaluation.find(
+                (e) => e.rule_id === issue.rule_id,
+              );
+              return (
+                <li key={i}>
+                  {rule ? `${label(rule.source_action.subject)}: ` : ''}
+                  {issue.issue ??
+                    issue.issues?.join('; ') ??
+                    `Missing ${issue.missing?.map(label).join(', ')}`}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-sm text-ink-3 mt-2">
+            This list reflects the saved revision. Save your decisions to update
+            it.
+          </p>
+        </details>
+      )}
+      {(target.body.guidance?.length ?? 0) > 0 && (
+        <details className="my-3">
+          <summary className="cursor-pointer font-semibold">
+            Selected advisory guidance (not planner constraints)
+          </summary>
+          <ul className="list-disc pl-5">
+            {target.body.guidance?.map((g) => (
+              <li key={g.rule.rule_id}>{g.action.advice}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <ListFilter
+        name="evaluated rules"
+        query={query}
+        onQuery={setQuery}
+        status={status}
+        onStatus={setStatus}
+        shown={visible.length}
+        total={target.evaluation.length}
+        statuses={[
+          { value: 'unresolved', label: 'Decision needed' },
+          { value: 'selected', label: 'Selected' },
+          { value: 'applicable', label: 'Applicable target' },
+          { value: 'needs_clinician', label: 'Needs clinician' },
+          { value: 'advisory', label: 'Advisory guidance' },
+          { value: 'incomplete', label: 'Missing information' },
+          { value: 'not_applicable', label: 'Not applicable' },
+          { value: 'excluded', label: 'Excluded' },
+        ]}
+      />
+      <Field label="Rule category">
+        <select
+          className="field mb-3"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
+          <option value="">All categories</option>
+          <option value="target">Executable targets</option>
+          <option value="assessment">Required assessments</option>
+          <option value="advisory">Advisory guidance</option>
+        </select>
+      </Field>
+      <p className="text-sm text-ink-3 mb-4">
+        {selected.length} selected · {hiddenSelected} hidden by filters ·{' '}
+        {unresolved.length} decisions needed. Selection does not approve a rule.
+      </p>
+      {!visible.length && (
+        <Empty>
+          No rules match. Clear the search, status and category filters.
+        </Empty>
       )}
       <Form
         busy={task.busy || locked}
         onSubmit={() =>
           void task.run(async () => {
+            if (unresolved.length) {
+              setQuery('');
+              setStatus('unresolved');
+              setCategory('');
+              throw new Error(
+                `Record a clinical decision for ${unresolved.length} rules before saving. They are now shown below.`,
+              );
+            }
             const result = await api<Target>(
               `/targets/${target.id}/revisions`,
               {
@@ -506,6 +663,22 @@ function TargetEditor({
                   )
                   .map(({ rule_id, revision }) => ({ rule_id, revision })),
                 manual,
+                guidance: target.evaluation
+                  .filter(
+                    (e) =>
+                      e.status === 'advisory' && selected.includes(e.rule_id),
+                  )
+                  .map(({ rule_id, revision }) => ({ rule_id, revision })),
+                assessments: target.evaluation
+                  .filter(
+                    (e) =>
+                      e.status === 'needs_clinician' &&
+                      selected.includes(e.rule_id),
+                  )
+                  .map(({ rule_id, revision }) => ({
+                    rule: { rule_id, revision },
+                    reason: dispositions[rule_id] || '',
+                  })),
                 dispositions: target.evaluation
                   .filter(
                     (e) =>
@@ -522,12 +695,16 @@ function TargetEditor({
           })
         }
       >
-        {target.evaluation.map((e) => (
+        {visible.map((e) => (
           <div key={e.rule_id} className="border-b border-rule pb-3">
             <label className="flex gap-2">
               <input
                 type="checkbox"
-                disabled={e.status !== 'applicable'}
+                disabled={
+                  !['applicable', 'needs_clinician', 'advisory'].includes(
+                    e.status,
+                  )
+                }
                 checked={selected.includes(e.rule_id)}
                 onChange={(event) =>
                   setSelected((s) =>
@@ -541,30 +718,137 @@ function TargetEditor({
                 {label(e.source_action.subject)} · {label(e.status)}
               </span>
             </label>
-            <p className="text-sm text-ink-3 mt-1">{e.citation.quote}</p>
+            <p className="mt-2">{e.source_action.advice}</p>
+            {e.status === 'needs_clinician' && (
+              <p className="text-sm text-ink-3 mt-2">
+                Select to include this assessment in the review. Record your
+                decision below; add an individual numeric target if needed.
+                Selection alone does not complete the assessment.
+              </p>
+            )}
+            {e.status === 'advisory' && (
+              <p className="text-sm text-ink-3 mt-2">
+                Optional counselling guidance. Selecting it includes it in the
+                patient’s guidance; it does not become a planner constraint.
+              </p>
+            )}
+            {e.review_note && (
+              <p className="text-sm text-ink-3 mt-2">
+                Classification: {e.review_note}
+              </p>
+            )}
+            {e.status === 'excluded' && (
+              <p className="text-sm text-ink-3 mt-2">
+                A recorded patient exception excludes this rule.
+              </p>
+            )}
+            {e.status === 'not_applicable' && (
+              <p className="text-sm text-ink-3 mt-2">
+                This patient does not match the rule’s population.
+              </p>
+            )}
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm font-semibold text-line">
+                Supporting evidence
+              </summary>
+              <EvidenceText text={e.citation.quote} />
+            </details>
             {e.missing.length > 0 && (
               <p className="text-sm text-warn">
                 Clarify: {e.missing.join(', ')}
               </p>
             )}
-            {['applicable', 'needs_clinician'].includes(e.status) &&
-              !selected.includes(e.rule_id) && (
-                <Field label="Reason for not selecting this rule">
-                  <input
-                    className="field"
-                    required
-                    value={dispositions[e.rule_id] ?? ''}
-                    onChange={(event) =>
-                      setDispositions((v) => ({
-                        ...v,
-                        [e.rule_id]: event.target.value,
-                      }))
-                    }
-                  />
-                </Field>
-              )}
+            {requiresDecision(e) && (
+              <Field
+                label={
+                  e.status === 'needs_clinician'
+                    ? `Clinical decision — ${label(e.source_action.subject)}`
+                    : `Reason for not selecting — ${label(e.source_action.subject)}`
+                }
+              >
+                <input
+                  className="field"
+                  required
+                  value={dispositions[e.rule_id] ?? ''}
+                  onChange={(event) =>
+                    setDispositions((v) => ({
+                      ...v,
+                      [e.rule_id]: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
+            )}
           </div>
         ))}
+        {target.body.energy_proposal && (
+          <section
+            aria-label="Energy starting estimate"
+            className="border-t border-rule pt-4"
+          >
+            <h3 className="font-semibold">
+              Energy starting estimate · clinician review
+            </h3>
+            <p className="mt-2">
+              {target.body.energy_proposal.calculation ??
+                'An individual assessment is needed before proposing an energy range.'}
+            </p>
+            {target.body.energy_proposal.issues.map((issue) => (
+              <p key={issue} className="text-sm mt-2">
+                {issue}
+              </p>
+            ))}
+            <ul className="list-disc pl-5 text-sm text-ink-3 mt-2">
+              {target.body.energy_proposal.review.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm font-semibold text-line">
+                Source and calculation basis
+              </summary>
+              <blockquote className="text-sm mt-2">
+                {target.body.energy_proposal.quote}
+              </blockquote>
+              <a
+                className="text-line underline"
+                href={target.body.energy_proposal.source}
+              >
+                {target.body.energy_proposal.source_title}
+              </a>
+            </details>
+            {target.body.energy_proposal.action && (
+              <button
+                type="button"
+                className="btn-ghost mt-3"
+                disabled={
+                  manual.some((item) => item.action.subject === 'energy') ||
+                  target.body.items.some(
+                    (item) =>
+                      item.origin !== 'clinician' &&
+                      item.action.subject === 'energy' &&
+                      !!item.rule &&
+                      selected.includes(item.rule.rule_id),
+                  )
+                }
+                onClick={() => {
+                  const estimate = target.body.energy_proposal!;
+                  setManual((list) => [
+                    ...list,
+                    { action: { ...estimate.action! }, rationale: '' },
+                  ]);
+                }}
+              >
+                Use as editable energy draft
+              </button>
+            )}
+            <p className="text-sm text-ink-3 mt-2">
+              Review the range and record your clinical rationale below, then
+              save and approve separately. Existing energy targets are not
+              replaced.
+            </p>
+          </section>
+        )}
         {manual.map((item, index) => (
           <div key={index} className="border-t border-rule pt-4">
             <ActionFields
@@ -669,9 +953,21 @@ export function ActionFields({
   onChange: (a: Action) => void;
   evidence?: boolean;
 }) {
-  const numeric = ['range', 'ceiling', 'intake', 'additional'].includes(
-    action.kind,
-  );
+  const numeric = [
+    'range',
+    'ceiling',
+    'minimum',
+    'intake',
+    'additional',
+  ].includes(action.kind);
+  const percentage = [
+    'protein',
+    'carbohydrate',
+    'fat',
+    'saturated_fat',
+    'trans_fat',
+    'free_sugars',
+  ].includes(action.subject);
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <Field label={numeric ? 'Nutrient' : 'Subject'}>
@@ -684,6 +980,8 @@ export function ActionFields({
                 ...action,
                 subject: e.target.value,
                 unit: units[e.target.value],
+                amount: null,
+                upper: null,
               })
             }
           >
@@ -713,6 +1011,7 @@ export function ActionFields({
             const numeric = [
               'range',
               'ceiling',
+              'minimum',
               'intake',
               'additional',
             ].includes(e.target.value);
@@ -720,28 +1019,74 @@ export function ActionFields({
               ...action,
               kind: e.target.value,
               amount: numeric ? (action.amount ?? null) : null,
-              unit: numeric ? (units[action.subject] ?? 'g/day') : null,
+              unit: numeric
+                ? e.target.value === 'additional' && action.unit === '%energy'
+                  ? units[action.subject]
+                  : (action.unit ?? units[action.subject] ?? 'g/day')
+                : null,
               upper: e.target.value === 'range' ? (action.upper ?? null) : null,
+              upper_exclusive:
+                e.target.value === 'ceiling'
+                  ? (action.upper_exclusive ?? false)
+                  : false,
             });
           }}
         >
           {[
             'range',
             'ceiling',
+            'minimum',
             'intake',
             'exclusion',
             'timing',
             ...(evidence ? ['additional', 'assessment'] : []),
           ].map((key) => (
-            <option key={key}>{key}</option>
+            <option key={key} value={key}>
+              {key === 'minimum'
+                ? 'Minimum (required)'
+                : key === 'intake'
+                  ? 'Recommended intake (soft goal)'
+                  : key}
+            </option>
           ))}
         </select>
       </Field>
+      {numeric && (
+        <Field label="Target unit">
+          <select
+            className="field"
+            value={action.unit ?? units[action.subject]}
+            onChange={(e) =>
+              onChange({
+                ...action,
+                unit: e.target.value,
+                amount: null,
+                upper: null,
+              })
+            }
+          >
+            <option value={units[action.subject] ?? 'g/day'}>
+              {units[action.subject] ?? 'g/day'}
+            </option>
+            {percentage && action.kind !== 'additional' && (
+              <option value="%energy">% of daily energy</option>
+            )}
+            {evidence && action.subject === 'protein' && (
+              <option value="g/kg/day">g/kg/day</option>
+            )}
+            {action.unit &&
+              ![units[action.subject], '%energy', 'g/kg/day'].includes(
+                action.unit,
+              ) && <option value={action.unit}>{action.unit}</option>}
+          </select>
+        </Field>
+      )}
       {numeric && (
         <Field label={`Amount (${action.unit})`}>
           <input
             type="number"
             min="0"
+            max={action.unit === '%energy' ? 100 : undefined}
             step="any"
             className="field"
             required
@@ -760,6 +1105,7 @@ export function ActionFields({
           <input
             type="number"
             min={action.amount ?? 0}
+            max={action.unit === '%energy' ? 100 : undefined}
             step="any"
             className="field"
             required
@@ -782,6 +1128,25 @@ export function ActionFields({
             onChange={(e) => onChange({ ...action, unit: e.target.value })}
           />
         </Field>
+      )}
+      {action.kind === 'ceiling' && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={action.upper_exclusive ?? false}
+            onChange={(e) =>
+              onChange({ ...action, upper_exclusive: e.target.checked })
+            }
+          />
+          Strictly less than (exclude the limit)
+        </label>
+      )}
+      {numeric && (
+        <p className="text-sm text-ink-3 sm:col-span-2 lg:col-span-4">
+          Minimums, ceilings and ranges are required daily bounds. Recommended
+          intake is a soft goal. Energy percentages use the actual planned daily
+          energy, not an assumed 2,000 kcal diet.
+        </p>
       )}
       <div className="sm:col-span-2 lg:col-span-4">
         <Field label="Advice">

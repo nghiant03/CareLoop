@@ -1,6 +1,10 @@
 from collections import defaultdict
 from math import isfinite
 
+from careloop.nutrition import NUMERIC_KINDS, supported_unit
+from careloop.nutrition import UNITS as UNITS
+from careloop.patients.conditions import condition_matches
+
 NUMERIC_FACTS = {"age_years", "weight_kg", "height_cm", "egfr"}
 BOOL_FACTS = {
     "has_ckd",
@@ -13,18 +17,6 @@ BOOL_FACTS = {
 }
 TEXT_FACTS = {"sex", "ckd_stage"}
 LIST_FACTS = {"conditions", "medications", "allergies", "dislikes"}
-UNITS = {
-    "energy": "kcal/day",
-    "protein": "g/day",
-    "carbohydrate": "g/day",
-    "fat": "g/day",
-    "saturated_fat": "g/day",
-    "fibre": "g/day",
-    "free_sugars": "g/day",
-    "sodium": "mg/day",
-    "potassium": "mg/day",
-    "phosphorus": "mg/day",
-}
 
 
 def predicate(condition, facts):
@@ -51,6 +43,8 @@ def predicate(condition, facts):
     if op == "lte":
         return actual <= expected, [], []
     if op == "contains":
+        if key == "conditions":
+            return any(condition_matches(value, expected) for value in actual), [], []
         return expected in actual, [], []
     return actual == expected, [], []
 
@@ -67,6 +61,14 @@ def evaluate_rule(rule, facts):
         "issues": [],
         "population_note": body["population_note"],
         "exception_note": body["exception_note"],
+        "category": (
+            "advisory"
+            if body.get("review_role") == "advisory"
+            else "assessment"
+            if body["action"]["kind"] not in NUMERIC_KINDS
+            else "target"
+        ),
+        "review_note": body.get("review_note"),
     }
     applicable = [predicate(p, facts) for p in body["applicability"]]
     exceptions = [predicate(p, facts) for p in body["exceptions"]]
@@ -81,6 +83,8 @@ def evaluate_rule(rule, facts):
     if result["missing"] or result["issues"]:
         return {**result, "status": "incomplete"}
     action = dict(body["action"])
+    if result["category"] == "advisory":
+        return {**result, "status": "advisory", "action": action}
     if action["kind"] in {"assessment", "additional"}:
         return {
             **result,
@@ -90,7 +94,7 @@ def evaluate_rule(rule, facts):
                 "not an automatic target"
             ],
         }
-    if action["kind"] in {"intake", "ceiling", "range"}:
+    if action["kind"] in NUMERIC_KINDS:
         if action["subject"] == "protein" and action["unit"] == "g/kg/day":
             weight = facts.get("weight_kg")
             if weight is None:
@@ -106,18 +110,29 @@ def evaluate_rule(rule, facts):
                 return {
                     **result,
                     "status": "needs_clinician",
+                    "category": "assessment",
                     "issues": ["Per-kg calculation exceeds supported numeric range"],
                 }
             action["unit"] = "g/day"
             result["calculation"] = {"operation": "per_kg_times_weight", "weight_kg": weight}
-        if UNITS.get(action["subject"]) != action["unit"]:
+        if not supported_unit(action["subject"], action["unit"]):
             return {
                 **result,
                 "status": "needs_clinician",
+                "category": "assessment",
                 "issues": [
                     "Unsupported nutrient or unit; provide a clinician-authored supported target"
                 ],
             }
+    if action["kind"] not in NUMERIC_KINDS:
+        return {
+            **result,
+            "status": "needs_clinician",
+            "category": "assessment",
+            "issues": [
+                "Planner cannot enforce this qualitative action; record a clinical decision"
+            ],
+        }
     return {**result, "status": "applicable", "action": action}
 
 
@@ -133,11 +148,13 @@ def signature(evaluation):
     )
 
 
-def target_blockers(evaluation, items, dispositions):
+def target_blockers(evaluation, items, dispositions, assessments=()):
     blockers = []
-    disposed = {d["rule"]["rule_id"] for d in dispositions}
+    disposed = {d["rule"]["rule_id"] for d in (*dispositions, *assessments)}
     selected = {item["rule"]["rule_id"] for item in items if item["origin"] == "evidence"}
     for result in evaluation:
+        if result.get("category") == "advisory":
+            continue
         if result["missing"]:
             blockers.append({"rule_id": result["rule_id"], "missing": result["missing"]})
         elif result["status"] == "incomplete":
@@ -150,10 +167,13 @@ def target_blockers(evaluation, items, dispositions):
     grouped = defaultdict(list)
     for item in items:
         action = item["action"]
-        if action["kind"] in {"intake", "ceiling", "range"}:
+        if action["kind"] in NUMERIC_KINDS:
             grouped[action["subject"]].append(action)
     for subject, actions in grouped.items():
-        keys = {(a["kind"], a["amount"], a.get("upper"), a["unit"]) for a in actions}
+        keys = {
+            (a["kind"], a["amount"], a.get("upper"), a["unit"], a.get("upper_exclusive", False))
+            for a in actions
+        }
         if len(keys) > 1:
             blockers.append(
                 {"subject": subject, "issue": "Resolve competing numeric targets explicitly"}

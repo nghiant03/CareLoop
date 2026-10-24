@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, label, type Food, type FoodBody } from '../api';
+import { api, foodEstimates, label, type Food, type FoodBody } from '../api';
 import {
   Details,
   Feedback,
@@ -60,6 +60,18 @@ function FoodEditor({
         portions. Ingredient and allergen classifications need supporting
         evidence.
       </p>
+      {Object.keys(foodEstimates(body)).length > 0 && (
+        <div className="mb-4">
+          <p className="notice notice-warn">
+            Includes estimated values:{' '}
+            {Object.keys(foodEstimates(body)).map(label).join(', ')}.
+          </p>
+          <Details
+            title="Estimation methods and uncertainty"
+            value={foodEstimates(body)}
+          />
+        </div>
+      )}
       <Form
         busy={task.busy || actor.role !== 'reviewer'}
         onSubmit={() =>
@@ -187,33 +199,64 @@ function FoodEditor({
             Correct nutrient values
           </summary>
           <div className="grid sm:grid-cols-3 gap-3 mt-3">
-            {Object.entries(body.nutrients).map(([key, value]) => (
-              <Field
-                key={key}
-                label={`${label(key)} (${key === 'energy' ? 'kcal' : ['sodium', 'potassium', 'phosphorus'].includes(key) ? 'mg' : 'g'})`}
-              >
-                <input
-                  className="field"
-                  type="number"
-                  min="0"
-                  max="1000000"
-                  step="any"
-                  placeholder="Unknown"
-                  value={value ?? ''}
-                  onChange={(e) =>
-                    update({
-                      nutrients: {
-                        ...body.nutrients,
-                        [key]:
-                          e.target.value === '' ? null : Number(e.target.value),
-                      },
-                    })
-                  }
-                />
-              </Field>
-            ))}
+            {Object.entries({ trans_fat: null, ...body.nutrients }).map(
+              ([key, value]) => (
+                <Field
+                  key={key}
+                  label={`${label(key)} (${key === 'energy' ? 'kcal' : ['sodium', 'potassium', 'phosphorus'].includes(key) ? 'mg' : 'g'})`}
+                >
+                  <input
+                    className="field"
+                    type="number"
+                    min="0"
+                    max="1000000"
+                    step="any"
+                    placeholder="Unknown"
+                    value={value ?? ''}
+                    onChange={(e) =>
+                      update({
+                        nutrients: {
+                          ...body.nutrients,
+                          [key]:
+                            e.target.value === ''
+                              ? null
+                              : Number(e.target.value),
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              ),
+            )}
           </div>
         </details>
+        <Field
+          label={`Qualifying fruit and vegetables (g per 100 ${body.basis})`}
+        >
+          <p className="text-sm text-ink-3 mb-2" id="food-group-guidance">
+            Use documented edible fruit/vegetable grams, including reviewed
+            recipe fractions. Do not infer from a dish name. Leave blank if
+            unknown; enter zero only when confirmed absent. Record the source
+            and qualifying definition in the review note.
+          </p>
+          <input
+            className="field"
+            type="number"
+            min="0"
+            max={body.basis === 'g' ? 100 : 1000000}
+            step="any"
+            aria-describedby="food-group-guidance"
+            value={body.food_groups?.fruit_and_vegetables ?? ''}
+            onChange={(e) =>
+              update({
+                food_groups: {
+                  fruit_and_vegetables:
+                    e.target.value === '' ? null : Number(e.target.value),
+                },
+              })
+            }
+          />
+        </Field>
         <Field label="Review note and correction reason">
           <textarea
             className="field"

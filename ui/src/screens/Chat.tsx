@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import EvidenceText from '../components/EvidenceText';
 import { Link } from 'react-router-dom';
 import {
   api,
@@ -17,6 +18,7 @@ import {
   Form,
   FoodPicker,
   Panel,
+  ListFilter,
 } from '../components/shared';
 import { decision, useResource, useSession, useTask } from '../state';
 import { paths } from '../navigation';
@@ -26,6 +28,8 @@ export default function Chat() {
   const task = useTask();
   const [version, setVersion] = useState(0);
   const [page, setPage] = useState(0);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
   const [question, setQuestion] = useState('');
   const [requestId, setRequestId] = useState<string | null>(null);
   const [unresolved, setUnresolved] = useState(false);
@@ -61,6 +65,13 @@ export default function Chat() {
     );
   const current = context.data;
   const allowed = actor.role === 'patient';
+  const visibleHistory = (history.data ?? []).filter(
+    (run) =>
+      (!status || run.state === status) &&
+      `${run.question} ${run.result?.answer ?? ''}`
+        .toLowerCase()
+        .includes(query.toLowerCase().trim()),
+  );
 
   return (
     <>
@@ -104,7 +115,11 @@ export default function Chat() {
         {current?.ready && (
           <Details
             title="Facts and approved targets used for answers"
-            value={{ facts: current.facts, targets: current.target_items }}
+            value={{
+              facts: current.facts,
+              targets: current.target_items,
+              advisory_guidance: current.guidance ?? [],
+            }}
           />
         )}
         <Form
@@ -329,6 +344,20 @@ export default function Chat() {
         </p>
       </Panel>
       <Panel title="Conversation and sources">
+        <ListFilter
+          name="questions"
+          query={query}
+          onQuery={setQuery}
+          status={status}
+          onStatus={setStatus}
+          shown={visibleHistory.length}
+          total={history.data?.length ?? 0}
+          scope={`Current page ${page + 1}; use older/newer to browse other pages`}
+          statuses={['pending', 'completed', 'failed'].map((value) => ({
+            value,
+            label: label(value),
+          }))}
+        />
         <p className="text-sm text-ink-3 mb-4">
           Newest questions first. The last three completed exchanges for the
           same approved context support follow-up questions.
@@ -340,7 +369,15 @@ export default function Chat() {
           </Empty>
         )}
         <ol className="divide-y divide-rule">
-          {history.data?.map((run) => {
+          {!history.loading &&
+            !!history.data?.length &&
+            !visibleHistory.length && (
+              <li className="py-4 text-ink-3">
+                No questions match on this page. Clear filters or browse another
+                page.
+              </li>
+            )}
+          {visibleHistory.map((run) => {
             const stale =
               run.stale ||
               (current &&
@@ -502,8 +539,8 @@ export default function Chat() {
                             {citation.locator}
                           </p>
                         )}
-                        <blockquote className="whitespace-pre-wrap break-words bg-panel p-3 mt-2 max-h-80 overflow-auto">
-                          {citation.quote}
+                        <blockquote className="min-w-0 bg-panel p-3 mt-2">
+                          <EvidenceText text={citation.quote} />
                         </blockquote>
                       </details>
                     ))}
