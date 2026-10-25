@@ -157,8 +157,20 @@ This is the NICE CG32 adult **nutrition-support** starting prescription, not a
 universal maintenance-energy equation or a measured metabolic requirement.
 The source URL, recommendation excerpt, method, patient inputs, calculation and
 review considerations are retained across target revisions. It does not enter
-`items` automatically. Clinicians can copy it into an editable manual range,
-record their rationale, save and approve through the existing workflow.
+`items` automatically. The energy assessment now contains a **Daily energy target**
+fieldset with lower/upper `kcal/day` inputs and an energy rationale. When no energy
+assessment is visible (including filtering), the same editor stays at the top of
+the form. The source estimate can be copied into these fields explicitly; existing
+values are not overwritten. Energy assessment notes remain separate, explicitly
+labelled as not calorie values. A number typed in a note is never parsed as a target.
+
+Proposal/edit blocker summaries, approval and planner preflight share the daily
+energy-range requirement: a positive lower bound and an upper bound at least as
+large, in `kcal/day`. Drafts may be saved without energy, but cannot be approved.
+Historical approvals without an energy range remain historical approvals; readiness
+reports the missing range and directs the clinician to a new proposal. The meal
+planning screen displays that reason before generation. No historical prescription
+is inferred from assessment notes or adopted automatically from an estimate.
 
 Age, measured weight and height are required. Adults outside BMI 18.5–25 now see
 the unadjusted weight-based reference range alongside a specific review note:

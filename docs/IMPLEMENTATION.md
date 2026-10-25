@@ -1,5 +1,26 @@
 # Implementation status
 
+## Inline energy prescription and approval consistency, 2026-10-25
+
+Fixed the Demo 01 workflow mismatch: an assessment disposition containing `2000`
+could previously clear review blockers without creating an energy prescription,
+and approval succeeded although planner preflight required an energy range.
+Daily energy lower/upper inputs and rationale now appear directly below the energy
+assessment, alongside its optional source estimate. Filtering keeps that editor
+available. Notes are explicitly labelled as not calorie values. Approval explains
+missing energy and a missing review reason rather than only disabling its button.
+The shared energy check runs for proposal/edit blockers, approval, readiness for
+historical approvals, and planning. Existing patient targets and notes are preserved.
+
+Verification: `uv run --with pgserver==0.1.4 python tests/run_postgres.py -q`
+passed 228 tests. Initial runs exposed 13 older fixtures approving nutrient-only
+targets, then one remaining chat fixture; updated those fixtures to explicitly
+record test energy ranges. Regression coverage includes numeric-note rejection,
+historical approval readiness, numeric target saving and approval. `npm run test --
+--reporter=dot` in `ui` passed 34 tests. UI build/lint,
+Ruff and changed-screen detector passed. Browser visual verification remains
+unavailable. Deployment still requires `sudo docker compose up --build -d api web`.
+
 ## User-requested food estimates, 2026-10-24
 
 Implemented and applied 2,689 audited food revisions with explicit estimation
