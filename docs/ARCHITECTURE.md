@@ -31,15 +31,15 @@ The four technique groups are modules inside the backend, not separate services.
 ```mermaid
 flowchart TB
     users["Patient · Clinician · Evidence reviewer"]
-    web["React / TypeScript frontend<br/>Role-specific workflows · single API client"]
+    web["Role-specific workflows · single API client"]
     users --> web
-    subgraph backend["CareLoop — Python / FastAPI application"]
-        api["HTTP API /api<br/>Demo-role guards · revision checks · transactions"]
-        decision["1. DECISION AUTOMATION<br/>Knowledge-based rules · three-valued reasoning<br/>Constraint checking · approval workflows"]
-        optimize["2. RESOURCE OPTIMIZATION<br/>Heuristic beam search<br/>Meal-plan alternatives"]
-        mining["3. KNOWLEDGE DISCOVERY / MINING<br/>K-means clustering<br/>Content-based food recommendations"]
-        language["4. COGNITIVE / NATURAL-LANGUAGE TECHNIQUES<br/>LLM guideline extraction<br/>Evidence-grounded patient chat"]
-        records["Domain records and audit<br/>Evidence · patients · foods · plans · intake · chat"]
+    subgraph backend["CareLoop"]
+        api["HTTP API /api<br/>Demo-role guards · revision checks"]
+        decision["Knowledge-based rules · Constraint checking "]
+        optimize["Heuristic beam search ·  Meal-plan alternatives"]
+        mining["K-means clustering · Content-based food recommendations"]
+        language["LLM guideline extraction ·  Evidence-grounded patient chat"]
+        records["Domain records and audit"]
         api --> decision
         api --> optimize
         api --> mining
@@ -76,7 +76,7 @@ free-text interpretation at planning time.
 flowchart TB
     rules[("Published, non-retired rule revisions<br/>Predicates · exceptions · actions · citations")]
     facts[("Patient fact revision<br/>Known values and explicit unknowns")]
-    evaluate["KNOWLEDGE-BASED RULE ENGINE<br/>Typed predicates and condition aliases<br/>THREE-VALUED REASONING: true / false / unknown"]
+    evaluate["KNOWLEDGE-BASED RULE ENGINE<br/>Typed predicates and condition aliases<br/>"]
     rules --> evaluate
     facts --> evaluate
     evaluate --> result{"Applicability and exceptions"}
