@@ -6,6 +6,7 @@ from careloop.foods.models import TOTAL_FIELDS, Allergen
 from careloop.foods.portions import source_portions
 from careloop.nutrition import (
     NUMERIC_KINDS,
+    energy_target_issue,
     food_values,
     outside_bound,
     required_nutrients,
@@ -23,8 +24,8 @@ def preflight(facts, items):
         if allergy not in get_args(Allergen):
             issues.append(f"Unsupported allergy label: {allergy}; record a supported exact label")
     actions = [item["action"] for item in items]
-    if not any(a["subject"] == "energy" and a["kind"] == "range" for a in actions):
-        issues.append("A clinician-approved daily energy range is required for planning")
+    if issue := energy_target_issue(items):
+        issues.append(issue)
     for action in actions:
         if action["kind"] not in NUMERIC_KINDS:
             issues.append(

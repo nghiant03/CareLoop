@@ -27,6 +27,24 @@ ENERGY_FACTORS = {
 NUMERIC_KINDS = {"intake", "minimum", "ceiling", "range"}
 
 
+def energy_target_issue(items):
+    for item in items:
+        action = item["action"]
+        if (
+            action["subject"] == "energy"
+            and action["kind"] == "range"
+            and action.get("unit") == "kcal/day"
+            and action.get("amount") is not None
+            and action.get("upper") is not None
+            and 0 < action["amount"] <= action["upper"]
+        ):
+            return None
+    return (
+        "Enter a daily energy range in kcal/day (lower and upper values) in the energy "
+        "target fields, then save and approve. An assessment note is not an energy target."
+    )
+
+
 def supported_unit(subject, unit):
     return (subject in UNITS and UNITS[subject] == unit) or (
         unit == "%energy" and subject in ENERGY_FACTORS

@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from test_inference import response
 from test_logging import planned, setup_plan
-from test_patients import CLINICIAN, REVIEWER, approve, patient, propose, rule
+from test_patients import CLINICIAN, REVIEWER, approve, patient, propose, rule, with_energy
 from test_planning import PATIENT, approve_plan, food, ready, request
 
 from careloop.inference import InferenceError, Settings, configured_client
@@ -39,7 +39,7 @@ class Provider:
 def setup(client):
     evidence, body = rule(client)
     p = patient(client)
-    t = propose(client, p)
+    t = with_energy(client, propose(client, p))
     assert approve(client, t).status_code == 200
     provider = Provider()
     client.app.dependency_overrides[configured_client] = lambda: provider
@@ -181,7 +181,7 @@ def test_chat_excludes_retired_evidence_and_keeps_abstention_flags(client):
         == 200
     )
     rule(client, amount=40, subject="protein", unit="g/day")
-    fresh = propose(client, p)
+    fresh = with_energy(client, propose(client, p))
     assert approve(client, fresh).status_code == 200
     data.update(target_id=fresh["id"], target_revision=fresh["latest_revision"])
 

@@ -91,7 +91,7 @@ def test_conflict_overlap_uses_same_alias_and_subtype_semantics(required, exclud
 def test_old_exact_match_approval_is_not_ready_after_alias_expands_applicability(
     client, monkeypatch
 ):
-    from test_patients import approve, patient, propose, rule
+    from test_patients import approve, patient, propose, rule, with_energy
 
     from careloop.patients import engine
 
@@ -107,7 +107,7 @@ def test_old_exact_match_approval_is_not_ready_after_alias_expands_applicability
     p = patient(client, conditions=["Prediabetes"])
     with monkeypatch.context() as old:
         old.setattr(engine, "condition_matches", lambda actual, expected: actual == expected)
-        target = propose(client, p)
+        target = with_energy(client, propose(client, p))
         assert approve(client, target).status_code == 200
         assert client.get(f"/api/patients/{p['id']}/target-readiness").json()["targets_ready"]
     ready = client.get(f"/api/patients/{p['id']}/target-readiness").json()

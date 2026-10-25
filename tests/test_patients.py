@@ -110,6 +110,44 @@ def approve(client, target):
     )
 
 
+def with_energy(client, target):
+    """Explicitly complete the energy prescription in non-energy workflow fixtures."""
+    body = target["body"]
+    response = client.post(
+        f"/api/targets/{target['id']}/revisions",
+        json={
+            **CLINICIAN,
+            "expected_revision": target["latest_revision"],
+            "selected": [i["rule"] for i in body["items"] if i.get("rule")],
+            "dispositions": body.get("dispositions", []),
+            "assessments": [
+                {"rule": i["rule"], "reason": i["reason"]} for i in body.get("assessments", [])
+            ],
+            "guidance": [i["rule"] for i in body.get("guidance", [])],
+            "manual": [
+                {"action": i["action"], "rationale": i["rationale"]}
+                for i in body["items"]
+                if i["origin"] == "clinician"
+            ]
+            + [
+                {
+                    "action": {
+                        "kind": "range",
+                        "subject": "energy",
+                        "amount": 1800,
+                        "upper": 2200,
+                        "unit": "kcal/day",
+                        "advice": "Test only",
+                    },
+                    "rationale": "Explicit test energy prescription",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 def test_missing_facts_do_not_become_false_and_patient_changes_flag_targets(client):
     rule(client, exceptions=[{"fact": "pregnant", "operator": "eq", "value": True}])
     p = patient(client)
@@ -127,6 +165,7 @@ def test_missing_facts_do_not_become_false_and_patient_changes_flag_targets(clie
     assert client.get(f"/api/targets/{initial['id']}").json()["needs_review"] is True
     fresh = propose(client, changed.json())
     assert fresh["evaluation"][0]["status"] == "applicable"
+    fresh = with_energy(client, fresh)
     assert approve(client, fresh).status_code == 200
     assert client.get(f"/api/patients/{p['id']}/target-readiness").json()["targets_ready"] is True
     body["facts"]["allergies"] = ["egg"]
@@ -135,7 +174,7 @@ def test_missing_facts_do_not_become_false_and_patient_changes_flag_targets(clie
         json={**CLINICIAN, "expected_revision": 2, "body": body},
     )
     historical = client.get(f"/api/targets/{fresh['id']}").json()
-    assert historical["approved_revision"] == 1
+    assert historical["approved_revision"] == fresh["latest_revision"]
     assert historical["body"]["items"] == fresh["body"]["items"]
     assert historical["needs_review"] is True
     assert client.get(f"/api/patients/{p['id']}/target-readiness").json()["targets_ready"] is False
@@ -181,8 +220,9 @@ def test_per_kg_calculation_citation_and_target_supersession(client):
     assert item["calculation"]["weight_kg"] == 50
     assert item["rule"]["rule_id"] == r["id"]
     assert item["citation"]["quote"]
+    target = with_energy(client, target)
     assert approve(client, target).status_code == 200
-    next_target = propose(client, p)
+    next_target = with_energy(client, propose(client, p))
     assert approve(client, next_target).status_code == 200
     old = client.get(f"/api/targets/{target['id']}").json()
     assert old["needs_review"] is True
@@ -194,13 +234,13 @@ def test_per_kg_calculation_citation_and_target_supersession(client):
 def test_competing_targets_require_explicit_clinician_resolution(client):
     a, _ = rule(client, amount=100)
     b, _ = rule(client, amount=200)
-    target = propose(client, patient(client))
+    target = with_energy(client, propose(client, patient(client)))
     assert approve(client, target).status_code == 409
     edited = client.post(
         f"/api/targets/{target['id']}/revisions",
         json={
             **CLINICIAN,
-            "expected_revision": 1,
+            "expected_revision": target["latest_revision"],
             "selected": [],
             "manual": [
                 {
@@ -227,7 +267,7 @@ def test_competing_targets_require_explicit_clinician_resolution(client):
     item = edited.json()["body"]["items"][0]
     assert item["origin"] == "clinician" and "citation" not in item and "rule" not in item
     assert item["author"] == "Test clinician"
-    assert approve(client, edited.json()).status_code == 200
+    assert approve(client, with_energy(client, edited.json())).status_code == 200
     assert approve(client, target).status_code == 409
 
 
@@ -244,7 +284,7 @@ def test_newly_applicable_publication_and_retirement_flag_targets(client):
     assert client.get(f"/api/targets/{original['id']}").json()["needs_review"] is False
     publish(client, revision)
     assert client.get(f"/api/targets/{original['id']}").json()["needs_review"] is True
-    fresh = propose(client, p)
+    fresh = with_energy(client, propose(client, p))
     assert approve(client, fresh).status_code == 200
     response = client.post(
         f"/api/evidence/rules/{r['id']}/retirement", json={**REVIEWER, "expected_revision": 2}
@@ -260,7 +300,7 @@ def test_irrelevant_publication_does_not_invalidate_and_patient_audit_not_eviden
     rule(client)
     before = client.get("/api/evidence/catalogue").json()["generation"]
     p = patient(client)
-    target = propose(client, p)
+    target = with_energy(client, propose(client, p))
     assert approve(client, target).status_code == 200
     assert client.get("/api/evidence/catalogue").json()["generation"] == before
     rule(client, applicability=[{"fact": "age_years", "operator": "gte", "value": 60}])
@@ -309,7 +349,7 @@ def test_concurrent_patient_change_and_target_approval_cannot_leave_ready_stale_
 ):
     rule(client)
     p = patient(client)
-    target = propose(client, p)
+    target = with_energy(client, propose(client, p))
 
     def update_or_approve(update):
         with TestClient(create_app(database)) as other:
@@ -372,12 +412,12 @@ def test_new_rule_flags_manual_target_and_unknown_age_blocks_approval(client):
         },
     )
     assert response.status_code == 201
-    assert approve(client, response.json()).status_code == 200
+    assert approve(client, with_energy(client, response.json())).status_code == 200
     rule(client)
     assert client.get(f"/api/targets/{target['id']}").json()["needs_review"] is True
-    unknown = propose(client, patient(client, age_years=None))
+    unknown = with_energy(client, propose(client, patient(client, age_years=None)))
     assert approve(client, unknown).status_code == 409
-    dialysis = propose(client, patient(client, dialysis=True))
+    dialysis = with_energy(client, propose(client, patient(client, dialysis=True)))
     assert approve(client, dialysis).status_code == 409
 
 
@@ -414,4 +454,4 @@ def test_qualitative_assessment_requires_clinician_disposition(client):
         },
     )
     assert response.status_code == 201, response.text
-    assert approve(client, response.json()).status_code == 200
+    assert approve(client, with_energy(client, response.json())).status_code == 200

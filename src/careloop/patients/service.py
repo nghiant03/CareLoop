@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from psycopg.types.json import Jsonb
 
+from careloop.nutrition import energy_target_issue
 from careloop.patients import engine
 from careloop.patients.energy import energy_proposal
 from careloop.planning.invalidation import flag_plans
@@ -143,6 +144,8 @@ def invalidate_evidence(conn, decision):
 
 def blockers(evaluation, items, dispositions, facts, assessments=()):
     result = engine.target_blockers(evaluation, items, dispositions, assessments)
+    if issue := energy_target_issue(items):
+        result.append({"issue": issue})
     if facts.get("age_years") is None:
         result.append({"missing": ["age_years"], "issue": "Age is required for target approval"})
     if facts.get("dialysis") is True:
@@ -290,14 +293,19 @@ def approve_target(conn, target_id, data):
     patient = require_current(conn, target, data.expected_revision)
     if target["approved_revision"] is not None:
         raise WorkflowError(409, "Target set already approved")
-    if blockers(
+    issues = blockers(
         target["evaluation"],
         target["body"]["items"],
         target["body"]["dispositions"],
         patient["body"]["facts"],
         target["body"].get("assessments", []),
-    ):
-        raise WorkflowError(409, "Resolve missing facts, competing targets, and review items first")
+    )
+    if issues:
+        raise WorkflowError(
+            409,
+            energy_target_issue(target["body"]["items"])
+            or "Resolve missing facts, competing targets, and review items first",
+        )
     old = conn.execute(
         """UPDATE target_sets SET needs_review = true,
         review_reasons = review_reasons || '["targets_superseded"]'::jsonb
@@ -332,8 +340,9 @@ def target_readiness(conn, patient_id):
         (patient_id,),
     ).fetchone()
     if current is not None:
+        target = get_target(conn, current["id"])
         try:
-            require_current(conn, get_target(conn, current["id"]), current["approved_revision"])
+            require_current(conn, target, current["approved_revision"])
         except WorkflowError as error:
             if error.status != 409:
                 raise
@@ -341,6 +350,13 @@ def target_readiness(conn, patient_id):
                 "targets_ready": False,
                 "approved_target": None,
                 "reason": "Rule applicability changed; propose and review current targets",
+            }
+        if issue := energy_target_issue(target["body"]["items"]):
+            return {
+                "targets_ready": False,
+                "approved_target": current,
+                "reason": "The approved targets have no daily energy range. Create a new "
+                "proposal to complete the energy target. " + issue,
             }
     return {
         "targets_ready": current is not None,
