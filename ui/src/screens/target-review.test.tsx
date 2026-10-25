@@ -98,7 +98,9 @@ test('clinician can select assessments and advice; filters preserve decisions an
   await user.click(assessment);
   expect(assessment.checked).toBe(true);
   await user.type(
-    screen.getByRole('textbox', { name: 'Clinical decision — energy' }),
+    screen.getByRole('textbox', {
+      name: 'Energy assessment note (not calorie values)',
+    }),
     'Reviewed energy needs and documented the individual target.',
   );
   await user.click(screen.getByRole('checkbox', { name: 'fat · advisory' }));
@@ -149,7 +151,98 @@ test('hidden unresolved assessments are revealed before a save', async () => {
     await screen.findByText(/Record a clinical decision for 1 rules/),
   ).toBeTruthy();
   expect(
-    screen.getByRole('textbox', { name: 'Clinical decision — energy' }),
+    screen.getByRole('textbox', {
+      name: 'Energy assessment note (not calorie values)',
+    }),
+  ).toBeTruthy();
+});
+
+test('energy values are entered beneath the assessment and saved as numeric targets', async () => {
+  const fetch = vi.fn(async () => new Response(JSON.stringify(target)));
+  vi.stubGlobal('fetch', fetch);
+  mount();
+  const user = userEvent.setup();
+  const lower = screen.getByRole('spinbutton', {
+    name: 'Lower energy (kcal/day)',
+  });
+  expect(lower.closest('.border-b')?.textContent).toContain(
+    'Individualise energy',
+  );
+  await user.type(
+    screen.getByRole('textbox', {
+      name: 'Energy assessment note (not calorie values)',
+    }),
+    '2000',
+  );
+  expect((lower as HTMLInputElement).value).toBe('');
+  await user.type(lower, '1800');
+  await user.type(
+    screen.getByRole('spinbutton', { name: 'Upper energy (kcal/day)' }),
+    '2200',
+  );
+  await user.type(
+    screen.getByRole('textbox', { name: 'Energy target rationale' }),
+    'Individual review',
+  );
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Rule category' }),
+    'advisory',
+  );
+  expect(
+    (
+      screen.getByRole('spinbutton', {
+        name: 'Lower energy (kcal/day)',
+      }) as HTMLInputElement
+    ).value,
+  ).toBe('1800');
+  await user.type(
+    screen.getByRole('textbox', { name: 'Review reason' }),
+    'Reviewed',
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Save target revision' }),
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  const request = fetch.mock.calls[0] as unknown as [string, RequestInit];
+  const payload = JSON.parse(String(request[1].body));
+  expect(payload.manual).toEqual([
+    {
+      action: expect.objectContaining({
+        kind: 'range',
+        subject: 'energy',
+        unit: 'kcal/day',
+        amount: 1800,
+        upper: 2200,
+      }),
+      rationale: 'Individual review',
+    },
+  ]);
+  expect(payload.dispositions[0].reason).toBe('2000');
+});
+
+test('a saved note alone cannot enable approval even with legacy empty blockers', async () => {
+  mount({
+    ...target,
+    body: {
+      ...target.body,
+      blockers: [],
+      dispositions: [
+        { rule: { rule_id: 'required', revision: 1 }, reason: '2000' },
+      ],
+    },
+  });
+  await userEvent
+    .setup()
+    .type(screen.getByRole('textbox', { name: 'Review reason' }), 'Reviewed');
+  expect(
+    (
+      screen.getByRole('button', {
+        name: 'Approve stored revision',
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  expect(
+    screen.getByText('Approval needs a saved daily energy range.'),
   ).toBeTruthy();
 });
 
@@ -189,4 +282,53 @@ test('saved advisory and assessment selections reopen while approved revisions a
       }) as HTMLInputElement
     ).checked,
   ).toBe(true);
+});
+
+test('a stored numeric energy range can be approved without another target editor', async () => {
+  const fetch = vi.fn(async () => new Response(JSON.stringify(target)));
+  vi.stubGlobal('fetch', fetch);
+  mount({
+    ...target,
+    latest_revision: 2,
+    body: {
+      ...target.body,
+      blockers: [],
+      items: [
+        {
+          origin: 'clinician',
+          action: {
+            kind: 'range',
+            subject: 'energy',
+            unit: 'kcal/day',
+            amount: 1800,
+            upper: 2200,
+            advice: 'Individual prescription',
+          },
+          rationale: 'Reviewed',
+        },
+      ],
+      dispositions: [
+        { rule: { rule_id: 'required', revision: 1 }, reason: 'Reviewed' },
+      ],
+    },
+  });
+  const user = userEvent.setup();
+  expect(
+    (
+      screen.getByRole('spinbutton', {
+        name: 'Lower energy (kcal/day)',
+      }) as HTMLInputElement
+    ).value,
+  ).toBe('1800');
+  await user.type(
+    screen.getByRole('textbox', { name: 'Review reason' }),
+    'Approve reviewed range',
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Approve stored revision' }),
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  const request = fetch.mock.calls[0] as unknown as [string, RequestInit];
+  expect(request[0]).toBe('/api/targets/t1/approval');
+  expect(JSON.parse(String(request[1].body)).expected_revision).toBe(2);
 });

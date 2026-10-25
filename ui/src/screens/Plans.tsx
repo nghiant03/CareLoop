@@ -48,6 +48,7 @@ export default function Plans() {
   const [version, setVersion] = useState(0);
   const ready = useResource<{
     targets_ready: boolean;
+    reason?: string | null;
     approved_target: { id: string; approved_revision: number } | null;
   }>(patientId ? `/patients/${patientId}/target-readiness` : null, version);
   const saved = useResource<Plan[]>(
@@ -95,8 +96,8 @@ export default function Plans() {
           ) : (
             !ready.data?.targets_ready && (
               <p className="notice notice-warn mb-4">
-                Current clinician-approved targets are required. Ask your
-                clinician to review your targets.
+                {ready.data?.reason ??
+                  'Current clinician-approved targets are required. Ask your clinician to review your targets.'}
               </p>
             )
           )}

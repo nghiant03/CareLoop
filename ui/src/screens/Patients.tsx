@@ -512,6 +512,42 @@ export function TargetEditor({
     actor.role !== 'clinician' ||
     !!target.approved_revision ||
     target.needs_review;
+  const energyIndex = manual.findIndex(
+    (item) => item.action.subject === 'energy',
+  );
+  const energyRule = visible.find(
+    (e) =>
+      e.source_action.subject === 'energy' && e.status === 'needs_clinician',
+  );
+  const evidenceEnergy = target.body.items.some(
+    (item) =>
+      item.origin !== 'clinician' &&
+      item.action.subject === 'energy' &&
+      item.action.kind === 'range' &&
+      !!item.rule &&
+      selected.includes(item.rule.rule_id),
+  );
+  const savedEnergy = target.body.items.some(
+    (item) =>
+      item.action.subject === 'energy' &&
+      item.action.kind === 'range' &&
+      item.action.unit === 'kcal/day' &&
+      (item.action.amount ?? 0) > 0 &&
+      (item.action.upper ?? 0) >= (item.action.amount ?? 0),
+  );
+  const energyFields = !evidenceEnergy && (
+    <EnergyTargetFields
+      item={energyIndex >= 0 ? manual[energyIndex] : undefined}
+      proposal={target.body.energy_proposal}
+      onChange={(item) =>
+        setManual((list) =>
+          energyIndex < 0
+            ? [...list, item]
+            : list.map((value, i) => (i === energyIndex ? item : value)),
+        )
+      }
+    />
+  );
   const dirty =
     JSON.stringify([...selected].sort()) !==
       JSON.stringify([...storedSelection].sort()) ||
@@ -525,6 +561,13 @@ export function TargetEditor({
   return (
     <Panel title={`Target set · revision ${target.latest_revision}`}>
       <Feedback task={task} />
+      {!savedEnergy && (
+        <p className="notice notice-warn mb-4">
+          {target.approved_revision
+            ? 'This approved revision has no daily energy range. Create a new proposal, enter the calorie values in Daily energy target, then save and approve.'
+            : 'Enter and save a daily energy target before approval. Text in an assessment note does not set calorie values.'}
+        </p>
+      )}
       {target.needs_review && (
         <p className="notice notice-warn mb-4">
           This target set needs review. Create a new proposal from current facts
@@ -695,6 +738,7 @@ export function TargetEditor({
           })
         }
       >
+        {!energyRule && energyFields}
         {visible.map((e) => (
           <div key={e.rule_id} className="border-b border-rule pb-3">
             <label className="flex gap-2">
@@ -719,6 +763,7 @@ export function TargetEditor({
               </span>
             </label>
             <p className="mt-2">{e.source_action.advice}</p>
+            {e.rule_id === energyRule?.rule_id && energyFields}
             {e.status === 'needs_clinician' && (
               <p className="text-sm text-ink-3 mt-2">
                 Select to include this assessment in the review. Record your
@@ -762,7 +807,9 @@ export function TargetEditor({
               <Field
                 label={
                   e.status === 'needs_clinician'
-                    ? `Clinical decision — ${label(e.source_action.subject)}`
+                    ? e.source_action.subject === 'energy'
+                      ? 'Energy assessment note (not calorie values)'
+                      : `Clinical decision — ${label(e.source_action.subject)}`
                     : `Reason for not selecting — ${label(e.source_action.subject)}`
                 }
               >
@@ -781,109 +828,43 @@ export function TargetEditor({
             )}
           </div>
         ))}
-        {target.body.energy_proposal && (
-          <section
-            aria-label="Energy starting estimate"
-            className="border-t border-rule pt-4"
-          >
-            <h3 className="font-semibold">
-              Energy starting estimate · clinician review
-            </h3>
-            <p className="mt-2">
-              {target.body.energy_proposal.calculation ??
-                'An individual assessment is needed before proposing an energy range.'}
-            </p>
-            {target.body.energy_proposal.issues.map((issue) => (
-              <p key={issue} className="text-sm mt-2">
-                {issue}
-              </p>
-            ))}
-            <ul className="list-disc pl-5 text-sm text-ink-3 mt-2">
-              {target.body.energy_proposal.review.map((note) => (
-                <li key={note}>{note}</li>
-              ))}
-            </ul>
-            <details className="mt-3">
-              <summary className="cursor-pointer text-sm font-semibold text-line">
-                Source and calculation basis
-              </summary>
-              <blockquote className="text-sm mt-2">
-                {target.body.energy_proposal.quote}
-              </blockquote>
-              <a
-                className="text-line underline"
-                href={target.body.energy_proposal.source}
-              >
-                {target.body.energy_proposal.source_title}
-              </a>
-            </details>
-            {target.body.energy_proposal.action && (
-              <button
-                type="button"
-                className="btn-ghost mt-3"
-                disabled={
-                  manual.some((item) => item.action.subject === 'energy') ||
-                  target.body.items.some(
-                    (item) =>
-                      item.origin !== 'clinician' &&
-                      item.action.subject === 'energy' &&
-                      !!item.rule &&
-                      selected.includes(item.rule.rule_id),
-                  )
-                }
-                onClick={() => {
-                  const estimate = target.body.energy_proposal!;
-                  setManual((list) => [
-                    ...list,
-                    { action: { ...estimate.action! }, rationale: '' },
-                  ]);
-                }}
-              >
-                Use as editable energy draft
-              </button>
-            )}
-            <p className="text-sm text-ink-3 mt-2">
-              Review the range and record your clinical rationale below, then
-              save and approve separately. Existing energy targets are not
-              replaced.
-            </p>
-          </section>
-        )}
-        {manual.map((item, index) => (
-          <div key={index} className="border-t border-rule pt-4">
-            <ActionFields
-              action={item.action}
-              onChange={(action) =>
-                setManual((list) =>
-                  list.map((v, i) => (i === index ? { ...v, action } : v)),
-                )
-              }
-            />
-            <Field label="Clinical rationale">
-              <input
-                className="field mt-2"
-                required
-                value={item.rationale}
-                onChange={(e) =>
+        {manual.map((item, index) =>
+          index === energyIndex && !evidenceEnergy ? null : (
+            <div key={index} className="border-t border-rule pt-4">
+              <ActionFields
+                action={item.action}
+                onChange={(action) =>
                   setManual((list) =>
-                    list.map((v, i) =>
-                      i === index ? { ...v, rationale: e.target.value } : v,
-                    ),
+                    list.map((v, i) => (i === index ? { ...v, action } : v)),
                   )
                 }
               />
-            </Field>
-            <button
-              type="button"
-              className="btn-ghost mt-2"
-              onClick={() =>
-                setManual((list) => list.filter((_, i) => i !== index))
-              }
-            >
-              Remove target
-            </button>
-          </div>
-        ))}
+              <Field label="Clinical rationale">
+                <input
+                  className="field mt-2"
+                  required
+                  value={item.rationale}
+                  onChange={(e) =>
+                    setManual((list) =>
+                      list.map((v, i) =>
+                        i === index ? { ...v, rationale: e.target.value } : v,
+                      ),
+                    )
+                  }
+                />
+              </Field>
+              <button
+                type="button"
+                className="btn-ghost mt-2"
+                onClick={() =>
+                  setManual((list) => list.filter((_, i) => i !== index))
+                }
+              >
+                Remove target
+              </button>
+            </div>
+          ),
+        )}
         <button
           type="button"
           className="btn-ghost"
@@ -893,10 +874,10 @@ export function TargetEditor({
               {
                 action: {
                   kind: 'range',
-                  subject: 'energy',
+                  subject: 'protein',
                   amount: null,
                   upper: null,
-                  unit: 'kcal/day',
+                  unit: 'g/day',
                   advice: '',
                 },
                 rationale: '',
@@ -918,7 +899,12 @@ export function TargetEditor({
         <button
           type="button"
           className="btn-approve ml-3"
-          disabled={dirty || !reason.trim() || !!target.body.blockers.length}
+          disabled={
+            dirty ||
+            !reason.trim() ||
+            !savedEnergy ||
+            !!target.body.blockers.length
+          }
           onClick={() =>
             void task.run(
               async () =>
@@ -936,11 +922,143 @@ export function TargetEditor({
           Approve stored revision
         </button>
         <p className="text-sm text-ink-3">
-          Save edits before approval. Approval applies to the stored revision
-          shown above.
+          {dirty
+            ? 'Save your edits before approving.'
+            : !savedEnergy
+              ? 'Approval needs a saved daily energy range.'
+              : !reason.trim()
+                ? 'Enter a review reason to approve the saved revision.'
+                : 'Approval applies to the stored revision shown above.'}
         </p>
       </Form>
     </Panel>
+  );
+}
+
+function EnergyTargetFields({
+  item,
+  proposal,
+  onChange,
+}: {
+  item?: { action: Action; rationale: string };
+  proposal?: Target['body']['energy_proposal'];
+  onChange: (item: { action: Action; rationale: string }) => void;
+}) {
+  const value = item ?? {
+    action: {
+      kind: 'range',
+      subject: 'energy',
+      unit: 'kcal/day',
+      amount: null,
+      upper: null,
+      advice: 'Individual daily energy prescription.',
+    },
+    rationale: '',
+  };
+  return (
+    <fieldset className="my-4 space-y-3">
+      <legend className="font-semibold">Daily energy target</legend>
+      <p className="text-sm text-ink-3">
+        Enter the calorie range here. These numbers are used for meal planning.
+        Both values are required for approval.
+      </p>
+      {proposal && (
+        <section aria-label="Energy starting estimate" className="space-y-2">
+          <p>
+            {proposal.calculation ??
+              'An individual energy assessment is needed.'}
+          </p>
+          {proposal.issues.map((issue) => (
+            <p key={issue} className="text-sm">
+              {issue}
+            </p>
+          ))}
+          <ul className="list-disc pl-5 text-sm text-ink-3">
+            {proposal.review.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+          <details>
+            <summary className="cursor-pointer text-sm font-semibold text-line">
+              Source and calculation basis
+            </summary>
+            <blockquote className="text-sm mt-2">{proposal.quote}</blockquote>
+            <a className="text-line underline" href={proposal.source}>
+              {proposal.source_title}
+            </a>
+          </details>
+          {proposal.action && (
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={
+                value.action.amount != null || value.action.upper != null
+              }
+              onClick={() =>
+                onChange({ ...value, action: { ...proposal.action! } })
+              }
+            >
+              Use as editable energy draft
+            </button>
+          )}
+        </section>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Lower energy (kcal/day)">
+          <input
+            className="field"
+            type="number"
+            name="energy-lower"
+            min="1"
+            step="any"
+            required={!!item}
+            value={value.action.amount ?? ''}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                action: {
+                  ...value.action,
+                  kind: 'range',
+                  unit: 'kcal/day',
+                  amount: e.target.value === '' ? null : Number(e.target.value),
+                },
+              })
+            }
+          />
+        </Field>
+        <Field label="Upper energy (kcal/day)">
+          <input
+            className="field"
+            type="number"
+            name="energy-upper"
+            required={!!item}
+            min={value.action.amount || 1}
+            step="any"
+            value={value.action.upper ?? ''}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                action: {
+                  ...value.action,
+                  kind: 'range',
+                  unit: 'kcal/day',
+                  upper: e.target.value === '' ? null : Number(e.target.value),
+                },
+              })
+            }
+          />
+        </Field>
+      </div>
+      <Field label="Energy target rationale">
+        <input
+          className="field"
+          name="energy-rationale"
+          required={!!item}
+          value={value.rationale}
+          onChange={(e) => onChange({ ...value, rationale: e.target.value })}
+        />
+      </Field>
+    </fieldset>
   );
 }
 
