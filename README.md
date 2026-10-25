@@ -1,5 +1,49 @@
 # CareLoop
 
+## Project Title
+
+CareLoop: Clinician Reviewed Nutrition Planning and Patient Follow Up
+
+**Group 30 — NUS-ISS Intelligent Reasoning Systems Practice Module**
+
+## Executive Summary / Paper Abstract
+
+CareLoop addresses the gap between reviewed nutrition guidance and everyday food
+choices. It connects evidence review, patient-specific nutrition targets, meal
+planning and patient-reported intake in a single academic decision-support
+prototype, with Singapore foods as the primary catalogue context.
+
+Reviewers check and publish structured rules linked to source quotations.
+Clinicians review patient facts and explicitly approve target revisions. Patients
+request meal alternatives and food replacements, while deterministic beam search
+and an independent numerical checker evaluate the requested plans against
+approved targets and recorded restrictions. Nutrient-based retrieval supports
+food substitutions, and a hosted language model provides cited explanations from
+reviewed evidence and approved records. Meal logs preserve reported intake for
+follow-up without treating unlogged meals as zero consumption.
+
+The implementation combines a React/TypeScript interface, a FastAPI backend and
+PostgreSQL. Its contribution is a traceable workflow that separates proposals,
+checks and human approval. The system is an academic prototype; development tests
+and pilot experiments do not establish clinical effectiveness or production
+readiness.
+
+## Credits / Project Contribution
+
+| Official Full Name | Student ID (MTech Applicable) | Work Items (Who Did What) |
+| --- | --- | --- |
+| Yeom Dongjun | A0354802H | Frontend development, frontend–backend integration, user workflow integration, and demonstration preparation. |
+| Zaiyu Zhang | A0357851U | Requirements analysis, business analysis, experiment design, and evaluation of results. |
+| Worameth Wittanakorn | A0356365W | Data and evidence-source research, data cleaning and standardisation, and validation of missing values, units, and source provenance. |
+| Nguyen Tri Nghia | A0355672W | Backend development, rule design, reasoning logic, meal-plan generation, and constraint validation. |
+
+**Shared contribution:** All four members participated in researching datasets
+and reference materials, reviewing code, and discussing implementation decisions.
+The allocation identifies primary responsibilities rather than exclusive
+ownership.
+
+## System Documentation and User Guide
+
 CareLoop connects clinician-reviewed nutrition targets with meal planning and
 patient-reported intake. It is a local academic decision-support prototype for
 helping patients put a reviewed nutrition plan into practice.
